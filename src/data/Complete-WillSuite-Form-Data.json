@@ -1,0 +1,2153 @@
+{
+    "formTitle": "Legacy Last Will & Testament Questionnaire",
+    "formSections": [
+      {
+        "formSection": "Personal Information",
+        "fields": [
+          {
+            "id": "title",
+            "type": "radio",
+            "label": "Title",
+            "options": [
+              { "value": "Mr", "label": "Mr" },
+              { "value": "Mrs", "label": "Mrs" },
+              { "value": "Miss", "label": "Miss" },
+              { "value": "Ms", "label": "Ms" },
+              { "value": "Dr", "label": "Dr" },
+              { "value": "Prof", "label": "Prof" },
+              { "value": "Sir", "label": "Sir" },
+              { "value": "Dame", "label": "Dame" },
+              { "value": "Lord", "label": "Lord" },
+              { "value": "Lady", "label": "Lady" },
+              { "value": "Other", "label": "Other" }
+            ],
+            "value": null
+          },
+          {
+            "id": "firstName",
+            "type": "text",
+            "label": "First Name(s)",
+            "value": "",
+            "required": true
+          },
+          {
+            "id": "middleName",
+            "type": "text",
+            "label": "Middle Name(s)",
+            "value": ""
+          },
+          {
+            "id": "lastName",
+            "type": "text",
+            "label": "Last Name",
+            "value": "",
+            "required": true
+          },
+          {
+            "id": "knownAs",
+            "type": "text",
+            "label": "Known As",
+            "infoText": "Any name the Testator is commonly known by, if different from their legal name",
+            "value": ""
+          },
+          {
+            "id": "alias",
+            "type": "text",
+            "label": "Alias",
+            "infoText": "Any other name the Testator uses or is known by",
+            "value": ""
+          },
+          {
+            "id": "dateOfBirth",
+            "type": "text",
+            "label": "Date of Birth",
+            "placeholder": "dd/mm/yyyy",
+            "infoText": "Please enter date in format: dd/mm/yyyy",
+            "value": "",
+            "pattern": "[0-9]{2}/[0-9]{2}/[0-9]{4}",
+            "required": true
+          },
+          {
+            "id": "gender",
+            "type": "radio",
+            "label": "Gender",
+            "options": [
+              { "value": "Male", "label": "Male" },
+              { "value": "Female", "label": "Female" },
+              { "value": "Other", "label": "Other" }
+            ],
+            "value": null
+          },
+          {
+            "id": "mobile",
+            "type": "text",
+            "label": "Mobile",
+            "placeholder": "Mobile phone number",
+            "value": ""
+          },
+          {
+            "id": "tel2",
+            "type": "text",
+            "label": "Tel 2",
+            "placeholder": "Alternative phone number",
+            "value": ""
+          },
+          {
+            "id": "email",
+            "type": "text",
+            "label": "Email",
+            "placeholder": "email@example.com",
+            "value": ""
+          },
+          {
+            "id": "occupation",
+            "type": "text",
+            "label": "Occupation",
+            "value": ""
+          },
+          {
+            "id": "address",
+            "type": "section",
+            "label": "Address",
+            "subFields": [
+              {
+                "id": "postcode",
+                "type": "text",
+                "label": "Postcode",
+                "value": "",
+                "required": true
+              },
+              {
+                "id": "address1",
+                "type": "text",
+                "label": "Address 1",
+                "value": "",
+                "required": true
+              },
+              {
+                "id": "address2",
+                "type": "text",
+                "label": "Address 2",
+                "value": ""
+              },
+              {
+                "id": "address3",
+                "type": "text",
+                "label": "Address 3",
+                "value": ""
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "formSection": "Marital Status/Mirroring",
+        "fields": [
+          {
+            "id": "maritalStatus",
+            "type": "radio",
+            "label": "What is the Testator's marital status?",
+            "options": [
+              { "value": "Civil Partnership", "label": "Civil Partnership" },
+              { "value": "Single", "label": "Single" },
+              { "value": "Married", "label": "Married" },
+              { "value": "Widowed", "label": "Widowed" },
+              { "value": "Divorced", "label": "Divorced" },
+              { "value": "Separated", "label": "Separated" },
+              { "value": "Cohabiting", "label": "Cohabiting" }
+            ],
+            "value": null
+          },
+          {
+            "id": "contemplation",
+            "type": "radio",
+            "label": "Is the Testator making this Will in contemplation of marriage or civil partnership?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Contemplation of Civil Partnership", "label": "Contemplation of Civil Partnership", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming civil partnership with {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after the civil partnership is formed, and it shall not be revoked by the formation of said civil partnership." },
+              { "value": "Either", "label": "Either", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage or civil partnership with {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after either ceremony takes place, and it shall not be revoked by the formation of said marriage or civil partnership." },
+              { "value": "Contemplation of Marriage", "label": "Contemplation of Marriage", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage to {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after the marriage takes place, and it shall not be revoked by the solemnisation of said marriage." }
+            ],
+            "infoText": "Under normal circumstances, a Will is revoked upon marriage/civil partnership. Selecting yes to this question will confirm that the Testator is making this Will in contemplation of marriage or civil partnership which will ensure the Will is not revoked if this event is to occur.",
+            "value": null,
+            "conditions": [
+              { "field": "maritalStatus", "operator": "in", "value": ["Single", "Widowed", "Divorced", "Cohabiting"] }
+            ]
+          },
+          {
+            "id": "partnerSection",
+            "type": "section",
+            "label": "the Testator's partner",
+            "conditions": [
+              { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
+              {
+                "operator": "AND",
+                "clauses": [
+                  { "field": "maritalStatus", "operator": "in", "value": ["Single", "Widowed", "Divorced"] },
+                  { "field": "contemplation", "operator": "in", "value": ["Contemplation of Civil Partnership", "Contemplation of Marriage"] }
+                ]
+              }
+            ],
+            "conditionLogic": "OR",
+            "subFields": [
+               {
+                  "id": "partnerStatusDisplay",
+                  "type": "display",
+                  "text": "No partner has been specified."
+               },
+               {
+                   "id": "addPartnerButton",
+                   "type": "button",
+                   "label": "Add Partner",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "partnerData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          }
+        ]
+      },
+      {
+        "formSection": "Foreign Assets",
+        "fields": [
+          {
+            "id": "assetsAbroad",
+            "type": "radio",
+            "label": "Does the Testator have any property / assets abroad?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "propertyInEU",
+            "type": "radio",
+            "label": "Does the Testator hold property within the EU / EEA?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "assetsAbroad", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "englishLawGovernsEUAssets",
+            "type": "radio",
+            "label": "Shall the law of England and Wales govern the succession of foreign assets within the EU / EEA?",
+             "infoText": "This will include the Brussels IV clause which means any assets within the EU / EEA except the UK, Ireland, and Denmark can be governed as close to the English/Welsh Law as possible.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby declare that the law of England and Wales shall govern the succession of all my assets situated in any state where Regulation (EU) No 650/2012 of the European Parliament and of the Council of 4 July 2012 applies." }
+            ],
+            "value": null,
+            "conditions": [
+              {
+                  "operator": "AND",
+                  "clauses": [
+                       { "field": "assetsAbroad", "operator": "eq", "value": "Yes" },
+                       { "field": "propertyInEU", "operator": "eq", "value": "Yes" }
+                  ]
+              }
+            ]
+          },
+          {
+              "id": "testatorUKNationalOrHabitual",
+              "type": "radio",
+              "label": "Is the Testator a UK National or a Habitual Resident?",
+              "options": [
+                  { "value": "Habitual Resident", "label": "Habitual Resident" }, 
+                  { "value": "UK National", "label": "UK National" }
+              ],
+              "value": null,
+              "conditions": [
+                   {
+                      "operator": "AND",
+                      "clauses": [
+                           { "field": "assetsAbroad", "operator": "eq", "value": "Yes" },
+                           { "field": "propertyInEU", "operator": "eq", "value": "Yes" },
+                           { "field": "englishLawGovernsEUAssets", "operator": "eq", "value": "Yes"}
+                      ]
+                  }
+              ]
+          },
+          {
+            "id": "foreignWillNotRevoked",
+            "type": "radio",
+            "label": "Has the Testator made a foreign Will which should not be revoked?",
+            "infoText": "A Will by default would revoke all previous Wills. However, if the Testator has made a Will in a foreign country that they wish to keep in place, selecting yes to this question would include a clause to allow this.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "assetsAbroad", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "willAppliesToUK",
+            "type": "radio",
+            "label": "Is this Will to only apply to England, Wales, and Northern Ireland?",
+            "options": [
+              { "value": "No", "label": "No", "willClauseText": "This Will applies to all my assets worldwide, regardless of their location." },
+              { "value": "Yes - England and Wales", "label": "Yes - England and Wales", "willClauseText": "This Will applies only to my assets situated in England and Wales. Any foreign Wills I have previously made for assets outside England and Wales shall remain valid and are not revoked by this Will, unless I have otherwise specified." },
+              { "value": "Yes - England, Wales and Northern Ireland", "label": "Yes - England, Wales and Northern Ireland", "willClauseText": "This Will applies only to my assets situated in England, Wales and Northern Ireland. Any foreign Wills I have previously made for assets outside these jurisdictions shall remain valid and are not revoked by this Will, unless I have otherwise specified." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "assetsAbroad", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+              "id": "foreignWillLocation",
+              "type": "text",
+              "label": "Where is the foreign Will located?",
+              "infoText": "We will exclude this from the revocation clause. Leaving this blank will include provision for any country outside of England and Wales",
+              "value": "",
+               "willClauseText": "I hereby declare that this Will shall not revoke any Will that I have previously made concerning my assets in {{field:foreignWillLocation:value}}.", 
+              "conditions": [
+                  {
+                      "operator": "AND",
+                      "clauses": [
+                          { "field": "assetsAbroad", "operator": "eq", "value": "Yes" },
+                          { "field": "foreignWillNotRevoked", "operator": "eq", "value": "Yes" },
+                          { "field": "willAppliesToUK", "operator": "eq", "value": "No" }
+                      ]
+                  }
+              ]
+          }
+        ]
+      },
+      {
+        "formSection": "Guardians",
+        "fields": [
+          {
+            "id": "appointGuardians",
+            "type": "radio",
+            "label": "Does the Testator wish to appoint Guardians for any minor children?",
+            "infoText": "If the Testator has care of minors, they may wish to appoint guardians to care for them should they pass away. The other parent of the Testator's children normally has joint parental responsibility for any children aged under 18.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I appoint {{field:guardiansSection:fullDetails}} to be the guardian(s) of any child of mine who is under eighteen years of age at the time of my death. Should they be unable or unwilling to act as guardian(s), I appoint {{field:substituteGuardiansSection:fullDetails}} to serve as substitute guardian(s) for my minor children." },
+              { "value": "Yes, but appoint different guardians for children", "label": "Yes, but appoint different guardians for children", "willClauseText": "I hereby make the following specific appointments of guardians for my children: {{field:guardianshipDetailsSection:fullDetails}}" }
+            ],
+            "value": null
+          },
+          {
+            "id": "guardiansSection",
+            "type": "section",
+            "label": "Who are the guardians?",
+            "conditions": [
+              { "field": "appointGuardians", "operator": "in", "value": ["Yes", "Yes, but appoint different guardians for children"] }
+            ],
+            "subFields": [
+               {
+                  "id": "guardianStatusDisplay",
+                  "type": "display",
+                  "text": "No guardian has been specified."
+               },
+               {
+                   "id": "addGuardianButton",
+                   "type": "button",
+                   "label": "Add Guardian",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "guardianData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+           {
+            "id": "substituteGuardiansSection",
+            "type": "section",
+            "label": "Who are the substitute guardians? (if any)",
+            "conditions": [
+              { "field": "appointGuardians", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "substituteGuardianStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute guardian has been specified."
+               },
+               {
+                   "id": "addSubstituteGuardianButton",
+                   "type": "button",
+                   "label": "Add Substitute Guardian",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substituteGuardianData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          }
+        ]
+      },
+      {
+        "formSection": "Trustees/Executors",
+        "fields": [
+          {
+            "id": "executorsSection",
+            "type": "section",
+            "label": "Who are the Executors?",
+             "willClauseText": "I appoint {{field:executorsSection:fullDetails}} to be the Executor(s) and Trustee(s) of my estate, with full power to administer my estate according to law and the terms of this Will.",
+            "subFields": [
+               {
+                  "id": "executorStatusDisplay",
+                  "type": "display",
+                  "text": "No executor has been specified."
+               },
+               {
+                   "id": "addExecutorButton",
+                   "type": "button",
+                   "label": "Add Executor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "executorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "substituteExecutorsSection",
+            "type": "section",
+            "label": "Who are the substitute Executors?",
+             "willClauseText": "If any of my appointed Executors is unable or unwilling to serve, I appoint {{field:substituteExecutorsSection:fullDetails}} to serve as substitute Executor(s) and Trustee(s) with the same powers and responsibilities.",
+            "subFields": [
+               {
+                  "id": "substituteExecutorStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute executor has been specified."
+               },
+               {
+                   "id": "addSubstituteExecutorButton",
+                   "type": "button",
+                   "label": "Add Substitute Executor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substituteExecutorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "appointProfessionalExecutor",
+            "type": "radio",
+            "label": "Shall a Professional Executor or Professional Substitute Executors be appointed?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "professionalExecutorSection",
+            "type": "section",
+            "label": "Who shall act as a professional Executor?",
+            "infoText": "If there are other Executors specified, the professional Executor shall act jointly with any others specified.",
+             "willClauseText": "I appoint {{field:professionalExecutorSection:fullDetails}} to serve as my professional Executor and Trustee, with full power to administer my estate according to law and the terms of this Will.",
+            "conditions": [
+              { "field": "appointProfessionalExecutor", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "professionalExecutorStatusDisplay",
+                  "type": "display",
+                  "text": "No professional executor has been specified."
+               },
+               {
+                   "id": "addProfessionalExecutorButton",
+                   "type": "button",
+                   "label": "Add Professional Executor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "professionalExecutorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "substituteProfessionalExecutorSection",
+            "type": "section",
+            "label": "Who shall act as substitute professional Executor?",
+            "infoText": "If there are other substitute Executors specified, the professional Executor shall act jointly with any others specified.",
+             "willClauseText": "If {{field:professionalExecutorSection:name}} is unable or unwilling to serve as my professional Executor, I appoint {{field:substituteProfessionalExecutorSection:fullDetails}} to serve in their place with the same powers and responsibilities.", 
+            "conditions": [
+              { "field": "appointProfessionalExecutor", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "substituteProfessionalExecutorStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute professional executor has been specified."
+               },
+               {
+                   "id": "addSubstituteProfessionalExecutorButton",
+                   "type": "button",
+                   "label": "Add Substitute Professional Executor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substituteProfessionalExecutorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "includeProfessionalRemuneration",
+            "type": "radio",
+            "label": "Include professional executor power for remuneration?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes (Default)", "willClauseText": "Any of my Trustees who is a professional person shall be entitled to charge and be paid all usual professional or other proper fees for business done, services rendered or time spent personally or by their firm in the administration of my estate, including acts which a trustee not engaged in any profession or business could have done personally." }
+            ],
+            "value": null
+          },
+          {
+            "id": "appointDigitalAssetsExecutor",
+            "type": "radio",
+            "label": "Should the Executors be appointed to look after any digital assets / online accounts?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I specifically authorize my Executors to access, handle, distribute and dispose of my digital assets in accordance with this Will. Digital assets include but are not limited to email accounts, social media accounts, digital files, cryptocurrencies, and other online accounts." }
+            ],
+            "value": null
+          },
+          {
+            "id": "appointSeparateDigitalExecutor",
+            "type": "radio",
+            "label": "Would you like to appoint separate digital Executors?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "appointDigitalAssetsExecutor", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "digitalExecutorsSection",
+            "type": "section",
+            "label": "Who are the digital Executors?",
+             "willClauseText": "I appoint {{field:digitalExecutorsSection:fullDetails}} solely for the purpose of dealing with my digital assets, including accessing, managing, and distributing these assets according to my wishes.",
+            "conditions": [
+              {
+                "operator": "AND",
+                "clauses": [
+                  { "field": "appointDigitalAssetsExecutor", "operator": "eq", "value": "Yes" },
+                  { "field": "appointSeparateDigitalExecutor", "operator": "eq", "value": "Yes" }
+                ]
+              }
+            ],
+            "subFields": [
+               {
+                  "id": "digitalExecutorStatusDisplay",
+                  "type": "display",
+                  "text": "No digital executor has been specified."
+               },
+               {
+                   "id": "addDigitalExecutorButton",
+                   "type": "button",
+                   "label": "Add Digital Executor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "digitalExecutorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "appointDifferentTrustees",
+            "type": "radio",
+            "label": "Shall there be different Trustees appointed to the Executors?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "trusteesSection",
+            "type": "section",
+            "label": "Who are the Trustees?",
+             "willClauseText": "I appoint {{field:trusteesSection:fullDetails}} to serve as the Trustee(s) of all trusts created under this Will, with full power to administer these trusts according to their terms.",
+            "conditions": [
+              { "field": "appointDifferentTrustees", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "trusteeStatusDisplay",
+                  "type": "display",
+                  "text": "No trustee has been specified."
+               },
+               {
+                   "id": "addTrusteeButton",
+                   "type": "button",
+                   "label": "Add Trustee",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "trusteeData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "substituteTrusteesSection",
+            "type": "section",
+            "label": "Who shall act as substitute Trustees?",
+             "willClauseText": "If any of my appointed Trustees is unable or unwilling to serve, I appoint {{field:substituteTrusteesSection:fullDetails}} to serve as substitute Trustee(s) with the same powers and responsibilities.",
+            "conditions": [
+              { "field": "appointDifferentTrustees", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "substituteTrusteeStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute trustee has been specified."
+               },
+               {
+                   "id": "addSubstituteTrusteeButton",
+                   "type": "button",
+                   "label": "Add Substitute Trustee",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substituteTrusteeData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "appointProfessionalTrustee",
+            "type": "radio",
+            "label": "Shall a professional Trustee be appointed?",
+             "conditions": [
+              { "field": "appointDifferentTrustees", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+           {
+            "id": "professionalTrusteesSection",
+            "type": "section",
+            "label": "Who are the professional Trustees?",
+             "willClauseText": "I appoint {{field:professionalTrusteesSection:fullDetails}} to serve as my professional Trustee for all trusts created under this Will, with full power to administer these trusts according to their terms.",
+            "conditions": [
+               {
+                  "operator": "AND",
+                  "clauses": [
+                      { "field": "appointDifferentTrustees", "operator": "eq", "value": "Yes" },
+                      { "field": "appointProfessionalTrustee", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ],
+            "subFields": [
+               {
+                  "id": "professionalTrusteeStatusDisplay",
+                  "type": "display",
+                  "text": "No professional trustee has been specified."
+               },
+               {
+                   "id": "addProfessionalTrusteeButton",
+                   "type": "button",
+                   "label": "Add Professional Trustee",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "professionalTrusteeData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "substituteProfessionalTrusteesSection",
+            "type": "section",
+            "label": "Who shall act as substitute professional Trustees?",
+             "willClauseText": "If {{field:professionalTrusteesSection:name}} is unable or unwilling to serve as my professional Trustee, I appoint {{field:substituteProfessionalTrusteesSection:fullDetails}} to serve in their place with the same powers and responsibilities.",
+             "conditions": [
+               {
+                  "operator": "AND",
+                  "clauses": [
+                      { "field": "appointDifferentTrustees", "operator": "eq", "value": "Yes" },
+                      { "field": "appointProfessionalTrustee", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ],
+            "subFields": [
+               {
+                  "id": "substituteProfessionalTrusteeStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute professional trustee has been specified."
+               },
+               {
+                   "id": "addSubstituteProfessionalTrusteeButton",
+                   "type": "button",
+                   "label": "Add Substitute Professional Trustee",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substituteProfessionalTrusteeData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "executorAgeClause",
+            "type": "radio",
+            "label": "Include a clause directing that executors shall only act if all in that level reach a certain age",
+            "options": [
+              { "value": "25", "label": "25", "willClauseText": "My Executors shall only be eligible to act if all appointed Executors in that class have attained the age of 25 years at the time of my death." },
+              { "value": "No", "label": "No" },
+              { "value": "Other", "label": "Other" }
+            ],
+            "value": null
+          },
+          {
+            "id": "executorSpecifyAge",
+            "type": "number",
+            "label": "Specify age",
+            "value": "",
+             "willClauseText": "My Executors shall only be eligible to act if all appointed Executors in that class have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death.",
+             "conditions": [
+              { "field": "executorAgeClause", "operator": "eq", "value": "Other" }
+            ]
+          },
+          {
+            "id": "inabilityToSignProvisions",
+            "type": "radio",
+            "label": "Shall any provisions be included for inability to sign the Will?",
+             "conditions": [
+              { "field": "hasDisabilityImpactingSignRead", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "AbleToSignWeak", "label": "The Testator is able to sign, but their signature may be weak or shaky", "willClauseText": "Attestation clause to note signature is weak/shaky." },
+              { "value": "UnableToSignCanMark", "label": "The Testator is unable to sign but can make mark", "willClauseText": "Attestation clause to note Testator made their mark." },
+              { "value": "UnableToRead", "label": "The Testator is unable to read", "willClauseText": "Attestation clause to note Will was read over to Testator who confirmed understanding." },
+              { "value": "AbleToReadCannotSign", "label": "The Testator is able to read but cannot sign", "willClauseText": "Attestation clause to note Testator confirmed understanding and Will signed on their behalf by {{field:signingOnBehalfSection:fullDetails}} in their presence and by their direction." },
+              { "value": "VisuallyImpaired", "label": "Yes, the Testator is visually impaired", "willClauseText": "Attestation clause to note Will was read over to visually impaired Testator who confirmed understanding." },
+              { "value": "UnableToReadCannotSign", "label": "The Testator is unable to read and cannot sign", "willClauseText": "Attestation clause to note Will was read over to Testator who confirmed understanding and Will signed on their behalf by {{field:signingOnBehalfSection:fullDetails}} in their presence and by their direction." },
+              { "value": "VisuallyImpairedCanSign", "label": "The Testator is visually impaired but can sign", "willClauseText": "Attestation clause to note Will was read over to visually impaired Testator who confirmed understanding and signed." },
+              { "value": "ImperfectEnglish", "label": "The Testator has an imperfect knowledge of the English Language", "willClauseText": "Attestation clause to note Will was read over and interpreted by {{field:interpreterSection:fullDetails}} in {{field:nativeLanguage:value}} and English to Testator who confirmed understanding." }
+            ],
+            "value": null
+          }
+        ]
+      },
+
+      {
+        "formSection": "Organ Donation",
+        "fields": [
+          {
+            "id": "organDonationPreference",
+            "type": "radio",
+            "label": "Would the Testator like to make organs available for donation / scientific purposes?",
+            "infoText": "the Testator's personal representatives (executors) are responsible for the disposal of the Testator's body.",
+            "options": [
+              { "value": "DontInclude", "label": "Don't include a statement" },
+              { "value": "YesAll", "label": "Yes, all organs", "willClauseText": "I wish to donate my body or any part of it for {{field:organPurposeGroup:selectedPurposes}}. I request that my Executors take all necessary steps to fulfill this wish." },
+              { "value": "YesButOnly", "label": "Yes, but only...", "willClauseText": "I wish to donate only the following parts of my body: {{field:specificOrgansToDonate:value}} for {{field:organPurposeGroup:selectedPurposes}}. I request that my Executors take all necessary steps to fulfill this wish." },
+              { "value": "YesAllExcept", "label": "Yes, all organs except...", "willClauseText": "I wish to donate my body or any part of it, except for {{field:specificOrgansToExclude:value}}, for {{field:organPurposeGroup:selectedPurposes}}. I request that my Executors take all necessary steps to fulfill this wish." },
+              { "value": "No", "label": "No", "willClauseText": "I do not wish for any part of my body to be used for organ donation or scientific purposes. I request that my Executors respect this wish." }
+            ],
+            "value": null
+          },
+          {
+            "id": "specificOrgansToDonate",
+            "type": "text",
+            "label": "Which are the specific organs?",
+            "placeholder": "Example: eyes, eyes and heart, eyes, heart, and brain",
+            "value": "",
+
+            "conditions": [
+              { "field": "organDonationPreference", "operator": "eq", "value": "YesButOnly" }
+            ]
+          },
+          {
+            "id": "specificOrgansToExclude",
+            "type": "text",
+            "label": "Which are the specific organs?",
+            "placeholder": "Example: eyes, eyes and heart, eyes, heart, and brain",
+            "value": "",
+             
+            "conditions": [
+              { "field": "organDonationPreference", "operator": "eq", "value": "YesAllExcept" }
+            ]
+          },
+          {
+            "id": "organPurposeGroup",
+            "type": "checkboxGroup",
+            "label": "What purposes shall organs be made available for?",
+            "infoText": "Leaving these options empty will assume the Testator wishes to leave organs for any purposes.",
+            "conditions": [
+               { "field": "organDonationPreference", "operator": "in", "value": ["YesAll", "YesButOnly", "YesAllExcept"] }
+            ],
+            "options": [
+              {
+                "id": "purposeMedicalResearch",
+                "label": "Medical and Scientific research",
+                "value": false,
+                 "willClauseTextFragment": "medical and scientific research"
+              },
+              {
+                "id": "purposeTherapeutic",
+                "label": "Organ donation and therapeutic purposes",
+                "value": false,
+                 "willClauseTextFragment": "organ donation and therapeutic purposes" 
+              }
+               
+            ]
+          }
+        ]
+      },
+       
+      {
+        "formSection": "Funeral Arrangements",
+        "fields": [
+          {
+            "id": "specifyFuneralArrangements",
+            "type": "radio",
+            "label": "Does the Testator want to specify any funeral arrangements?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" } 
+            ],
+            "value": null
+          },
+          {
+            "id": "burialOrCremation",
+            "type": "radio",
+            "label": "Does the Testator wish to be buried or cremated?",
+            "options": [
+              { "value": "Buried", "label": "Buried", "willClauseText": "I wish for my body to be buried. I request that my Executors make all necessary arrangements for my funeral and burial in accordance with this wish." },
+              { "value": "Cremated", "label": "Cremated", "willClauseText": "I wish for my body to be cremated. I request that my Executors make all necessary arrangements for my funeral and cremation in accordance with this wish." },
+              { "value": "No Preference", "label": "No Preference", "willClauseText": "I express no preference regarding burial or cremation. I leave this decision to the discretion of my Executors or next of kin." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "otherFuneralRequirements",
+            "type": "textarea",
+            "label": "Please state any other requirements",
+            "value": "",
+            "infoText": "Please note: It is possible that the Will is not discovered until after funeral plans are made, so it is advisable to create a memorandum of funeral wishes if the Testator has any specific instructions.",
+             "willClauseText": "Regarding my funeral arrangements, I wish {{field:otherFuneralRequirements:value}}. I request that my Executors take all reasonable steps to honor these wishes.",
+            "examples": [ 
+              "I wish to be buried in a specific cemetery.",
+              "I wish to have a specific type of service.",
+              "I wish to have my ashes scattered at a specific location."
+            ],
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
+            ]
+          }
+        ]
+      },
+      
+      {
+        "formSection": "Business Interests",
+        "fields": [
+          {
+            "id": "hasBusinessInterests",
+            "type": "radio",
+            "label": "Does the Testator have any business interests?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "trusteePowerCarryOnBusiness",
+            "type": "radio",
+            "label": "Does the Testator wish to grant the trustees power to carry on business?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I grant my Trustees the power to manage, continue, or sell any business or share of a business that I own at the time of my death, in accordance with clause 4.8 of the STEP standard provisions (third edition). While the business is carried on by my Trustees, they shall not be personally liable for any losses to the business, except in cases of willful default, gross negligence, or breach of trust." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "hasBusinessInterests", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "appointSeparateBusinessTrustee",
+            "type": "radio",
+            "label": "Does the Testator wish to appoint separate business trustee?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" } 
+            ],
+            "value": null,
+            "conditions": [
+               {
+                  "operator": "AND",
+                  "clauses": [
+                      { "field": "hasBusinessInterests", "operator": "eq", "value": "Yes" },
+                      { "field": "trusteePowerCarryOnBusiness", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ]
+          },
+           {
+            "id": "separateTrusteesSection",
+            "type": "section",
+            "label": "Who are the separate Trustees?",
+             "willClauseText": "Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests.",
+             "conditions": [
+               {
+                  "operator": "AND",
+                  "clauses": [
+                      { "field": "hasBusinessInterests", "operator": "eq", "value": "Yes" },
+                      { "field": "trusteePowerCarryOnBusiness", "operator": "eq", "value": "Yes"},
+                      { "field": "appointSeparateBusinessTrustee", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ],
+            "subFields": [
+               {
+                  "id": "separateTrusteeStatusDisplay",
+                  "type": "display",
+                  "text": "No separate trustee has been specified."
+               },
+               {
+                   "id": "addSeparateTrusteeButton",
+                   "type": "button",
+                   "label": "Add Separate Trustee",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "separateTrusteeData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "includeBPRTrust",
+            "type": "radio",
+            "label": "Include a Business Property Relief Trust?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null,
+             "conditions": [
+              { "field": "hasBusinessInterests", "operator": "eq", "value": "Yes" }
+            ]
+          },
+           {
+            "id": "bprTrustSection",
+            "type": "section",
+            "label": "Business Property Relief Trust",
+             "willClauseText": "I give such of my business assets as qualify for Business Property Relief from Inheritance Tax to my Trustees to hold on the terms of the Business Property Relief Trust detailed in Schedule {{field:bprTrustScheduleNumber:value}} of this Will.",
+            "conditions": [
+               {
+                  "operator": "AND",
+                  "clauses": [
+                      { "field": "hasBusinessInterests", "operator": "eq", "value": "Yes" },
+                      { "field": "includeBPRTrust", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ],
+            "subFields": [
+              {
+                "id": "bprTrustDetails",
+                "type": "textarea",
+                "label": "Business Property Details",
+                "placeholder": "Enter details of the business property for the trust",
+                "rows": 3,
+                "value": ""
+              },
+              {
+                "id": "bprTrustScheduleNumber",
+                "type": "text",
+                "label": "Schedule Number",
+                "placeholder": "Enter the schedule number (e.g., '2')",
+                "value": ""
+              },
+              {
+                "id": "bprTrustTerms",
+                "type": "textarea",
+                "label": "Business Property Relief Trust Terms",
+                "placeholder": "Enter the terms of the business property relief trust",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          }
+        ]
+      },
+      
+      {
+        "formSection": "Gifts of Money",
+        "fields": [
+          {
+            "id": "leaveMoneyGifts",
+            "type": "radio",
+            "label": "Does the Testator want to leave any gifts of money?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific monetary gifts to be paid from my estate, free of all taxes and duties: {{field:monetaryGiftsSection:fullList}}."}
+            ],
+            "value": null
+          },
+          {
+            "id": "monetaryGiftsSection",
+            "type": "section",
+            "label": "Monetary Gifts",
+            "conditions": [
+              { "field": "leaveMoneyGifts", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "monetaryGiftsDetails",
+                "type": "textarea",
+                "label": "Enter monetary gift details",
+                "placeholder": "Enter the monetary gifts you wish to make (e.g., '£10,000 to my nephew Richard Jones')",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "failedMoneyGiftPassProportionately",
+            "type": "radio",
+            "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any monetary gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that gift."}
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "leaveMoneyGifts", "operator": "eq", "value": "Yes" }
+            ]
+          }
+        ]
+      },
+       
+      {
+        "formSection": "Specific Gifts",
+        "fields": [
+          {
+            "id": "leaveSpecificGifts",
+            "type": "radio",
+            "label": "Does the Testator want to leave any specific gifts?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific gifts of personal property, to be distributed free of all taxes and duties: {{field:specificGiftsSection:fullList}}." }
+            ],
+            "value": null
+          },
+          {
+            "id": "specificGiftsSection",
+            "type": "section",
+            "label": "Specific Gifts",
+            "conditions": [
+              { "field": "leaveSpecificGifts", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "specificGiftsDetails",
+                "type": "textarea",
+                "label": "Enter specific gifts details",
+                "placeholder": "Enter the specific gifts you wish to make (e.g., 'My diamond ring to my daughter Jane Smith')",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "failedSpecificGiftPassProportionately",
+            "type": "radio",
+            "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any specific gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that specific gift."}
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "leaveSpecificGifts", "operator": "eq", "value": "Yes" }
+            ]
+          }
+        ]
+      },
+      
+      {
+        "formSection": "Property Gifts",
+        "fields": [
+          {
+            "id": "leavePropertyGifts",
+            "type": "radio",
+            "label": "Does the Testator want to leave any gifts of property (not in a property trust)?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following gifts of real property, to be distributed free of all taxes and duties: {{field:propertyGiftsSection:fullList}}." }
+            ],
+            "value": null
+          },
+          {
+            "id": "propertyGiftsSection",
+            "type": "section",
+            "label": "Property Gifts",
+            "conditions": [
+              { "field": "leavePropertyGifts", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "propertyGiftsDetails",
+                "type": "textarea",
+                "label": "Enter property gift details",
+                "placeholder": "Enter the property gifts you wish to make (e.g., 'My house at 123 Main St to my son John Smith')",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "failedPropertyGiftPassProportionately",
+            "type": "radio",
+            "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any gift of property made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that property gift."}
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "leavePropertyGifts", "operator": "eq", "value": "Yes" }
+            ]
+          }
+        ]
+      },
+       
+      {
+        "formSection": "Property Trust",
+        "fields": [
+          {
+            "id": "includePropertyTrust",
+            "type": "radio",
+            "label": "Include a property trust?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I give the following property: {{field:propertyTrustDetails:propertyDetails}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will." }
+            ],
+            "value": null
+          },
+          {
+            "id": "propertyTrustSection",
+            "type": "section",
+            "label": "Property Trust",
+            "conditions": [
+              { "field": "includePropertyTrust", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "propertyTrustDetails",
+                "type": "textarea",
+                "label": "Property Details",
+                "placeholder": "Enter the property details for the trust (e.g., '55 Oak Street, London, NW1 6XE')",
+                "rows": 3,
+                "value": ""
+              },
+              {
+                "id": "propertyTrustScheduleNumber",
+                "type": "text",
+                "label": "Schedule Number",
+                "placeholder": "Enter the schedule number (e.g., '1')",
+                "value": ""
+              },
+              {
+                "id": "propertyTrustTerms",
+                "type": "textarea",
+                "label": "Property Trust Terms",
+                "placeholder": "Enter the terms of the property trust",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          }
+        ]
+      },
+       
+       {
+        "formSection": "Personal Chattels",
+        "fields": [
+          {
+            "id": "unspecifiedChattelsAction",
+            "type": "radio",
+            "label": "What should happen to personal possessions not specified by this Will?",
+            "options": [
+              { "value": "SameAsResidue", "label": "Pass on same terms as residue", "willClauseText": "I direct that all my personal possessions not otherwise specifically given by this Will or any Codicil to it shall be distributed upon the same terms as my Residuary Estate." },
+              { "value": "SpecificRecipient", "label": "Pass to specific recipient", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelRecipientsSection:relationshipList}} {{field:chattelRecipientsSection:nameList}} of {{field:chattelRecipientsSection:addressList}}, absolutely and beneficially." },
+              { "value": "DistributedByExecutors", "label": "Distributed by Executors", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my Executors, with the request (but without creating any binding obligation) that they distribute these items in accordance with any wishes I may express to them during my lifetime or in a written memorandum left by me." }
+            ],
+            "value": null
+          },
+          {
+            "id": "chattelRecipientsSection",
+            "type": "section",
+            "label": "Who should receive the remaining personal possessions?",
+            "conditions": [
+              { "field": "unspecifiedChattelsAction", "operator": "eq", "value": "SpecificRecipient" }
+            ],
+            "subFields": [
+               {
+                  "id": "chattelRecipientStatusDisplay",
+                  "type": "display",
+                  "text": "No recipient has been specified."
+               },
+               {
+                   "id": "addChattelRecipientButton",
+                   "type": "button",
+                   "label": "Add Recipient",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "chattelRecipientData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+          {
+            "id": "chattelsInheritanceTax",
+            "type": "radio",
+            "label": "Inheritance Tax",
+            "options": [
+              { "value": "PaidByEstate", "label": "IHT to be paid by the estate", "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid from my Residuary Estate so that the recipients receive these items free of tax." },
+              { "value": "PaidByRecipient", "label": "IHT to be paid by the recipient", "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid by the respective recipients of those items." }
+            ],
+            "value": null
+          },
+          {
+            "id": "produceMemorandum",
+            "type": "radio",
+            "label": "Would you like to produce a memorandum of wishes for low value gifts?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I may leave a separate memorandum of wishes concerning the distribution of certain personal items. While I request my Executors to consider these wishes, I acknowledge that such memorandum shall not be legally binding upon them." }
+            ],
+            "value": null
+          },
+          {
+            "id": "personalChattelsGift",
+            "type": "radio",
+            "label": "Give personal chattels to",
+            "options": [
+              { "value": "No", "label": "No specific gift" },
+              { "value": "ResidueIncluded", "label": "Include with residuary estate" },
+              { "value": "Beneficiary", "label": "To specific beneficiary", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelsGiftBeneficiarySection:fullDetails}}, absolutely and beneficially." }
+            ],
+            "value": null
+          },
+          {
+            "id": "forgiveDebt",
+            "type": "radio",
+            "label": "Would the Testator like to forgive any debts?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtorSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
+            ],
+            "value": null
+          }
+        ]
+      },
+      
+      {
+        "formSection": "Deliberate Exclusions",
+        "fields": [
+          {
+            "id": "deliberatelyExcludingAnyone",
+            "type": "radio",
+            "label": "Is the Testator deliberately excluding any person from this Will who may claim against the estate or object to the terms of the will?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I have deliberately made no provision in this Will for my {{field:excludedPersonSection:relationshipList}} {{field:excludedPersonSection:nameList}} of {{field:excludedPersonSection:addressList}}. This decision is intentional and has been made after careful consideration. I have communicated my reasons separately to my Executors."}
+            ],
+            "value": null
+          },
+          {
+            "id": "excludedPersonsSection",
+            "type": "section",
+            "label": "Who is the Testator excluding?",
+            "infoText": "Warning: many specialists believe an exclusion clause can provoke a claim that might not otherwise have been made. If used we recommend the Testator writes a side letter to the Executors, explaining their reasons, that could be used in evidence if necessary.",
+            "conditions": [
+              { "field": "deliberatelyExcludingAnyone", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "excludedPersonStatusDisplay",
+                  "type": "display",
+                  "text": "No excluded person has been specified."
+               },
+               {
+                   "id": "addExcludedPersonButton",
+                   "type": "button",
+                   "label": "Add Excluded Person",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "excludedPersonData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+           {
+            "id": "spouseBenefitOnDivorce",
+            "type": "radio",
+            "label": "Does the Testator wish their spouse to benefit from this Will even if divorce / annulment takes place?",
+            "infoText": "Use of this clause should be carefully considered as not all divorces are amicable.\n\nSelecting yes to this question will explicitly exclude Section 18a of the Wills Act 1837.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "For the avoidance of doubt, I direct that Section 18A of the Wills Act 1837 shall not apply to this Will. Any gift to my spouse/civil partner shall take effect notwithstanding any subsequent divorce, dissolution, or annulment of our marriage or civil partnership." }
+            ],
+            "value": null
+          },
+           {
+            "id": "stopGiftToChildrenOnFail",
+            "type": "radio",
+            "label": "Should any gifts to the Testator's children be stopped from automatically passing to their own children, should the gift fail?",
+             "infoText": "Selecting yes to this question will explicitly exclude Section 33 of the Wills Act 1837.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I direct that Section 33 of the Wills Act 1837 (concerning gifts to children who die before the testator) shall not apply to any gift in this Will." }
+            ],
+            "value": null
+          }
+        ]
+      },
+        
+        {
+          "formSection": "Funeral Wishes",
+          "fields": [
+            {
+              "id": "funeralWishes",
+              "type": "textarea",
+              "label": "Funeral Wishes",
+              "placeholder": "Enter the Testator's funeral wishes (e.g., 'I wish to be cremated and have my ashes scattered at sea')",
+              "rows": 5,
+              "value": "",
+              "willClauseText": "I request that my Executors take all reasonable steps to honor my funeral wishes as expressed in this Will."
+            }
+          ]
+        },
+      {
+        "formSection": "Other Provisions",
+        "fields": [
+          {
+            "id": "provisionsForPets",
+            "type": "radio",
+            "label": "Would the Testator like to include provisions for pets?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals." }
+            ],
+            "value": null
+          },
+          {
+            "id": "petCarerSection",
+            "type": "section",
+            "label": "Who is to care for the Testator's pets?",
+            "infoText": "Any pets owned by the Testator at the date of their death shall be cared for by named beneficiary.",
+             "willClauseText": "I request that my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} of {{field:petCarerSection:addressList}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
+            "conditions": [
+              { "field": "provisionsForPets", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "petCarerStatusDisplay",
+                  "type": "display",
+                  "text": "No pet carer has been specified."
+               },
+               {
+                   "id": "addPetCarerButton",
+                   "type": "button",
+                   "label": "Add Pet Carer",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "petCarerData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+           {
+            "id": "substitutePetCarerSection",
+            "type": "section",
+            "label": "Who is the substitute carer for the Testator's pets?",
+             "willClauseText": "If my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:relationshipList}} {{field:substitutePetCarerSection:nameList}} of {{field:substitutePetCarerSection:addressList}} assume this responsibility instead.",
+            "conditions": [
+              { "field": "provisionsForPets", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "substitutePetCarerStatusDisplay",
+                  "type": "display",
+                  "text": "No substitute pet carer has been specified."
+               },
+               {
+                   "id": "addSubstitutePetCarerButton",
+                   "type": "button",
+                   "label": "Add Substitute Pet Carer",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "substitutePetCarerData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+           {
+            "id": "petsCaredForByRSPCA",
+            "type": "radio",
+            "label": "Shall any pets be cared for by RSPCA's home for life scheme if unable to be homed?",
+            "infoText": "The Home for Life Scheme gives the Testator peace of mind that, in the event of their death, the RSPCA will care for your pets and re-home them, if possible. You can apply online here",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If neither my primary nor substitute pet carers are able or willing to care for my pets, I request that these pets be offered to the RSPCA under their Home for Life scheme." }
+            ],
+            "value": null,
+             "conditions": [
+              { "field": "provisionsForPets", "operator": "eq", "value": "Yes" }
+            ]
+          },
+           {
+            "id": "petCarerOptions",
+            "type": "radio",
+            "label": "Would the Testator like to leave a gift of money with any pets?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", 
+                "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals."
+              }
+            ],
+            "value": null
+          },
+          {
+            "id": "substitutePetCarer",
+            "type": "radio",
+            "label": "Would the Testator like to name a substitute pet carer?",
+            "conditions": [
+              { "field": "petCarerOptions", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", 
+                "willClauseText": "If my {{field:petCarerSection:fullDetails}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:fullDetails}} assume this responsibility instead."
+              } 
+            ],
+            "value": null
+          },
+          {
+            "id": "petCarerGift",
+            "type": "currency",
+            "label": "Amount to leave for pet care",
+            "placeholder": "e.g. 5000",
+            "conditions": [
+              { "field": "petCarerOptions", "operator": "eq", "value": "Yes" }
+            ],
+            "willClauseText": "I give the sum of {{field:petCarerGift:formattedAmount}} to whoever accepts responsibility for caring for my pets, to be used exclusively for their upkeep, veterinary care, and general welfare.",
+            "value": null
+          },
+          {
+            "id": "relieveDebts",
+            "type": "radio",
+            "label": "Does the Testator wish to relieve anyone of debts upon the Testator's death?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtorsSection:relationshipList}} {{field:debtorsSection:nameList}} of {{field:debtorsSection:addressList}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
+            ],
+            "value": null
+          },
+           {
+            "id": "debtsReleasedSection",
+            "type": "section",
+            "label": "Who should be released from their debts?",
+            "conditions": [
+              { "field": "relieveDebts", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+               {
+                  "id": "debtorStatusDisplay",
+                  "type": "display",
+                  "text": "No debtor has been specified."
+               },
+               {
+                   "id": "addDebtorButton",
+                   "type": "button",
+                   "label": "Add Debtor",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "debtorData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          }
+        ]
+      },
+       
+      {
+        "formSection": "Administrative Provisions",
+        "fields": [
+          {
+            "id": "includeReceiptByMinors",
+            "type": "radio",
+            "label": "Include Receipt by Minors clause?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "My Trustees may accept the receipt of a minor beneficiary who has attained the age of 16 years as a full discharge for any payment made." }
+            ],
+            "value": null
+          },
+          {
+            "id": "includeCypresClause",
+            "type": "radio",
+            "label": "Include Cy-près clause?",
+            "infoText": "If the Testator has made a gift to a charity in their Will this clause will ensure that the gift will not fail if the charity ceases to exist at their death. Instead the gift will be made to another charity with similar charitable aims.",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any charitable gift in this Will cannot take effect because the named charity has ceased to exist or amalgamated, my Trustees shall pay the gift to such other charity with similar aims as they shall in their absolute discretion select." }
+            ],
+            "value": null
+          },
+          {
+            "id": "bringLifetimeGiftsIntoAccount",
+            "type": "radio",
+            "label": "Bring into account gifts or loans made to children in lifetime?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "Any gifts or loans made by me during my lifetime to any of my children [as specified: [Specific Loans/Gifts List]] shall be brought into account (hotchpot) when calculating their share of my Residuary Estate, unless I have indicated otherwise in writing." }
+            ],
+            "value": null
+          },
+           {
+            "id": "specifyLifetimeLoansGifts",
+            "type": "radio",
+            "label": "Would you like to specify any specific loans / gifts within the Will?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" } 
+            ],
+            "value": null,
+             "conditions": [
+              { "field": "bringLifetimeGiftsIntoAccount", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "specifyLoansGiftsText",
+            "type": "textarea",
+            "label": "Specify Loans / Gifts",
+            "placeholder": "I wish to make my Executors aware of...",
+            "value": "",
+             
+            "conditions": [
+              {
+                 "operator": "AND",
+                  "clauses": [
+                      { "field": "bringLifetimeGiftsIntoAccount", "operator": "eq", "value": "Yes" },
+                      { "field": "specifyLifetimeLoansGifts", "operator": "eq", "value": "Yes"}
+                  ]
+              }
+            ]
+          },
+          {
+            "id": "stepProvisionsApply",
+            "type": "radio",
+            "label": "Which STEP provisions shall apply?",
+            "options": [
+              { "value": "NoProvisions", "label": "No provisions" },
+              { "value": "AllStandardSpecialInclude", "label": "All standard and special provisions, and include in Will", "willClauseText": "The standard provisions and all of the special provisions of the Society of Trust and Estate Practitioners (3rd Edition) are incorporated into this Will." },
+              { "value": "AllStandardSpecial", "label": "All standard and special provisions", "willClauseText": "The standard provisions and all of the special provisions of the Society of Trust and Estate Practitioners (3rd Edition) shall apply to this Will." },
+              { "value": "AllStandardOnly", "label": "All standard provisions only", "willClauseText": "The standard provisions only of the Society of Trust and Estate Practitioners (3rd Edition) shall apply to this Will." }
+            ],
+            "value": null
+          },
+           {
+            "id": "excludeSpecificStepProvisions",
+            "type": "radio",
+            "label": "Should any specific STEP provisions be excluded?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "YesOne", "label": "Yes, one provision" },
+               { "value": "YesMultiple", "label": "Yes, multiple provisions" }
+            ],
+            "value": null,
+            "conditions": [
+                { "field": "stepProvisionsApply", "operator": "neq", "value": "NoProvisions" }
+            ]
+          },
+           {
+            "id": "stepProvisionToExcludeOne",
+            "type": "text",
+            "label": "Which STEP provision is to be excluded?",
+            "placeholder": "e.g. 1",
+            "value": "",
+             "willClauseText": "The STEP provisions shall apply subject to the exclusion of provision [UserEnteredText].",
+             "conditions": [
+                {
+                 "operator": "AND",
+                  "clauses": [
+                      { "field": "stepProvisionsApply", "operator": "neq", "value": "NoProvisions" },
+                      { "field": "excludeSpecificStepProvisions", "operator": "eq", "value": "YesOne"}
+                  ]
+                }
+            ]
+          },
+          {
+            "id": "stepProvisionsToExcludeMultiple",
+            "type": "text",
+            "label": "Which STEP provisions are to be excluded?",
+            "placeholder": "e.g. 1, 2, & 3",
+            "value": "",
+            "willClauseText": "The STEP provisions shall apply subject to the exclusion of provisions [UserEnteredText].",
+            "conditions": [
+                {
+                 "operator": "AND",
+                  "clauses": [
+                      { "field": "stepProvisionsApply", "operator": "neq", "value": "NoProvisions" },
+                      { "field": "excludeSpecificStepProvisions", "operator": "eq", "value": "YesMultiple"}
+                  ]
+                }
+            ]
+          }
+        ]
+      },
+       
+      {
+        "formSection": "Estate Administration/Residue",
+        "fields": [
+          {
+            "id": "howResidueDistributed",
+            "type": "radio",
+            "label": "How shall residue be distributed?",
+             "infoText": "In this definition, the flexible life interest trust means a fixed life interest trust, followed by a discretionary trust.",
+            "options": [
+              { "value": "AsShares", "label": "As shares (standard)", "willClauseText": "My Trustees shall hold my Residuary Estate upon trust for [Residual Beneficiary List and Shares]."}, 
+              { "value": "IntoFLIT", "label": "Into a Flexible Life Interest Trust (see helper)", "willClauseText": "My Trustees shall hold my Residuary Estate upon trust to pay the income thereof to [Life Tenant Name] during [his/her] lifetime (subject to the power to revoke/reduce below) and after [his/her] death for [Final Beneficiaries/Distribution Details]..."} 
+            ],
+            "value": null
+          },
+          {
+            "id": "residualGiftsSection",
+            "type": "section",
+            "label": "Residual Gifts",
+            "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "AsShares" }
+            ],
+            "subFields": [
+              {
+                "id": "residualGiftsDetails",
+                "type": "textarea",
+                "label": "Enter residual gift details",
+                "placeholder": "Enter details of how the residuary estate should be distributed (e.g., '50% to my wife Jane Smith, 25% to my son John Smith, 25% to my daughter Sarah Jones')",
+                "rows": 5,
+                "value": ""
+              }
+            ]
+          },
+           {
+            "id": "powerToRevokeLifeInterest",
+            "type": "radio",
+            "label": "Power to revoke/reduce life interest?",
+            "infoText": "Without this power the discretionary beneficiaries of the trust can't receive any benefit from it until after the life tenant has died...",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "My Trustees shall have the power during the lifetime of the life tenant to revoke or reduce their interest and appoint capital or income to or for the benefit of the discretionary beneficiaries..." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "IntoFLIT" }
+            ]
+          },
+           {
+            "id": "appointSeparateTrusteesFLIT",
+            "type": "radio",
+            "label": "Do you wish to appoint separate Trustees?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I appoint [Separate Trustee(s) List] as Trustees specifically for the Flexible Life Interest Trust." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "IntoFLIT" }
+            ]
+          },
+          {
+            "id": "lifeTenantSectionFLIT",
+            "type": "section",
+            "label": "Life Tenant",
+             "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "IntoFLIT" }
+            ],
+            "subFields": [
+              {
+                "id": "lifeTenantDetails",
+                "type": "textarea",
+                "label": "Enter life tenant details",
+                "placeholder": "Enter details of the life tenant (e.g., 'My wife Jane Smith')",
+                "rows": 3,
+                "value": ""
+              }
+            ]
+          },
+           {
+            "id": "beneficiariesSectionFLIT",
+            "type": "section",
+            "label": "Beneficiaries",
+            "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "IntoFLIT" }
+            ],
+            "subFields": [
+              {
+                "id": "beneficiariesDetails",
+                "type": "textarea",
+                "label": "Enter beneficiaries details",
+                "placeholder": "Enter details of the beneficiaries (e.g., 'My children John Smith and Sarah Jones')",
+                "rows": 3,
+                "value": ""
+              }
+            ]
+          },
+           {
+            "id": "trustEndDistributionSectionFLIT",
+            "type": "section",
+            "label": "At the end of the Trust how is it to be distributed?",
+            "conditions": [
+              { "field": "howResidueDistributed", "operator": "eq", "value": "IntoFLIT" }
+            ],
+            "subFields": [
+              {
+                "id": "trustEndDistributionDetails",
+                "type": "textarea",
+                "label": "Enter distribution details",
+                "placeholder": "Enter details of how the trust should be distributed at the end (e.g., 'Equally between my children who survive me')",
+                "rows": 3,
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "specifyFurtherResidualGiftsOnFail",
+            "type": "radio",
+            "label": "Does the Testator wish to specify any further gifts of residue, should the aforementioned gifts fail?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any gift of my Residuary Estate should fail, I give the failed share to [Further Residual Beneficiary List and Shares]."}
+            ],
+            "value": null
+          },
+          {
+            "id": "furtherResidualGiftsSection",
+            "type": "section",
+            "label": "Further Residual Gifts",
+            "conditions": [
+              { "field": "specifyFurtherResidualGiftsOnFail", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "furtherResidualGiftsDetails",
+                "type": "textarea",
+                "label": "Enter further residual gift details",
+                "placeholder": "Enter details of the contingent residuary gifts (e.g., 'To my brother Robert Smith')",
+                "rows": 3,
+                "value": ""
+              }
+            ]
+          },
+           {
+            "id": "failedResiduePassProportionately",
+            "type": "radio",
+            "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "If any share of my Residuary Estate should fail, that share shall be added proportionately to the other shares of my Residuary Estate."}
+            ],
+            "value": null
+          },
+           {
+            "id": "give10PercentToCharity",
+            "type": "radio",
+            "label": "Does the Testator wish to give at least 10% of their net estate to charity?",
+            "infoText": "A charitable gift of 10% or more of your estate will reduce the rate of tax due on the balance from 40% to 36% but will cause your executors much more work and possibly involve complex calculations",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "I give [10% / minimum amount specified] of my net estate [conditionally if IHT due] to [Charity/Charities List]..."}
+            ],
+            "value": null
+          },
+          {
+            "id": "charityGiftOnlyIfIHTDue",
+            "type": "radio",
+            "label": "Shall the gift be made only if inheritance tax is due?",
+             "conditions": [
+              { "field": "give10PercentToCharity", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes", "willClauseText": "(This gift shall only take effect if Inheritance Tax would otherwise be payable on my estate)"}
+            ],
+            "value": null
+          },
+          {
+            "id": "splitCharitableGift",
+            "type": "radio",
+            "label": "Shall the charitable gift be split in different shares to different charities?",
+             "conditions": [
+              { "field": "give10PercentToCharity", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "charityBenefitSection",
+            "type": "section",
+            "label": "Which charities shall benefit?",
+            "conditions": [
+                { "field": "give10PercentToCharity", "operator": "eq", "value": "Yes" }
+            ],
+            "subFields": [
+              {
+                "id": "charityBenefitDetails",
+                "type": "textarea",
+                "label": "Enter charity details",
+                "placeholder": "Enter details of the charities that will benefit (e.g., 'The British Red Cross (Charity No. 220949)')",
+                "rows": 3,
+                "value": ""
+              }
+            ]
+          },
+          {
+            "id": "minimumCharityAmount",
+            "type": "radio",
+            "label": "Is there a minimum amount or percentage you wish to leave whether tax relief is available or not?",
+             "conditions": [
+              { "field": "give10PercentToCharity", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "minimumCharityAmountValue",
+            "type": "text",
+            "label": "What is the amount?",
+            "examples": ["ONE THOUSAND POUNDS", "5% of my Residual Estate"],
+            "value": "",
+             
+             "conditions": [
+                {
+                 "operator": "AND",
+                  "clauses": [
+                      { "field": "give10PercentToCharity", "operator": "eq", "value": "Yes" },
+                      { "field": "minimumCharityAmount", "operator": "eq", "value": "Yes"}
+                  ]
+                }
+            ]
+          },
+          {
+            "id": "howIHTDealtWithSplitting",
+            "type": "radio",
+            "label": "How shall IHT be dealt with when splitting residue between exempt and non-exempt beneficiaries? (if applicable)",
+            "options": [
+              { "value": "NA", "label": "N/A" },
+              { "value": "AfterTax", "label": "Division of shares after tax (Benham)", "willClauseText": "Inheritance Tax payable on my Residuary Estate shall be deducted before the calculation of shares passing to exempt and non-exempt beneficiaries (Benham calculation)." },
+              { "value": "BeforeTax", "label": "Division of shares before tax (Ratcliffe - default)", "willClauseText": "Inheritance Tax payable on my Residuary Estate shall be borne by the non-exempt beneficiaries' shares (Ratcliffe calculation)." }
+            ],
+            "value": null
+          }
+        ]
+      },
+      
+      {
+        "formSection": "Testamentary Capacity",
+        "fields": [
+          {
+            "id": "physicalHealthDescription",
+            "type": "textarea",
+            "label": "How would you describe the Testator's physical health?",
+            "value": ""
+            
+          },
+          {
+            "id": "capacityConcerns",
+            "type": "radio",
+            "label": "Do you have any concerns about the Testator in respect of capacity, confusion or memory loss?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+            
+          },
+          {
+            "id": "hasTestamentaryCapacity",
+            "type": "radio",
+            "label": "Does the Testator have Testamentary Capacity?",
+            "infoText": "The test for capacity to execute a valid Will is based in case law...",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+            
+          },
+          {
+            "id": "satisfiedUnderstandsInstructions",
+            "type": "radio",
+            "label": "Are you satisfied that the Testator understands that they are giving instructions for their Will?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+            
+          },
+          {
+            "id": "satisfiedAwareOfClaims",
+            "type": "radio",
+            "label": "Are you satisfied that the Testator is aware of who may have a claim on their Estate?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+            
+          },
+           {
+            "id": "otherPeoplePresent",
+            "type": "radio",
+            "label": "Are there any other people present at the time of taking instruction other than the client?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+            
+          },
+           {
+            "id": "satisfiedNotUndulyInfluenced",
+            "type": "radio",
+            "label": "Are you satisfied that the Testator isn't being unduly influenced by any other person?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+             
+          },
+           {
+            "id": "hasDisabilityImpactingSignRead",
+            "type": "radio",
+            "label": "Does the Testator have any disabilities that impairs their ability to sign/read their Will?",
+            "placeholder": "E.g. blindness, severe infirmity",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+          {
+            "id": "inabilityToSignProvisions",
+            "type": "radio",
+            "label": "Shall any provisions be included for inability to sign the Will?",
+             "conditions": [
+              { "field": "hasDisabilityImpactingSignRead", "operator": "eq", "value": "Yes" }
+            ],
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "AbleToSignWeak", "label": "The Testator is able to sign, but their signature may be weak or shaky", "willClauseText": "Attestation clause to note signature is weak/shaky." },
+              { "value": "UnableToSignCanMark", "label": "The Testator is unable to sign but can make mark", "willClauseText": "Attestation clause to note Testator made their mark." },
+              { "value": "UnableToRead", "label": "The Testator is unable to read", "willClauseText": "Attestation clause to note Will was read over to Testator who confirmed understanding." },
+              { "value": "AbleToReadCannotSign", "label": "The Testator is able to read but cannot sign", "willClauseText": "Attestation clause to note Testator confirmed understanding and Will signed on their behalf by {{field:signingOnBehalfSection:fullDetails}} in their presence and by their direction." },
+              { "value": "VisuallyImpaired", "label": "Yes, the Testator is visually impaired", "willClauseText": "Attestation clause to note Will was read over to visually impaired Testator who confirmed understanding." },
+              { "value": "UnableToReadCannotSign", "label": "The Testator is unable to read and cannot sign", "willClauseText": "Attestation clause to note Will was read over to Testator who confirmed understanding and Will signed on their behalf by {{field:signingOnBehalfSection:fullDetails}} in their presence and by their direction." },
+              { "value": "VisuallyImpairedCanSign", "label": "The Testator is visually impaired but can sign", "willClauseText": "Attestation clause to note Will was read over to visually impaired Testator who confirmed understanding and signed." },
+              { "value": "ImperfectEnglish", "label": "The Testator has an imperfect knowledge of the English Language", "willClauseText": "Attestation clause to note Will was read over and interpreted by {{field:interpreterSection:fullDetails}} in {{field:nativeLanguage:value}} and English to Testator who confirmed understanding." }
+            ],
+            "value": null
+          },
+          {
+            "id": "signingOnBehalfSection",
+            "type": "section",
+            "label": "Who will be signing on the Testator's behalf?",
+            "conditions": [
+              { "field": "inabilityToSignProvisions", "operator": "in", "value": ["AbleToReadCannotSign", "UnableToReadCannotSign"] }
+            ],
+            "subFields": [
+               {
+                  "id": "signingOnBehalfStatusDisplay",
+                  "type": "display",
+                  "text": "No signer has been specified."
+               },
+               {
+                   "id": "addSigningOnBehalfButton",
+                   "type": "button",
+                   "label": "Add Signer",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "signingOnBehalfData",
+                  "type": "hidden",
+                  "value": null
+               }
+            ]
+          },
+           {
+            "id": "interpreterSection",
+            "type": "section",
+            "label": "Who is the interpreter?",
+             "infoText": "An interpreter will be required as the second witness to read the Will in front of another witness, in both English and the Testator's native language.",
+             "conditions": [
+              { "field": "inabilityToSignProvisions", "operator": "eq", "value": "ImperfectEnglish" }
+            ],
+             "subFields": [
+               {
+                  "id": "interpreterStatusDisplay",
+                  "type": "display",
+                  "text": "No interpreter has been specified."
+               },
+               {
+                   "id": "addInterpreterButton",
+                   "type": "button",
+                   "label": "Add Interpreter",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "interpreterData",
+                  "type": "hidden",
+                  "value": null
+               }
+             ]
+          },
+           {
+            "id": "nativeLanguage",
+            "type": "text",
+            "label": "What is the Testator's native language?",
+            "value": "",
+            
+            "conditions": [
+              { "field": "inabilityToSignProvisions", "operator": "eq", "value": "ImperfectEnglish" }
+            ]
+          },
+          {
+            "id": "includeWitnessDetails",
+            "type": "radio",
+            "label": "Include Witness Details?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" }
+            ],
+            "value": null
+          },
+           {
+            "id": "witness1Section",
+            "type": "section",
+            "label": "Who is the first Witness?",
+            "conditions": [
+              { "field": "includeWitnessDetails", "operator": "eq", "value": "Yes" }
+            ],
+             "subFields": [
+               {
+                  "id": "witness1StatusDisplay",
+                  "type": "display",
+                  "text": "No witness has been specified."
+               },
+               {
+                   "id": "addWitness1Button",
+                   "type": "button",
+                   "label": "Add Witness",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "witness1Data",
+                  "type": "hidden",
+                  "value": null
+               }
+             ]
+          },
+           {
+            "id": "witness2Section",
+            "type": "section",
+            "label": "Who is the second Witness?",
+            "conditions": [
+              { "field": "includeWitnessDetails", "operator": "eq", "value": "Yes" }
+            ],
+             "subFields": [
+               {
+                  "id": "witness2StatusDisplay",
+                  "type": "display",
+                  "text": "No witness has been specified."
+               },
+               {
+                   "id": "addWitness2Button",
+                   "type": "button",
+                   "label": "Add Witness",
+                   "action": "openAddForm"
+               },
+               {
+                  "id": "witness2Data",
+                  "type": "hidden",
+                  "value": null
+               }
+             ]
+          },
+          {
+            "id": "consultantSignature",
+            "type": "signature",
+            "label": "Consultant's Signature",
+            "subLabel": "Sign below:",
+            "actions": [ { "label": "Clear", "action": "clearSignature"} ]
+             
+          },
+           {
+            "id": "clientSignature",
+            "type": "signature",
+            "label": "Client's Signature",
+            "subLabel": "Sign below:",
+             "actions": [ { "label": "Clear", "action": "clearSignature"} ]
+          }
+        ]
+      }
+    ]
+  }
