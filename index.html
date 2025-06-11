@@ -2,12 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <title>Will Tool</title>
+
+    <!-- Optional: Add favicon -->
+    <link rel="icon" href="/favicon.ico" />
+
+    <!-- Optional: Open Graph metadata -->
+    <meta name="description" content="Will Tool MVP - Generate legally valid wills with ease" />
+    <meta property="og:title" content="Will Tool" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/preview.png" />
+    <meta property="og:url" content="https://yourdomain.com" />
   </head>
-  <body>
-    <div id="root"></div>
+
+  <body class="bg-gray-50 text-gray-800 min-h-screen w-screen overflow-hidden">
+    <!-- React Root Element -->
+    <div id="root" class="h-full"></div>
+
+    <!-- Main React App Mount Point -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

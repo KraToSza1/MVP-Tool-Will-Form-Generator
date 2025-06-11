@@ -59,12 +59,11 @@
           },
           {
             "id": "dateOfBirth",
-            "type": "text",
+            "type": "date",
             "label": "Date of Birth",
             "placeholder": "dd/mm/yyyy",
             "infoText": "Please enter date in format: dd/mm/yyyy",
             "value": "",
-            "pattern": "[0-9]{2}/[0-9]{2}/[0-9]{4}",
             "required": true
           },
           {
