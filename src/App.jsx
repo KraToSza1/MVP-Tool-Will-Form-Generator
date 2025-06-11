@@ -12,21 +12,23 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden text-gray-800 bg-gray-50">
-      {/* This outer div ensures the sidebar is fixed and the main content scrolls */}
-
+    <div className="min-h-screen w-full flex flex-col lg:flex-row overflow-hidden text-gray-800 bg-gray-50">
       {/* --------------------------- */}
-      {/* Main Content Area */}a
+      {/* Main Content Area */}
       {/* --------------------------- */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto py-10 px-4">
+      <main className="flex-1 h-screen overflow-y-auto">
+        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           {/* --------------------------- */}
-          {/* Header Section (Unchanged) */}
+          {/* Header Section */}
           {/* --------------------------- */}
-          <header className="relative border shadow-md px-8 py-6 rounded-xl mb-10 bg-white">
+          <header className="relative border shadow-md px-6 sm:px-8 py-6 rounded-xl mb-10 bg-white">
             <div className="text-center">
-              <img src={logo} alt="Aristone Logo" className="h-12 mx-auto mb-2" />
-              <h1 className="text-3xl font-bold">Will Tool MVP</h1>
+              <img
+                src={logo}
+                alt="Aristone Logo"
+                className="h-10 sm:h-12 mx-auto mb-2"
+              />
+              <h1 className="text-2xl sm:text-3xl font-bold">Will Tool MVP</h1>
             </div>
           </header>
 
@@ -35,7 +37,7 @@ export default function App() {
           {/* --------------------------- */}
           <FormRenderer />
         </div>
-      </div>
+      </main>
     </div>
   );
 }

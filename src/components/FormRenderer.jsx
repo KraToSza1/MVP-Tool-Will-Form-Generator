@@ -80,39 +80,51 @@ export default function FormRenderer() {
     return true;
   });
 
+  const isFormFullyCompleted = () => {
+    return formData.formSections.every(section =>
+      section.fields.every(field => {
+        if (field.required) {
+          if (field.type === 'checkboxGroup') {
+            return Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          }
+          return !!formValues[field.id];
+        }
+        return true;
+      })
+    );
+  };
+
   // ---------------------------
   // Navigation Logic
   // ---------------------------
   const goNext = () => {
     if (currentIndex < formData.formSections.length - 1) {
-      console.log('🟦 Next section');
       setCurrentIndex(currentIndex + 1);
     } else {
       setSubmitted(true);
       localStorage.removeItem('willForm');
-      console.log('✅ Form submitted and draft cleared');
     }
   };
 
   const goBack = () => {
     if (currentIndex > 0) {
-      console.log('🟨 Back section');
       setCurrentIndex(currentIndex - 1);
     }
   };
 
   const saveDraft = () => {
     localStorage.setItem('willForm', JSON.stringify(formValues));
-    console.log('💾 Draft saved:', formValues);
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 transition-colors duration-300">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50">
+      {/* Sidebar */}
       <Sidebar currentIndex={currentIndex} setCurrentIndex={setCurrentIndex} />
 
-      <main className="flex-1 flex justify-center py-10 px-4">
-        <div className="w-full max-w-3xl bg-white rounded-xl shadow-md p-10 relative">
-          {/* Progress */}
+      {/* Main Content */}
+      <main className="flex-1 flex justify-center py-10 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-3xl bg-white rounded-xl shadow-md p-6 sm:p-10">
+          {/* Progress Bar */}
           <div className="mb-6">
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
@@ -125,31 +137,31 @@ export default function FormRenderer() {
             </div>
           </div>
 
-          {/* Header & PDF */}
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800">
+          {/* Title & PDF Download */}
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
               {formData.formTitle || 'Legacy Last Will & Testament Questionnaire'}
             </h1>
 
-            <PDFDownloadLink
-              document={<PDFDocument formValues={formValues} />}
-              fileName="Will-Preview.pdf"
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition"
-            >
-              {({ loading }) => {
-                if (loading) console.log('📄 Generating PDF...');
-                else console.log('📥 PDF ready to download');
-                return loading ? 'Generating PDF...' : (<><Download size={18} /><span>Download PDF</span></>);
-              }}
-            </PDFDownloadLink>
+            {isFormFullyCompleted() ? (
+              <PDFDownloadLink
+                document={<PDFDocument formValues={formValues} />}
+                fileName="Will-Preview.pdf"
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow transition"
+              >
+                {({ loading }) => loading ? 'Generating PDF...' : (<><Download size={18} /><span>Download PDF</span></>)}
+              </PDFDownloadLink>
+            ) : (
+              <span className="text-sm text-gray-400 italic">Complete all required fields to enable download</span>
+            )}
           </div>
 
-          {/* Section Title */}
+          {/* Section Header */}
           <h2 className="text-xl font-semibold border-b pb-2 mb-8 text-gray-700 border-indigo-600">
             {currentSection.formSection}
           </h2>
 
-          {/* Field List */}
+          {/* Fields */}
           <div className="space-y-8">
             {currentSection.fields.map((field) => (
               <div key={field.id}>
@@ -165,7 +177,7 @@ export default function FormRenderer() {
           </div>
 
           {/* Navigation */}
-          <div className="flex justify-between mt-12 space-x-2">
+          <div className="flex flex-col sm:flex-row justify-between mt-12 gap-4">
             <button
               onClick={goBack}
               disabled={currentIndex === 0}
@@ -182,8 +194,8 @@ export default function FormRenderer() {
             </button>
           </div>
 
-          {/* Save & Preview */}
-          <div className="mt-6 flex gap-4 items-start">
+          {/* Save + Preview */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start">
             <button
               onClick={saveDraft}
               className="bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-2 rounded shadow transition duration-200"
@@ -192,13 +204,12 @@ export default function FormRenderer() {
               Save Draft
             </button>
 
-            <aside className="flex-1 bg-gray-100 border border-gray-300 p-4 rounded shadow-inner">
+            <aside className="flex-1 bg-gray-100 border border-gray-300 p-4 rounded shadow-inner w-full">
               <h3 className="font-bold mb-2 text-gray-800">Clause Preview</h3>
               <div className="text-sm whitespace-pre-line text-gray-700">
                 {currentSection.fields.map(field => {
                   if (!field.willClauseText) return null;
                   const interpolated = interpolateText(field.willClauseText, formValues);
-                  // Only show if there are NO remaining {{field:...}} placeholders
                   if (/\{\{field:[^}]+\}\}/.test(interpolated)) return null;
                   return (
                     <div key={field.id} className="mb-4">
@@ -214,9 +225,9 @@ export default function FormRenderer() {
 
       {/* Modal */}
       {submitted && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">Submission Complete!</h2>
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 px-4">
+          <div className="bg-white p-6 sm:p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+            <h2 className="text-xl sm:text-2xl font-bold mb-4 text-gray-900">Submission Complete!</h2>
             <p className="text-gray-700">Your will form has been submitted successfully.</p>
             <button
               onClick={() => setSubmitted(false)}

@@ -8,6 +8,7 @@
             "id": "title",
             "type": "radio",
             "label": "Title",
+            "required": true,
             "options": [
               { "value": "Mr", "label": "Mr" },
               { "value": "Mrs", "label": "Mrs" },
@@ -70,6 +71,7 @@
             "id": "gender",
             "type": "radio",
             "label": "Gender",
+            "required": true,
             "options": [
               { "value": "Male", "label": "Male" },
               { "value": "Female", "label": "Female" },
@@ -81,6 +83,7 @@
             "id": "mobile",
             "type": "text",
             "label": "Mobile",
+            "required": true,
             "placeholder": "Mobile phone number",
             "value": ""
           },
@@ -95,6 +98,7 @@
             "id": "email",
             "type": "text",
             "label": "Email",
+            "required": true,
             "placeholder": "email@example.com",
             "value": ""
           },

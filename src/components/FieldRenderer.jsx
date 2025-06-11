@@ -13,9 +13,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
       if (clause.operator === 'in') return clause.value.includes(value);
       if (clause.operator === 'AND' || clause.operator === 'OR') {
         const results = clause.clauses.map(evalClause);
-        return clause.operator === 'AND'
-          ? results.every(Boolean)
-          : results.some(Boolean);
+        return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
       }
       return false;
     };
@@ -224,7 +222,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
           <SignatureCanvas
             penColor="black"
-            canvasProps={{ width: 500, height: 100, className: 'sigCanvas' }}
+            canvasProps={{ width: 500, height: 100, className: 'sigCanvas w-full h-24' }}
             ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
             onEnd={() => {
               const dataUrl = sigCanvasRef.current[field.id]?.getTrimmedCanvas()?.toDataURL('image/png');
@@ -268,7 +266,6 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition-colors duration-300"
           value={formValues[field.id] || ''}
           onChange={e => setFormValues(prev => ({ ...prev, [field.id]: e.target.value }))}
-          style={{ color: "#1a202c" }} // This makes the date text darker
         />
       </div>
     );

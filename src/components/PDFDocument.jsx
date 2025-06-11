@@ -52,15 +52,6 @@ const styles = StyleSheet.create({
     marginTop: 60,
     alignSelf: 'center',
   },
-  coverFirm: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#6d28d9',
-    fontWeight: 'bold',
-    marginTop: 18,
-    letterSpacing: 1,
-    fontFamily: 'Helvetica-Bold',
-  },
   page: {
     padding: 50,
     fontSize: 12,
@@ -81,10 +72,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 1.4,
     marginBottom: 8,
-  },
-  signatureBlock: {
-    marginTop: 40,
-    fontSize: 12,
   },
   signatureImage: {
     marginTop: 10,
@@ -182,7 +169,7 @@ const renderFields = (fields, formValues, parentKey = '') =>
       }
 
       return (
-        <View key={key} style={{ marginBottom: 12 }} wrap={true}>
+        <View key={key} style={{ marginBottom: 12 }} wrap>
           <Text style={styles.fieldLabel}>{field.label}</Text>
           <Text style={styles.bodyText}>{label}</Text>
         </View>
@@ -193,7 +180,7 @@ const renderFields = (fields, formValues, parentKey = '') =>
       return (
         <View key={key} style={{ marginBottom: 12 }}>
           <Text style={styles.fieldLabel}>{field.label}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {value.map((item, i) => (
               <View key={`${key}-${i}`} style={{ width: '48%', marginBottom: 12 }}>
                 {typeof item === 'object' ? (
@@ -225,7 +212,7 @@ const PDFDocument = ({ formValues = {} }) => (
     <Page size="A4" style={styles.coverPage}>
       <View style={styles.borderOuter} fixed />
       <View style={styles.borderInner} fixed />
-      <Text style={styles.coverTitle}>Last Will{''}and Testament</Text>
+      <Text style={styles.coverTitle}>Last Will and Testament</Text>
       <Text style={styles.coverOf}>-of-</Text>
       <Image style={styles.coverLogo} src={logo} />
     </Page>
@@ -247,7 +234,6 @@ const PDFDocument = ({ formValues = {} }) => (
       <Text style={{ marginTop: 18 }}>Date</Text>
       <View style={styles.line} />
 
-      {/* Show Signature if captured */}
       <Text style={{ marginTop: 18 }}>SIGNATURE</Text>
       {formValues.testatorSignature ? (
         <Image src={formValues.testatorSignature} style={styles.signatureImage} />
