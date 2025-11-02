@@ -21,14 +21,14 @@ export default function App() {
           {/* --------------------------- */}
           {/* Header Section */}
           {/* --------------------------- */}
-          <header className="relative border shadow-md px-6 sm:px-8 py-6 rounded-xl mb-10 bg-white">
+          <header className="relative border shadow-md px-4 sm:px-6 py-4 rounded-xl mb-6 bg-white border-gray-200">
             <div className="text-center">
               <img
                 src={logo}
                 alt="Aristone Logo"
                 className="h-10 sm:h-12 mx-auto mb-2"
               />
-              <h1 className="text-2xl sm:text-3xl font-bold">Will Tool MVP</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Will Tool MVP</h1>
             </div>
           </header>
 

@@ -9,6 +9,7 @@ import {
 } from '@react-pdf/renderer';
 import logo from '../assets/logo_resized.png';
 import formSchema from '../data/Complete-WillSuite-Form-Data.json';
+import { formatUKDate, formatUKPostcode, formatUKPhoneNumber } from '../utils/ukValidations';
 
 // =====================
 // STYLES
@@ -112,17 +113,25 @@ const styles = StyleSheet.create({
 // =====================
 // UTILS
 // =====================
-const getFullName = (fv) =>
-  [fv.title, fv.firstName, fv.middleName, fv.lastName].filter(Boolean).join(' ') || '[Full Name]';
+const getFullName = (fv) => {
+  if (!fv || typeof fv !== 'object') return '[Full Name]';
+  return [fv.title, fv.firstName, fv.middleName, fv.lastName].filter(Boolean).join(' ') || '[Full Name]';
+};
 
 const evaluateConditions = (conditions, formValues) => {
   if (!conditions) return true;
+  if (!formValues || typeof formValues !== 'object') return false;
 
   const evalClause = (clause) => {
+    if (!clause || !clause.field) return false;
     const value = formValues[clause.field];
     if (clause.operator === 'eq') return value === clause.value;
-    if (clause.operator === 'in') return clause.value.includes(value);
+    if (clause.operator === 'in') {
+      if (!Array.isArray(clause.value)) return value === clause.value;
+      return clause.value.includes(value);
+    }
     if (clause.operator === 'AND' || clause.operator === 'OR') {
+      if (!clause.clauses || !Array.isArray(clause.clauses)) return false;
       const results = clause.clauses.map(evalClause);
       return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
     }
@@ -134,8 +143,14 @@ const evaluateConditions = (conditions, formValues) => {
     : evalClause(conditions);
 };
 
-const renderFields = (fields, formValues, parentKey = '') =>
-  fields.map((field, idx) => {
+const renderFields = (fields, formValues, parentKey = '', depth = 0) => {
+  if (!fields || !Array.isArray(fields) || !formValues || typeof formValues !== 'object') {
+    return [];
+  }
+  
+  return fields.map((field, idx) => {
+    if (!field) return null;
+    
     const key = `${parentKey}${field.id || idx}`;
     const value = formValues[field.id];
 
@@ -157,74 +172,180 @@ const renderFields = (fields, formValues, parentKey = '') =>
       );
     }
 
+    // Skip signature fields and data URLs completely
+    if (field.type === 'signature' || (typeof value === 'string' && value.startsWith('data:'))) {
+      return null;
+    }
+    
+    // Skip very long strings
+    if (typeof value === 'string' && value.length > 50000) {
+      return null;
+    }
+    
     if (
       ['text', 'textarea', 'radio', 'select', 'number', 'date'].includes(field.type) &&
       value !== undefined &&
       value !== ''
     ) {
-      let label = value;
-      if ((field.type === 'radio' || field.type === 'select') && field.options) {
-        const option = field.options.find((o) => o.value === value);
-        label = option ? option.label : value;
+      let label = String(value || '').substring(0, 5000);
+      
+      // Remove corrupted numbers from text before rendering
+      label = label.replace(/-?\d+\.?\d*[eE][+-]?2\d+/g, '').replace(/-1\.8\d*[eE][+-]?\d+/gi, '').replace(/1\.8\d*[eE][+-]?2\d+/gi, '');
+      
+      if ((field.type === 'radio' || field.type === 'select') && field.options && Array.isArray(field.options)) {
+        try {
+          const option = field.options.find((o) => o && o.value === value);
+          if (option && option.label) {
+            let optionLabel = String(option.label);
+            // Sanitize option label too
+            optionLabel = optionLabel.replace(/-?\d+\.?\d*[eE][+-]?2\d+/g, '').replace(/-1\.8\d*[eE][+-]?\d+/gi, '').replace(/1\.8\d*[eE][+-]?2\d+/gi, '');
+            label = optionLabel;
+          }
+        } catch (e) {
+          label = String(value || '');
+        }
       }
 
-      return (
-        <View key={key} style={{ marginBottom: 12 }} wrap>
-          <Text style={styles.fieldLabel}>{field.label}</Text>
-          <Text style={styles.bodyText}>{label}</Text>
-        </View>
-      );
+      try {
+        if (field.type === 'date') {
+          label = formatUKDate(value) || label;
+        } else if (field.id === 'postcode' || (field.id && field.id.toLowerCase().includes('postcode'))) {
+          label = formatUKPostcode(value) || label;
+        } else if (field.id === 'mobile' || field.id === 'tel2' || (field.id && (field.id.toLowerCase().includes('phone') || field.id.toLowerCase().includes('tel')))) {
+          label = formatUKPhoneNumber(value) || label;
+        }
+      } catch (formatError) {
+        label = String(value || '');
+      }
+      
+      // Final sanitization pass
+      label = label.replace(/-?\d+\.?\d*[eE][+-]?2\d+/g, '').replace(/-1\.8\d*[eE][+-]?\d+/gi, '').replace(/1\.8\d*[eE][+-]?2\d+/gi, '');
+      
+      if (label.length === 0) return null;
+      
+      try {
+        return (
+          <View key={key} style={{ marginBottom: 12 }} wrap>
+            <Text style={styles.fieldLabel}>{String(field.label || '')}</Text>
+            <Text style={styles.bodyText} wrap>{label}</Text>
+          </View>
+        );
+      } catch (renderError) {
+        console.error(`Error rendering field "${field.id}":`, renderError);
+        return null;
+      }
     }
 
     if (Array.isArray(value) && value.length > 0) {
-      return (
-        <View key={key} style={{ marginBottom: 12 }}>
-          <Text style={styles.fieldLabel}>{field.label}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {value.map((item, i) => (
-              <View key={`${key}-${i}`} style={{ width: '48%', marginBottom: 12 }}>
-                {typeof item === 'object' ? (
-                  Object.entries(item).map(([k, v]) => (
-                    <Text key={k} style={styles.bodyText}>
-                      <Text style={styles.fieldLabel}>{k.replace(/([A-Z])/g, ' $1')}: </Text>
-                      {String(v)}
-                    </Text>
-                  ))
-                ) : (
-                  <Text style={styles.bodyText}>{String(item)}</Text>
-                )}
-              </View>
-            ))}
+      const safeItems = value.filter((item) => {
+        if (typeof item === 'string' && (item.length > 50000 || item.startsWith('data:'))) {
+          return false;
+        }
+        return item != null;
+      });
+      
+      if (safeItems.length === 0) return null;
+      
+      try {
+        return (
+          <View key={key} style={{ marginBottom: 12 }}>
+            <Text style={styles.fieldLabel}>{field.label || ''}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {safeItems.map((item, i) => {
+                try {
+                  if (typeof item === 'object' && item !== null) {
+                    return (
+                      <View key={`${key}-${i}`} style={{ width: '48%', marginBottom: 12 }}>
+                        {Object.entries(item)
+                          .filter(([k, v]) => {
+                            if (typeof v === 'string' && (v.length > 5000 || v.startsWith('data:'))) {
+                              return false;
+                            }
+                            return v != null;
+                          })
+                          .map(([k, v]) => {
+                            let safeValue = String(v || '').substring(0, 1000);
+                            // Remove corrupted numbers from nested values
+                            safeValue = safeValue.replace(/-?\d+\.?\d*[eE][+-]?2\d+/g, '').replace(/-1\.8\d*[eE][+-]?\d+/gi, '').replace(/1\.8\d*[eE][+-]?2\d+/gi, '');
+                            return (
+                              <Text key={k} style={styles.bodyText}>
+                                <Text style={styles.fieldLabel}>{k.replace(/([A-Z])/g, ' $1')}: </Text>
+                                {safeValue}
+                              </Text>
+                            );
+                          })}
+                      </View>
+                    );
+                  }
+                  let safeItem = String(item || '').substring(0, 1000);
+                  // Remove corrupted numbers from array items
+                  safeItem = safeItem.replace(/-?\d+\.?\d*[eE][+-]?2\d+/g, '').replace(/-1\.8\d*[eE][+-]?\d+/gi, '').replace(/1\.8\d*[eE][+-]?2\d+/gi, '');
+                  return (
+                    <View key={`${key}-${i}`} style={{ width: '48%', marginBottom: 12 }}>
+                      <Text style={styles.bodyText}>{safeItem}</Text>
+                    </View>
+                  );
+                } catch (itemError) {
+                  return null;
+                }
+              })}
+            </View>
           </View>
-        </View>
-      );
+        );
+      } catch (arrayError) {
+        console.error(`Error rendering array field "${field.id}":`, arrayError);
+        return null;
+      }
     }
 
     return null;
-  });
+  }).filter(Boolean);
+};
 
 // =====================
 // MAIN COMPONENT
 // =====================
-const PDFDocument = ({ formValues = {} }) => (
-  <Document>
-    {/* COVER PAGE */}
-    <Page size="A4" style={styles.coverPage}>
-      <View style={styles.borderOuter} fixed />
-      <View style={styles.borderInner} fixed />
-      <Text style={styles.coverTitle}>Last Will and Testament</Text>
-      <Text style={styles.coverOf}>-of-</Text>
-      <Image style={styles.coverLogo} src={logo} />
-    </Page>
+const PDFDocument = ({ formValues = {}, testatorSignature = null }) => {
+  const safeFormValues = formValues && typeof formValues === 'object' ? formValues : {};
+  
+  try {
+    return (
+      <Document>
+      {/* COVER PAGE */}
+      <Page size="A4" style={styles.coverPage}>
+        <View style={styles.borderOuter} fixed />
+        <View style={styles.borderInner} fixed />
+        <Text style={styles.coverTitle}>Last Will and Testament</Text>
+        <Text style={styles.coverOf}>-of-</Text>
+        {logo && <Image style={styles.coverLogo} src={logo} />}
+      </Page>
 
     {/* CONTENT PAGE */}
     <Page size="A4" style={styles.page}>
       <Text style={styles.bodyText}>
-        This is the Will of {getFullName(formValues)}.
+        {(() => {
+          try {
+            const fullName = getFullName(safeFormValues);
+            if (!fullName || typeof fullName !== 'string' || fullName.length === 0 || fullName.length > 500) {
+              return 'This is the Will of [Name].';
+            }
+            return `This is the Will of ${fullName}.`;
+          } catch (nameError) {
+            return 'This is the Will of [Name].';
+          }
+        })()}
       </Text>
-      {formSchema.formSections.map((section, idx) =>
-        renderFields(section.fields, formValues, `section${idx}-`)
-      )}
+      {formSchema && formSchema.formSections && Array.isArray(formSchema.formSections)
+        ? formSchema.formSections.map((section, idx) => {
+            if (!section || !section.fields) return null;
+            try {
+              return renderFields(section.fields, safeFormValues, `section${idx}-`, 0);
+            } catch (sectionError) {
+              console.error(`Error rendering section ${idx}:`, sectionError);
+              return null;
+            }
+          })
+        : null}
       <Text style={styles.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} fixed />
     </Page>
 
@@ -235,8 +356,16 @@ const PDFDocument = ({ formValues = {} }) => (
       <View style={styles.line} />
 
       <Text style={{ marginTop: 18 }}>SIGNATURE</Text>
-      {formValues.testatorSignature ? (
-        <Image src={formValues.testatorSignature} style={styles.signatureImage} />
+      {testatorSignature && 
+       typeof testatorSignature === 'string' && 
+       testatorSignature.startsWith('data:image') &&
+       testatorSignature.length > 100 &&
+       testatorSignature.length < 1000000 ? (
+        <Image 
+          src={testatorSignature} 
+          style={styles.signatureImage}
+          cache={false}
+        />
       ) : (
         <View style={styles.line} />
       )}
@@ -265,6 +394,18 @@ const PDFDocument = ({ formValues = {} }) => (
       <Text style={styles.pageNum} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} fixed />
     </Page>
   </Document>
-);
+    );
+    } catch (error) {
+      console.error('PDF Document Error:', error);
+      return (
+        <Document>
+          <Page size="A4" style={styles.page}>
+            <Text style={styles.bodyText}>Error generating PDF document.</Text>
+            <Text style={styles.bodyText}>Error: {error.message || 'Unknown error'}</Text>
+          </Page>
+        </Document>
+      );
+    }
+};
 
 export default PDFDocument;

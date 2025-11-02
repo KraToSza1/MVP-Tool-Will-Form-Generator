@@ -10,30 +10,30 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-pdf/renderer": "^4.3.0",
+    "@react-pdf/renderer": "^4.3.1",
     "buffer": "^6.0.3",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.1",
-    "lucide-react": "^0.511.0",
-    "react": "^18.2.0",
-    "react-datepicker": "^8.4.0",
-    "react-dom": "^18.2.0",
+    "jspdf": "^3.0.3",
+    "lucide-react": "^0.552.0",
+    "react": "^19.2.0",
+    "react-datepicker": "^8.8.0",
+    "react-dom": "^19.2.0",
     "react-signature-canvas": "^1.1.0-alpha.2"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.10",
-    "@tailwindcss/postcss": "^4.1.7",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "^4.4.1",
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.21",
-    "eslint": "^9.25.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.19",
-    "globals": "^16.0.0",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
     "init": "^0.1.2",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^4.1.7",
-    "vite": "^6.3.5"
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.16",
+    "vite": "^7.1.12"
   }
 }

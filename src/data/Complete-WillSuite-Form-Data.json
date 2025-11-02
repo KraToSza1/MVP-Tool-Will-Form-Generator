@@ -84,14 +84,16 @@
             "type": "text",
             "label": "Mobile",
             "required": true,
-            "placeholder": "Mobile phone number",
+            "placeholder": "e.g., 07123 456789",
+            "infoText": "UK mobile number format (e.g., 07123 456789)",
             "value": ""
           },
           {
             "id": "tel2",
             "type": "text",
             "label": "Tel 2",
-            "placeholder": "Alternative phone number",
+            "placeholder": "e.g., 020 1234 5678",
+            "infoText": "UK landline or alternative number (e.g., 020 1234 5678)",
             "value": ""
           },
           {
@@ -112,32 +114,37 @@
             "id": "address",
             "type": "section",
             "label": "Address",
+            "infoText": "UK address format: Address line(s) followed by postcode",
             "subFields": [
-              {
-                "id": "postcode",
-                "type": "text",
-                "label": "Postcode",
-                "value": "",
-                "required": true
-              },
               {
                 "id": "address1",
                 "type": "text",
-                "label": "Address 1",
+                "label": "Address Line 1",
+                "placeholder": "e.g., Flat 5, 123 High Street",
                 "value": "",
                 "required": true
               },
               {
                 "id": "address2",
                 "type": "text",
-                "label": "Address 2",
+                "label": "Address Line 2",
+                "placeholder": "e.g., Town or District",
                 "value": ""
               },
               {
                 "id": "address3",
                 "type": "text",
-                "label": "Address 3",
+                "label": "Address Line 3",
+                "placeholder": "e.g., City or County",
                 "value": ""
+              },
+              {
+                "id": "postcode",
+                "type": "text",
+                "label": "Postcode",
+                "placeholder": "e.g., SW1A 1AA",
+                "value": "",
+                "required": true
               }
             ]
           }
@@ -2136,19 +2143,30 @@
              ]
           },
           {
+            "id": "testatorSignature",
+            "type": "signature",
+            "label": "Testator's Signature",
+            "infoText": "The Testator (person making the Will) may sign digitally here, or print the PDF and sign manually. If signing manually, leave this blank.",
+            "value": "",
+            "required": false
+          },
+          {
             "id": "consultantSignature",
             "type": "signature",
             "label": "Consultant's Signature",
+            "infoText": "The consultant/solicitor's signature. Optional - can be signed on printed copy.",
             "subLabel": "Sign below:",
-            "actions": [ { "label": "Clear", "action": "clearSignature"} ]
-             
+            "value": "",
+            "required": false
           },
-           {
+          {
             "id": "clientSignature",
             "type": "signature",
             "label": "Client's Signature",
+            "infoText": "The client's signature. Optional - can be signed on printed copy.",
             "subLabel": "Sign below:",
-             "actions": [ { "label": "Clear", "action": "clearSignature"} ]
+            "value": "",
+            "required": false
           }
         ]
       }
