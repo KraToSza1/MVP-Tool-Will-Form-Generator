@@ -1,11 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import SignatureCanvas from 'react-signature-canvas';
-import DatePicker from 'react-datepicker';
-import { registerLocale, setDefaultLocale } from 'react-datepicker';
-import { enGB } from 'date-fns/locale';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, Upload } from 'lucide-react';
-
-import 'react-datepicker/dist/react-datepicker.css';
 import {
   validateUKPostcode,
   formatUKPostcode,
@@ -16,9 +10,32 @@ import {
   getUKAddressExample,
 } from '../utils/ukValidations';
 
-// Register UK locale for date picker
-registerLocale('en-GB', enGB);
-setDefaultLocale('en-GB');
+let _datePickerPromise;
+async function loadDatePicker() {
+  if (_datePickerPromise) return _datePickerPromise;
+  _datePickerPromise = (async () => {
+    // Load styles only when the date picker is actually used (keeps initial CSS smaller).
+    await import('react-datepicker/dist/react-datepicker.css');
+    const dp = await import('react-datepicker');
+    // Import only the single locale we need (avoids bundling every locale).
+    const locale = await import('date-fns/locale/en-GB');
+    // Register locale once (idempotent in practice)
+    dp.registerLocale('en-GB', locale.enGB);
+    dp.setDefaultLocale('en-GB');
+    return dp.default;
+  })();
+  return _datePickerPromise;
+}
+
+const LazyDatePicker = React.lazy(async () => {
+  const Comp = await loadDatePicker();
+  return { default: Comp };
+});
+
+const LazySignatureCanvas = React.lazy(async () => {
+  const mod = await import('react-signature-canvas');
+  return { default: mod.default };
+});
 
 export default function FieldRenderer({ field, formValues, setFormValues }) {
   
@@ -29,11 +46,12 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   const inputRefs = useRef({});
   const sigContainerRef = useRef(null);
   const [sigCanvasWidth, setSigCanvasWidth] = useState(0);
+  const isSignatureField = field?.type === 'signature';
 
   // Keep the signature canvas bitmap width in sync with its container.
   // Must be unconditional (hooks rule), so we no-op unless this FieldRenderer instance is a signature field.
   useEffect(() => {
-    if (field?.type !== 'signature') return;
+    if (!isSignatureField) return;
     const el = sigContainerRef.current;
     if (!el) return;
 
@@ -50,7 +68,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [field?.type]);
+  }, [isSignatureField]);
   
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
@@ -692,54 +710,62 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           ref={sigContainerRef}
           className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300"
         >
-          <SignatureCanvas
-            penColor="black"
-            canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28' }}
-            ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
-            onEnd={() => {
-              try {
-                const canvas = sigCanvasRef.current[field.id];
-                if (!canvas) return;
-                
-                let dataUrl = null;
-                
+          <Suspense
+            fallback={
+              <div className="w-full h-28 flex items-center justify-center text-sm text-gray-500 bg-gray-50">
+                Loading signature pad…
+              </div>
+            }
+          >
+            <LazySignatureCanvas
+              penColor="black"
+              canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28' }}
+              ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
+              onEnd={() => {
                 try {
-                  const trimmedCanvas = canvas.getTrimmedCanvas();
-                  if (trimmedCanvas && typeof trimmedCanvas.toDataURL === 'function') {
-                    dataUrl = trimmedCanvas.toDataURL('image/png');
-                  }
-                } catch (trimError) {
-                  console.warn('getTrimmedCanvas failed, falling back to regular canvas:', trimError);
-                  if (canvas && canvas.getCanvas && typeof canvas.getCanvas().toDataURL === 'function') {
-                    dataUrl = canvas.getCanvas().toDataURL('image/png');
-                  }
-                }
-                
-                if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
-                  logFormChange(field.id, dataUrl ? 'Signature data URL' : null);
+                  const canvas = sigCanvasRef.current[field.id];
+                  if (!canvas) return;
                   
-                  // Clear validation errors when signature is captured
-                  setValidationErrors((prev) => {
-                    const newErrors = { ...prev };
-                    delete newErrors[field.id];
-                    return newErrors;
-                  });
+                  let dataUrl = null;
                   
-                  setFormValues((prev) => ({
-                    ...prev,
-                    [field.id]: dataUrl,
-                  }));
-                } else {
-                  console.warn('Invalid signature data URL generated');
-                  if (field.required) {
-                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please provide a signature.' }));
+                  try {
+                    const trimmedCanvas = canvas.getTrimmedCanvas();
+                    if (trimmedCanvas && typeof trimmedCanvas.toDataURL === 'function') {
+                      dataUrl = trimmedCanvas.toDataURL('image/png');
+                    }
+                  } catch (trimError) {
+                    console.warn('getTrimmedCanvas failed, falling back to regular canvas:', trimError);
+                    if (canvas && canvas.getCanvas && typeof canvas.getCanvas().toDataURL === 'function') {
+                      dataUrl = canvas.getCanvas().toDataURL('image/png');
+                    }
                   }
+                  
+                  if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
+                    logFormChange(field.id, dataUrl ? 'Signature data URL' : null);
+                    
+                    // Clear validation errors when signature is captured
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors[field.id];
+                      return newErrors;
+                    });
+                    
+                    setFormValues((prev) => ({
+                      ...prev,
+                      [field.id]: dataUrl,
+                    }));
+                  } else {
+                    console.warn('Invalid signature data URL generated');
+                    if (field.required) {
+                      setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please provide a signature.' }));
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error processing signature:', error);
                 }
-              } catch (error) {
-                console.error('Error processing signature:', error);
-              }
-            }}
-          />
+              }}
+            />
+          </Suspense>
         </div>
         <button
           type="button"
@@ -810,76 +836,78 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
             {FieldIcon}
           </div>
-          <DatePicker
-            selected={isValidDate ? dateValue : null}
-            onChange={(date) => {
-              if (date) {
-                const isoDate = date.toISOString().split('T')[0];
-                logFormChange(field.id, isoDate);
-                
-                // Validate date
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const selectedDate = new Date(date);
-                selectedDate.setHours(0, 0, 0, 0);
-                
-                // Clear errors if valid
-                setValidationErrors((prev) => {
-                  const newErrors = { ...prev };
-                  delete newErrors[field.id];
-                  return newErrors;
-                });
-                
-                setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
-              } else {
-                if (field.required) {
-                  setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
-                }
-                setFormValues((prev) => ({ ...prev, [field.id]: '' }));
-              }
-            }}
-            dateFormat="dd/MM/yyyy"
-            placeholderText="DD/MM/YYYY"
-            locale="en-GB"
-            showYearDropdown
-            showMonthDropdown
-            dropdownMode="select"
-            maxDate={new Date()}
-            withPortal
-            portalId="root-portal"
-            popperPlacement="bottom-start"
-            popperModifiers={[
-              {
-                name: 'offset',
-                options: {
-                  offset: [0, 8],
-                },
-              },
-              {
-                name: 'preventOverflow',
-                options: {
-                  rootBoundary: 'viewport',
-                  boundary: 'viewport',
-                  padding: 8,
-                },
-              },
-              {
-                name: 'flip',
-                options: {
-                  fallbackPlacements: ['top-start', 'bottom-start'],
-                  boundary: 'viewport',
-                },
-              },
-            ]}
-            customInput={
-              <input
-                readOnly
-                className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-pointer ${
-                  validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
-                }`}
-              />
+          <Suspense
+            fallback={
+              <div className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-gray-500 bg-gray-50">
+                Loading calendar…
+              </div>
             }
-          />
+          >
+            <LazyDatePicker
+              selected={isValidDate ? dateValue : null}
+              onChange={(date) => {
+                if (date) {
+                  const isoDate = date.toISOString().split('T')[0];
+                  logFormChange(field.id, isoDate);
+                  
+                  // Clear errors if valid
+                  setValidationErrors((prev) => {
+                    const newErrors = { ...prev };
+                    delete newErrors[field.id];
+                    return newErrors;
+                  });
+                  
+                  setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
+                } else {
+                  if (field.required) {
+                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
+                  }
+                  setFormValues((prev) => ({ ...prev, [field.id]: '' }));
+                }
+              }}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="DD/MM/YYYY"
+              locale="en-GB"
+              showYearDropdown
+              showMonthDropdown
+              dropdownMode="select"
+              maxDate={new Date()}
+              withPortal
+              portalId="root-portal"
+              popperPlacement="bottom-start"
+              popperModifiers={[
+                {
+                  name: 'offset',
+                  options: {
+                    offset: [0, 8],
+                  },
+                },
+                {
+                  name: 'preventOverflow',
+                  options: {
+                    rootBoundary: 'viewport',
+                    boundary: 'viewport',
+                    padding: 8,
+                  },
+                },
+                {
+                  name: 'flip',
+                  options: {
+                    fallbackPlacements: ['top-start', 'bottom-start'],
+                    boundary: 'viewport',
+                  },
+                },
+              ]}
+              customInput={
+                <input
+                  readOnly
+                  className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-pointer ${
+                    validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+                  }`}
+                />
+              }
+            />
+          </Suspense>
         </div>
         {validationErrors[field.id] && (
           <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">

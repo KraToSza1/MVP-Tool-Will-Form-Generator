@@ -46,6 +46,13 @@ export default function FormRenderer() {
     localStorage.setItem('willFormStep', String(currentIndex));
   }, [currentIndex]);
 
+  // Prefetch the PDF generator chunk when users reach the final step.
+  useEffect(() => {
+    if (currentIndex === formData.formSections.length - 1) {
+      import('./PDFGeneratorJSPDF.js').catch(() => {});
+    }
+  }, [currentIndex]);
+
   // ---------------------------
   // Text Interpolation Logic
   // ---------------------------
