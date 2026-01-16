@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import formData from '../data/Complete-WillSuite-Form-Data.json';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
 import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, FileCheck } from 'lucide-react';
-import { generatePDFWithJSPDF } from './PDFGeneratorJSPDF.js';
+import { toast } from 'sonner';
 
 export default function FormRenderer() {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const saved = localStorage.getItem('willFormStep');
+    const idx = saved != null ? Number(saved) : 0;
+    return Number.isFinite(idx) && idx >= 0 ? idx : 0;
+  });
   const [formValues, setFormValues] = useState(() => {
     const saved = localStorage.getItem('willForm');
     if (!saved) return {};
@@ -33,12 +37,19 @@ export default function FormRenderer() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [expandedFields, setExpandedFields] = useState({});
+  const [banner, setBanner] = useState(null); // { type: 'error'|'info', message: string }
+  const autosaveTimerRef = useRef(null);
   const currentSection = formData.formSections[currentIndex];
+
+  useEffect(() => {
+    // Persist the current step so users can resume.
+    localStorage.setItem('willFormStep', String(currentIndex));
+  }, [currentIndex]);
 
   // ---------------------------
   // Text Interpolation Logic
   // ---------------------------
-  const interpolateText = (text, values, context = '') => {
+  const interpolateText = (text, values) => {
     if (typeof text !== 'string') {
       return text;
     }
@@ -134,7 +145,7 @@ export default function FormRenderer() {
   };
 
   // Evaluate field conditions to determine if field should be shown
-  const evaluateFieldConditions = (field) => {
+  const evaluateFieldConditions = useCallback((field) => {
     if (!field.conditions) return true;
     
     const evalClause = (clause) => {
@@ -151,7 +162,7 @@ export default function FormRenderer() {
     return Array.isArray(field.conditions)
       ? field.conditions.every(evalClause)
       : evalClause(field.conditions);
-  };
+  }, [formValues]);
 
   // ---------------------------
   // Validation: Required Fields
@@ -256,18 +267,19 @@ export default function FormRenderer() {
         }
       }
       
-      // Show alert message
-      alert(`Please complete all required fields marked with * before proceeding.\n\nMissing field: ${firstInvalidField?.label || 'Required field'}`);
+      const msg = `Please complete required fields before continuing. Missing: ${firstInvalidField?.label || 'Required field'}`;
+      setBanner({ type: 'error', message: msg });
+      toast.error('Missing required fields', { description: msg });
       return;
     }
     
     if (currentIndex < formData.formSections.length - 1) {
       const nextIndex = currentIndex + 1;
-      const nextSection = formData.formSections[nextIndex];
       setCurrentIndex(nextIndex);
     } else {
       setSubmitted(true);
       localStorage.removeItem('willForm');
+      localStorage.removeItem('willFormStep');
     }
   };
 
@@ -305,16 +317,46 @@ export default function FormRenderer() {
       }
       
       localStorage.setItem('willForm', testStr);
-      alert('Draft saved successfully! Your progress has been saved to your device.');
+      toast.success('Draft saved', { description: 'Your progress has been saved to this device.' });
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
-        alert('Storage is full. Please clear some space or reduce form data.');
+        toast.error('Storage is full', { description: 'Please clear some space or reduce form data.' });
       } else {
         console.error('[PDF] Error saving draft:', error);
-        alert('Error saving draft: ' + error.message);
+        toast.error('Error saving draft', { description: error.message || 'Unknown error' });
       }
     }
   };
+
+  // Autosave (debounced) — silent, but keeps local progress safe.
+  useEffect(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      try {
+        const dataToSave = {};
+        for (const [key, value] of Object.entries(formValues || {})) {
+          if (key.toLowerCase().includes('signature')) continue;
+          if (typeof value === 'string' && value.startsWith('data:image')) continue;
+          if (isInvalidNumber(value)) continue;
+          dataToSave[key] = value;
+        }
+
+        const testStr = JSON.stringify(dataToSave);
+        if (testStr.length <= 5 * 1024 * 1024) {
+          localStorage.setItem('willForm', testStr);
+        }
+      } catch {
+        // ignore autosave failures
+      }
+    }, 600);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [formValues]);
 
   // Calculate clause preview - moved outside JSX to fix React Hooks error
   // (evaluateFieldConditions is already defined above, reusing it)
@@ -344,7 +386,7 @@ export default function FormRenderer() {
         
         // Check field's willClauseText
         if (field.willClauseText) {
-          const interpolated = interpolateText(field.willClauseText, formValues, `section-${section.formSection}-field-${field.id}`);
+          const interpolated = interpolateText(field.willClauseText, formValues);
           if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
             allClauses.push({
               id: `${section.formSection}-${field.id}`,
@@ -404,39 +446,7 @@ export default function FormRenderer() {
     }
 
     return allClauses;
-  }, [currentIndex, formValues, currentSection]);
-
-  // Check if a value contains invalid numbers
-  const hasInvalidNumber = (val) => {
-    if (typeof val === 'number') {
-      return !isFinite(val) || Math.abs(val) >= 1e10 || isNaN(val);
-    }
-    if (typeof val === 'string') {
-      if (val.includes('-1.8') || val.includes('1.8e+22') || val.includes('-1.80000') || val.includes('1.80000e+')) {
-        return true;
-      }
-      const largeNumberMatch = val.match(/-?\d+\.?\d*[eE][+-]?\d+/g);
-      if (largeNumberMatch) {
-        for (const numStr of largeNumberMatch) {
-          const num = parseFloat(numStr);
-          if (!isFinite(num) || Math.abs(num) >= 1e10 || isNaN(num)) {
-            return true;
-          }
-        }
-      }
-      const bigNumberMatch = val.match(/-?\d{15,}/g);
-      if (bigNumberMatch) {
-        for (const numStr of bigNumberMatch) {
-          const num = parseFloat(numStr);
-          if (!isFinite(num) || Math.abs(num) >= 1e10) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  };
-
+  }, [currentIndex, formValues, evaluateFieldConditions]);
 
   // Aggressive check for corrupted numbers that break PDF rendering
   const isInvalidNumber = (val) => {
@@ -469,7 +479,7 @@ export default function FormRenderer() {
         const str = JSON.stringify(val);
         if (/-?\d+\.?\d*[eE][+-]?2\d+/.test(str)) return true;
         if (str.includes('-1.8e+') || str.includes('1.8e+22')) return true;
-      } catch (e) {
+      } catch {
         return true; // Can't serialize = invalid
       }
     }
@@ -559,7 +569,8 @@ export default function FormRenderer() {
 
   const handleDownloadPDF = async () => {
     try {
-      console.log('[PDF] Starting PDF generation...');
+      setBanner(null);
+      const toastId = toast.loading('Generating PDF…', { description: 'This can take a few seconds on mobile.' });
       
       // Aggressively sanitize all form values
       let sanitizedValues = sanitizeFormValues(formValues);
@@ -574,7 +585,7 @@ export default function FormRenderer() {
           !isInvalidNumber(formValues.testatorSignature)) {
         try {
           testatorSignature = formValues.testatorSignature;
-        } catch (e) {
+        } catch {
           console.error('[PDF] Invalid signature image, skipping');
         }
       }
@@ -626,7 +637,7 @@ export default function FormRenderer() {
                 }
               }
             }
-          } catch (e) {
+          } catch {
             // Skip corrupted fields
             continue;
           }
@@ -648,7 +659,7 @@ export default function FormRenderer() {
             lastName: sanitizeText(String(formValues.lastName || ''))
           };
         }
-      } catch (e) {
+      } catch {
         console.error('[PDF] Cannot validate sanitized data, using fallback');
         sanitizedValues = {
           firstName: sanitizeText(String(formValues.firstName || '')),
@@ -663,7 +674,7 @@ export default function FormRenderer() {
           console.error('[PDF] Corrupted data still present after deep clean');
           sanitizedValues = { firstName: sanitizedValues.firstName || '', lastName: sanitizedValues.lastName || '' };
         }
-      } catch (e) {
+      } catch {
         console.error('[PDF] Cannot serialize form values, using safe fallback');
         sanitizedValues = { firstName: sanitizedValues.firstName || '', lastName: sanitizedValues.lastName || '' };
       }
@@ -686,17 +697,15 @@ export default function FormRenderer() {
         }
       }
       
-      console.log('[PDF] Generating PDF with jsPDF...');
+      // Lazy-load the heavy PDF generator so initial app load stays fast.
+      const { generatePDFWithJSPDF } = await import('./PDFGeneratorJSPDF.js');
       
       // Use jsPDF instead of React PDF Renderer (now async)
       const doc = await generatePDFWithJSPDF(sanitizedValues, testatorSignature);
-      
-      console.log('[PDF] PDF generated successfully');
-      
+
       // Save and download the PDF
       doc.save('Will-Preview.pdf');
-      
-      console.log('[PDF] Download initiated');
+      toast.success('PDF ready', { id: toastId, description: 'Download started.' });
     } catch (error) {
       console.error('[PDF] Generation Error:', error);
       console.error('[PDF] Error details:', {
@@ -704,18 +713,33 @@ export default function FormRenderer() {
         stack: error.stack,
         formValuesKeys: Object.keys(formValues).length
       });
-      alert(`Error generating PDF: ${error.message || 'Unknown error'}\n\nPlease try saving your draft and refreshing the page, then try again.`);
+      const msg = error?.message || 'Unknown error';
+      setBanner({ type: 'error', message: `Error generating PDF: ${msg}` });
+      toast.error('Error generating PDF', { description: msg });
     }
   };
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-50">
+    <div className="flex flex-col lg:flex-row min-h-dvh bg-gray-50">
       {/* Sidebar */}
       <Sidebar currentIndex={currentIndex} setCurrentIndex={setCurrentIndex} />
 
       {/* Main Content */}
-      <main className="flex-1 flex justify-center py-6 px-4 sm:px-6 lg:px-8 animate-fadeIn">
+      <main className="flex-1 min-w-0 flex justify-center py-4 px-3 sm:py-6 sm:px-6 lg:px-8 animate-fadeIn">
         <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200 transition-all duration-300 hover:shadow-2xl">
+          {banner?.message ? (
+            <div
+              className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+                banner.type === 'error'
+                  ? 'bg-red-50 border-red-200 text-red-800'
+                  : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+              }`}
+              role={banner.type === 'error' ? 'alert' : 'status'}
+            >
+              {banner.message}
+            </div>
+          ) : null}
+
           {/* Title */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
@@ -845,8 +869,40 @@ export default function FormRenderer() {
             </button>
           </div>
 
-          {/* Enhanced Save + Preview */}
-          <div className="mt-4 flex flex-col gap-3">
+          {/* Sticky Mobile Actions */}
+          <div className="lg:hidden sticky bottom-0 -mx-4 sm:-mx-6 mt-4 px-4 sm:px-6 pt-3 pb-3 bg-white/95 backdrop-blur border-t border-gray-200">
+            <div className="flex gap-2">
+              <button
+                onClick={goBack}
+                disabled={currentIndex === 0}
+                className="flex-1 flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                type="button"
+              >
+                <ChevronLeft size={18} />
+                <span>Back</span>
+              </button>
+              <button
+                onClick={saveDraft}
+                className="flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-3 rounded-xl transition-all duration-200 font-medium"
+                type="button"
+              >
+                <Save size={18} />
+                <span>Save</span>
+              </button>
+              <button
+                onClick={goNext}
+                disabled={!allRequiredFilled}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                type="button"
+              >
+                <span>{currentIndex === formData.formSections.length - 1 ? 'Submit' : 'Next'}</span>
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Enhanced Save + Preview (desktop + below content) */}
+          <div className="mt-4 flex flex-col gap-3 pb-20 lg:pb-0">
             <button
               onClick={saveDraft}
               className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-black px-6 py-3 rounded-xl shadow-md transition-all duration-300 self-start font-medium transform hover:scale-105 active:scale-95"

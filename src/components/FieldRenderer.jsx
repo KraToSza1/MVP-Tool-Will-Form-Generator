@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import DatePicker from 'react-datepicker';
 import { registerLocale, setDefaultLocale } from 'react-datepicker';
@@ -27,6 +27,30 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   const [validationErrors, setValidationErrors] = useState({});
   const sigCanvasRef = useRef({});
   const inputRefs = useRef({});
+  const sigContainerRef = useRef(null);
+  const [sigCanvasWidth, setSigCanvasWidth] = useState(0);
+
+  // Keep the signature canvas bitmap width in sync with its container.
+  // Must be unconditional (hooks rule), so we no-op unless this FieldRenderer instance is a signature field.
+  useEffect(() => {
+    if (field?.type !== 'signature') return;
+    const el = sigContainerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const w = Math.floor(el.clientWidth || 0);
+      if (w > 0) {
+        setSigCanvasWidth((prev) => (prev === w ? prev : w));
+      }
+    };
+
+    measure();
+
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [field?.type]);
   
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
@@ -41,7 +65,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   };
 
   // Helper function to log form value changes (minimal logging)
-  const logFormChange = (fieldId, value, changeType = 'UPDATE') => {
+  const logFormChange = (fieldId, value) => {
     // Only log errors for corrupted data
     if (typeof value === 'number' && (!isFinite(value) || Math.abs(value) >= 1e10 || isNaN(value))) {
       console.error(`[FORM] Invalid number in field "${fieldId}":`, value);
@@ -98,7 +122,6 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     };
 
     const handleRemoveItem = (indexToRemove) => {
-      const itemToRemove = existingItems[indexToRemove];
       const updatedItems = existingItems.filter((_, index) => index !== indexToRemove);
       setFormValues((prev) => ({
         ...prev,
@@ -335,7 +358,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         }
       }
       
-      logFormChange(field.id, value, 'TEXT/NUMBER');
+      logFormChange(field.id, value);
       setFormValues((prev) => ({ ...prev, [field.id]: value }));
     };
 
@@ -350,7 +373,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
-      <div className="mb-4 group">
+      <div className="mb-4 group" data-field-id={field.id}>
         <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
           <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
             {FieldIcon}
@@ -422,7 +445,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         });
       }
       
-      logFormChange(field.id, value, 'TEXTAREA');
+      logFormChange(field.id, value);
       setFormValues((prev) => ({ ...prev, [field.id]: value }));
     };
     
@@ -502,7 +525,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                 checked={formValues[field.id] === opt.value}
                     onChange={(e) => {
                       const newValue = e.target.value;
-                      logFormChange(field.id, newValue, 'RADIO');
+                      logFormChange(field.id, newValue);
                       
                       // Clear validation errors when selection is made
                       setValidationErrors((prev) => {
@@ -580,7 +603,6 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                     const newValue = Array.isArray(formValues[field.id])
                       ? [...formValues[field.id]]
                       : [];
-                    const action = e.target.checked ? 'CHECKED' : 'UNCHECKED';
                     if (e.target.checked) {
                       newValue.push(optValue);
                     } else {
@@ -598,7 +620,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                       setValidationErrors((prev) => ({ ...prev, [field.id]: `This field is required. Please select at least one option.` }));
                     }
                     
-                    logFormChange(field.id, newValue, 'CHECKBOX GROUP');
+                    logFormChange(field.id, newValue);
                     setFormValues((prev) => ({
                       ...prev,
                       [field.id]: newValue,
@@ -654,9 +676,11 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
 
   if (field.type === 'signature') {
     const FieldIcon = getFieldIcon(field.type, field.id);
+    const canvasWidth = Math.max(280, Math.min(900, sigCanvasWidth || 500));
+    const canvasHeight = 120;
     
     return (
-      <div className="my-4 group">
+      <div className="my-4 group" data-field-id={field.id}>
         <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
           <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
             {FieldIcon}
@@ -664,10 +688,13 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           <span>{field.label}</span>
           {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
         </label>
-        <div className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300">
+        <div
+          ref={sigContainerRef}
+          className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300"
+        >
           <SignatureCanvas
             penColor="black"
-            canvasProps={{ width: 500, height: 100, className: 'sigCanvas w-full h-24' }}
+            canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28' }}
             ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
             onEnd={() => {
               try {
@@ -689,7 +716,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                 }
                 
                 if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
-                  logFormChange(field.id, dataUrl ? 'Signature data URL' : null, 'SIGNATURE');
+                  logFormChange(field.id, dataUrl ? 'Signature data URL' : null);
                   
                   // Clear validation errors when signature is captured
                   setValidationErrors((prev) => {
@@ -788,7 +815,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
             onChange={(date) => {
               if (date) {
                 const isoDate = date.toISOString().split('T')[0];
-                logFormChange(field.id, isoDate, 'DATE');
+                logFormChange(field.id, isoDate);
                 
                 // Validate date
                 const today = new Date();

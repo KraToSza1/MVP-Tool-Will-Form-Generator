@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf';
 import formSchema from '../data/Complete-WillSuite-Form-Data.json';
-import { formatUKDate, formatUKPostcode, formatUKPhoneNumber } from '../utils/ukValidations';
 
 // Helper to convert image to base64 and get dimensions for jsPDF
 const loadImageAsBase64 = async (imagePath) => {
@@ -91,7 +90,7 @@ const evaluateConditions = (conditions, formValues) => {
 };
 
 // Text interpolation function (matching FormRenderer logic)
-const interpolateText = (text, values, context = '') => {
+const interpolateText = (text, values) => {
   if (typeof text !== 'string') return text;
 
   const fallbackMap = {
@@ -162,7 +161,7 @@ const interpolateText = (text, values, context = '') => {
     } else if (typeof sectionData === 'object' && sectionData !== null) {
       const fieldValue = sectionData[subField] || 
                        sectionData[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
-                       sectionData[subField.charAt(0).toUpperCase() + sectionData.slice(1)] ||
+                       sectionData[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
                        sectionData[subField.toLowerCase()] ||
                        sectionData[subField.toUpperCase()];
       if (fieldValue && (typeof fieldValue === 'string' || typeof fieldValue === 'number')) {
@@ -207,31 +206,31 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
         if (logoModule.default) {
           logoData = await loadImageAsBase64(logoModule.default);
         }
-      } catch (importError) {
+      } catch {
         // Method 2: Try default import
         try {
           const logoModule = await import('../assets/logo_resized.png');
           if (logoModule.default) {
             logoData = await loadImageAsBase64(logoModule.default);
           }
-        } catch (importError2) {
+        } catch {
           // Method 3: Try direct URL path
           try {
             const logoUrl = '/src/assets/logo_resized.png';
             logoData = await loadImageAsBase64(logoUrl);
-          } catch (urlError) {
+          } catch {
             // Method 4: Try public path
             try {
               const logoUrl = '/logo_resized.png';
               logoData = await loadImageAsBase64(logoUrl);
-            } catch (publicError) {
+            } catch {
               console.warn('Could not load logo image, will use text fallback');
             }
           }
         }
       }
-    } catch (e) {
-      console.warn('Could not load logo image, will use text fallback:', e);
+    } catch {
+      console.warn('Could not load logo image, will use text fallback');
     }
 
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -400,7 +399,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
       } else {
         throw new Error('Logo not available');
       }
-    } catch (e) {
+    } catch {
       // Fallback to text logo if image fails - styled to match logo design
       yPos = pageHeight - 45;
       doc.setFontSize(16);
@@ -513,7 +512,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
     }
 
     // Render numbered will clauses - matching professional format
-    willClauses.forEach((clause, idx) => {
+    willClauses.forEach((clause) => {
       checkPageBreak(lineHeight * 4);
       
       // Section number and heading (bold) - matching "1. Revoking Previous Wills" format
@@ -592,7 +591,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
       try {
         doc.addImage(testatorSignature, 'PNG', margin, yPos, 78, 35);
         yPos += 40;
-      } catch (e) {
+      } catch {
         doc.setLineWidth(0.35);
         doc.line(margin, yPos, margin + 78, yPos);
         yPos += 15;

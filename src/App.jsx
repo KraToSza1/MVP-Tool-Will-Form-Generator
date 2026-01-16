@@ -12,12 +12,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row overflow-hidden text-gray-800 bg-gray-50">
+    <div className="min-h-dvh w-full flex flex-col text-gray-800 bg-gray-50">
       {/* --------------------------- */}
       {/* Main Content Area */}
       {/* --------------------------- */}
-      <main className="flex-1 h-screen overflow-y-auto">
-        <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+      <main className="flex-1 w-full">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
           {/* --------------------------- */}
           {/* Header Section */}
           {/* --------------------------- */}
