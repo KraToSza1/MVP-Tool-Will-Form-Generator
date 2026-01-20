@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/run-all-tests.js",
+    "test:unit": "vitest run src",
+    "test:e2e": "vitest run tests/e2e",
+    "test:all": "node scripts/run-all-tests.js --start-server",
+    "test:ui": "vitest --ui",
+    "test:watch": "vitest watch"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.1",
@@ -25,17 +31,25 @@
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/postcss": "^4.1.16",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
+    "@vitest/ui": "^4.0.17",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "happy-dom": "^20.3.3",
     "init": "^0.1.2",
+    "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
+    "puppeteer": "^24.35.0",
     "tailwindcss": "^4.1.16",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^4.0.17"
   }
 }

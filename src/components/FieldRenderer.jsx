@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useState, useRef } from 'react';
-import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, Upload } from 'lucide-react';
+import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
 import {
   validateUKPostcode,
   formatUKPostcode,
@@ -42,6 +42,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   const [showInputs, setShowInputs] = useState({});
   const [inputValues, setInputValues] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
+  const [dateInputValue, setDateInputValue] = useState('');
   const sigCanvasRef = useRef({});
   const inputRefs = useRef({});
   const sigContainerRef = useRef(null);
@@ -69,6 +70,12 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [isSignatureField]);
+
+  useEffect(() => {
+    if (field?.type !== 'date') return;
+    const currentValue = formValues[field.id] || '';
+    setDateInputValue(currentValue ? formatUKDate(currentValue) : '');
+  }, [field?.type, field?.id, formValues]);
   
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
@@ -92,7 +99,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     }
   };
 
-  const evaluateConditions = (conditions) => {
+  const evaluateConditions = (fieldToCheck) => {
+    const conditions = fieldToCheck?.conditions;
     if (!conditions) return true;
     const evalClause = (clause) => {
       const value = formValues[clause.field];
@@ -104,17 +112,20 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
       }
       return false;
     };
-    return Array.isArray(conditions)
-      ? conditions.every(evalClause)
-      : evalClause(conditions);
+    if (Array.isArray(conditions)) {
+      const logic = fieldToCheck?.conditionLogic === 'OR' ? 'OR' : 'AND';
+      return logic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause);
+    }
+    return evalClause(conditions);
   };
 
-  if (field.conditions && !evaluateConditions(field.conditions)) {
+  if (field.conditions && !evaluateConditions(field)) {
     return null;
   }
 
   if (field.type === 'button' && field.action === 'openAddForm') {
-    const targetFieldId = field.id.replace('add', '').replace('Button', 'Data');
+    const rawTarget = field.id.replace(/^add/i, '').replace(/Button$/i, 'Data');
+    const targetFieldId = rawTarget.charAt(0).toLowerCase() + rawTarget.slice(1);
     const currentInputValue = inputValues[targetFieldId] || '';
     const existingItems = Array.isArray(formValues[targetFieldId]) 
       ? formValues[targetFieldId] 
@@ -254,7 +265,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     );
   }
 
-  if (field.type === 'text' || field.type === 'number') {
+  if (field.type === 'text' || field.type === 'number' || field.type === 'currency') {
     // UK-specific field handling
     const isPostcode = field.id === 'postcode' || field.id.toLowerCase().includes('postcode');
     const isPhone = field.id === 'mobile' || field.id === 'tel2' || field.id.toLowerCase().includes('phone') || field.id.toLowerCase().includes('tel');
@@ -410,7 +421,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
             {FieldIcon}
           </div>
           <input
-            type={field.type}
+            type={field.type === 'currency' ? 'text' : field.type}
             placeholder={placeholder}
             className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md ${
               validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
@@ -604,9 +615,9 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         )}
         <div className="mt-2 flex flex-col space-y-1">
           {field.options.map((opt) => {
-            const optValue = (opt.value !== undefined && opt.value !== false && opt.value !== null && opt.value !== '') 
-              ? opt.value 
-              : (opt.id || opt.label);
+            const optValue = (opt.value !== undefined && opt.value !== false && opt.value !== null && opt.value !== '')
+              ? opt.value
+              : (opt.willClauseTextFragment || opt.id || opt.label);
             const isChecked = Array.isArray(formValues[field.id])
               ? formValues[field.id].includes(optValue)
               : false;
@@ -857,13 +868,56 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                     return newErrors;
                   });
                   
+                  setDateInputValue(formatUKDate(isoDate));
                   setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
                 } else {
                   if (field.required) {
                     setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
                   }
+                  setDateInputValue('');
                   setFormValues((prev) => ({ ...prev, [field.id]: '' }));
                 }
+              }}
+              onChangeRaw={(e) => {
+                const rawValue = e.target.value;
+                setDateInputValue(rawValue);
+                if (!rawValue) {
+                  setFormValues((prev) => ({ ...prev, [field.id]: '' }));
+                  if (field.required) {
+                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a date.' }));
+                  } else {
+                    setValidationErrors((prev) => {
+                      const newErrors = { ...prev };
+                      delete newErrors[field.id];
+                      return newErrors;
+                    });
+                  }
+                  return;
+                }
+                setFormValues((prev) => ({ ...prev, [field.id]: rawValue }));
+              }}
+              onBlur={() => {
+                const rawValue = dateInputValue;
+                if (!rawValue) {
+                  if (field.required) {
+                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a date.' }));
+                  }
+                  return;
+                }
+                const isoCandidate = rawValue.match(/^\d{4}-\d{2}-\d{2}$/) ? rawValue : ukDateToISO(rawValue);
+                const parsed = isoCandidate ? new Date(isoCandidate) : null;
+                if (!parsed || Number.isNaN(parsed.getTime())) {
+                  setValidationErrors((prev) => ({ ...prev, [field.id]: 'Please enter a valid date (DD/MM/YYYY).' }));
+                  return;
+                }
+                const isoDate = parsed.toISOString().split('T')[0];
+                setDateInputValue(formatUKDate(isoDate));
+                setValidationErrors((prev) => {
+                  const newErrors = { ...prev };
+                  delete newErrors[field.id];
+                  return newErrors;
+                });
+                setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
               }}
               dateFormat="dd/MM/yyyy"
               placeholderText="DD/MM/YYYY"
@@ -900,8 +954,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
               ]}
               customInput={
                 <input
-                  readOnly
-                  className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-pointer ${
+                  readOnly={false}
+                  className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-text ${
                     validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
                   }`}
                 />

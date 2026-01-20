@@ -58,13 +58,24 @@ const safeString = (value) => {
   return str.substring(0, 5000); // Limit length
 };
 
+const formatCurrencyValue = (value) => {
+  if (value == null || value === '') return '';
+  const numeric = typeof value === 'number'
+    ? value
+    : Number(String(value).replace(/[^0-9.-]/g, ''));
+  if (Number.isFinite(numeric)) {
+    return `£${numeric.toLocaleString('en-GB', { maximumFractionDigits: 2 })}`;
+  }
+  return safeString(value);
+};
+
 const getFullName = (fv) => {
   if (!fv || typeof fv !== 'object') return '[Full Name]';
   const parts = [fv.title, fv.firstName, fv.middleName, fv.lastName].filter(Boolean).map(safeString);
   return parts.join(' ') || '[Full Name]';
 };
 
-const evaluateConditions = (conditions, formValues) => {
+const evaluateConditions = (conditions, formValues, conditionLogic) => {
   if (!conditions) return true;
   if (!formValues || typeof formValues !== 'object') return false;
 
@@ -84,9 +95,11 @@ const evaluateConditions = (conditions, formValues) => {
     return false;
   };
 
-  return Array.isArray(conditions)
-    ? conditions.every(evalClause)
-    : evalClause(conditions);
+  if (Array.isArray(conditions)) {
+    const logic = conditionLogic === 'OR' ? 'OR' : 'AND';
+    return logic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause);
+  }
+  return evalClause(conditions);
 };
 
 // Text interpolation function (matching FormRenderer logic)
@@ -99,8 +112,10 @@ const interpolateText = (text, values) => {
     guardianshipDetailsSection: 'guardianshipDetailsData',
     signingOnBehalfSection: 'signingOnBehalfData',
     interpreterSection: 'interpreterData',
-    chattelRecipientsSection: 'chattelRecipientsData',
+    chattelRecipientsSection: 'chattelRecipientData',
+    chattelsGiftBeneficiarySection: 'chattelsGiftBeneficiaryData',
     excludedPersonSection: 'excludedPersonData',
+    excludedPersonsSection: 'excludedPersonData',
     petCarerSection: 'petCarerData',
     substitutePetCarerSection: 'substitutePetCarerData',
     professionalTrusteesSection: 'professionalTrusteeData',
@@ -109,7 +124,8 @@ const interpolateText = (text, values) => {
     monetaryGiftsSection: 'monetaryGiftsDetails',
     specificGiftsSection: 'specificGiftsDetails',
     propertyGiftsSection: 'propertyGiftsDetails',
-    debtorsSection: 'debtorsData',
+    debtorsSection: 'debtorData',
+    debtsReleasedSection: 'debtorData',
     partnerSection: 'partnerData',
     executorsSection: 'executorData',
     substituteExecutorsSection: 'substituteExecutorData',
@@ -118,8 +134,7 @@ const interpolateText = (text, values) => {
     digitalExecutorsSection: 'digitalExecutorData',
     trusteesSection: 'trusteeData',
     substituteTrusteesSection: 'substituteTrusteeData',
-    charityBenefitSection: 'charityBenefitDetails',
-    chattelsGiftBeneficiarySection: 'chattelsGiftBeneficiaryData'
+    charityBenefitSection: 'charityBenefitDetails'
   };
 
   const interpolated = text.replace(/\{\{field:([^}]+)\}\}/g, (_, fullKey) => {
@@ -138,25 +153,32 @@ const interpolateText = (text, values) => {
       return '';
     }
 
+    if (subField === 'formattedAmount') {
+      const rawValue = values[sectionId] || values[fullKey];
+      return formatCurrencyValue(rawValue);
+    }
+
     // Handle nested section fields
     const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
     const sectionData = values[fallbackId] || values[sectionId];
     
     if (Array.isArray(sectionData) && sectionData.length > 0) {
-      const firstItem = sectionData[0];
-      if (typeof firstItem === 'object' && firstItem !== null) {
-        const fieldValue = firstItem[subField] || 
-                         firstItem[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
-                         firstItem[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
-                         firstItem[subField.toLowerCase()] ||
-                         firstItem[subField.toUpperCase()];
-        if (fieldValue && (typeof fieldValue === 'string' || typeof fieldValue === 'number')) {
-          const result = safeString(fieldValue);
-          if (result.startsWith('data:') || result.length > 10000) {
-            return '';
-          }
-          return result;
-        }
+      if (typeof sectionData[0] !== 'object') {
+        return sectionData.map(safeString).join(', ');
+      }
+      const mappedValues = sectionData
+        .map((item) => {
+          if (!item || typeof item !== 'object') return '';
+          const fieldValue = item[subField] || 
+            item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
+            item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
+            item[subField.toLowerCase()] ||
+            item[subField.toUpperCase()];
+          return fieldValue != null ? safeString(fieldValue) : '';
+        })
+        .filter(Boolean);
+      if (mappedValues.length > 0) {
+        return mappedValues.join(', ');
       }
     } else if (typeof sectionData === 'object' && sectionData !== null) {
       const fieldValue = sectionData[subField] || 
@@ -177,10 +199,31 @@ const interpolateText = (text, values) => {
       }
     }
 
+    // Try other naming conventions (matching FormRenderer)
+    const customValue = values[`${sectionId}:${subField}`] || 
+                       values[`${sectionId}${subField}`] || 
+                       values[`${sectionId}_${subField}`] ||
+                       values[`${sectionId}.${subField}`];
+    if (customValue) return safeString(customValue);
+
     // Try direct field lookup
     const directField = values[sectionId];
-    if (directField != null && typeof directField === 'string') {
-      return safeString(directField);
+    if (directField != null) {
+      if (Array.isArray(directField)) {
+        return directField.map(safeString).filter(Boolean).join(', ');
+      }
+      if (typeof directField === 'string' || typeof directField === 'number') {
+        return safeString(directField);
+      }
+    }
+
+    // Final fallback: try the full key as a direct field name
+    const fullKeyValue = values[fullKey];
+    if (fullKeyValue != null) {
+      if (Array.isArray(fullKeyValue)) {
+        return fullKeyValue.map(safeString).filter(Boolean).join(', ');
+      }
+      return safeString(fullKeyValue);
     }
 
     return '';
@@ -189,8 +232,13 @@ const interpolateText = (text, values) => {
   return interpolated;
 };
 
-export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
+export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
   try {
+    const {
+      testatorSignature = null,
+      consultantSignature = null,
+      clientSignature = null
+    } = signatures || {};
     const doc = new jsPDF({
       unit: 'mm',
       format: 'a4',
@@ -241,7 +289,6 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
     const margin = 20;
     const lineHeight = 6;
     let yPos = margin;
-    let sectionNumber = 1; // Start numbering sections
 
     // Helper to add new page if needed
     const checkPageBreak = (requiredHeight = lineHeight) => {
@@ -441,7 +488,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
             if (!field) return;
 
             // Skip if conditions not met
-            if (field.conditions && !evaluateConditions(field.conditions, formValues)) {
+            if (field.conditions && !evaluateConditions(field.conditions, formValues, field.conditionLogic)) {
               return;
             }
 
@@ -472,7 +519,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
                   if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
                     willClauses.push({
                       sectionLabel: section.formSection,
-                      fieldLabel: field.label + ': ' + selectedOption.label,
+                      fieldLabel: field.label,
                       text: safeString(interpolated)
                     });
                   }
@@ -483,7 +530,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
             // Handle section fields with subFields
             if (field.type === 'section' && field.subFields) {
               field.subFields.forEach(subField => {
-                if (subField.conditions && !evaluateConditions(subField.conditions, formValues)) {
+                if (subField.conditions && !evaluateConditions(subField.conditions, formValues, subField.conditionLogic)) {
                   return;
                 }
                 
@@ -492,7 +539,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
                   if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
                     willClauses.push({
                       sectionLabel: section.formSection,
-                      fieldLabel: field.label + ': ' + (subField.label || ''),
+                      fieldLabel: subField.label || field.label,
                       text: safeString(interpolated)
                     });
                   }
@@ -511,15 +558,14 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
       });
     }
 
-    // Render numbered will clauses - matching professional format
+    // Render will clauses with question headings
     willClauses.forEach((clause) => {
       checkPageBreak(lineHeight * 4);
       
-      // Section number and heading (bold) - matching "1. Revoking Previous Wills" format
-      // Ensure heading doesn't overflow
+      // Heading (bold) - ensure it fits within margins
       doc.setFontSize(12);
       doc.setFont('times', 'bold');
-      const sectionHeading = `${sectionNumber}. ${clause.fieldLabel}`;
+      const sectionHeading = `${clause.fieldLabel}`;
       const headingWidth = doc.getTextWidth(sectionHeading);
       const maxHeadingWidth = pageWidth - (margin * 2);
       
@@ -540,8 +586,6 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
       doc.text(clauseLines, margin, yPos);
       yPos += clauseLines.length * 6; // Line height
       yPos += 4; // Spacing between sections
-      
-      sectionNumber++;
     });
 
     // Add page numbers to all pages
@@ -564,7 +608,7 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
     doc.setTextColor(0, 0, 0);
 
     // Signature page header with name
-    const signatureHeader = `Signed by my ${fullNameText}, to give effect to this Will, on`;
+    const signatureHeader = `Signed by ${fullNameText}, to give effect to this Will, on`;
     yPos = addText(signatureHeader, margin, 12, false);
     yPos += 8;
     
@@ -576,35 +620,44 @@ export const generatePDFWithJSPDF = async (formValues, testatorSignature) => {
     doc.line(margin, yPos, margin + 78, yPos);
     yPos += 10;
     
-    // SIGNATURE
-    doc.setFont('times', 'bold');
-    doc.text('SIGNATURE', margin, yPos);
-    yPos += 5;
-    doc.setFont('times', 'normal');
-    
-    // Signature image or line
-    if (testatorSignature && 
-        typeof testatorSignature === 'string' && 
-        testatorSignature.startsWith('data:image') &&
-        testatorSignature.length > 100 &&
-        testatorSignature.length < 1000000) {
-      try {
-        doc.addImage(testatorSignature, 'PNG', margin, yPos, 78, 35);
-        yPos += 40;
-      } catch {
+    const addSignatureBlock = (label, signatureData, showEmptyLine = false) => {
+      checkPageBreak(40);
+      doc.setFont('times', 'bold');
+      doc.text(label, margin, yPos);
+      yPos += 5;
+      doc.setFont('times', 'normal');
+
+      if (signatureData && 
+          typeof signatureData === 'string' && 
+          signatureData.startsWith('data:image') &&
+          signatureData.length > 100 &&
+          signatureData.length < 3000000) {
+        try {
+          doc.addImage(signatureData, 'PNG', margin, yPos, 78, 35);
+          yPos += 40;
+        } catch {
+          doc.setLineWidth(0.35);
+          doc.line(margin, yPos, margin + 78, yPos);
+          yPos += 15;
+        }
+      } else if (showEmptyLine) {
         doc.setLineWidth(0.35);
         doc.line(margin, yPos, margin + 78, yPos);
         yPos += 15;
       }
-    } else {
-      doc.setLineWidth(0.35);
-      doc.line(margin, yPos, margin + 78, yPos);
-      yPos += 15;
-    }
 
-    yPos += 8;
+      yPos += 8;
+    };
+
+    addSignatureBlock('TESTATOR SIGNATURE', testatorSignature, true);
+    if (consultantSignature) {
+      addSignatureBlock('CONSULTANT SIGNATURE', consultantSignature);
+    }
+    if (clientSignature) {
+      addSignatureBlock('CLIENT SIGNATURE', clientSignature);
+    }
     // Witness confirmation
-    const witnessText = `We confirm this Will was signed first by my ${fullNameText} in our presence and then by both of us in the presence of my ${fullNameText}.`;
+    const witnessText = `We confirm this Will was signed first by ${fullNameText} in our presence and then by both of us in the presence of ${fullNameText}.`;
     yPos = addText(witnessText, margin, 12, false);
     yPos += 15;
 

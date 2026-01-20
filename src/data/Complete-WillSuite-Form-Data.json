@@ -169,14 +169,32 @@
             "value": null
           },
           {
+            "id": "partnerFullName",
+            "type": "text",
+            "label": "Partner's Full Name",
+            "required": true,
+            "conditions": [
+              { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
+              {
+                "operator": "AND",
+                "clauses": [
+                  { "field": "maritalStatus", "operator": "in", "value": ["Single", "Widowed", "Divorced"] },
+                  { "field": "contemplation", "operator": "in", "value": ["Contemplation of Civil Partnership", "Contemplation of Marriage", "Either"] }
+                ]
+              }
+            ],
+            "conditionLogic": "OR",
+            "value": ""
+          },
+          {
             "id": "contemplation",
             "type": "radio",
             "label": "Is the Testator making this Will in contemplation of marriage or civil partnership?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Contemplation of Civil Partnership", "label": "Contemplation of Civil Partnership", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming civil partnership with {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after the civil partnership is formed, and it shall not be revoked by the formation of said civil partnership." },
-              { "value": "Either", "label": "Either", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage or civil partnership with {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after either ceremony takes place, and it shall not be revoked by the formation of said marriage or civil partnership." },
-              { "value": "Contemplation of Marriage", "label": "Contemplation of Marriage", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage to {{field:partnerSection:relationship}} {{field:partnerSection:fullName}} of {{field:partnerSection:address}}. I intend for this Will to remain valid after the marriage takes place, and it shall not be revoked by the solemnisation of said marriage." }
+              { "value": "Contemplation of Civil Partnership", "label": "Contemplation of Civil Partnership", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming civil partnership with {{field:partnerFullName:value}}. I intend for this Will to remain valid after the civil partnership is formed, and it shall not be revoked by the formation of said civil partnership." },
+              { "value": "Either", "label": "Either", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage or civil partnership with {{field:partnerFullName:value}}. I intend for this Will to remain valid after either ceremony takes place, and it shall not be revoked by the formation of said marriage or civil partnership." },
+              { "value": "Contemplation of Marriage", "label": "Contemplation of Marriage", "willClauseText": "I declare that this Will is made in contemplation of my forthcoming marriage to {{field:partnerFullName:value}}. I intend for this Will to remain valid after the marriage takes place, and it shall not be revoked by the solemnisation of said marriage." }
             ],
             "infoText": "Under normal circumstances, a Will is revoked upon marriage/civil partnership. Selecting yes to this question will confirm that the Testator is making this Will in contemplation of marriage or civil partnership which will ensure the Will is not revoked if this event is to occur.",
             "value": null,
@@ -1029,7 +1047,7 @@
             "label": "Does the Testator want to leave any gifts of money?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific monetary gifts to be paid from my estate, free of all taxes and duties: {{field:monetaryGiftsSection:fullList}}."}
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific monetary gifts to be paid from my estate, free of all taxes and duties: {{field:monetaryGiftsDetails:value}}."}
             ],
             "value": null
           },
@@ -1076,7 +1094,7 @@
             "label": "Does the Testator want to leave any specific gifts?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific gifts of personal property, to be distributed free of all taxes and duties: {{field:specificGiftsSection:fullList}}." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following specific gifts of personal property, to be distributed free of all taxes and duties: {{field:specificGiftsDetails:value}}." }
             ],
             "value": null
           },
@@ -1123,7 +1141,7 @@
             "label": "Does the Testator want to leave any gifts of property (not in a property trust)?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following gifts of real property, to be distributed free of all taxes and duties: {{field:propertyGiftsSection:fullList}}." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I make the following gifts of real property, to be distributed free of all taxes and duties: {{field:propertyGiftsDetails:value}}." }
             ],
             "value": null
           },
@@ -1170,7 +1188,7 @@
             "label": "Include a property trust?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I give the following property: {{field:propertyTrustDetails:propertyDetails}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I give the following property: {{field:propertyTrustDetails:value}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will." }
             ],
             "value": null
           },
@@ -1219,7 +1237,7 @@
             "label": "What should happen to personal possessions not specified by this Will?",
             "options": [
               { "value": "SameAsResidue", "label": "Pass on same terms as residue", "willClauseText": "I direct that all my personal possessions not otherwise specifically given by this Will or any Codicil to it shall be distributed upon the same terms as my Residuary Estate." },
-              { "value": "SpecificRecipient", "label": "Pass to specific recipient", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelRecipientsSection:relationshipList}} {{field:chattelRecipientsSection:nameList}} of {{field:chattelRecipientsSection:addressList}}, absolutely and beneficially." },
+              { "value": "SpecificRecipient", "label": "Pass to specific recipient", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelRecipientsSection:fullDetails}}, absolutely and beneficially." },
               { "value": "DistributedByExecutors", "label": "Distributed by Executors", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my Executors, with the request (but without creating any binding obligation) that they distribute these items in accordance with any wishes I may express to them during my lifetime or in a written memorandum left by me." }
             ],
             "value": null
@@ -1287,7 +1305,7 @@
             "label": "Would the Testator like to forgive any debts?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtorSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtsReleasedSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
             ],
             "value": null
           }
@@ -1303,7 +1321,7 @@
             "label": "Is the Testator deliberately excluding any person from this Will who may claim against the estate or object to the terms of the will?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I have deliberately made no provision in this Will for my {{field:excludedPersonSection:relationshipList}} {{field:excludedPersonSection:nameList}} of {{field:excludedPersonSection:addressList}}. This decision is intentional and has been made after careful consideration. I have communicated my reasons separately to my Executors."}
+              { "value": "Yes", "label": "Yes", "willClauseText": "I have deliberately made no provision in this Will for my {{field:excludedPersonSection:fullDetails}}. This decision is intentional and has been made after careful consideration. I have communicated my reasons separately to my Executors."}
             ],
             "value": null
           },
@@ -1391,7 +1409,7 @@
             "type": "section",
             "label": "Who is to care for the Testator's pets?",
             "infoText": "Any pets owned by the Testator at the date of their death shall be cared for by named beneficiary.",
-             "willClauseText": "I request that my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} of {{field:petCarerSection:addressList}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
+            "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
             "conditions": [
               { "field": "provisionsForPets", "operator": "eq", "value": "Yes" }
             ],
@@ -1418,7 +1436,7 @@
             "id": "substitutePetCarerSection",
             "type": "section",
             "label": "Who is the substitute carer for the Testator's pets?",
-             "willClauseText": "If my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:relationshipList}} {{field:substitutePetCarerSection:nameList}} of {{field:substitutePetCarerSection:addressList}} assume this responsibility instead.",
+            "willClauseText": "If my {{field:petCarerSection:fullDetails}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:fullDetails}} assume this responsibility instead.",
             "conditions": [
               { "field": "provisionsForPets", "operator": "eq", "value": "Yes" }
             ],
@@ -1499,7 +1517,7 @@
             "label": "Does the Testator wish to relieve anyone of debts upon the Testator's death?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtorsSection:relationshipList}} {{field:debtorsSection:nameList}} of {{field:debtorsSection:addressList}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I hereby release and forgive my {{field:debtsReleasedSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records." }
             ],
             "value": null
           },
