@@ -13,7 +13,8 @@
     "test:e2e": "vitest run tests/e2e",
     "test:all": "node scripts/run-all-tests.js --start-server",
     "test:ui": "vitest --ui",
-    "test:watch": "vitest watch"
+    "test:watch": "vitest watch",
+    "demo:puppeteer": "node scripts/puppeteer-e2e-demo.js"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.3.1",

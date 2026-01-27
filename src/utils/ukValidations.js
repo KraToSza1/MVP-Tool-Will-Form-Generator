@@ -105,19 +105,26 @@ export const formatUKPhoneNumber = (phoneNumber) => {
   }
   
   // Format based on length and pattern
-  // Mobile (11 digits starting with 07): 07123 456789
+  // Mobile (11 digits starting with 07): 07123 456789 (5 digits, space, 6 digits)
   if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
     return cleanPhone.slice(0, 5) + ' ' + cleanPhone.slice(5);
   }
   
-  // London/02 numbers (10 digits): 020 1234 5678
+  // London/02 numbers (11 digits total): 020 1234 5678 (020, space, 4 digits, space, 4 digits)
   if (cleanPhone.startsWith('02') && cleanPhone.length === 11) {
     return cleanPhone.slice(0, 3) + ' ' + cleanPhone.slice(3, 7) + ' ' + cleanPhone.slice(7);
   }
   
-  // Other landline (11 digits): 01234 567890
+  // Other landline starting with 01 (11 digits): 0117 123 4567 or 0161 123 4567 (4 digits, space, 3 digits, space, 4 digits)
   if (cleanPhone.startsWith('01') && cleanPhone.length === 11) {
-    return cleanPhone.slice(0, 5) + ' ' + cleanPhone.slice(5);
+    // Check if it's a 4-digit area code (like 0117, 0161) or 5-digit (like 01234)
+    if (cleanPhone.match(/^01[1-9]\d{8}$/)) {
+      // 4-digit area code (e.g., 0117, 0161): 0117 123 4567
+      return cleanPhone.slice(0, 4) + ' ' + cleanPhone.slice(4, 7) + ' ' + cleanPhone.slice(7);
+    } else {
+      // 5-digit area code (e.g., 01234): 01234 567890
+      return cleanPhone.slice(0, 5) + ' ' + cleanPhone.slice(5);
+    }
   }
   
   return phoneNumber;

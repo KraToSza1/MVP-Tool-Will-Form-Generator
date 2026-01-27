@@ -1,52 +1,337 @@
+/*
+ * 🔍 COMPREHENSIVE CONSOLE LOGGING ENABLED
+ * 
+ * This FormRenderer component now includes extensive console logging for debugging and monitoring:
+ * 
+ * 📋 FORM LIFECYCLE:
+ * - [FORM INIT] - Component initialization and data loading
+ * - [SECTION CHANGE] - Navigation between form sections
+ * - [SECTION FIELD] - Processing of individual fields in each section
+ * 
+ * 🔧 FORM INTERACTIONS:
+ * - [QUESTION CHANGE] - All form value changes with field details
+ * - [RADIO SELECTION] - Radio button selections with previous/new values
+ * - [CHECKBOX CHANGE] - Checkbox group selections with option details
+ * - [TEXT INPUT] - Text field changes and validation events
+ * - [TEXTAREA] - Textarea changes with character counts
+ * - [DATE PICKER] - Date selections with ISO conversion details
+ * - [SIGNATURE] - Signature drawing and clearing events
+ * - [ADD ITEM BUTTON] / [REMOVE ITEM] - Dynamic list management
+ * 
+ * ✅ VALIDATION & CONDITIONS:
+ * - [VALIDATION] - Form validation checks per field
+ * - [VALIDATION CHECK] - Section-level validation summaries
+ * - [CONDITION CHECK] - Field condition evaluations
+ * - [CONDITION RESULT] - Final condition results for field visibility
+ * - [FORM COMPLETION] - Full form completion analysis
+ * 
+ * 🎯 USER ACTIONS:
+ * - [NAVIGATION] - Next/back button clicks and navigation attempts
+ * - [SCROLL TO FIELD] - Auto-scrolling to validation errors
+ * - [KEYBOARD] - Keyboard shortcut usage (Ctrl+S, Escape)
+ * - [PDF DOWNLOAD] - PDF generation and download events
+ * - [SAVE DRAFT] / [MANUAL SAVE] - Form saving operations
+ * - [RESET FORM] - Form reset and data clearing
+ * 
+ * 🎪 MODAL INTERACTIONS:
+ * - [CLAUSE MODAL] - Clause preview modal open/close
+ * - [VALIDATION MODAL] - Validation error modal interactions
+ * - [COMPLETION MODAL] - Form completion modal events
+ * 
+ * 💾 DATA MANAGEMENT:
+ * - [AUTOSAVE] - Automatic form saving with field counts
+ * - [COMPLETION %] - Form completion percentage calculations
+ * 
+ * 🔍 FIELD RENDERING:
+ * - [FIELD RENDER] - Every field render with type and status
+ * - [FIELD SHOWN/HIDDEN] - Field visibility based on conditions
+ * - [TEXT FIELD] / [RADIO FIELD] / [CHECKBOX GROUP] etc. - Field type specific logs
+ * 
+ * All logs include relevant context like field IDs, labels, values, and current form state.
+ * Perfect for debugging user interactions, form behavior, and tracking engagement patterns!
+ */
+
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import formData from '../data/Complete-WillSuite-Form-Data.json';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
-import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles } from 'lucide-react';
+import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap } from 'lucide-react';
+import { autoFillForm, generateDummyFormData } from '../utils/autoFillForm.js';
 import { toast } from 'sonner';
 
 export default function FormRenderer() {
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = localStorage.getItem('willFormStep');
     const idx = saved != null ? Number(saved) : 0;
+    console.log(`[FORM INIT] Starting at step ${idx + 1} of ${formData.formSections.length}`);
     return Number.isFinite(idx) && idx >= 0 ? idx : 0;
   });
+  
+  // Add global success handlers
+  useEffect(() => {
+    window.showPartnerNameSuccess = (partnerName) => {
+      toast.success('Partner name saved!', { 
+        description: `"${partnerName}" has been saved and will be used throughout your Will.` 
+      });
+    };
+    
+    window.showAristoneSuccess = (executorType) => {
+      toast.success('🥇 Aristone Solicitors Selected!', { 
+        description: `Aristone Solicitors has been selected as your professional ${executorType}. They will handle your estate professionally and efficiently.`,
+        duration: 4000
+      });
+    };
+    
+    return () => {
+      delete window.showPartnerNameSuccess;
+      delete window.showAristoneSuccess;
+    };
+  }, []);
   const [formValues, setFormValues] = useState(() => {
     const saved = localStorage.getItem('willForm');
-    if (!saved) return {};
+    if (!saved) {
+      console.log('[FORM INIT] No saved form data found, starting fresh');
+      return {};
+    }
     try {
       const parsed = JSON.parse(saved);
+      console.log('[FORM INIT] Loaded saved form data with fields:', Object.keys(parsed));
+      console.log('[FORM INIT] Total saved fields count:', Object.keys(parsed).length);
+      
       // Quick check for corrupted data on load
       const hasCorruption = JSON.stringify(parsed).includes('-1.8e+22') || 
                            JSON.stringify(parsed).includes('1.8e+22') ||
                            JSON.stringify(parsed).match(/-?\d+\.?\d*[eE][+-]?2\d+/);
       if (hasCorruption) {
-        console.warn('Corrupted data detected in localStorage, clearing...');
+        console.warn('[FORM INIT] Corrupted data detected in localStorage, clearing...');
         localStorage.removeItem('willForm');
-        // Cleared corrupted data
         return {};
       }
-      // Loaded from localStorage
+      console.log('[FORM INIT] Form data loaded successfully');
       return parsed;
     } catch (e) {
-      console.error('Error parsing localStorage data:', e);
+      console.error('[FORM INIT] Error parsing localStorage data:', e);
       localStorage.removeItem('willForm');
-        // Cleared due to parsing error
       return {};
     }
   });
   const [submitted, setSubmitted] = useState(false);
   const [expandedFields, setExpandedFields] = useState({});
   const [banner, setBanner] = useState(null); // { type: 'error'|'info', message: string }
-  const [lastUpdatedFieldId, setLastUpdatedFieldId] = useState(null);
+  const [validationModalOpen, setValidationModalOpen] = useState(false);
+  const [validationIssues, setValidationIssues] = useState([]);
+  const [clauseModalOpen, setClauseModalOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [formCompletionPercent, setFormCompletionPercent] = useState(0);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const autosaveTimerRef = useRef(null);
-  const previousValuesRef = useRef(formValues);
+  const clauseUpdateTimerRef = useRef(null);
   const currentSection = formData.formSections[currentIndex];
+  
+  // Check if we're in development mode (for conditional logging)
+  const isDev = import.meta.env.DEV;
+
+  // Log form initialization summary
+  useEffect(() => {
+    console.log('[FORM INIT] ========== FORM INITIALIZATION COMPLETE ==========');
+    console.log('[FORM INIT] Total sections:', formData.formSections.length);
+    console.log('[FORM INIT] Current section:', currentIndex + 1, 'of', formData.formSections.length);
+    console.log('[FORM INIT] Current section name:', currentSection?.formSection);
+    console.log('[FORM INIT] Form values loaded:', Object.keys(formValues).length, 'fields');
+    console.log('[FORM INIT] Auto-fill available: Click "Auto-Fill Form (Test Data)" button or call window.autoFillWillForm()');
+    console.log('[FORM INIT] ============================================');
+  }, []); // Run once on mount
+
+  // Debug: Log when validationIssues changes
+  useEffect(() => {
+    console.log('[VALIDATION ISSUES] State changed:', {
+      length: validationIssues.length,
+      issues: validationIssues,
+      firstIssue: validationIssues[0],
+      modalOpen: validationModalOpen
+    });
+    
+    // When modal opens, check for buttons in DOM
+    if (validationModalOpen) {
+      setTimeout(() => {
+        console.log('[VALIDATION MODAL DOM CHECK] ========== CHECKING DOM FOR BUTTONS ==========');
+        const allButtons = document.querySelectorAll('button');
+        console.log('[VALIDATION MODAL DOM CHECK] Total buttons in document:', allButtons.length);
+        
+        const modalButtons = document.querySelectorAll('[role="button"]');
+        console.log('[VALIDATION MODAL DOM CHECK] Buttons with role="button":', modalButtons.length);
+        
+        const itemButtons = Array.from(allButtons).filter(btn => 
+          btn.className.includes('bg-red-50') || 
+          btn.className.includes('border-red-500') ||
+          btn.getAttribute('aria-label')?.includes('Go to')
+        );
+        console.log('[VALIDATION MODAL DOM CHECK] Item buttons found:', itemButtons.length);
+        itemButtons.forEach((btn, idx) => {
+          console.log(`[VALIDATION MODAL DOM CHECK] Item button ${idx}:`, {
+            tagName: btn.tagName,
+            className: btn.className,
+            disabled: btn.disabled,
+            tabIndex: btn.tabIndex,
+            hasOnClick: !!btn.onclick,
+            ariaLabel: btn.getAttribute('aria-label'),
+            pointerEvents: window.getComputedStyle(btn).pointerEvents,
+            zIndex: window.getComputedStyle(btn).zIndex,
+            display: window.getComputedStyle(btn).display,
+            visibility: window.getComputedStyle(btn).visibility
+          });
+        });
+        
+        const goToFirstIssueButton = Array.from(allButtons).find(btn => 
+          btn.textContent?.includes('Go to First Issue') || 
+          btn.getAttribute('aria-label') === 'Go to first incomplete item'
+        );
+        if (goToFirstIssueButton) {
+          console.log('[VALIDATION MODAL DOM CHECK] "Go to First Issue" button found:', {
+            tagName: goToFirstIssueButton.tagName,
+            className: goToFirstIssueButton.className,
+            disabled: goToFirstIssueButton.disabled,
+            tabIndex: goToFirstIssueButton.tabIndex,
+            hasOnClick: !!goToFirstIssueButton.onclick,
+            pointerEvents: window.getComputedStyle(goToFirstIssueButton).pointerEvents,
+            zIndex: window.getComputedStyle(goToFirstIssueButton).zIndex,
+            display: window.getComputedStyle(goToFirstIssueButton).display,
+            visibility: window.getComputedStyle(goToFirstIssueButton).visibility
+          });
+        } else {
+          console.warn('[VALIDATION MODAL DOM CHECK] ❌ "Go to First Issue" button NOT found in DOM!');
+        }
+      }, 100);
+    }
+  }, [validationIssues, validationModalOpen]);
+
+  // Debug: Scan formValues for "test test test" placeholders (runs on every formValues change)
+  useEffect(() => {
+    const testPlaceholders = Object.entries(formValues).filter(([key, val]) => {
+      if (typeof val === 'string') {
+        const lowerVal = val.toLowerCase();
+        return (lowerVal.includes('test test test') || 
+                (lowerVal.includes('test test') && !lowerVal.includes('test@') && !lowerVal.includes('@test')) ||
+                (lowerVal.trim() === 'test' && key !== 'email'));
+      }
+      return false;
+    });
+    
+    if (testPlaceholders.length > 0) {
+      console.warn(`[FORM VALUES SCAN] ⚠️  Found ${testPlaceholders.length} fields with "test" placeholders:`);
+      testPlaceholders.forEach(([k, v]) => {
+        console.warn(`[FORM VALUES SCAN]   - ${k}: "${typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : v}"`);
+      });
+      console.warn(`[FORM VALUES SCAN] 💡 TIP: Click "Auto-Fill Form (Test Data)" button to replace all placeholders with dummy data`);
+    } else {
+      console.log('[FORM VALUES SCAN] ✅ No "test test test" placeholders found in form values');
+    }
+  }, [formValues]);
 
   useEffect(() => {
     // Persist the current step so users can resume.
     localStorage.setItem('willFormStep', String(currentIndex));
-  }, [currentIndex]);
+    console.log(`[SECTION CHANGE] Moved to section ${currentIndex + 1}: "${currentSection?.formSection}"`);
+    console.log(`[SECTION INFO] This section has ${currentSection?.fields?.length || 0} fields`);
+  }, [currentIndex, currentSection]);
+
+  // Handle scroll to show/hide back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY || document.documentElement.scrollTop;
+      setShowBackToTop(scrollY > 300); // Show button after scrolling 300px
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        console.log('[KEYBOARD] Escape key pressed');
+        if (validationModalOpen) {
+          console.log('[KEYBOARD] Closing validation modal with Escape key');
+          setValidationModalOpen(false);
+        }
+        if (clauseModalOpen) {
+          console.log('[KEYBOARD] Closing clause modal with Escape key');
+          setClauseModalOpen(false);
+        }
+        if (submitted) {
+          console.log('[KEYBOARD] Closing completion modal with Escape key');
+          setSubmitted(false);
+        }
+      }
+      
+      // Ctrl/Cmd + S to save draft (prevent default browser save)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        console.log('[KEYBOARD] Ctrl/Cmd + S pressed - triggering manual save');
+        e.preventDefault();
+        // Trigger autosave manually
+        try {
+          const dataToSave = {};
+          let savedCount = 0;
+          for (const [key, value] of Object.entries(formValues || {})) {
+            if (key.toLowerCase().includes('signature')) continue;
+            if (typeof value === 'string' && value.startsWith('data:image')) continue;
+            if (isInvalidNumber(value)) continue;
+            dataToSave[key] = value;
+            savedCount++;
+          }
+          const testStr = JSON.stringify(dataToSave);
+          if (testStr.length <= 5 * 1024 * 1024) {
+            localStorage.setItem('willForm', testStr);
+            setLastSaved(new Date());
+            console.log(`[KEYBOARD] Manual save completed - saved ${savedCount} fields`);
+            toast.success('Draft saved', { description: 'Your progress has been saved.' });
+          } else {
+            console.warn(`[KEYBOARD] Manual save failed - data too large: ${testStr.length} bytes`);
+          }
+        } catch (error) {
+          console.error('[KEYBOARD] Manual save failed:', error);
+          toast.error('Failed to save', { description: 'Could not save your draft.' });
+        }
+      }
+      
+      // Enter to submit (when in a form field, but not textarea)
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && !e.shiftKey) {
+        const target = e.target;
+        // Only trigger if we're in an input field and not already submitting
+        if (target.tagName === 'INPUT' && target.type !== 'submit' && target.type !== 'button') {
+          // Don't prevent default - let form handle it naturally
+          // But we can add visual feedback
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [validationModalOpen, clauseModalOpen, submitted, formValues]);
+
+  const scrollToTop = () => {
+    console.log('[SCROLL TO TOP] Back to top button clicked');
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
+
+  // Format last saved time
+  const formatLastSaved = (date) => {
+    if (!date) return '';
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} minute${Math.floor(diff / 60) > 1 ? 's' : ''} ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
 
   // Prefetch the PDF generator chunk when users reach the final step.
   useEffect(() => {
@@ -126,6 +411,55 @@ export default function FormRenderer() {
         return formatCurrencyValue(rawValue);
       }
 
+      // Handle 'value' subField FIRST - this is the most common case (e.g., partnerFullName:value)
+      if (subField === 'value') {
+        if (isDev) {
+          console.log(`[INTERPOLATE] Looking for value: sectionId="${sectionId}", fullKey="${fullKey}"`);
+        }
+        // Try direct field lookup first (e.g., partnerFullName:value -> formValues.partnerFullName)
+        const directValue = values[sectionId];
+        if (isDev) console.log(`[INTERPOLATE] Direct lookup values[${sectionId}]:`, directValue);
+        if (directValue != null && directValue !== '') {
+          if (isDev) console.log(`[INTERPOLATE] ✅ Found direct value for ${sectionId}:`, directValue);
+          return directValue.toString();
+        }
+        // Also try the full key as a direct field name
+        const fullKeyValue = values[fullKey];
+        if (isDev) console.log(`[INTERPOLATE] Full key lookup values[${fullKey}]:`, fullKeyValue);
+        if (fullKeyValue != null && fullKeyValue !== '') {
+          if (isDev) console.log(`[INTERPOLATE] ✅ Found fullKey value for ${fullKey}:`, fullKeyValue);
+          return fullKeyValue.toString();
+        }
+        if (isDev) {
+          console.log(`[INTERPOLATE] ❌ No value found for ${sectionId}:value or ${fullKey}`);
+          console.log(`[INTERPOLATE] Available keys:`, Object.keys(values).filter(k => k.includes(sectionId) || k.includes('partner')));
+        }
+      }
+
+      // Handle special case: selectedPurposes for organPurposeGroup
+      if (subField === 'selectedPurposes' && sectionId === 'organPurposeGroup') {
+        const selectedPurposes = values[sectionId] || [];
+        if (Array.isArray(selectedPurposes) && selectedPurposes.length > 0) {
+          // Get the field definition to access willClauseTextFragment
+          const purposeField = formData.formSections
+            .flatMap(s => s.fields)
+            .find(f => f.id === 'organPurposeGroup');
+          if (purposeField && purposeField.options) {
+          const selectedFragments = purposeField.options
+            .filter(opt => {
+              // Check if this option is selected by ID or value
+              return selectedPurposes.includes(opt.id) || selectedPurposes.includes(opt.value);
+            })
+            .map(opt => opt.willClauseTextFragment || opt.label)
+            .filter(Boolean);
+            if (selectedFragments.length > 0) {
+              return selectedFragments.join(', ');
+            }
+          }
+        }
+        return '';
+      }
+
       // Handle nested section fields (e.g., partnerSection:relationship, partnerSection:fullName)
       const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
       const sectionData = values[fallbackId] || values[sectionId];
@@ -163,13 +497,6 @@ export default function FormRenderer() {
         }
       }
 
-      if (subField === 'value') {
-        const directValue = values[sectionId];
-        if (directValue != null) {
-          return directValue.toString();
-        }
-      }
-
       // Try other naming conventions
       const customValue = values[`${sectionId}:${subField}`] || 
                          values[`${sectionId}${subField}`] || 
@@ -192,6 +519,17 @@ export default function FormRenderer() {
     
     const evalClause = (clause) => {
       const value = formValues[clause.field];
+      
+      // Debug logging for critical FLIT fields
+      if (clause.field === 'howResidueDistributed' && isDev) {
+        console.log(`[CONDITION DEBUG] Field "${field.id}" checking howResidueDistributed:`, {
+          actualValue: value,
+          expectedValue: clause.value,
+          operator: clause.operator,
+          matches: clause.operator === 'eq' ? value === clause.value : 'not eq operator'
+        });
+      }
+      
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
       if (clause.operator === 'AND' || clause.operator === 'OR') {
@@ -201,54 +539,94 @@ export default function FormRenderer() {
       return false;
     };
     
-    if (Array.isArray(field.conditions)) {
-      const logic = field.conditionLogic === 'OR' ? 'OR' : 'AND';
-      return logic === 'OR' ? field.conditions.some(evalClause) : field.conditions.every(evalClause);
+    const result = Array.isArray(field.conditions) 
+      ? (field.conditionLogic === 'OR' ? field.conditions.some(evalClause) : field.conditions.every(evalClause))
+      : evalClause(field.conditions);
+    
+    // Enhanced debug logging for FLIT fields
+    if (field.id && field.id.includes('FLIT') && isDev) {
+      console.log(`[CONDITION DEBUG] Field "${field.id}" condition result:`, {
+        fieldId: field.id,
+        conditions: field.conditions,
+        conditionLogic: field.conditionLogic,
+        result: result,
+        howResidueDistributed: formValues.howResidueDistributed
+      });
     }
-    return evalClause(field.conditions);
+    
+    return result;
   }, [formValues]);
 
   // ---------------------------
   // Validation: Required Fields
   // ---------------------------
-  const allRequiredFilled = currentSection.fields.every(field => {
-    // Skip fields that shouldn't be shown (conditions not met)
-    if (field.conditions && !evaluateFieldConditions(field)) {
-      return true; // Field is hidden, so it's "valid"
-    }
+  const allRequiredFilled = useMemo(() => {
+    console.log('[VALIDATION CHECK] ========== VALIDATING SECTION ==========');
+    console.log('[VALIDATION CHECK] Current section:', currentSection?.formSection);
+    console.log('[VALIDATION CHECK] Total fields to check:', currentSection?.fields?.length);
     
-    // Skip hidden, button, and display fields
-    if (['button', 'hidden', 'display'].includes(field.type)) {
-      return true;
-    }
-    
-    if (field.required) {
-      if (field.type === 'checkboxGroup') {
-        return Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+    const result = currentSection.fields.every(field => {
+      console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
+      
+      // Skip fields that shouldn't be shown (conditions not met)
+      if (field.conditions && !evaluateFieldConditions(field)) {
+        console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (conditions not met)`);
+        return true; // Field is hidden, so it's "valid"
       }
-      return !!formValues[field.id];
-    }
-    return true;
-  });
+      
+      // Skip hidden, button, and display fields
+      if (['button', 'hidden', 'display'].includes(field.type)) {
+        console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (type: ${field.type})`);
+        return true;
+      }
+      
+      if (field.required) {
+        let isValid = false;
+        if (field.type === 'checkboxGroup') {
+          isValid = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          console.log(`[VALIDATION] Field "${field.id}" (checkbox group) - Selected: ${Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0}, Valid: ${isValid}`);
+        } else {
+          isValid = !!formValues[field.id];
+          console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+        }
+        return isValid;
+      } else {
+        console.log(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
+      }
+      return true;
+    });
+    
+    if (isDev) console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
+    return result;
+  }, [currentSection, formValues, evaluateFieldConditions]);
 
   const isFormFullyCompleted = () => {
+    console.log('[FORM COMPLETION] ========== CHECKING FULL FORM COMPLETION ==========');
     try {
-    return formData.formSections.every(section =>
-      section.fields.every(field => {
+    const result = formData.formSections.every((section, sectionIndex) => {
+      console.log(`[FORM COMPLETION] Checking section ${sectionIndex + 1}: "${section.formSection}"`);
+      
+      return section.fields.every(field => {
+          console.log(`[FORM COMPLETION] Checking field "${field.id}" (${field.label}) in section "${section.formSection}"`);
+          
           // Skip fields that shouldn't be shown (conditions not met)
           if (!evaluateFieldConditions(field)) {
+            console.log(`[FORM COMPLETION] Field "${field.id}" - SKIPPED (conditions not met)`);
             return true; // Field is hidden, so it's "valid"
           }
           
           // Skip hidden fields, button fields, and display fields
           if (['button', 'hidden', 'display'].includes(field.type)) {
+            console.log(`[FORM COMPLETION] Field "${field.id}" - SKIPPED (type: ${field.type})`);
             return true;
           }
           
           // Check required fields
         if (field.required) {
           if (field.type === 'checkboxGroup') {
-            return Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+            const isValid = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+            console.log(`[FORM COMPLETION] Field "${field.id}" (checkbox group) - Valid: ${isValid}`);
+            return isValid;
           }
             if (field.type === 'section' && field.subFields) {
               // For sections, check if at least one subfield is filled if required
@@ -262,69 +640,399 @@ export default function FormRenderer() {
               const hasNoRequiredSubFields = field.subFields.every(subField => 
                 !subField.required || !evaluateFieldConditions(subField)
               );
-              return hasRequiredSubFieldFilled || hasNoRequiredSubFields;
+              const isValid = hasRequiredSubFieldFilled || hasNoRequiredSubFields;
+              console.log(`[FORM COMPLETION] Field "${field.id}" (section) - Valid: ${isValid}`);
+              return isValid;
             }
-          return !!formValues[field.id];
+          const isValid = !!formValues[field.id];
+          console.log(`[FORM COMPLETION] Field "${field.id}" (${field.type}) - Required: ${field.required}, Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+          return isValid;
+        } else {
+          console.log(`[FORM COMPLETION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
         }
         return true;
       })
-    );
+    });
+    
+    console.log(`[FORM COMPLETION] FINAL RESULT: Form fully completed = ${result}`);
+    return result;
     } catch (error) {
-      console.error('Error checking form completion:', error);
+      console.error('[FORM COMPLETION] Error checking form completion:', error);
       // If there's an error, allow download anyway
       return true;
     }
   };
 
   // ---------------------------
+  // Validation: Collect All Issues
+  // ---------------------------
+  const collectValidationIssues = useCallback(() => {
+    if (isDev) {
+      console.log('[VALIDATION] Collecting validation issues...');
+      console.log('[VALIDATION] Current section:', currentSection?.formSection);
+      console.log('[VALIDATION] Total fields in section:', currentSection?.fields?.length);
+    }
+    
+    const issues = [];
+    
+    currentSection.fields.forEach((field, index) => {
+      if (isDev) console.log(`[VALIDATION] Checking field ${index + 1}/${currentSection.fields.length}:`, field.id, field.label, 'required:', field.required);
+      
+      // Skip fields that shouldn't be shown (conditions not met)
+      if (field.conditions && !evaluateFieldConditions(field)) {
+        if (isDev) console.log(`[VALIDATION] Field ${field.id} skipped - conditions not met`);
+        return;
+      }
+      
+      // Skip hidden, button, and display fields
+      if (['button', 'hidden', 'display'].includes(field.type)) {
+        if (isDev) console.log(`[VALIDATION] Field ${field.id} skipped - type: ${field.type}`);
+        return;
+      }
+      
+      // Check required fields
+      if (field.required) {
+        let isInvalid = false;
+        let issueMessage = '';
+        
+        if (field.type === 'checkboxGroup') {
+          const hasSelection = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          if (isDev) console.log(`[VALIDATION] CheckboxGroup ${field.id} - hasSelection:`, hasSelection);
+          if (!hasSelection) {
+            isInvalid = true;
+            issueMessage = 'Please select at least one option';
+          }
+        } else if (field.type === 'section' && field.subFields) {
+          // For sections, check if at least one required subfield is filled
+          const hasRequiredSubFieldFilled = field.subFields.some(subField => {
+            if (!evaluateFieldConditions(subField)) return false;
+            if (subField.required) {
+              return !!formValues[subField.id];
+            }
+            return false;
+          });
+          const hasNoRequiredSubFields = field.subFields.every(subField => 
+            !subField.required || !evaluateFieldConditions(subField)
+          );
+          if (isDev) console.log(`[VALIDATION] Section ${field.id} - hasRequiredSubFieldFilled:`, hasRequiredSubFieldFilled, 'hasNoRequiredSubFields:', hasNoRequiredSubFields);
+          if (!hasRequiredSubFieldFilled && !hasNoRequiredSubFields) {
+            isInvalid = true;
+            issueMessage = 'Please complete at least one required field in this section';
+          }
+        } else {
+          const value = formValues[field.id];
+          const isEmpty = !value || (typeof value === 'string' && !value.trim());
+          if (isDev) console.log(`[VALIDATION] Field ${field.id} - value:`, value, 'isEmpty:', isEmpty);
+          if (isEmpty) {
+            isInvalid = true;
+            issueMessage = 'This field is required';
+          }
+        }
+        
+        if (isInvalid) {
+          if (isDev) console.log(`[VALIDATION] ❌ ISSUE FOUND: ${field.label} (${field.id}) - ${issueMessage}`);
+          issues.push({
+            fieldId: field.id,
+            fieldLabel: field.label,
+            message: issueMessage,
+            type: 'required'
+          });
+        } else {
+          if (isDev) console.log(`[VALIDATION] ✅ Field ${field.id} is valid`);
+        }
+      } else {
+        if (isDev) console.log(`[VALIDATION] Field ${field.id} is not required - skipping`);
+      }
+    });
+    
+    if (isDev) {
+      console.log('[VALIDATION] Total issues collected:', issues.length);
+      console.log('[VALIDATION] Issues:', issues);
+    }
+    return issues;
+  }, [currentSection, formValues, evaluateFieldConditions]);
+
+  // ---------------------------
   // Navigation Logic
   // ---------------------------
   const goNext = () => {
+    console.log('[NAVIGATION] ========== GO NEXT CLICKED ==========');
+    console.log('[NAVIGATION] Current section:', currentSection?.formSection);
+    console.log('[NAVIGATION] allRequiredFilled:', allRequiredFilled);
+    console.log('[NAVIGATION] currentIndex:', currentIndex, 'of', formData.formSections.length - 1);
+    console.log('[NAVIGATION] Current form values:', Object.keys(formValues));
+    
     // Check if all required fields are filled before allowing navigation
     if (!allRequiredFilled) {
-      // Scroll to first invalid field or show error message
-      const firstInvalidField = currentSection.fields.find(field => {
-        if (field.conditions && !evaluateFieldConditions(field)) return false;
-        if (['button', 'hidden', 'display'].includes(field.type)) return false;
-        if (field.required) {
-          if (field.type === 'checkboxGroup') {
-            return !(Array.isArray(formValues[field.id]) && formValues[field.id].length > 0);
-          }
-          return !formValues[field.id];
-        }
-        return false;
-      });
-      
-      if (firstInvalidField) {
-        // Scroll to the field
-        const fieldElement = document.querySelector(`[data-field-id="${firstInvalidField.id}"]`);
-        if (fieldElement) {
-          fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Add a highlight effect
-          fieldElement.classList.add('animate-pulse');
-          setTimeout(() => fieldElement.classList.remove('animate-pulse'), 2000);
-        }
-        // Focus on the first input in that field
-        const input = fieldElement?.querySelector('input, textarea, select');
-        if (input) {
-          setTimeout(() => input.focus(), 500);
-        }
-      }
-      
-      const msg = `Please complete required fields before continuing. Missing: ${firstInvalidField?.label || 'Required field'}`;
-      setBanner({ type: 'error', message: msg });
-      toast.error('Missing required fields', { description: msg });
+      if (isDev) console.log('[GO NEXT] Required fields NOT filled - opening modal');
+      // Collect all validation issues
+      const issues = collectValidationIssues();
+      setValidationIssues(issues);
+      setValidationModalOpen(true);
+      if (isDev) console.log('[GO NEXT] Modal state set to open');
       return;
     }
     
+    if (isDev) console.log('[GO NEXT] All fields valid - proceeding to next step');
     if (currentIndex < formData.formSections.length - 1) {
       const nextIndex = currentIndex + 1;
+      if (isDev) console.log('[GO NEXT] Moving from step', currentIndex + 1, 'to step', nextIndex + 1);
       setCurrentIndex(nextIndex);
+      // Scroll to top when changing sections
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Auto-focus first field in new section after a brief delay
+      setTimeout(() => {
+        const firstField = document.querySelector('[data-field-id]');
+        if (firstField) {
+          const firstInput = firstField.querySelector('input, textarea, select');
+          if (firstInput && typeof firstInput.focus === 'function') {
+            firstInput.focus();
+          }
+        }
+      }, 300);
     } else {
+      if (isDev) console.log('[GO NEXT] Last step reached - showing completion modal');
+      // Don't clear localStorage here - let user download PDF first
+      // Only clear after they close the completion modal or download
       setSubmitted(true);
-      localStorage.removeItem('willForm');
-      localStorage.removeItem('willFormStep');
     }
+  };
+
+  const handleNextButtonClick = (e) => {
+    if (isDev) {
+      console.log('[NEXT BUTTON] ========== CLICKED ==========');
+      console.log('[NEXT BUTTON] allRequiredFilled:', allRequiredFilled);
+      console.log('[NEXT BUTTON] currentIndex:', currentIndex);
+      console.log('[NEXT BUTTON] currentSection:', currentSection?.formSection);
+    }
+    
+    if (!allRequiredFilled) {
+      if (isDev) console.log('[NEXT BUTTON] ❌ Required fields NOT filled - collecting issues...');
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const issues = collectValidationIssues();
+      if (isDev) {
+        console.log('[NEXT BUTTON] Validation issues found:', issues);
+        console.log('[NEXT BUTTON] Number of issues:', issues.length);
+      }
+      
+      setValidationIssues(issues);
+      setValidationModalOpen(true);
+      if (isDev) console.log('[NEXT BUTTON] ✅ Modal state set to TRUE');
+    } else {
+      if (isDev) console.log('[NEXT BUTTON] ✅ All required fields filled - proceeding to next step');
+      goNext();
+    }
+  };
+
+  const scrollToField = (fieldId) => {
+    console.log(`[SCROLL TO FIELD] ========== SCROLLING TO FIELD "${fieldId}" ==========`);
+    console.log(`[SCROLL TO FIELD] Field ID type:`, typeof fieldId);
+    console.log(`[SCROLL TO FIELD] Field ID value:`, fieldId);
+    
+    if (!fieldId) {
+      console.error(`[SCROLL TO FIELD] ❌ No fieldId provided!`);
+      return;
+    }
+    
+    const selector = `[data-field-id="${fieldId}"]`;
+    console.log(`[SCROLL TO FIELD] Using selector:`, selector);
+    
+    const fieldElement = document.querySelector(selector);
+    console.log(`[SCROLL TO FIELD] Query result:`, fieldElement);
+    
+    if (fieldElement) {
+      console.log(`[SCROLL TO FIELD] ✅ Found field element for "${fieldId}" - scrolling and highlighting`);
+      console.log(`[SCROLL TO FIELD] Element tag:`, fieldElement.tagName);
+      console.log(`[SCROLL TO FIELD] Element classes:`, fieldElement.className);
+      
+      try {
+        fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        console.log(`[SCROLL TO FIELD] ScrollIntoView called successfully`);
+        
+        // Add a highlight effect
+        fieldElement.classList.add('animate-pulse');
+        console.log(`[SCROLL TO FIELD] Added animate-pulse class`);
+        setTimeout(() => {
+          fieldElement.classList.remove('animate-pulse');
+          console.log(`[SCROLL TO FIELD] Removed animate-pulse class`);
+        }, 2000);
+        
+        // Focus on the first input in that field
+        const input = fieldElement?.querySelector('input, textarea, select');
+        console.log(`[SCROLL TO FIELD] Found input element:`, input);
+        if (input) {
+          console.log(`[SCROLL TO FIELD] Focusing on input element in field "${fieldId}"`);
+          setTimeout(() => {
+            try {
+              input.focus();
+              console.log(`[SCROLL TO FIELD] ✅ Input focused successfully`);
+            } catch (focusError) {
+              console.error(`[SCROLL TO FIELD] ❌ Error focusing input:`, focusError);
+            }
+          }, 500);
+        } else {
+          console.log(`[SCROLL TO FIELD] No input element found in field`);
+        }
+        
+        // Close modal after scrolling
+        console.log(`[SCROLL TO FIELD] Closing validation modal after scroll to "${fieldId}"`);
+        setValidationModalOpen(false);
+      } catch (scrollError) {
+        console.error(`[SCROLL TO FIELD] ❌ Error during scroll:`, scrollError);
+      }
+    } else {
+      console.error(`[SCROLL TO FIELD] ❌ Could not find field element for "${fieldId}"`);
+      console.log(`[SCROLL TO FIELD] Trying case-insensitive search...`);
+      
+      // Try case-insensitive search
+      const allFields = document.querySelectorAll('[data-field-id]');
+      console.log(`[SCROLL TO FIELD] Total fields with data-field-id:`, allFields.length);
+      
+      const foundField = Array.from(allFields).find(field => {
+        const id = field.getAttribute('data-field-id') || '';
+        return id.toLowerCase() === String(fieldId).toLowerCase();
+      });
+      
+      if (foundField) {
+        console.log(`[SCROLL TO FIELD] ✅ Found field via case-insensitive search`);
+        foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setValidationModalOpen(false);
+      } else {
+        console.error(`[SCROLL TO FIELD] ❌ Field not found even with case-insensitive search`);
+      }
+    }
+  };
+
+  // Helper to find and scroll to schedule fields
+  const scrollToScheduleField = (scheduleText) => {
+    console.log(`[SCROLL TO SCHEDULE] ========== STARTING SCHEDULE SEARCH ==========`);
+    console.log(`[SCROLL TO SCHEDULE] Input scheduleText: "${scheduleText}"`);
+    console.log(`[SCROLL TO SCHEDULE] Type of scheduleText:`, typeof scheduleText);
+    console.log(`[SCROLL TO SCHEDULE] Current form values:`, Object.keys(formValues).length, 'fields');
+    console.log(`[SCROLL TO SCHEDULE] propertyTrustScheduleNumber:`, formValues.propertyTrustScheduleNumber);
+    console.log(`[SCROLL TO SCHEDULE] bprTrustScheduleNumber:`, formValues.bprTrustScheduleNumber);
+    
+    // Extract schedule number from "Schedule 65432" or "Schedule65432" etc.
+    const scheduleMatch = scheduleText.match(/schedule\s*(\d+)/i);
+    console.log(`[SCROLL TO SCHEDULE] Regex match result:`, scheduleMatch);
+    const scheduleNumber = scheduleMatch ? scheduleMatch[1] : null;
+    console.log(`[SCROLL TO SCHEDULE] Extracted schedule number: "${scheduleNumber}"`);
+    
+    if (!scheduleNumber) {
+      console.error(`[SCROLL TO SCHEDULE] Could not extract schedule number from: "${scheduleText}"`);
+      console.log(`[SCROLL TO SCHEDULE] Trying fallback: search for any schedule section...`);
+    }
+    
+    if (scheduleNumber) {
+      console.log(`[SCROLL TO SCHEDULE] Searching for schedule number: ${scheduleNumber}`);
+      
+      // Try multiple strategies to find the schedule field
+      const searchStrategies = [
+        // Strategy 1: Direct field ID match with schedule number
+        `[data-field-id*="schedule${scheduleNumber}"]`,
+        // Strategy 2: Field ID containing "schedule" and the number
+        `[data-field-id*="schedule"][data-field-id*="${scheduleNumber}"]`,
+        // Strategy 3: Label containing schedule number
+        `[data-field-id][aria-label*="${scheduleNumber}"]`,
+        // Strategy 4: Any field with schedule in ID
+        `[data-field-id*="schedule"]`,
+      ];
+      
+      console.log(`[SCROLL TO SCHEDULE] Trying ${searchStrategies.length} selector strategies...`);
+      for (let i = 0; i < searchStrategies.length; i++) {
+        const selector = searchStrategies[i];
+        console.log(`[SCROLL TO SCHEDULE] Strategy ${i + 1}: Trying selector "${selector}"`);
+        const element = document.querySelector(selector);
+        console.log(`[SCROLL TO SCHEDULE] Strategy ${i + 1} result:`, element);
+        if (element) {
+          console.log(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found field with selector: ${selector}`);
+          console.log(`[SCROLL TO SCHEDULE] Element details:`, {
+            tagName: element.tagName,
+            id: element.id,
+            className: element.className,
+            dataFieldId: element.getAttribute('data-field-id')
+          });
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('animate-pulse');
+          setTimeout(() => element.classList.remove('animate-pulse'), 2000);
+          
+          const input = element.querySelector('input, textarea, select');
+          console.log(`[SCROLL TO SCHEDULE] Found input element:`, input);
+          if (input) {
+            setTimeout(() => {
+              console.log(`[SCROLL TO SCHEDULE] Focusing input...`);
+              input.focus();
+            }, 500);
+          }
+          
+          console.log(`[SCROLL TO SCHEDULE] Closing validation modal...`);
+          setValidationModalOpen(false);
+          console.log(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
+          return;
+        }
+      }
+      
+      // Strategy 5: Search all fields and find one with schedule number in value or label
+      console.log(`[SCROLL TO SCHEDULE] All selector strategies failed, trying manual field search...`);
+      const allFields = document.querySelectorAll('[data-field-id]');
+      console.log(`[SCROLL TO SCHEDULE] Total fields with data-field-id: ${allFields.length}`);
+      
+      let checkedCount = 0;
+      for (const field of allFields) {
+        checkedCount++;
+        const fieldId = field.getAttribute('data-field-id') || '';
+        const label = field.querySelector('label')?.textContent || '';
+        const value = field.querySelector('input, textarea, select')?.value || '';
+        
+        const hasScheduleInId = fieldId.toLowerCase().includes('schedule') && fieldId.includes(scheduleNumber);
+        const hasScheduleInLabel = label.toLowerCase().includes('schedule') && label.includes(scheduleNumber);
+        const hasScheduleInValue = value.includes(scheduleNumber);
+        
+        if (hasScheduleInId || hasScheduleInLabel || hasScheduleInValue) {
+          console.log(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found matching field at index ${checkedCount}:`);
+          console.log(`[SCROLL TO SCHEDULE] Field ID: "${fieldId}"`);
+          console.log(`[SCROLL TO SCHEDULE] Label: "${label}"`);
+          console.log(`[SCROLL TO SCHEDULE] Value: "${value}"`);
+          console.log(`[SCROLL TO SCHEDULE] Matches:`, { hasScheduleInId, hasScheduleInLabel, hasScheduleInValue });
+          
+          field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          field.classList.add('animate-pulse');
+          setTimeout(() => field.classList.remove('animate-pulse'), 2000);
+          
+          const input = field.querySelector('input, textarea, select');
+          if (input) {
+            setTimeout(() => input.focus(), 500);
+          }
+          
+          setValidationModalOpen(false);
+          console.log(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
+          return;
+        }
+        
+        // Log first 5 fields for debugging
+        if (checkedCount <= 5) {
+          console.log(`[SCROLL TO SCHEDULE] Field ${checkedCount}: ID="${fieldId}", Label="${label.substring(0, 50)}"`);
+        }
+      }
+      console.log(`[SCROLL TO SCHEDULE] Checked ${checkedCount} fields, no match found`);
+    }
+    
+    // Fallback: Try to find any schedule-related section
+    console.log(`[SCROLL TO SCHEDULE] Trying fallback: search for schedule sections...`);
+    const scheduleSections = document.querySelectorAll('[aria-label*="Schedule"], [aria-label*="schedule"]');
+    console.log(`[SCROLL TO SCHEDULE] Found ${scheduleSections.length} schedule sections`);
+    if (scheduleSections.length > 0) {
+      console.log(`[SCROLL TO SCHEDULE] Falling back to first schedule section`);
+      scheduleSections[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setValidationModalOpen(false);
+      console.log(`[SCROLL TO SCHEDULE] ========== FALLBACK SUCCESS - EXITING ==========`);
+      return;
+    }
+    
+    console.error(`[SCROLL TO SCHEDULE] ❌ FAILED: Could not find schedule field for "${scheduleText}"`);
+    console.error(`[SCROLL TO SCHEDULE] ========== FAILED - EXITING ==========`);
   };
 
   const goBack = () => {
@@ -334,24 +1042,37 @@ export default function FormRenderer() {
   };
 
   const saveDraft = () => {
+    console.log('[SAVE DRAFT] ========== MANUAL SAVE DRAFT CLICKED ==========');
+    console.log('[SAVE DRAFT] Current form values count:', Object.keys(formValues).length);
+    
     try {
       // Remove signature data URLs before saving (they're too large and cause issues)
       const dataToSave = {};
+      let skippedCount = 0;
+      
       for (const [key, value] of Object.entries(formValues)) {
         // Skip signature fields (they'll be re-added if needed)
         if (key.toLowerCase().includes('signature')) {
+          skippedCount++;
+          console.log(`[SAVE DRAFT] Skipping signature field: "${key}"`);
           continue;
         }
         // Skip data URLs
         if (typeof value === 'string' && value.startsWith('data:image')) {
+          skippedCount++;
+          console.log(`[SAVE DRAFT] Skipping data URL field: "${key}"`);
           continue;
         }
         // Skip corrupted data
         if (isInvalidNumber(value)) {
+          skippedCount++;
+          console.log(`[SAVE DRAFT] Skipping corrupted data field: "${key}"`);
           continue;
         }
         dataToSave[key] = value;
       }
+      
+      console.log(`[SAVE DRAFT] Prepared ${Object.keys(dataToSave).length} fields for saving (skipped ${skippedCount})`);
       
       // Check localStorage quota
       const testStr = JSON.stringify(dataToSave);
@@ -361,39 +1082,298 @@ export default function FormRenderer() {
       }
       
       localStorage.setItem('willForm', testStr);
+      console.log(`[SAVE DRAFT] Successfully saved draft with ${Object.keys(dataToSave).length} fields`);
       toast.success('Draft saved', { description: 'Your progress has been saved to this device.' });
     } catch (error) {
+      console.error('[SAVE DRAFT] Error saving draft:', error);
       if (error.name === 'QuotaExceededError') {
         toast.error('Storage is full', { description: 'Please clear some space or reduce form data.' });
       } else {
-        console.error('[PDF] Error saving draft:', error);
+        console.error('[SAVE DRAFT] Error saving draft:', error);
         toast.error('Error saving draft', { description: error.message || 'Unknown error' });
       }
     }
   };
 
-  // Autosave (debounced) — silent, but keeps local progress safe.
+  const resetForm = () => {
+    console.log('[RESET FORM] ========== RESET FORM BUTTON CLICKED ==========');
+    console.log('[RESET FORM] Current form values count:', Object.keys(formValues).length);
+    console.log('[RESET FORM] Current step:', currentIndex + 1);
+    
+    if (window.confirm('Are you sure you want to clear all saved data and start fresh? This action cannot be undone.')) {
+      console.log('[RESET FORM] User confirmed reset - clearing all data');
+      localStorage.removeItem('willForm');
+      localStorage.removeItem('willFormStep');
+      setFormValues({});
+      setCurrentIndex(0);
+      setBanner(null);
+      console.log('[RESET FORM] Reset completed - form is now empty and at step 1');
+      toast.success('Form reset', { description: 'All data has been cleared. You can now start fresh.' });
+    } else {
+      console.log('[RESET FORM] User cancelled reset');
+    }
+  };
+
+  // Auto-fill form with dummy data
+  const handleAutoFill = useCallback(() => {
+    console.log('[AUTOFILL] ========== AUTO-FILL BUTTON CLICKED ==========');
+    console.log('[AUTOFILL] Form data available:', !!formData);
+    console.log('[AUTOFILL] Form sections count:', formData?.formSections?.length);
+    console.log('[AUTOFILL] Current form values before auto-fill:', Object.keys(formValues).length, 'fields');
+    
+    // Check for existing "test" placeholders
+    const testPlaceholders = Object.entries(formValues).filter(([key, val]) => {
+      if (typeof val === 'string') {
+        return val.toLowerCase().includes('test test') || val.toLowerCase().trim() === 'test';
+      }
+      return false;
+    });
+    if (testPlaceholders.length > 0) {
+      console.log(`[AUTOFILL] ⚠️  Found ${testPlaceholders.length} fields with "test" placeholders that will be replaced:`, testPlaceholders.map(([k]) => k));
+    }
+    
+    try {
+      const dummyData = generateDummyFormData(formData);
+      console.log('[AUTOFILL] Generated dummy data with', Object.keys(dummyData).length, 'fields');
+      
+      // Verify no "test test test" in generated data
+      const stillHasTest = Object.entries(dummyData).filter(([key, val]) => {
+        if (typeof val === 'string') {
+          return val.toLowerCase().includes('test test test') || (val.toLowerCase().includes('test test') && !val.toLowerCase().includes('test@'));
+        }
+        return false;
+      });
+      if (stillHasTest.length > 0) {
+        console.error(`[AUTOFILL] ❌ ERROR: Generated data still contains "test test" in ${stillHasTest.length} fields:`, stillHasTest.map(([k]) => k));
+        stillHasTest.forEach(([key, val]) => {
+          console.error(`[AUTOFILL]   - ${key}: "${val.substring(0, 100)}"`);
+        });
+      } else {
+        console.log('[AUTOFILL] ✅ Verified: No "test test test" placeholders in generated data');
+      }
+      
+      // Apply the dummy data
+      console.log('[AUTOFILL] Applying dummy data to form state...');
+      setFormValues(prev => {
+        console.log('[AUTOFILL] Previous form values count:', Object.keys(prev).length);
+        const merged = { ...prev, ...dummyData };
+        console.log('[AUTOFILL] Merged form values - total fields:', Object.keys(merged).length);
+        
+        // Log fields that were replaced
+        const replaced = Object.keys(dummyData).filter(key => prev[key] !== dummyData[key]);
+        console.log(`[AUTOFILL] Replaced/updated ${replaced.length} fields:`, replaced.slice(0, 20));
+        
+        return merged;
+      });
+      
+      // Save to localStorage
+      console.log('[AUTOFILL] Saving dummy data to localStorage...');
+      localStorage.setItem('willForm', JSON.stringify(dummyData));
+      console.log('[AUTOFILL] Dummy data saved to localStorage');
+      
+      // Force a re-render by triggering a state update
+      setTimeout(() => {
+        console.log('[AUTOFILL] Triggering form re-render to show updated values...');
+        setFormValues(current => ({ ...current }));
+      }, 100);
+      
+      toast.success('Form auto-filled', { 
+        description: `Filled ${Object.keys(dummyData).length} fields with dummy data. All "test test test" placeholders replaced.` 
+      });
+      
+      console.log('[AUTOFILL] ========== AUTO-FILL COMPLETE ==========');
+      console.log('[AUTOFILL] ✅ Form should now be fully populated with realistic dummy data');
+      console.log('[AUTOFILL] ✅ All "test test test" placeholders should be replaced');
+      
+      // Verify no test placeholders remain after a short delay
+      setTimeout(() => {
+        console.log('[AUTOFILL] ========== POST-AUTOFILL VERIFICATION ==========');
+        const testFields = Object.entries(dummyData).filter(([key, val]) => {
+          if (typeof val === 'string') {
+            const lowerVal = val.toLowerCase();
+            return (lowerVal.includes('test test test') || 
+                    (lowerVal.includes('test test') && !lowerVal.includes('test@')));
+          }
+          return false;
+        });
+        
+        if (testFields.length > 0) {
+          console.error(`[AUTOFILL] ❌ ERROR: Generated data still contains "test test" in ${testFields.length} fields!`);
+          testFields.forEach(([key, val]) => {
+            console.error(`[AUTOFILL]   - ${key}: "${typeof val === 'string' && val.length > 100 ? val.substring(0, 100) + '...' : val}"`);
+          });
+        } else {
+          console.log('[AUTOFILL] ✅ VERIFIED: Generated dummy data contains no "test test test" placeholders');
+        }
+        
+        // Also verify current form values
+        verifyNoTestPlaceholders();
+      }, 500);
+    } catch (error) {
+      console.error('[AUTOFILL] Error during auto-fill:', error);
+      console.error('[AUTOFILL] Error stack:', error.stack);
+      toast.error('Auto-fill failed', { description: error.message });
+    }
+  }, [formData, formValues]);
+
+  // Expose auto-fill function to window for console access
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.autoFillWillForm = () => {
+        console.log('[AUTOFILL] Auto-fill triggered from console');
+        handleAutoFill();
+      };
+      console.log('[FORM INIT] Auto-fill function available: window.autoFillWillForm()');
+      console.log('[FORM INIT] You can also click the "Auto-Fill Form (Test Data)" button in the UI');
+    }
+  }, [handleAutoFill]);
+
+  // Function to verify all "test test test" placeholders are replaced
+  const verifyNoTestPlaceholders = useCallback(() => {
+    console.log('[VERIFY] ========== SCANNING FOR "TEST TEST TEST" PLACEHOLDERS ==========');
+    const testFields = Object.entries(formValues).filter(([key, val]) => {
+      if (typeof val === 'string') {
+        const lowerVal = val.toLowerCase();
+        // Check for "test test test" but exclude email addresses
+        return (lowerVal.includes('test test test') || 
+                (lowerVal.includes('test test') && !lowerVal.includes('test@') && !lowerVal.includes('@test'))) &&
+               lowerVal.trim() !== 'test@example.com';
+      }
+      return false;
+    });
+    
+    if (testFields.length > 0) {
+      console.error(`[VERIFY] ❌ Found ${testFields.length} fields still containing "test test" placeholders:`);
+      testFields.forEach(([key, val]) => {
+        console.error(`[VERIFY]   - ${key}: "${typeof val === 'string' && val.length > 100 ? val.substring(0, 100) + '...' : val}"`);
+      });
+      return false;
+    } else {
+      console.log('[VERIFY] ✅ SUCCESS: No "test test test" placeholders found in form values');
+      return true;
+    }
+  }, [formValues]);
+
+  // Expose verification function to window
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.verifyNoTestPlaceholders = verifyNoTestPlaceholders;
+      console.log('[FORM INIT] Verification function available: window.verifyNoTestPlaceholders()');
+    }
+  }, [verifyNoTestPlaceholders]);
+
+  // Calculate form completion percentage
+  useEffect(() => {
+    const calculateCompletion = () => {
+      console.log('[COMPLETION %] ========== CALCULATING FORM COMPLETION PERCENTAGE ==========');
+      let totalRequired = 0;
+      let completedRequired = 0;
+
+      formData.formSections.forEach((section, sectionIndex) => {
+        console.log(`[COMPLETION %] Section ${sectionIndex + 1}: "${section.formSection}"`);
+        
+        section.fields.forEach(field => {
+          if (field.conditions && !evaluateFieldConditions(field)) {
+            console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (conditions not met)`);
+            return;
+          }
+          if (['button', 'hidden', 'display'].includes(field.type)) {
+            console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (type: ${field.type})`);
+            return;
+          }
+          
+          if (field.required) {
+            totalRequired++;
+            console.log(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
+            
+            if (field.type === 'checkboxGroup') {
+              const isCompleted = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+              if (isCompleted) {
+                completedRequired++;
+                console.log(`[COMPLETION %] Field "${field.id}" (checkbox) - COMPLETED (completed now: ${completedRequired})`);
+              } else {
+                console.log(`[COMPLETION %] Field "${field.id}" (checkbox) - NOT completed`);
+              }
+            } else if (field.type === 'section' && field.subFields) {
+              const hasRequiredSubFieldFilled = field.subFields.some(subField => {
+                if (!evaluateFieldConditions(subField)) return false;
+                if (subField.required) return !!formValues[subField.id];
+                return false;
+              });
+              if (hasRequiredSubFieldFilled) {
+                completedRequired++;
+                console.log(`[COMPLETION %] Field "${field.id}" (section) - COMPLETED (completed now: ${completedRequired})`);
+              } else {
+                console.log(`[COMPLETION %] Field "${field.id}" (section) - NOT completed`);
+              }
+            } else {
+              const isCompleted = !!formValues[field.id];
+              if (isCompleted) {
+                completedRequired++;
+                console.log(`[COMPLETION %] Field "${field.id}" (${field.type}) - COMPLETED (completed now: ${completedRequired})`);
+              } else {
+                console.log(`[COMPLETION %] Field "${field.id}" (${field.type}) - NOT completed`);
+              }
+            }
+          }
+        });
+      });
+
+      const percent = totalRequired > 0 ? Math.round((completedRequired / totalRequired) * 100) : 0;
+      console.log(`[COMPLETION %] FINAL CALCULATION: ${completedRequired}/${totalRequired} = ${percent}%`);
+      setFormCompletionPercent(percent);
+    };
+
+    calculateCompletion();
+  }, [formValues, evaluateFieldConditions]);
+
+  // Autosave (debounced) — with visual feedback
+  useEffect(() => {
+    console.log('[AUTOSAVE] Form values changed, triggering autosave timer...');
+    console.log('[AUTOSAVE] Changed values:', Object.keys(formValues));
+    
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
 
+    setIsSaving(true);
+
     autosaveTimerRef.current = setTimeout(() => {
+      console.log('[AUTOSAVE] Executing autosave...');
       try {
         const dataToSave = {};
+        let filteredCount = 0;
         for (const [key, value] of Object.entries(formValues || {})) {
-          if (key.toLowerCase().includes('signature')) continue;
-          if (typeof value === 'string' && value.startsWith('data:image')) continue;
-          if (isInvalidNumber(value)) continue;
+          if (key.toLowerCase().includes('signature')) {
+            filteredCount++;
+            continue;
+          }
+          if (typeof value === 'string' && value.startsWith('data:image')) {
+            filteredCount++;
+            continue;
+          }
+          if (isInvalidNumber(value)) {
+            filteredCount++;
+            continue;
+          }
           dataToSave[key] = value;
         }
 
+        console.log(`[AUTOSAVE] Prepared ${Object.keys(dataToSave).length} fields for saving (filtered out ${filteredCount})`);
+        
         const testStr = JSON.stringify(dataToSave);
         if (testStr.length <= 5 * 1024 * 1024) {
           localStorage.setItem('willForm', testStr);
+          setLastSaved(new Date());
+          setIsSaving(false);
+          console.log(`[AUTOSAVE] Successfully saved ${Object.keys(dataToSave).length} fields to localStorage`);
+        } else {
+          console.warn(`[AUTOSAVE] Data too large to save: ${testStr.length} bytes`);
+          setIsSaving(false);
         }
-      } catch {
-        // ignore autosave failures
+      } catch (error) {
+        console.error('[AUTOSAVE] Error during autosave:', error);
+        setIsSaving(false);
       }
     }, 600);
 
@@ -402,26 +1382,36 @@ export default function FormRenderer() {
     };
   }, [formValues]);
 
-  useEffect(() => {
-    const prevValues = previousValuesRef.current || {};
-    const keys = new Set([...Object.keys(prevValues), ...Object.keys(formValues || {})]);
-    let changedKey = null;
-    for (const key of keys) {
-      if (prevValues[key] !== formValues[key]) {
-        changedKey = key;
-      }
-    }
-    if (changedKey) {
-      setLastUpdatedFieldId(changedKey);
-    }
-    previousValuesRef.current = formValues;
-  }, [formValues]);
 
   // Calculate clause preview - moved outside JSX to fix React Hooks error
   // (evaluateFieldConditions is already defined above, reusing it)
+  // Debounced clause preview calculation for better performance
+  const [debouncedFormValues, setDebouncedFormValues] = useState(formValues);
+  
+  useEffect(() => {
+    if (clauseUpdateTimerRef.current) {
+      clearTimeout(clauseUpdateTimerRef.current);
+    }
+    
+    clauseUpdateTimerRef.current = setTimeout(() => {
+      setDebouncedFormValues(formValues);
+    }, 400); // Debounce clause updates by 400ms
+    
+    return () => {
+      if (clauseUpdateTimerRef.current) clearTimeout(clauseUpdateTimerRef.current);
+    };
+  }, [formValues]);
+
   const clausePreview = useMemo(() => {
+    if (isDev) {
+      console.log('[CLAUSE PREVIEW] ========== RECALCULATING ==========');
+      console.log('[CLAUSE PREVIEW] currentIndex:', currentIndex);
+      console.log('[CLAUSE PREVIEW] formValues keys:', Object.keys(debouncedFormValues));
+    }
+    
     // Only render clause preview from step 2 onwards
     if (currentIndex < 1) {
+      if (isDev) console.log('[CLAUSE PREVIEW] Skipping - currentIndex < 1');
       return null;
     }
 
@@ -430,48 +1420,81 @@ export default function FormRenderer() {
     
     // Process all sections up to current index (and current section)
     const sectionsToProcess = formData.formSections.slice(0, currentIndex + 1);
+    console.log('[CLAUSE PREVIEW] Processing sections:', sectionsToProcess.map(s => s.formSection));
     
     sectionsToProcess.forEach(section => {
+      if (isDev) console.log(`[CLAUSE PREVIEW] Processing section: ${section.formSection}`);
       section.fields.forEach(field => {
         // Skip fields that shouldn't be shown (conditions not met)
         if (field.conditions && !evaluateFieldConditions(field)) {
+          if (isDev) console.log(`[CLAUSE PREVIEW] Field ${field.id} skipped - conditions not met`);
           return; // Skip this field
         }
         
         // Skip hidden, button, and display fields
         if (['button', 'hidden', 'display'].includes(field.type)) {
+          if (isDev) console.log(`[CLAUSE PREVIEW] Field ${field.id} skipped - type: ${field.type}`);
           return;
         }
         
         // Check field's willClauseText
         if (field.willClauseText) {
-          const interpolated = interpolateText(field.willClauseText, formValues);
-          if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
+          if (isDev) console.log(`[CLAUSE PREVIEW] Field ${field.id} has willClauseText:`, field.willClauseText);
+          const interpolated = interpolateText(field.willClauseText, debouncedFormValues);
+          if (isDev) console.log(`[CLAUSE PREVIEW] Interpolated result:`, interpolated);
+          const hasUnresolved = /\{\{field:[^}]+\}\}/.test(interpolated);
+          if (isDev) console.log(`[CLAUSE PREVIEW] Has unresolved placeholders:`, hasUnresolved);
+          
+          if (interpolated && !hasUnresolved && interpolated.trim() !== '') {
+            if (isDev) console.log(`[CLAUSE PREVIEW] ✅ Adding clause from field ${field.id}`);
             allClauses.push({
               id: `${section.formSection}-${field.id}`,
               text: interpolated,
               fieldLabel: field.label,
               section: section.formSection
             });
+          } else {
+            if (isDev) console.log(`[CLAUSE PREVIEW] ❌ Skipping clause from field ${field.id} - unresolved or empty`);
           }
         }
         
         // Check options' willClauseText for radio/select fields
         if (field.options && (field.type === 'radio' || field.type === 'select')) {
-          const selectedValue = formValues[field.id];
+          const selectedValue = debouncedFormValues[field.id];
+          if (isDev) console.log(`[CLAUSE PREVIEW] Radio/Select field ${field.id} - selectedValue:`, selectedValue);
+          
           if (selectedValue) {
             const selectedOption = field.options.find(opt => opt.value === selectedValue);
+            if (isDev) console.log(`[CLAUSE PREVIEW] Selected option:`, selectedOption);
+            
             if (selectedOption?.willClauseText) {
-              const interpolated = interpolateText(selectedOption.willClauseText, formValues);
-              if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
+              if (isDev) console.log(`[CLAUSE PREVIEW] Option has willClauseText:`, selectedOption.willClauseText);
+              const interpolated = interpolateText(selectedOption.willClauseText, debouncedFormValues);
+              if (isDev) console.log(`[CLAUSE PREVIEW] Interpolated result:`, interpolated);
+              const hasUnresolved = /\{\{field:[^}]+\}\}/.test(interpolated);
+              if (isDev) console.log(`[CLAUSE PREVIEW] Has unresolved placeholders:`, hasUnresolved);
+              
+              if (interpolated && !hasUnresolved && interpolated.trim() !== '') {
+                if (isDev) console.log(`[CLAUSE PREVIEW] ✅ Adding clause from option ${selectedOption.value}`);
                 allClauses.push({
                   id: `${section.formSection}-${field.id}-${selectedOption.value}`,
                   text: interpolated,
                   fieldLabel: field.label,
                   section: section.formSection
                 });
+              } else {
+                if (isDev) {
+                  console.log(`[CLAUSE PREVIEW] ❌ Skipping clause from option - unresolved placeholders or empty`);
+                  console.log(`[CLAUSE PREVIEW] Interpolated:`, interpolated);
+                  console.log(`[CLAUSE PREVIEW] Has unresolved:`, hasUnresolved);
+                  console.log(`[CLAUSE PREVIEW] Trimmed length:`, interpolated?.trim().length);
+                }
               }
+            } else {
+              if (isDev) console.log(`[CLAUSE PREVIEW] Selected option has no willClauseText`);
             }
+          } else {
+            if (isDev) console.log(`[CLAUSE PREVIEW] No value selected for field ${field.id}`);
           }
         }
         
@@ -485,7 +1508,7 @@ export default function FormRenderer() {
             
             // Check subField's willClauseText
             if (subField.willClauseText) {
-              const interpolated = interpolateText(subField.willClauseText, formValues);
+              const interpolated = interpolateText(subField.willClauseText, debouncedFormValues);
               if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
                 allClauses.push({
                   id: `${section.formSection}-${field.id}-${subField.id}`,
@@ -500,38 +1523,21 @@ export default function FormRenderer() {
       });
     });
 
+    if (isDev) {
+      console.log('[CLAUSE PREVIEW] Total clauses found:', allClauses.length);
+      console.log('[CLAUSE PREVIEW] Clauses:', allClauses.map(c => ({ id: c.id, label: c.fieldLabel })));
+    }
+
     if (allClauses.length === 0) {
+      if (isDev) console.log('[CLAUSE PREVIEW] No clauses - returning null');
       return null;
     }
 
-    // Reverse to show newest first (most recently added/updated at top)
-    // If a field was just updated, move its clause to the top
-    if (lastUpdatedFieldId) {
-      let updatedIndex = allClauses.findIndex((clause) =>
-        clause.id.includes(`-${lastUpdatedFieldId}`) || clause.id.endsWith(`-${lastUpdatedFieldId}`)
-      );
-      if (updatedIndex === -1) {
-        const updatedValue = formValues[lastUpdatedFieldId];
-        const updatedToken = Array.isArray(updatedValue)
-          ? updatedValue.join(', ')
-          : updatedValue != null
-          ? String(updatedValue)
-          : '';
-        if (updatedToken) {
-          updatedIndex = allClauses.findIndex((clause) => clause.text.includes(updatedToken));
-        }
-      }
-      if (updatedIndex > -1) {
-        const [updatedClause] = allClauses.splice(updatedIndex, 1);
-        allClauses.unshift(updatedClause);
-      }
-    } else {
-      // Reverse the array to show newest first (last added = first shown)
-      allClauses.reverse();
-    }
-
+    // Maintain consistent ordering: show clauses in the order they appear in the form
+    // Only update clause content when fields change, but don't reorder or scroll
+    // This prevents the "jump to top then drop" behavior
     return allClauses;
-  }, [currentIndex, formValues, evaluateFieldConditions, lastUpdatedFieldId]);
+  }, [currentIndex, debouncedFormValues, evaluateFieldConditions]);
 
   const renderClausePreview = (wrapperClassName = '') => {
     if (currentIndex < 1) {
@@ -553,12 +1559,13 @@ export default function FormRenderer() {
               </span>
             </div>
 
-            <div className={`p-4 ${clausePreview.length > 3 ? 'max-h-[70vh] overflow-y-auto custom-scrollbar' : ''}`}>
+            <div className={`p-4 ${clausePreview.length > 3 ? 'max-h-[70vh] overflow-y-auto custom-scrollbar' : ''}`} id="clause-preview-container">
               <div className="space-y-4">
                 {clausePreview.map((clause) => (
                   <div
                     key={clause.id}
                     className="bg-white border-l-4 border-indigo-500 rounded-r-lg p-3 shadow-sm hover:shadow-md transition-all duration-300"
+                    data-clause-id={clause.id}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -579,13 +1586,17 @@ export default function FormRenderer() {
           <div className="w-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 border-2 border-indigo-200 rounded-xl shadow-lg overflow-hidden">
             <div className="p-4">
               <div className="text-center py-12 animate-fadeIn">
-                <div className="p-4 bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                  <Scroll className="w-10 h-10 text-gray-400" />
+                <div className="text-center py-6">
+                  <div className="mb-3 flex justify-center">
+                    <div className="p-3 bg-indigo-100 rounded-full">
+                      <FileText size={24} className="text-indigo-600" />
+                    </div>
+                  </div>
+                  <p className="text-gray-700 font-semibold mb-1.5">No clauses generated yet</p>
+                  <p className="text-sm text-gray-500">
+                    Complete relevant fields to see generated clauses appear here.
+                  </p>
                 </div>
-                <p className="text-gray-600 font-medium mb-1.5">No clauses to preview yet</p>
-                <p className="text-sm text-gray-500 mb-1.5">
-                  Complete the form fields above to see generated will clauses appear here
-                </p>
               </div>
             </div>
           </div>
@@ -714,9 +1725,29 @@ export default function FormRenderer() {
   };
 
   const handleDownloadPDF = async () => {
+    console.log('[PDF DEBUG] ========== PDF DOWNLOAD STARTED ==========');
+    console.log('[PDF DEBUG] Browser info:', {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+      onLine: navigator.onLine
+    });
+    console.log('[PDF DEBUG] Document info:', {
+      title: document.title,
+      URL: document.URL,
+      referrer: document.referrer
+    });
+    console.log('[PDF DEBUG] Form values check:', {
+      hasFormValues: !!formValues,
+      formValuesType: typeof formValues,
+      keysCount: formValues ? Object.keys(formValues).length : 0
+    });
+    
+    setIsGeneratingPDF(true);
     try {
       setBanner(null);
       const toastId = toast.loading('Generating PDF…', { description: 'This can take a few seconds on mobile.' });
+      console.log('[PDF DEBUG] Toast loading started with ID:', toastId);
       
       // Aggressively sanitize all form values
       let sanitizedValues = sanitizeFormValues(formValues);
@@ -847,28 +1878,252 @@ export default function FormRenderer() {
       }
       
       // Lazy-load the heavy PDF generator so initial app load stays fast.
+      console.log('[PDF DEBUG] Starting PDF generation process...');
+      console.log('[PDF DEBUG] Form values keys:', Object.keys(formValues));
+      console.log('[PDF DEBUG] Sanitized values keys:', Object.keys(sanitizedValues));
+      console.log('[PDF DEBUG] Form values for filename:', {
+        firstName: formValues.firstName,
+        lastName: formValues.lastName,
+        title: formValues.title
+      });
+      
       const { generatePDFWithJSPDF } = await import('./PDFGeneratorJSPDF.js');
+      console.log('[PDF DEBUG] PDF generator imported successfully');
       
       // Use jsPDF instead of React PDF Renderer (now async)
-      const doc = await generatePDFWithJSPDF(sanitizedValues, {
+      console.log('[PDF DEBUG] Calling generatePDFWithJSPDF with signatures:', {
+        hasTestatorSignature: !!testatorSignature,
+        hasConsultantSignature: !!consultantSignature,
+        hasClientSignature: !!clientSignature
+      });
+      
+      const pdfResult = await generatePDFWithJSPDF(sanitizedValues, {
         testatorSignature,
         consultantSignature,
         clientSignature
       });
-
-      // Save and download the PDF
-      doc.save('Will-Preview.pdf');
-      toast.success('PDF ready', { id: toastId, description: 'Download started.' });
-    } catch (error) {
-      console.error('[PDF] Generation Error:', error);
-      console.error('[PDF] Error details:', {
-        message: error.message,
-        stack: error.stack,
-        formValuesKeys: Object.keys(formValues).length
+      
+      // Handle new return format: { doc, missingItems, schedulesMissing, hasPlaceholders }
+      const doc = pdfResult.doc || pdfResult;
+      const missingItems = pdfResult.missingItems || [];
+      const schedulesMissing = pdfResult.schedulesMissing || [];
+      const hasPlaceholders = pdfResult.hasPlaceholders !== undefined ? pdfResult.hasPlaceholders : (missingItems.length > 0 || schedulesMissing.length > 0);
+      
+      // Store missing items for "View Issues" link
+      if (hasPlaceholders) {
+        // Map schedule numbers to user-friendly messages
+        const scheduleIssues = schedulesMissing.map(scheduleText => {
+          // Extract schedule number from "Schedule 2876070" format
+          const scheduleMatch = scheduleText.match(/Schedule\s+(\d+)/i);
+          const scheduleNumber = scheduleMatch ? scheduleMatch[1] : scheduleText;
+          
+          // Try to identify which field this schedule belongs to by checking form values
+          let scheduleType = 'Schedule';
+          let userFriendlyMessage = '';
+          let fieldHint = '';
+          let sectionName = '';
+          
+          // Check which fields are actually missing
+          let missingFields = [];
+          let targetFieldIds = [];
+          let targetSectionIndex = -1;
+          
+          // Check if this schedule number matches any known schedule field
+          if (formValues.propertyTrustScheduleNumber === scheduleNumber || 
+              formValues.propertyTrustScheduleNumber === scheduleText) {
+            scheduleType = 'Property Trust Schedule';
+            sectionName = 'Property Trust';
+            
+            // Check which specific fields are missing
+            if (!formValues.propertyTrustDetails || formValues.propertyTrustDetails.trim() === '') {
+              missingFields.push('"Property Details"');
+              targetFieldIds.push('propertyTrustDetails');
+            }
+            if (!formValues.propertyTrustTerms || formValues.propertyTrustTerms.trim() === '') {
+              missingFields.push('"Property Trust Terms"');
+              targetFieldIds.push('propertyTrustTerms');
+            }
+            
+            // Find the section index for Property Trust
+            targetSectionIndex = formData.formSections.findIndex(s => s.formSection === 'Property Trust');
+            
+            userFriendlyMessage = missingFields.length > 0 
+              ? `Missing ${missingFields.join(' and ')} in Property Trust section.`
+              : `Property Trust schedule details are incomplete.`;
+            fieldHint = `Go to "Property Trust" section and fill in: ${missingFields.join(' and ')}`;
+            
+          } else if (formValues.bprTrustScheduleNumber === scheduleNumber || 
+                     formValues.bprTrustScheduleNumber === scheduleText) {
+            scheduleType = 'Business Property Relief Trust Schedule';
+            sectionName = 'Business Interests';
+            
+            // Check which specific fields are missing
+            if (!formValues.bprTrustDetails || formValues.bprTrustDetails.trim() === '') {
+              missingFields.push('"Business Property Details"');
+              targetFieldIds.push('bprTrustDetails');
+            }
+            if (!formValues.bprTrustTerms || formValues.bprTrustTerms.trim() === '') {
+              missingFields.push('"Business Property Relief Trust Terms"');
+              targetFieldIds.push('bprTrustTerms');
+            }
+            
+            // Find the section index for Business Interests
+            targetSectionIndex = formData.formSections.findIndex(s => s.formSection === 'Business Interests');
+            
+            userFriendlyMessage = missingFields.length > 0 
+              ? `Missing ${missingFields.join(' and ')} in Business Interests section.`
+              : `Business Property Relief Trust schedule details are incomplete.`;
+            fieldHint = `Go to "Business Interests" section and fill in: ${missingFields.join(' and ')}`;
+            
+          } else {
+            // Generic message for unknown schedules - make it user-friendly
+            scheduleType = 'Schedule';
+            sectionName = 'Unknown Section';
+            userFriendlyMessage = `A schedule (Schedule ${scheduleNumber}) was referenced in your Will, but the details for that schedule were not provided.`;
+            fieldHint = 'Please check sections that mention schedules (like "Property Trust" or "Business Interests") and ensure all schedule details are filled in.';
+          }
+          
+          return {
+            section: sectionName || scheduleType,
+            field: scheduleText,
+            fieldId: targetFieldIds[0] || scheduleNumber, // Use first missing field for navigation
+            targetFieldIds: targetFieldIds, // All fields that need to be filled
+            targetSectionIndex: targetSectionIndex, // Section to navigate to
+            issue: userFriendlyMessage,
+            message: `${userFriendlyMessage} ${fieldHint}`,
+            snippet: fieldHint,
+            scheduleNumber: scheduleNumber, // Keep original for navigation
+            fieldLabel: scheduleText,
+            missingFields: missingFields // List of missing field names
+          };
+        });
+        
+        setValidationIssues([...missingItems, ...scheduleIssues]);
+      }
+      
+      console.log('[PDF DEBUG] PDF document generated successfully:', {
+        docType: typeof doc,
+        hasOutput: typeof doc.output === 'function',
+        hasSave: typeof doc.save === 'function',
+        missingItemsCount: missingItems.length,
+        schedulesMissingCount: schedulesMissing.length
       });
+
+      // Generate a descriptive filename with testator name and date
+      const testatorName = formValues.firstName && formValues.lastName 
+        ? `${formValues.firstName}-${formValues.lastName}`
+        : 'Will';
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      const filename = `${testatorName}-Last-Will-${currentDate}.pdf`;
+      
+      console.log('[PDF DEBUG] Generated filename:', filename);
+      console.log('[PDF DEBUG] Filename components:', {
+        testatorName,
+        currentDate,
+        fullFilename: filename
+      });
+      
+      // Check the actual PDF content before saving
+      console.log('[PDF DEBUG] Analyzing PDF content before save...');
+      const pdfBlob = doc.output('blob');
+      const pdfDataUri = doc.output('datauristring');
+      const pdfArrayBuffer = doc.output('arraybuffer');
+      
+      console.log('[PDF DEBUG] PDF Analysis:', {
+        blobSize: pdfBlob.size,
+        blobType: pdfBlob.type,
+        dataUriPrefix: pdfDataUri.substring(0, 50),
+        arrayBufferByteLength: pdfArrayBuffer.byteLength,
+        firstBytes: new Uint8Array(pdfArrayBuffer.slice(0, 10))
+      });
+      
+      // SKIP doc.save() - use blob method exclusively to force proper filename
+      console.log('[PDF DEBUG] Using blob method exclusively to force proper filename...');
+      
+      // Create a proper PDF blob with explicit MIME type
+      const properPdfBlob = new Blob([pdfArrayBuffer], { 
+        type: 'application/pdf' 
+      });
+      
+      console.log('[PDF DEBUG] Created proper PDF blob:', {
+        size: properPdfBlob.size,
+        type: properPdfBlob.type
+      });
+      
+      // Create download link with forced filename
+      const downloadUrl = URL.createObjectURL(properPdfBlob);
+      const downloadLink = document.createElement('a');
+      
+      // Force download attributes
+      downloadLink.href = downloadUrl;
+      downloadLink.download = filename;
+      downloadLink.type = 'application/pdf';
+      downloadLink.style.display = 'none';
+      
+      console.log('[PDF DEBUG] Download link configured:', {
+        href: downloadLink.href.substring(0, 50) + '...',
+        download: downloadLink.download,
+        type: downloadLink.type
+      });
+      
+      // Add to DOM and trigger download
+      document.body.appendChild(downloadLink);
+      console.log('[PDF DEBUG] Triggering download click...');
+      downloadLink.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(downloadUrl);
+        console.log('[PDF DEBUG] Download cleanup completed');
+      }, 100);
+      
+      console.log('[PDF DEBUG] Blob download method completed successfully');
+      
+      console.log('[PDF DEBUG] PDF process completed successfully, showing toast and cleaning up...');
+      
+      // Show appropriate toast message based on completion level
+      setTimeout(() => {
+        if (hasPlaceholders) {
+          toast.error('DRAFT INCOMPLETE - Not ready for signing', { 
+            id: toastId, 
+            description: 'PDF contains blanks and placeholder text. Complete all sections before creating final Will.' 
+          });
+          setBanner({ 
+            type: 'warning', 
+            message: '⚠️  This PDF is a DRAFT with incomplete content. Do not sign - complete all form sections first.',
+            missingItems: missingItems,
+            schedulesMissing: schedulesMissing
+          });
+        } else {
+          toast.success('PDF ready', { 
+            id: toastId, 
+            description: 'Professional Will generated successfully.' 
+          });
+          setBanner(null); // Clear banner if no issues
+        }
+      }, 500); // Small delay to let console logs appear first
+      
+      setIsGeneratingPDF(false);
+      console.log('[PDF DEBUG] PDF generation process fully completed!');
+    } catch (error) {
+      console.error('[PDF DEBUG] PDF Generation Error occurred:', error);
+      console.error('[PDF DEBUG] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        formValuesKeys: Object.keys(formValues).length,
+        sanitizedValuesKeys: typeof sanitizedValues !== 'undefined' ? Object.keys(sanitizedValues).length : 'undefined',
+        errorType: typeof error,
+        toString: error.toString()
+      });
+      console.error('[PDF DEBUG] Full error object:', error);
+      
       const msg = error?.message || 'Unknown error';
       setBanner({ type: 'error', message: `Error generating PDF: ${msg}` });
       toast.error('Error generating PDF', { description: msg });
+      setIsGeneratingPDF(false);
+      console.log('[PDF DEBUG] Error handling completed, PDF generation flag reset');
     }
   };
 
@@ -881,7 +2136,11 @@ export default function FormRenderer() {
       <main className="flex-1 min-w-0 flex justify-center py-4 px-3 sm:py-6 sm:px-6 lg:px-8 animate-fadeIn">
         <div className="w-full max-w-6xl">
           <div className="flex flex-col lg:flex-row gap-6">
-            <section className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200 transition-all duration-300 hover:shadow-2xl">
+            <section 
+              className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-4 sm:p-6 border border-gray-200 transition-all duration-300 hover:shadow-2xl"
+              aria-label={`Form section: ${currentSection?.formSection || 'Questionnaire'}`}
+              role="region"
+            >
               {banner?.message ? (
                 <div
                   className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
@@ -891,7 +2150,31 @@ export default function FormRenderer() {
                   }`}
                   role={banner.type === 'error' ? 'alert' : 'status'}
                 >
-                  {banner.message}
+                  <div className="flex items-start justify-between gap-2">
+                    <span>{banner.message}</span>
+                    {(banner.missingItems?.length > 0 || banner.schedulesMissing?.length > 0) && (
+                      <button
+                        onClick={() => {
+                          const allIssues = [
+                            ...(banner.missingItems || []),
+                            ...(banner.schedulesMissing?.map(s => ({ 
+                              section: 'Schedules', 
+                              field: s, 
+                              issue: 'Schedule content not provided', 
+                              snippet: '',
+                              clauseNumber: null
+                            })) || [])
+                          ];
+                          setValidationIssues(allIssues);
+                          setValidationModalOpen(true);
+                        }}
+                        className="text-xs font-semibold underline hover:no-underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded px-2 py-1 -mt-1 -mr-1"
+                        aria-label="View incomplete items"
+                      >
+                        View Issues →
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : null}
 
@@ -907,11 +2190,16 @@ export default function FormRenderer() {
                     <Sparkles size={14} className="text-indigo-500" />
                     Progress
                   </span>
-                  <span className="text-sm font-semibold text-indigo-600">
-                    Step {currentIndex + 1} of {formData.formSections.length}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">
+                      {formCompletionPercent}% Complete
+                    </span>
+                    <span className="text-sm font-semibold text-indigo-600">
+                      Step {currentIndex + 1} of {formData.formSections.length}
+                    </span>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner mb-2">
                   <div
                     className="bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 h-3 rounded-full transition-all duration-500 ease-out shadow-lg relative overflow-hidden"
                     style={{ width: `${((currentIndex + 1) / formData.formSections.length) * 100}%` }}
@@ -919,31 +2207,96 @@ export default function FormRenderer() {
                     <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
                   </div>
                 </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    {isSaving ? (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                        <span>Saving...</span>
+                      </>
+                    ) : lastSaved ? (
+                      <>
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>Saved {formatLastSaved(lastSaved)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-green-600 h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${formCompletionPercent}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-3">
-                {currentIndex === formData.formSections.length - 1 ? (
-                  isFormFullyCompleted() ? (
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  {currentIndex >= 1 && (
                     <button
-                      onClick={handleDownloadPDF}
-                      className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium cursor-pointer z-10 relative transform hover:scale-105 active:scale-95 hover:shadow-xl animate-pulse-subtle"
+                      onClick={() => {
+                      console.log('[CLAUSE MODAL] ========== OPENING CLAUSE PREVIEW MODAL ==========');
+                      console.log('[CLAUSE MODAL] Clause count:', clausePreview?.length || 0);
+                      console.log('[CLAUSE MODAL] Current section:', currentSection?.formSection);
+                        setClauseModalOpen(true);
+                      }}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium transform hover:scale-105 active:scale-95 ${
+                        clausePreview && clausePreview.length > 0
+                          ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white'
+                          : 'bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white'
+                      }`}
                       type="button"
                     >
-                      <Download size={20} className="animate-bounce-subtle" />
-                      <span>Download PDF</span>
+                      <Scroll size={20} />
+                      <span>View Clauses ({clausePreview?.length || 0})</span>
                     </button>
-                  ) : (
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Download PDF button ONLY shows on the FINAL step (last section) AND when form is fully completed */}
+                  {currentIndex === formData.formSections.length - 1 && isFormFullyCompleted() ? (
+                    <button
+                      onClick={() => {
+                        console.log('[PDF DOWNLOAD] ========== DOWNLOAD PDF BUTTON CLICKED ==========');
+                        console.log('[PDF DOWNLOAD] Form completion:', formCompletionPercent + '%');
+                        console.log('[PDF DOWNLOAD] Is form fully completed:', isFormFullyCompleted());
+                        console.log('[PDF DOWNLOAD] Current form values count:', Object.keys(formValues).length);
+                        handleDownloadPDF();
+                      }}
+                      disabled={isGeneratingPDF}
+                      className={`flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium z-10 relative transform hover:scale-105 active:scale-95 hover:shadow-xl ${
+                        isGeneratingPDF 
+                          ? 'opacity-75 cursor-not-allowed' 
+                          : 'cursor-pointer animate-pulse-subtle'
+                      }`}
+                      type="button"
+                      aria-label={isGeneratingPDF ? "Generating PDF, please wait" : "Download PDF document"}
+                      aria-busy={isGeneratingPDF}
+                    >
+                      {isGeneratingPDF ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Generating PDF...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={20} className="animate-bounce-subtle" />
+                          <span>Download PDF</span>
+                        </>
+                      )}
+                    </button>
+                  ) : currentIndex === formData.formSections.length - 1 ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
                       <span className="italic">Complete all required fields to enable download</span>
                     </div>
-                  )
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
-                    <AlertCircle size={16} />
-                    <span className="italic">Complete all steps to enable download</span>
-                  </div>
-                )}
+                  ) : (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
+                      <AlertCircle size={16} />
+                      <span className="italic">Complete all steps to enable download</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-indigo-600">
@@ -957,9 +2310,43 @@ export default function FormRenderer() {
 
               <div className="space-y-3">
                 {currentSection.fields.map((field, idx) => {
-                  const displayLabel = field.id === 'partnerFullName' && formValues.maritalStatus === 'Cohabiting'
-                    ? "Co-habiting Partner's Full Name"
-                    : field.label;
+                  console.log(`[SECTION FIELD] ========== PROCESSING FIELD ${idx + 1}/${currentSection.fields.length} ==========`);
+                  console.log(`[SECTION FIELD] Section: "${currentSection.formSection}"`);
+                  console.log(`[SECTION FIELD] Field ID: "${field.id}"`);
+                  console.log(`[SECTION FIELD] Field Label: "${field.label || 'N/A'}"`);
+                  console.log(`[SECTION FIELD] Field Type: "${field.type}"`);
+                  console.log(`[SECTION FIELD] Field Required: ${field.required || false}`);
+                  console.log(`[SECTION FIELD] Current Value:`, formValues[field.id] || 'empty');
+                  
+                  // Check if current value contains "test test test"
+                  const currentValue = formValues[field.id];
+                  if (currentValue && typeof currentValue === 'string') {
+                    const lowerVal = currentValue.toLowerCase();
+                    if (lowerVal.includes('test test test') || (lowerVal.includes('test test') && !lowerVal.includes('test@'))) {
+                      console.warn(`[SECTION FIELD] ⚠️  WARNING: Field "${field.id}" contains "test test test" placeholder! Value: "${currentValue.substring(0, 100)}"`);
+                    }
+                  }
+                  console.log(`[SECTION FIELD] Has conditions:`, !!field.conditions);
+                  
+                  // Skip fields that shouldn't be shown (conditions not met)
+                  if (field.conditions && !evaluateFieldConditions(field)) {
+                    console.log(`[FORM RENDER] Field ${field.id} skipped - conditions not met`);
+                    return null; // Skip rendering this field
+                  }
+                  
+                  // Enhanced label for partner name field with clear instructions
+                  let displayLabel = field.label;
+                  if (field.id === 'partnerFullName') {
+                    if (formValues.maritalStatus === 'Cohabiting') {
+                      displayLabel = "Co-habiting Partner's Full Name";
+                    } else if (formValues.maritalStatus === 'Married') {
+                      displayLabel = "Spouse's Full Name";
+                    } else if (formValues.maritalStatus === 'Civil Partnership') {
+                      displayLabel = "Civil Partner's Full Name";
+                    } else {
+                      displayLabel = "Partner's Full Name (Future Spouse/Partner)";
+                    }
+                  }
                   const interpolatedFieldWillClause = field.willClauseText
                     ? interpolateText(field.willClauseText, formValues)
                     : null;
@@ -976,9 +2363,9 @@ export default function FormRenderer() {
                   return (
                     <div
                       key={field.id}
-                      className="animate-slideIn opacity-0"
+                      className="animate-slideIn opacity-0 transition-all duration-300"
                       style={{
-                        animationDelay: `${idx * 0.1}s`,
+                        animationDelay: `${idx * 0.05}s`,
                         animationFillMode: 'forwards'
                       }}
                     >
@@ -986,6 +2373,10 @@ export default function FormRenderer() {
                         field={{
                           ...field,
                           label: displayLabel,
+                          // Add helpful info text for partner name field
+                          infoText: field.id === 'partnerFullName' ? 
+                            "Simply type your partner's full name in the field above. The form saves automatically as you type - no need to press any buttons!" : 
+                            field.infoText,
                           willClauseText: interpolatedFieldWillClause,
                           options: interpolatedOptions || field.options
                         }}
@@ -993,98 +2384,919 @@ export default function FormRenderer() {
                         setFormValues={setFormValues}
                         expandedFields={expandedFields}
                         setExpandedFields={setExpandedFields}
+                        evaluateFieldConditions={evaluateFieldConditions}
                       />
                     </div>
                   );
-                })}
+                }).filter(Boolean)}
+                {(() => {
+                  const renderedFields = currentSection.fields.filter(f => !f.conditions || evaluateFieldConditions(f));
+                  console.log(`[FORM RENDER] ========== SECTION RENDERING COMPLETE ==========`);
+                  console.log(`[FORM RENDER] Section: "${currentSection.formSection}"`);
+                  console.log(`[FORM RENDER] Total fields in section: ${currentSection.fields.length}`);
+                  console.log(`[FORM RENDER] Fields rendered: ${renderedFields.length}`);
+                  console.log(`[FORM RENDER] Fields skipped (conditions): ${currentSection.fields.length - renderedFields.length}`);
+                  
+                  // Check for any "test test test" in rendered fields
+                  const fieldsWithTest = renderedFields.filter(f => {
+                    const val = formValues[f.id];
+                    return val && typeof val === 'string' && 
+                      (val.toLowerCase().includes('test test test') || 
+                       (val.toLowerCase().includes('test test') && !val.toLowerCase().includes('test@')));
+                  });
+                  
+                  if (fieldsWithTest.length > 0) {
+                    console.warn(`[FORM RENDER] ⚠️  ${fieldsWithTest.length} rendered fields still contain "test test test":`, fieldsWithTest.map(f => f.id));
+                  } else {
+                    console.log(`[FORM RENDER] ✅ No "test test test" placeholders in rendered fields`);
+                  }
+                  
+                  return null;
+                })()}
               </div>
 
               <div className="flex flex-col sm:flex-row justify-between mt-6 gap-3">
                 <button
-                  onClick={goBack}
+                  onClick={() => {
+                    console.log('[BACK BUTTON] ========== BACK BUTTON CLICKED ==========');
+                    console.log('[BACK BUTTON] Current section:', currentSection?.formSection);
+                    console.log('[BACK BUTTON] Current index:', currentIndex);
+                    
+                    if (currentIndex > 0) {
+                      console.log(`[BACK BUTTON] Navigating back from step ${currentIndex + 1} to step ${currentIndex}`);
+                      const formSection = document.querySelector('section');
+                      if (formSection) {
+                        formSection.style.opacity = '0';
+                        formSection.style.transform = 'translateY(-10px)';
+                      }
+                      
+                      setTimeout(() => {
+                        setCurrentIndex(currentIndex - 1);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        
+                        setTimeout(() => {
+                          const newFormSection = document.querySelector('section');
+                          if (newFormSection) {
+                            newFormSection.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                            newFormSection.style.opacity = '1';
+                            newFormSection.style.transform = 'translateY(0)';
+                          }
+                        }, 50);
+                      }, 150);
+                    } else {
+                      console.log('[BACK BUTTON] Already at first section - no navigation performed');
+                    }
+                  }}
                   disabled={currentIndex === 0}
                   className="flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transform hover:scale-105 active:scale-95 shadow-md disabled:shadow-none"
+                  aria-label="Go to previous section"
                 >
                   <ChevronLeft size={18} />
                   <span>Back</span>
                 </button>
                 <button
-                  onClick={goNext}
-                  disabled={!allRequiredFilled}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transform hover:scale-105 active:scale-95 disabled:transform-none"
+                  onClick={handleNextButtonClick}
+                  className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium transform hover:scale-105 active:scale-95 ${
+                    allRequiredFilled
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white'
+                      : 'bg-gradient-to-r from-indigo-400 to-indigo-500 text-white opacity-75 cursor-pointer hover:opacity-90'
+                  }`}
                   type="button"
+                  title={!allRequiredFilled ? 'Click to see what needs to be completed' : ''}
                 >
                   <span>{currentIndex === formData.formSections.length - 1 ? 'Submit' : 'Next'}</span>
                   <ChevronRight size={18} />
                 </button>
               </div>
 
-              <div className="lg:hidden sticky bottom-0 -mx-4 sm:-mx-6 mt-4 px-4 sm:px-6 pt-3 pb-3 bg-white/95 backdrop-blur border-t border-gray-200">
-                <div className="flex gap-2">
+
+              <div className="mt-4 flex flex-col gap-3 pb-20 lg:pb-0">
+                <div className="flex flex-wrap gap-3">
                   <button
-                    onClick={goBack}
-                    disabled={currentIndex === 0}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    type="button"
-                  >
-                    <ChevronLeft size={18} />
-                    <span>Back</span>
-                  </button>
-                  <button
-                    onClick={saveDraft}
-                    className="flex items-center justify-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black px-4 py-3 rounded-xl transition-all duration-200 font-medium"
+                    onClick={() => {
+                      console.log('[MANUAL SAVE] Save Draft button clicked');
+                      saveDraft();
+                    }}
+                    className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-black px-6 py-3 rounded-xl shadow-md transition-all duration-300 font-medium transform hover:scale-105 active:scale-95"
                     type="button"
                   >
                     <Save size={18} />
-                    <span>Save</span>
+                    <span>Save Draft</span>
                   </button>
                   <button
-                    onClick={goNext}
-                    disabled={!allRequiredFilled}
-                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    onClick={() => {
+                      console.log('[RESET BUTTON] Clear Data / Start Fresh button clicked');
+                      resetForm();
+                    }}
+                    className="flex items-center gap-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-xl shadow-md transition-all duration-300 font-medium transform hover:scale-105 active:scale-95"
                     type="button"
+                    title="Clear all saved data and start from scratch - perfect for testing!"
                   >
-                    <span>{currentIndex === formData.formSections.length - 1 ? 'Submit' : 'Next'}</span>
-                    <ChevronRight size={18} />
+                    <RotateCcw size={18} />
+                    <span>Clear Data / Start Fresh</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('[AUTOFILL BUTTON] Auto-Fill Form button clicked');
+                      handleAutoFill();
+                    }}
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl shadow-md transition-all duration-300 font-medium transform hover:scale-105 active:scale-95"
+                    type="button"
+                    title="Fill the entire form with dummy data for testing - all fields will be populated!"
+                  >
+                    <Zap size={18} />
+                    <span>Auto-Fill Form (Test Data)</span>
                   </button>
                 </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 pb-20 lg:pb-0">
-                <button
-                  onClick={saveDraft}
-                  className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-black px-6 py-3 rounded-xl shadow-md transition-all duration-300 self-start font-medium transform hover:scale-105 active:scale-95"
-                  type="button"
-                >
-                  <Save size={18} />
-                  <span>Save Draft</span>
-                </button>
-
-                {renderClausePreview('lg:hidden')}
+                <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                  <Info size={14} />
+                  <span><strong>Tip:</strong> Use "Clear Data / Start Fresh" to remove all saved information, or "Auto-Fill Form" to populate all fields with test data for testing.</span>
+                </p>
               </div>
             </section>
-
-            {currentIndex >= 1 ? (
-              <div className="hidden lg:block w-full max-w-sm shrink-0">
-                {renderClausePreview('lg:sticky lg:top-6')}
-              </div>
-            ) : null}
           </div>
         </div>
       </main>
 
-      {/* Modal */}
+      {/* Clause Preview Modal */}
+      {clauseModalOpen && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 px-4 animate-fadeIn"
+          onClick={() => {
+            console.log('[CLAUSE MODAL] Closing clause preview modal (backdrop click)');
+            setClauseModalOpen(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clause-modal-title"
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Scroll className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Clause Preview</h2>
+                  <p className="text-sm text-indigo-100 mt-0.5">
+                    {clausePreview?.length || 0} {clausePreview?.length === 1 ? 'clause' : 'clauses'} generated
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setClauseModalOpen(false);
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1 bg-gradient-to-br from-indigo-50 via-white to-blue-50">
+              {clausePreview && clausePreview.length > 0 ? (
+                <div className="space-y-4">
+                  {clausePreview.map((clause) => (
+                    <div
+                      key={clause.id}
+                      className="bg-white border-l-4 border-indigo-500 rounded-r-lg p-4 shadow-md hover:shadow-lg transition-all duration-300"
+                      data-clause-id={clause.id}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-indigo-700 mb-2 uppercase tracking-wide">
+                            {clause.fieldLabel}
+                          </p>
+                          <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-line">
+                            {clause.text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="p-4 bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                    <Scroll className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <p className="text-gray-600 font-medium mb-1.5">No clauses to preview yet</p>
+                  <p className="text-sm text-gray-500">
+                    Complete the form fields above to see generated will clauses appear here
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => {
+                  setClauseModalOpen(false);
+                }}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all duration-200 font-medium"
+                aria-label="Close clause preview modal"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+          {/* Validation Modal */}
+          {(() => {
+            console.log('[VALIDATION MODAL] ========== MODAL RENDER CHECK ==========');
+            console.log('[VALIDATION MODAL] validationModalOpen:', validationModalOpen);
+            console.log('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
+            console.log('[VALIDATION MODAL] validationIssues:', validationIssues);
+            return null;
+          })()}
+          {validationModalOpen && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 px-4 animate-fadeIn"
+          onClick={(e) => {
+            console.log('[MODAL BACKDROP] ========== BACKDROP CLICKED ==========');
+            console.log('[MODAL BACKDROP] Event target:', e.target);
+            console.log('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
+            console.log('[MODAL BACKDROP] Target === CurrentTarget:', e.target === e.currentTarget);
+            if (e.target === e.currentTarget) {
+              console.log('[MODAL BACKDROP] Closing modal (clicked backdrop)');
+              setValidationModalOpen(false);
+            } else {
+              console.log('[MODAL BACKDROP] Click was inside modal, not closing');
+            }
+          }}
+          onMouseDown={(e) => {
+            console.log('[MODAL BACKDROP] ========== BACKDROP MOUSE DOWN ==========');
+            console.log('[MODAL BACKDROP] Event target:', e.target);
+            console.log('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-slideIn"
+            onClick={(e) => {
+              console.log('[MODAL CONTENT] ========== MODAL CONTENT CLICKED ==========');
+              console.log('[MODAL CONTENT] Event target:', e.target);
+              console.log('[MODAL CONTENT] Event target tagName:', e.target.tagName);
+              console.log('[MODAL CONTENT] Event target className:', e.target.className);
+              console.log('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
+              console.log('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
+              // Only stop propagation if clicking on the modal content itself, not on buttons inside
+              if (e.target === e.currentTarget || (e.target.tagName !== 'BUTTON' && e.target.closest('button') === null)) {
+                console.log('[MODAL CONTENT] Stopping propagation (clicked on modal content, not button)');
+                e.stopPropagation();
+              } else {
+                console.log('[MODAL CONTENT] NOT stopping propagation (clicked on button)');
+              }
+            }}
+            onMouseDown={(e) => {
+              console.log('[MODAL CONTENT] ========== MODAL CONTENT MOUSE DOWN ==========');
+              console.log('[MODAL CONTENT] Event target:', e.target);
+              console.log('[MODAL CONTENT] Event target tagName:', e.target.tagName);
+              console.log('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
+              console.log('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
+            }}
+            ref={(el) => {
+              if (el) {
+                console.log('[VALIDATION MODAL] ========== MODAL ELEMENT RENDERED ==========');
+                console.log('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
+                console.log('[VALIDATION MODAL] validationIssues:', validationIssues);
+                console.log('[VALIDATION MODAL] Button should render:', validationIssues.length > 0);
+              }
+            }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <AlertCircle size={24} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">
+                    {validationIssues.some(issue => issue.fieldId) 
+                      ? 'Please Complete Required Fields'
+                      : 'Draft Will - Incomplete Items'}
+                  </h2>
+                  <p className="text-sm text-red-100 mt-0.5">
+                    {validationIssues.length} {validationIssues.length === 1 ? 'item needs' : 'items need'} to be completed
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setValidationModalOpen(false)}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              <p className="text-gray-700 mb-4">
+                {validationIssues.some(issue => issue.fieldId) 
+                  ? 'Before you can proceed to the next section, please complete the following required fields:'
+                  : 'This PDF contains incomplete content. Please complete the following items:'}
+              </p>
+              
+              <div className="space-y-3">
+                {validationIssues.map((issue, index) => {
+                  // Handle both validation format (fieldId) and PDF missing items format (section/field)
+                  const fieldId = issue.fieldId || issue.field;
+                  
+                  // For schedules, show a more user-friendly label
+                  const isScheduleIssue = issue.scheduleNumber || (issue.section && (issue.section.toLowerCase().includes('schedule') || issue.section === 'Schedules'));
+                  let fieldLabel = issue.fieldLabel || `${issue.section}: ${issue.field}`;
+                  if (isScheduleIssue) {
+                    // For schedule issues, show the section name instead of the schedule number
+                    fieldLabel = `${issue.section || 'Schedule'}: Missing Details`;
+                  }
+                  
+                  // For schedule issues, provide a more helpful display message
+                  let message = isScheduleIssue 
+                    ? (issue.message || `${issue.issue || 'Schedule details missing'}. ${issue.snippet || ''}`)
+                    : (issue.message || issue.issue || issue.snippet);
+                  
+                  // Improve message clarity - if it's a string from old format, make it user-friendly
+                  if (typeof message === 'string') {
+                    // Handle old string format like "CRITICAL: Field Name - description"
+                    if (message.startsWith('CRITICAL:')) {
+                      message = message.replace('CRITICAL:', '⚠️ CRITICAL:').trim();
+                    } else if (message.startsWith('EXECUTION:')) {
+                      message = message.replace('EXECUTION:', '✍️ EXECUTION:').trim();
+                    } else if (message.startsWith('PROFESSIONAL:')) {
+                      message = message.replace('PROFESSIONAL:', '👔 PROFESSIONAL:').trim();
+                    } else if (message.startsWith('CHARITY:')) {
+                      message = message.replace('CHARITY:', '💝 CHARITY:').trim();
+                    } else if (message.startsWith('PLACEHOLDER:')) {
+                      message = message.replace('PLACEHOLDER:', '📝 PLACEHOLDER:').trim();
+                    } else if (message.startsWith('PET CARE:')) {
+                      message = message.replace('PET CARE:', '🐾 PET CARE:').trim();
+                    }
+                  }
+                  
+                  // If message is still unclear, create a better one
+                  if (!message || message.trim() === '' || message === '(empty)') {
+                    if (issue.section && issue.field) {
+                      message = `Missing information in "${issue.section}" section: ${issue.field}`;
+                    } else if (issue.field) {
+                      message = `Missing: ${issue.field}`;
+                    } else {
+                      message = 'Missing required information';
+                    }
+                  }
+                  
+                  const clauseNumber = issue.clauseNumber;
+                  
+                  return (
+                    <button
+                      key={fieldId || index}
+                      ref={(el) => {
+                        if (el) {
+                          console.log(`[ITEM RENDER] ========== ITEM BUTTON RENDERED ==========`);
+                          console.log(`[ITEM RENDER] Index: ${index}`);
+                          console.log(`[ITEM RENDER] Field ID: ${fieldId}`);
+                          console.log(`[ITEM RENDER] Element:`, el);
+                          console.log(`[ITEM RENDER] Element tagName:`, el.tagName);
+                          console.log(`[ITEM RENDER] Element className:`, el.className);
+                          console.log(`[ITEM RENDER] Element disabled:`, el.disabled);
+                          console.log(`[ITEM RENDER] Element tabIndex:`, el.tabIndex);
+                          console.log(`[ITEM RENDER] Has onClick:`, !!el.onclick);
+                        }
+                      }}
+                      onMouseDown={(e) => {
+                        console.log('[ITEM MOUSEDOWN] ========== MOUSE DOWN ON ITEM ==========');
+                        console.log('[ITEM MOUSEDOWN] Event:', e);
+                        console.log('[ITEM MOUSEDOWN] Target:', e.target);
+                        console.log('[ITEM MOUSEDOWN] Current target:', e.currentTarget);
+                        console.log('[ITEM MOUSEDOWN] Issue index:', index);
+                        console.log('[ITEM MOUSEDOWN] Issue:', issue);
+                      }}
+                      onKeyDown={(e) => {
+                        console.log('[ITEM KEYDOWN] ========== KEY PRESSED ON ITEM ==========');
+                        console.log('[ITEM KEYDOWN] Key:', e.key);
+                        console.log('[ITEM KEYDOWN] Code:', e.code);
+                        console.log('[ITEM KEYDOWN] Issue index:', index);
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          console.log('[ITEM KEYDOWN] Enter/Space pressed - triggering click');
+                          e.preventDefault();
+                          e.currentTarget.click();
+                        }
+                      }}
+                      onClick={(e) => {
+                        console.log('[ITEM CLICK] ========== ITEM CLICKED ==========');
+                        console.log('[ITEM CLICK] Event:', e);
+                        console.log('[ITEM CLICK] Event type:', e.type);
+                        console.log('[ITEM CLICK] Event target:', e.target);
+                        console.log('[ITEM CLICK] Event target tagName:', e.target.tagName);
+                        console.log('[ITEM CLICK] Event target className:', e.target.className);
+                        console.log('[ITEM CLICK] Event currentTarget:', e.currentTarget);
+                        console.log('[ITEM CLICK] Event defaultPrevented:', e.defaultPrevented);
+                        console.log('[ITEM CLICK] Event isTrusted:', e.isTrusted);
+                        console.log('[ITEM CLICK] Event bubbles:', e.bubbles);
+                        console.log('[ITEM CLICK] Event cancelable:', e.cancelable);
+                        console.log('[ITEM CLICK] Event timeStamp:', e.timeStamp);
+                        console.log('[ITEM CLICK] Issue index:', index);
+                        console.log('[ITEM CLICK] Issue object:', issue);
+                        console.log('[ITEM CLICK] Issue keys:', Object.keys(issue));
+                        console.log('[ITEM CLICK] Issue section:', issue.section);
+                        console.log('[ITEM CLICK] Issue field:', issue.field);
+                        console.log('[ITEM CLICK] Issue fieldId:', issue.fieldId);
+                        console.log('[ITEM CLICK] Issue issue:', issue.issue);
+                        console.log('[ITEM CLICK] Issue message:', issue.message);
+                        console.log('[ITEM CLICK] Issue snippet:', issue.snippet);
+                        console.log('[ITEM CLICK] Computed fieldId:', fieldId);
+                        console.log('[ITEM CLICK] Computed fieldLabel:', fieldLabel);
+                        console.log('[ITEM CLICK] Is schedule issue:', isScheduleIssue);
+                        console.log('[ITEM CLICK] Button element:', e.currentTarget);
+                        console.log('[ITEM CLICK] Button disabled:', e.currentTarget.disabled);
+                        console.log('[ITEM CLICK] Button tabIndex:', e.currentTarget.tabIndex);
+                        console.log('[ITEM CLICK] Button style.pointerEvents:', window.getComputedStyle(e.currentTarget).pointerEvents);
+                        console.log('[ITEM CLICK] Button style.zIndex:', window.getComputedStyle(e.currentTarget).zIndex);
+                        
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('[ITEM CLICK] Prevented default and stopped propagation');
+                        
+                        try {
+                          // Handle schedule issues with specific navigation
+                          if (isScheduleIssue && issue.targetSectionIndex !== undefined && issue.targetSectionIndex >= 0) {
+                            console.log('[ITEM CLICK] ✅ Schedule issue detected, navigating to section index:', issue.targetSectionIndex);
+                            console.log('[ITEM CLICK] Target field IDs:', issue.targetFieldIds);
+                            console.log('[ITEM CLICK] Total sections available:', formData.formSections.length);
+                            
+                            if (issue.targetSectionIndex < 0 || issue.targetSectionIndex >= formData.formSections.length) {
+                              console.error('[ITEM CLICK] ❌ Invalid section index:', issue.targetSectionIndex);
+                              return;
+                            }
+                            
+                            // Navigate to the correct section first
+                            console.log('[ITEM CLICK] Setting current index to:', issue.targetSectionIndex);
+                            setCurrentIndex(issue.targetSectionIndex);
+                            console.log('[ITEM CLICK] Closing validation modal');
+                            setValidationModalOpen(false);
+                            
+                            // Wait for section to render, then scroll to first missing field
+                            setTimeout(() => {
+                              console.log('[ITEM CLICK] Timeout fired, attempting to scroll to field');
+                              if (issue.targetFieldIds && issue.targetFieldIds.length > 0) {
+                                const firstFieldId = issue.targetFieldIds[0];
+                                console.log('[ITEM CLICK] Scrolling to first missing field:', firstFieldId);
+                                scrollToField(firstFieldId);
+                              } else {
+                                console.log('[ITEM CLICK] No target field IDs, scrolling to top');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }
+                            }, 300);
+                            return;
+                          }
+                          
+                          if (issue.fieldId && !isScheduleIssue) {
+                            console.log('[ITEM CLICK] ✅ Has fieldId, calling scrollToField with:', issue.fieldId);
+                            scrollToField(issue.fieldId);
+                          } else if (isScheduleIssue || issue.section === 'Schedules' || (issue.field && issue.field.toLowerCase().includes('schedule'))) {
+                            console.log('[ITEM CLICK] ✅ Detected as schedule field');
+                            console.log('[ITEM CLICK] Section check:', issue.section === 'Schedules');
+                            console.log('[ITEM CLICK] Field includes schedule:', issue.field && issue.field.toLowerCase().includes('schedule'));
+                            console.log('[ITEM CLICK] Calling scrollToScheduleField with:', issue.field);
+                            // Handle schedule fields specially
+                            scrollToScheduleField(issue.field);
+                          } else {
+                            console.log('[ITEM CLICK] Not a schedule, trying regular field search for:', issue.field);
+                            // For other PDF issues, try to find and scroll to the field
+                            const fieldElement = document.querySelector(`[data-field-id="${issue.field}"]`);
+                            console.log('[ITEM CLICK] Direct querySelector result:', fieldElement);
+                            if (fieldElement) {
+                              console.log('[ITEM CLICK] ✅ Found field element, scrolling...');
+                              fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              fieldElement.focus();
+                              setValidationModalOpen(false);
+                            } else {
+                              console.log('[ITEM CLICK] Direct search failed, trying case-insensitive search...');
+                              // Try case-insensitive search
+                              const allFields = document.querySelectorAll('[data-field-id]');
+                              console.log('[ITEM CLICK] Total fields with data-field-id:', allFields.length);
+                              const foundField = Array.from(allFields).find(field => {
+                                const fieldId = field.getAttribute('data-field-id') || '';
+                                return fieldId.toLowerCase() === issue.field.toLowerCase() || 
+                                       fieldId.toLowerCase().includes(issue.field.toLowerCase());
+                              });
+                              console.log('[ITEM CLICK] Case-insensitive search result:', foundField);
+                              if (foundField) {
+                                console.log('[ITEM CLICK] ✅ Found field via case-insensitive search, scrolling...');
+                                foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                const input = foundField.querySelector('input, textarea, select');
+                                if (input) {
+                                  setTimeout(() => input.focus(), 500);
+                                }
+                                setValidationModalOpen(false);
+                              } else {
+                                console.error('[ITEM CLICK] ❌ Could not find field:', issue.field);
+                              }
+                            }
+                          }
+                        } catch (error) {
+                          console.error('[ITEM CLICK] ❌ ERROR during click handler:', error);
+                          console.error('[ITEM CLICK] Error stack:', error.stack);
+                        }
+                      }}
+                      className="w-full text-left p-4 bg-red-50 border-l-4 border-red-500 rounded-lg hover:bg-red-100 transition-all duration-200 group cursor-pointer"
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Go to ${fieldLabel}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="flex items-center justify-center w-6 h-6 bg-red-500 text-white rounded-full text-sm font-bold">
+                              {index + 1}
+                            </span>
+                            <h3 className="font-semibold text-gray-900">{fieldLabel}</h3>
+                            {clauseNumber && (
+                              <span className="text-xs bg-red-200 text-red-800 px-2 py-0.5 rounded">
+                                Clause {clauseNumber}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-700 ml-8 font-medium">{message}</p>
+                          {isScheduleIssue && issue.missingFields && issue.missingFields.length > 0 && (
+                            <div className="mt-2 ml-8">
+                              <p className="text-xs text-gray-700 font-semibold mb-1">Missing fields:</p>
+                              <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+                                {issue.missingFields.map((fieldName, idx) => (
+                                  <li key={idx}>{fieldName}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {isScheduleIssue && issue.snippet && (
+                            <p className="text-xs text-blue-600 mt-2 ml-8 font-medium flex items-start gap-1">
+                              <span>👉</span>
+                              <span>{issue.snippet}</span>
+                            </p>
+                          )}
+                          {!isScheduleIssue && issue.snippet && issue.snippet !== message && (
+                            <p className="text-xs text-gray-500 ml-8 mt-1 italic">"{issue.snippet.substring(0, 100)}..."</p>
+                          )}
+                        </div>
+                        <ArrowRight 
+                          size={18} 
+                          className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1" 
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+              {console.log('[VALIDATION MODAL FOOTER] Rendering footer, validationIssues.length:', validationIssues.length, 'validationIssues:', validationIssues) || null}
+              <button
+                onClick={() => setValidationModalOpen(false)}
+                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all duration-200 font-medium"
+              >
+                Close
+              </button>
+              {validationIssues.length > 0 && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] ========== MOUSE DOWN ==========');
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event:', e);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event type:', e.type);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target:', e.target);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target tagName:', e.target.tagName);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target className:', e.target.className);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event currentTarget:', e.currentTarget);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event defaultPrevented:', e.defaultPrevented);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event isTrusted:', e.isTrusted);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event bubbles:', e.bubbles);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button element:', e.currentTarget);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button disabled:', e.currentTarget.disabled);
+                    console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button tabIndex:', e.currentTarget.tabIndex);
+                  }}
+                  onKeyDown={(e) => {
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] ========== KEY PRESSED ==========');
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Key:', e.key);
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Code:', e.code);
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Event type:', e.type);
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Event target:', e.target);
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Event currentTarget:', e.currentTarget);
+                    console.log('[GO TO FIRST ISSUE KEYDOWN] Event defaultPrevented:', e.defaultPrevented);
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      console.log('[GO TO FIRST ISSUE KEYDOWN] Enter/Space pressed - triggering click');
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('[GO TO FIRST ISSUE KEYDOWN] Calling click() on button element');
+                      e.currentTarget.click();
+                    }
+                  }}
+                  onFocus={(e) => {
+                    console.log('[GO TO FIRST ISSUE FOCUS] ========== BUTTON FOCUSED ==========');
+                    console.log('[GO TO FIRST ISSUE FOCUS] Event:', e);
+                    console.log('[GO TO FIRST ISSUE FOCUS] Event target:', e.target);
+                  }}
+                  onBlur={(e) => {
+                    console.log('[GO TO FIRST ISSUE BLUR] ========== BUTTON BLURRED ==========');
+                    console.log('[GO TO FIRST ISSUE BLUR] Event:', e);
+                    console.log('[GO TO FIRST ISSUE BLUR] Event target:', e.target);
+                  }}
+                  onClick={(e) => {
+                    console.log('[GO TO FIRST ISSUE] ========== BUTTON CLICKED ==========');
+                    console.log('[GO TO FIRST ISSUE] Event:', e);
+                    console.log('[GO TO FIRST ISSUE] Event type:', e.type);
+                    console.log('[GO TO FIRST ISSUE] Event target:', e.target);
+                    console.log('[GO TO FIRST ISSUE] Event currentTarget:', e.currentTarget);
+                    console.log('[GO TO FIRST ISSUE] Event defaultPrevented:', e.defaultPrevented);
+                    console.log('[GO TO FIRST ISSUE] Event isTrusted:', e.isTrusted);
+                    console.log('[GO TO FIRST ISSUE] Event bubbles:', e.bubbles);
+                    console.log('[GO TO FIRST ISSUE] Event cancelable:', e.cancelable);
+                    console.log('[GO TO FIRST ISSUE] Validation issues exists:', !!validationIssues);
+                    console.log('[GO TO FIRST ISSUE] Validation issues type:', typeof validationIssues);
+                    console.log('[GO TO FIRST ISSUE] Validation issues is array:', Array.isArray(validationIssues));
+                    console.log('[GO TO FIRST ISSUE] Validation issues count:', validationIssues?.length);
+                    console.log('[GO TO FIRST ISSUE] First issue exists:', !!validationIssues?.[0]);
+                    
+                    if (validationIssues?.[0]) {
+                      console.log('[GO TO FIRST ISSUE] First issue object:', validationIssues[0]);
+                      console.log('[GO TO FIRST ISSUE] First issue keys:', Object.keys(validationIssues[0]));
+                      console.log('[GO TO FIRST ISSUE] First issue section:', validationIssues[0].section);
+                      console.log('[GO TO FIRST ISSUE] First issue field:', validationIssues[0].field);
+                      console.log('[GO TO FIRST ISSUE] First issue fieldId:', validationIssues[0].fieldId);
+                      console.log('[GO TO FIRST ISSUE] First issue issue:', validationIssues[0].issue);
+                      console.log('[GO TO FIRST ISSUE] First issue message:', validationIssues[0].message);
+                    } else {
+                      console.error('[GO TO FIRST ISSUE] ❌ No first issue found!');
+                      return;
+                    }
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    try {
+                      const firstIssue = validationIssues[0];
+                      console.log('[GO TO FIRST ISSUE] Processing first issue:', firstIssue);
+                      
+                      if (!firstIssue) {
+                        console.error('[GO TO FIRST ISSUE] ❌ No first issue found!');
+                        return;
+                      }
+                      
+                      // Handle schedule issues with specific navigation
+                      const isScheduleIssue = firstIssue.scheduleNumber || 
+                        (firstIssue.section && (firstIssue.section.toLowerCase().includes('schedule') || firstIssue.section === 'Schedules'));
+                      
+                      console.log('[GO TO FIRST ISSUE] Is schedule issue:', isScheduleIssue);
+                      console.log('[GO TO FIRST ISSUE] Target section index:', firstIssue.targetSectionIndex);
+                      console.log('[GO TO FIRST ISSUE] Target field IDs:', firstIssue.targetFieldIds);
+                      
+                      if (isScheduleIssue && firstIssue.targetSectionIndex !== undefined && firstIssue.targetSectionIndex >= 0) {
+                        console.log('[GO TO FIRST ISSUE] ✅ Schedule issue detected, navigating to section index:', firstIssue.targetSectionIndex);
+                        console.log('[GO TO FIRST ISSUE] Total sections available:', formData.formSections.length);
+                        
+                        if (firstIssue.targetSectionIndex < 0 || firstIssue.targetSectionIndex >= formData.formSections.length) {
+                          console.error('[GO TO FIRST ISSUE] ❌ Invalid section index:', firstIssue.targetSectionIndex);
+                          return;
+                        }
+                        
+                        // Navigate to the correct section first
+                        console.log('[GO TO FIRST ISSUE] Setting current index to:', firstIssue.targetSectionIndex);
+                        setCurrentIndex(firstIssue.targetSectionIndex);
+                        console.log('[GO TO FIRST ISSUE] Closing validation modal');
+                        setValidationModalOpen(false);
+                        
+                        // Wait for section to render, then scroll to first missing field
+                        setTimeout(() => {
+                          console.log('[GO TO FIRST ISSUE] Timeout fired, attempting to scroll');
+                          if (firstIssue.targetFieldIds && firstIssue.targetFieldIds.length > 0) {
+                            const firstFieldId = firstIssue.targetFieldIds[0];
+                            console.log('[GO TO FIRST ISSUE] Scrolling to first missing field:', firstFieldId);
+                            scrollToField(firstFieldId);
+                          } else {
+                            console.log('[GO TO FIRST ISSUE] No target field IDs, scrolling to top');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }, 300);
+                        return;
+                      }
+                      
+                      // Handle regular field navigation
+                      if (firstIssue.fieldId) {
+                        console.log('[GO TO FIRST ISSUE] ✅ Has fieldId, calling scrollToField with:', firstIssue.fieldId);
+                        scrollToField(firstIssue.fieldId);
+                      } else if (isScheduleIssue || firstIssue.section === 'Schedules') {
+                        console.log('[GO TO FIRST ISSUE] ✅ Schedule issue, calling scrollToScheduleField');
+                        scrollToScheduleField(firstIssue.field || `Schedule ${firstIssue.scheduleNumber || ''}`);
+                      } else if (firstIssue.field) {
+                        console.log('[GO TO FIRST ISSUE] Has field (not schedule), searching for:', firstIssue.field);
+                        const fieldElement = document.querySelector(`[data-field-id="${firstIssue.field}"]`);
+                        console.log('[GO TO FIRST ISSUE] Direct querySelector result:', fieldElement);
+                        if (fieldElement) {
+                          console.log('[GO TO FIRST ISSUE] ✅ Found field element, scrolling...');
+                          fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          const input = fieldElement.querySelector('input, textarea, select');
+                          if (input) {
+                            setTimeout(() => input.focus(), 500);
+                          }
+                          setValidationModalOpen(false);
+                        } else {
+                          console.log('[GO TO FIRST ISSUE] Direct search failed, trying case-insensitive search...');
+                          // Try case-insensitive search
+                          const allFields = document.querySelectorAll('[data-field-id]');
+                          console.log('[GO TO FIRST ISSUE] Total fields with data-field-id:', allFields.length);
+                          const foundField = Array.from(allFields).find(field => {
+                            const fieldId = field.getAttribute('data-field-id') || '';
+                            return fieldId.toLowerCase() === firstIssue.field.toLowerCase() || 
+                                   fieldId.toLowerCase().includes(firstIssue.field.toLowerCase());
+                          });
+                          console.log('[GO TO FIRST ISSUE] Case-insensitive search result:', foundField);
+                          if (foundField) {
+                            console.log('[GO TO FIRST ISSUE] ✅ Found field via case-insensitive search, scrolling...');
+                            foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            const input = foundField.querySelector('input, textarea, select');
+                            if (input) {
+                              setTimeout(() => input.focus(), 500);
+                            }
+                            setValidationModalOpen(false);
+                          } else {
+                            console.error('[GO TO FIRST ISSUE] ❌ Could not find field:', firstIssue.field);
+                          }
+                        }
+                      } else {
+                        console.error('[GO TO FIRST ISSUE] ❌ First issue has no fieldId, field, or is not a schedule');
+                        console.error('[GO TO FIRST ISSUE] First issue object:', firstIssue);
+                      }
+                    } catch (error) {
+                      console.error('[GO TO FIRST ISSUE] ❌ ERROR during click handler:', error);
+                      console.error('[GO TO FIRST ISSUE] Error stack:', error.stack);
+                      console.error('[GO TO FIRST ISSUE] Error message:', error.message);
+                    }
+                  }}
+                  ref={(el) => {
+                    if (el) {
+                      console.log('[GO TO FIRST ISSUE RENDER] ========== BUTTON ELEMENT RENDERED ==========');
+                      console.log('[GO TO FIRST ISSUE RENDER] Element:', el);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element tagName:', el.tagName);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element className:', el.className);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element disabled:', el.disabled);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element tabIndex:', el.tabIndex);
+                      console.log('[GO TO FIRST ISSUE RENDER] Has onClick:', !!el.onclick);
+                      console.log('[GO TO FIRST ISSUE RENDER] Validation issues count:', validationIssues.length);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element style.pointerEvents:', window.getComputedStyle(el).pointerEvents);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element style.zIndex:', window.getComputedStyle(el).zIndex);
+                    }
+                  }}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all duration-200 font-medium flex items-center gap-2 cursor-pointer"
+                  tabIndex={0}
+                  aria-label="Go to first incomplete item"
+                  ref={(el) => {
+                    if (el) {
+                      console.log('[GO TO FIRST ISSUE RENDER] ========== BUTTON RENDERED ==========');
+                      console.log('[GO TO FIRST ISSUE RENDER] Element:', el);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element tagName:', el.tagName);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element className:', el.className);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element disabled:', el.disabled);
+                      console.log('[GO TO FIRST ISSUE RENDER] Element tabIndex:', el.tabIndex);
+                      console.log('[GO TO FIRST ISSUE RENDER] Has onClick:', !!el.onclick);
+                      console.log('[GO TO FIRST ISSUE RENDER] Validation issues count:', validationIssues.length);
+                    }
+                  }}
+                >
+                  Go to First Issue
+                  <ArrowRight size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Back to Top Button */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 z-40 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 animate-fadeIn"
+          type="button"
+          aria-label="Back to top"
+          title="Back to top"
+        >
+          <ArrowUp size={24} />
+        </button>
+      )}
+
+      {/* Completion Modal - Shows what happens next */}
       {submitted && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 px-4">
-          <div className="bg-white p-6 sm:p-8 rounded-lg shadow-lg text-center max-w-md w-full">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 text-gray-900">Submission Complete!</h2>
-            <p className="text-gray-700">Your will form has been submitted successfully.</p>
-            <button
-              onClick={() => setSubmitted(false)}
-              className="mt-6 px-6 py-2.5 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-all duration-200 font-medium"
-            >
-              Close
-            </button>
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 px-4 animate-fadeIn"
+          onClick={() => {
+            // Don't close on backdrop click - user must click a button
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <CheckCircle2 size={28} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Congratulations!</h2>
+                  <p className="text-sm text-green-100 mt-0.5">You've completed the entire questionnaire</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSubmitted(false);
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
+                <div className="space-y-4 text-gray-700">
+                  <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
+                    <div className="flex-shrink-0 w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm mt-0.5">
+                      1
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 mb-1">Download Your Will PDF</p>
+                      <p className="text-sm text-gray-600">Click the <strong>"Download PDF"</strong> button at the top of the page to generate and download your completed Will document. This button is now available since you've finished all steps!</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm mt-0.5">
+                      2
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 mb-1">Review Your Will</p>
+                      <p className="text-sm text-gray-600">Carefully review the downloaded PDF to ensure all information is correct and matches your intentions.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
+                    <div className="flex-shrink-0 w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm mt-0.5">
+                      3
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 mb-1">Sign Your Will</p>
+                      <p className="text-sm text-gray-600">Print the Will and sign it in the presence of two independent witnesses (as shown in the signature section of the PDF). Both you and your witnesses must sign and date the document.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg">
+                    <div className="flex-shrink-0 w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center text-white font-bold text-sm mt-0.5">
+                      4
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900 mb-1">Store Safely</p>
+                      <p className="text-sm text-gray-600">Keep your signed Will in a safe, secure location and inform your Executors of its location. Consider storing a copy with your solicitor or in a safe deposit box.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                <div className="flex items-start gap-2">
+                  <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900 mb-1">Want to start over or test again?</p>
+                    <p className="text-sm text-blue-800">
+                      Use the <strong>"Clear Data / Start Fresh"</strong> button at the bottom of the form to remove all saved information and start a new Will from scratch. This is perfect for testing or creating multiple Wills.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  console.log('[COMPLETION MODAL] ========== "GOT IT" BUTTON CLICKED ==========');
+                  console.log('[COMPLETION MODAL] Closing completion modal - user ready to download PDF');
+                  setSubmitted(false);
+                }}
+                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all duration-200 font-medium"
+              >
+                Got It - Show Me the Download Button
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -30,3 +30,7 @@ coverage
 
 # Puppeteer
 .local-chromium
+
+# Downloads
+downloads/
+*.pdf

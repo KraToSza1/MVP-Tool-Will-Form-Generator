@@ -145,3 +145,47 @@ body {
 .react-datepicker-popper-calendar {
   position: fixed !important;
 }
+
+/* Ensure input fields are always accessible and not blocked by overlays */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="tel"],
+textarea {
+  position: relative !important;
+  z-index: 10 !important;
+}
+
+/* Ensure input containers don't clip content */
+.relative {
+  overflow: visible !important;
+}
+
+/* Prevent any overlays from blocking inputs */
+input:focus,
+textarea:focus {
+  z-index: 20 !important;
+}
+
+/* Enhanced focus indicators for accessibility */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 3px solid #6366f1 !important;
+  outline-offset: 2px !important;
+  border-radius: 0.5rem;
+}
+
+/* Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

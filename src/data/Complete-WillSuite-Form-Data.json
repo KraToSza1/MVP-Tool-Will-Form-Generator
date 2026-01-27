@@ -85,7 +85,7 @@
             "label": "Mobile",
             "required": true,
             "placeholder": "e.g., 07123 456789",
-            "infoText": "UK mobile number format (e.g., 07123 456789)",
+            "infoText": "Mobile phone number",
             "value": ""
           },
           {
@@ -93,7 +93,7 @@
             "type": "text",
             "label": "Tel 2",
             "placeholder": "e.g., 020 1234 5678",
-            "infoText": "UK landline or alternative number (e.g., 020 1234 5678)",
+            "infoText": "Alternative phone number",
             "value": ""
           },
           {
@@ -154,6 +154,11 @@
         "formSection": "Marital Status/Mirroring",
         "fields": [
           {
+            "id": "maritalStatusInstructions",
+            "type": "display",
+            "text": "📝 Step-by-step: 1) First select your marital status below, 2) Then enter your partner's name when the field appears, 3) Answer any additional questions that appear. The form saves automatically as you go!"
+          },
+          {
             "id": "maritalStatus",
             "type": "radio",
             "label": "What is the Testator's marital status?",
@@ -172,6 +177,7 @@
             "id": "partnerFullName",
             "type": "text",
             "label": "Partner's Full Name",
+            "placeholder": "e.g., John David Smith",
             "required": true,
             "conditions": [
               { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
@@ -203,9 +209,9 @@
             ]
           },
           {
-            "id": "partnerSection",
+            "id": "partnerSection", 
             "type": "section",
-            "label": "the Testator's partner",
+            "label": "Partner Information Summary",
             "conditions": [
               { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
               {
@@ -219,20 +225,9 @@
             "conditionLogic": "OR",
             "subFields": [
                {
-                  "id": "partnerStatusDisplay",
+                  "id": "partnerInfoDisplay",
                   "type": "display",
-                  "text": "No partner has been specified."
-               },
-               {
-                   "id": "addPartnerButton",
-                   "type": "button",
-                   "label": "Add Partner",
-                   "action": "openAddForm"
-               },
-               {
-                  "id": "partnerData",
-                  "type": "hidden",
-                  "value": null
+                  "text": "Partner name: {{field:partnerFullName:value}} ✅"
                }
             ]
           }
@@ -422,8 +417,13 @@
         ]
       },
       {
-        "formSection": "Trustees/Executors",
+        "formSection": "Trustees/Executors", 
         "fields": [
+          {
+            "id": "executorInstructions",
+            "type": "display",
+            "text": "🥇 ARISTONE SOLICITORS AVAILABLE: You can choose Aristone Solicitors as your professional executor throughout this section. They're a qualified legal firm that will handle all estate administration professionally and efficiently. Look for the Aristone options marked with 🥇!"
+          },
           {
             "id": "executorsSection",
             "type": "section",
@@ -431,15 +431,32 @@
              "willClauseText": "I appoint {{field:executorsSection:fullDetails}} to be the Executor(s) and Trustee(s) of my estate, with full power to administer my estate according to law and the terms of this Will.",
             "subFields": [
                {
-                  "id": "executorStatusDisplay",
+                  "id": "executorStatusDisplay", 
                   "type": "display",
                   "text": "No executor has been specified."
                },
                {
+                  "id": "chooseAristoneExecutor",
+                  "type": "radio",
+                  "label": "Quick Selection",
+                  "options": [
+                    { 
+                      "value": "Aristone", 
+                      "label": "🥇 Aristone Solicitors (Professional - Recommended)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                    },
+                    { "value": "Individual", "label": "Add Individual Executor" }
+                  ],
+                  "value": null
+               },
+               {
                    "id": "addExecutorButton",
                    "type": "button",
-                   "label": "Add Executor",
-                   "action": "openAddForm"
+                   "label": "Add Individual Executor",
+                   "action": "openAddForm",
+                   "conditions": [
+                     { "field": "chooseAristoneExecutor", "operator": "eq", "value": "Individual" }
+                   ]
                },
                {
                   "id": "executorData",
@@ -460,10 +477,27 @@
                   "text": "No substitute executor has been specified."
                },
                {
+                  "id": "chooseAristoneSubstituteExecutor",
+                  "type": "radio",
+                  "label": "Quick Selection",
+                  "options": [
+                    { 
+                      "value": "Aristone", 
+                      "label": "🥇 Aristone Solicitors (Professional - Recommended)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                    },
+                    { "value": "Individual", "label": "Add Individual Substitute Executor" }
+                  ],
+                  "value": null
+               },
+               {
                    "id": "addSubstituteExecutorButton",
                    "type": "button",
-                   "label": "Add Substitute Executor",
-                   "action": "openAddForm"
+                   "label": "Add Individual Substitute Executor",
+                   "action": "openAddForm",
+                   "conditions": [
+                     { "field": "chooseAristoneSubstituteExecutor", "operator": "eq", "value": "Individual" }
+                   ]
                },
                {
                   "id": "substituteExecutorData",
@@ -475,37 +509,63 @@
           {
             "id": "appointProfessionalExecutor",
             "type": "radio",
-            "label": "Shall a Professional Executor or Professional Substitute Executors be appointed?",
+            "label": "Would you like to appoint Aristone Solicitors as your Professional Executor?",
+            "infoText": "💡 Recommended: Aristone Solicitors can serve as your professional executor, handling all legal and administrative tasks professionally. This is often the best choice for most people.",
             "options": [
-              { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes" }
+              { "value": "Yes", "label": "🥇 Yes - Choose Aristone Solicitors (Recommended)", "willClauseText": "" },
+              { "value": "No", "label": "No - I'll choose individual executors instead" }
             ],
             "value": null
           },
           {
             "id": "professionalExecutorSection",
             "type": "section",
-            "label": "Who shall act as a professional Executor?",
-            "infoText": "If there are other Executors specified, the professional Executor shall act jointly with any others specified.",
-             "willClauseText": "I appoint {{field:professionalExecutorSection:fullDetails}} to serve as my professional Executor and Trustee, with full power to administer my estate according to law and the terms of this Will.",
+            "label": "Select Your Professional Executor",
+            "infoText": "🥇 Aristone Solicitors is recommended and available here. If there are other Executors specified, the professional Executor shall act jointly with any others specified.",
+             "willClauseText": "I appoint {{field:professionalExecutorSelection:fullDetails}} to serve as my professional Executor and Trustee, with full power to administer my estate according to law and the terms of this Will.",
             "conditions": [
               { "field": "appointProfessionalExecutor", "operator": "eq", "value": "Yes" }
             ],
             "subFields": [
                {
-                  "id": "professionalExecutorStatusDisplay",
-                  "type": "display",
-                  "text": "No professional executor has been specified."
+                  "id": "professionalExecutorSelection",
+                  "type": "radio",
+                  "label": "Select Professional Executor",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "Aristone",
+                      "label": "🥇 Aristone Solicitors (Recommended)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                      "autoPopulate": {
+                        "firmName": "Aristone Limited (trading as Aristone Solicitors)",
+                        "address": "Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                        "phone": "01582 383 888",
+                        "email": "info@aristonesolicitors.co.uk",
+                        "sraNumber": "649717",
+                        "fullDetails": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                      }
+                    },
+                    {
+                      "value": "Other",
+                      "label": "Other Professional (please specify)"
+                    }
+                  ],
+                  "value": null
                },
                {
-                   "id": "addProfessionalExecutorButton",
-                   "type": "button",
-                   "label": "Add Professional Executor",
-                   "action": "openAddForm"
+                  "id": "professionalExecutorOtherDetails",
+                  "type": "text",
+                  "label": "Professional Executor Details",
+                  "placeholder": "Enter professional executor firm name, address, and contact details",
+                  "required": false,
+                  "conditions": [
+                    { "field": "professionalExecutorSelection", "operator": "eq", "value": "Other" }
+                  ]
                },
                {
                   "id": "professionalExecutorData",
-                  "type": "hidden",
+                  "type": "hidden", 
                   "value": null
                }
             ]
@@ -513,23 +573,52 @@
           {
             "id": "substituteProfessionalExecutorSection",
             "type": "section",
-            "label": "Who shall act as substitute professional Executor?",
-            "infoText": "If there are other substitute Executors specified, the professional Executor shall act jointly with any others specified.",
-             "willClauseText": "If {{field:professionalExecutorSection:name}} is unable or unwilling to serve as my professional Executor, I appoint {{field:substituteProfessionalExecutorSection:fullDetails}} to serve in their place with the same powers and responsibilities.", 
+            "label": "Select Your Substitute Professional Executor",
+            "infoText": "🥇 Aristone Solicitors is recommended and available here as backup. If there are other substitute Executors specified, the professional Executor shall act jointly with any others specified.",
+             "willClauseText": "If the professional Executor named above is unable or unwilling to serve, I appoint {{field:substituteProfessionalExecutorSelection:fullDetails}} to serve in their place with the same powers and responsibilities.", 
             "conditions": [
               { "field": "appointProfessionalExecutor", "operator": "eq", "value": "Yes" }
             ],
             "subFields": [
                {
-                  "id": "substituteProfessionalExecutorStatusDisplay",
-                  "type": "display",
-                  "text": "No substitute professional executor has been specified."
+                  "id": "substituteProfessionalExecutorSelection",
+                  "type": "radio",
+                  "label": "Select Substitute Professional Executor",
+                  "required": false,
+                  "options": [
+                    {
+                      "value": "Aristone",
+                      "label": "🥇 Aristone Solicitors (Recommended as backup)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                      "autoPopulate": {
+                        "firmName": "Aristone Limited (trading as Aristone Solicitors)",
+                        "address": "Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                        "phone": "01582 383 888",
+                        "email": "info@aristonesolicitors.co.uk",
+                        "sraNumber": "649717",
+                        "fullDetails": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                      }
+                    },
+                    {
+                      "value": "None",
+                      "label": "No substitute needed"
+                    },
+                    {
+                      "value": "Other",
+                      "label": "Other Professional (please specify)"
+                    }
+                  ],
+                  "value": null
                },
                {
-                   "id": "addSubstituteProfessionalExecutorButton",
-                   "type": "button",
-                   "label": "Add Substitute Professional Executor",
-                   "action": "openAddForm"
+                  "id": "substituteProfessionalExecutorOtherDetails",
+                  "type": "text",
+                  "label": "Substitute Professional Executor Details",
+                  "placeholder": "Enter substitute professional executor firm name, address, and contact details",
+                  "required": false,
+                  "conditions": [
+                    { "field": "substituteProfessionalExecutorSelection", "operator": "eq", "value": "Other" }
+                  ]
                },
                {
                   "id": "substituteProfessionalExecutorData",
@@ -685,7 +774,7 @@
             "id": "professionalTrusteesSection",
             "type": "section",
             "label": "Who are the professional Trustees?",
-             "willClauseText": "I appoint {{field:professionalTrusteesSection:fullDetails}} to serve as my professional Trustee for all trusts created under this Will, with full power to administer these trusts according to their terms.",
+             "willClauseText": "I appoint {{field:professionalTrusteeSelection:fullDetails}} to serve as my professional Trustee for all trusts created under this Will, with full power to administer these trusts according to their terms.",
             "conditions": [
                {
                   "operator": "AND",
@@ -697,15 +786,40 @@
             ],
             "subFields": [
                {
-                  "id": "professionalTrusteeStatusDisplay",
-                  "type": "display",
-                  "text": "No professional trustee has been specified."
+                  "id": "professionalTrusteeSelection",
+                  "type": "radio",
+                  "label": "Select Professional Trustee",
+                  "required": true,
+                  "options": [
+                    {
+                      "value": "Aristone",
+                      "label": "🥇 Aristone Solicitors (Recommended)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                      "autoPopulate": {
+                        "firmName": "Aristone Limited (trading as Aristone Solicitors)",
+                        "address": "Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                        "phone": "01582 383 888",
+                        "email": "info@aristonesolicitors.co.uk",
+                        "sraNumber": "649717",
+                        "fullDetails": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                      }
+                    },
+                    {
+                      "value": "Other",
+                      "label": "Other Professional Trustee (please specify)"
+                    }
+                  ],
+                  "value": null
                },
                {
-                   "id": "addProfessionalTrusteeButton",
-                   "type": "button",
-                   "label": "Add Professional Trustee",
-                   "action": "openAddForm"
+                  "id": "professionalTrusteeOtherDetails",
+                  "type": "text",
+                  "label": "Professional Trustee Details",
+                  "placeholder": "Enter professional trustee firm name, address, and contact details",
+                  "required": false,
+                  "conditions": [
+                    { "field": "professionalTrusteeSelection", "operator": "eq", "value": "Other" }
+                  ]
                },
                {
                   "id": "professionalTrusteeData",
@@ -718,7 +832,7 @@
             "id": "substituteProfessionalTrusteesSection",
             "type": "section",
             "label": "Who shall act as substitute professional Trustees?",
-             "willClauseText": "If {{field:professionalTrusteesSection:name}} is unable or unwilling to serve as my professional Trustee, I appoint {{field:substituteProfessionalTrusteesSection:fullDetails}} to serve in their place with the same powers and responsibilities.",
+             "willClauseText": "If the professional Trustee named above is unable or unwilling to serve, I appoint {{field:substituteProfessionalTrusteeSelection:fullDetails}} to serve in their place with the same powers and responsibilities.",
              "conditions": [
                {
                   "operator": "AND",
@@ -730,15 +844,40 @@
             ],
             "subFields": [
                {
-                  "id": "substituteProfessionalTrusteeStatusDisplay",
-                  "type": "display",
-                  "text": "No substitute professional trustee has been specified."
+                  "id": "substituteProfessionalTrusteeSelection",
+                  "type": "radio",
+                  "label": "Select Substitute Professional Trustee",
+                  "required": false,
+                  "options": [
+                    {
+                      "value": "Aristone",
+                      "label": "🥇 Aristone Solicitors (Recommended)",
+                      "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                      "autoPopulate": {
+                        "firmName": "Aristone Limited (trading as Aristone Solicitors)",
+                        "address": "Ground Floor, 12 Cardiff Road, Luton, LU1 1QG",
+                        "phone": "01582 383 888",
+                        "email": "info@aristonesolicitors.co.uk",
+                        "sraNumber": "649717",
+                        "fullDetails": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
+                      }
+                    },
+                    {
+                      "value": "Other",
+                      "label": "Other Professional Trustee (please specify)"
+                    }
+                  ],
+                  "value": null
                },
                {
-                   "id": "addSubstituteProfessionalTrusteeButton",
-                   "type": "button",
-                   "label": "Add Substitute Professional Trustee",
-                   "action": "openAddForm"
+                  "id": "substituteProfessionalTrusteeOtherDetails",
+                  "type": "text",
+                  "label": "Substitute Professional Trustee Details",
+                  "placeholder": "Enter substitute professional trustee firm name, address, and contact details",
+                  "required": false,
+                  "conditions": [
+                    { "field": "substituteProfessionalTrusteeSelection", "operator": "eq", "value": "Other" }
+                  ]
                },
                {
                   "id": "substituteProfessionalTrusteeData",
@@ -752,7 +891,7 @@
             "type": "radio",
             "label": "Include a clause directing that executors shall only act if all in that level reach a certain age",
             "options": [
-              { "value": "25", "label": "25", "willClauseText": "My Executors shall only be eligible to act if all appointed Executors in that class have attained the age of 25 years at the time of my death." },
+              { "value": "25", "label": "25", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 25 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
               { "value": "No", "label": "No" },
               { "value": "Other", "label": "Other" }
             ],
@@ -763,7 +902,7 @@
             "type": "number",
             "label": "Specify age",
             "value": "",
-             "willClauseText": "My Executors shall only be eligible to act if all appointed Executors in that class have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death.",
+             "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed.",
              "conditions": [
               { "field": "executorAgeClause", "operator": "eq", "value": "Other" }
             ]
@@ -999,7 +1138,7 @@
             "id": "bprTrustSection",
             "type": "section",
             "label": "Business Property Relief Trust",
-             "willClauseText": "I give such of my business assets as qualify for Business Property Relief from Inheritance Tax to my Trustees to hold on the terms of the Business Property Relief Trust detailed in Schedule {{field:bprTrustScheduleNumber:value}} of this Will.",
+             "willClauseText": "I give such of my business assets as may qualify for applicable tax relief to my Trustees to hold on the terms of the Business Property Relief Trust detailed in Schedule {{field:bprTrustScheduleNumber:value}} of this Will.",
             "conditions": [
                {
                   "operator": "AND",
@@ -1271,7 +1410,7 @@
           {
             "id": "chattelsInheritanceTax",
             "type": "radio",
-            "label": "Inheritance Tax",
+            "label": "Estate Tax / Death Duties",
             "options": [
               { "value": "PaidByEstate", "label": "IHT to be paid by the estate", "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid from my Residuary Estate so that the recipients receive these items free of tax." },
               { "value": "PaidByRecipient", "label": "IHT to be paid by the recipient", "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid by the respective recipients of those items." }
@@ -1687,7 +1826,7 @@
              "infoText": "In this definition, the flexible life interest trust means a fixed life interest trust, followed by a discretionary trust.",
             "options": [
               { "value": "AsShares", "label": "As shares (standard)", "willClauseText": "My Trustees shall hold my Residuary Estate upon trust for [Residual Beneficiary List and Shares]."}, 
-              { "value": "IntoFLIT", "label": "Into a Flexible Life Interest Trust (see helper)", "willClauseText": "My Trustees shall hold my Residuary Estate upon trust to pay the income thereof to [Life Tenant Name] during [his/her] lifetime (subject to the power to revoke/reduce below) and after [his/her] death for [Final Beneficiaries/Distribution Details]..."} 
+              { "value": "IntoFLIT", "label": "Into a Flexible Life Interest Trust (see helper)", "willClauseText": "My Trustees shall hold my Residuary Estate upon trust to pay the income thereof to {{field:flitLifeTenant:value}} during their lifetime (subject to the power to revoke/reduce below) and after their death for {{field:flitFinalBeneficiaries:value}}"} 
             ],
             "value": null
           },
@@ -2159,6 +2298,15 @@
                   "value": null
                }
              ]
+          },
+          {
+            "id": "willExecutionDate",
+            "type": "date",
+            "label": "Will Execution Date",
+            "infoText": "The date when this Will is being signed and executed. If left blank, today's date will be used.",
+            "placeholder": "dd/mm/yyyy",
+            "value": "",
+            "required": false
           },
           {
             "id": "testatorSignature",

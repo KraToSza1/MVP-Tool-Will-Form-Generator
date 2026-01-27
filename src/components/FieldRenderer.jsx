@@ -1,5 +1,43 @@
+/*
+ * 🎯 COMPREHENSIVE FIELD INTERACTION LOGGING
+ * 
+ * This FieldRenderer component includes detailed console logging for every field interaction:
+ * 
+ * 🔧 FIELD LIFECYCLE:
+ * - [FIELD RENDER] - Every field render with ID, label, type, required status, current value
+ * - [FIELD SHOWN/HIDDEN] - Field visibility based on conditional logic
+ * - [TEXT FIELD] / [RADIO FIELD] / [CHECKBOX GROUP] / [SIGNATURE FIELD] etc. - Field type specific initialization
+ * 
+ * 🎯 USER INTERACTIONS:
+ * - [QUESTION CHANGE] - All form value changes with comprehensive field details
+ * - [RADIO SELECTION] - Radio option selections with previous and new values
+ * - [CHECKBOX CHANGE] / [CHECKBOX RESULT] - Individual checkbox changes and final array state
+ * - [TEXT INPUT] - Text input changes and blur events with validation context
+ * - [TEXTAREA] - Textarea changes with character count tracking
+ * - [DATE PICKER] - Date selections with ISO conversion and validation
+ * - [SIGNATURE] - Signature drawing completion with data URL generation details
+ * - [SIGNATURE CLEAR] - Signature clearing events
+ * 
+ * 🎯 DYNAMIC LIST MANAGEMENT:
+ * - [ADD BUTTON FIELD] - Add button initialization with target field mapping
+ * - [ADD BUTTON CLICK] - Opening input forms for dynamic lists
+ * - [ADD ITEM BUTTON] - Adding items to dynamic lists with item details
+ * - [REMOVE ITEM] - Removing items from lists with index and item details
+ * 
+ * ✅ CONDITIONAL LOGIC:
+ * - [CONDITION CHECK] - Field condition evaluation with clause details
+ * - [CONDITION RESULT] - Final visibility determination results
+ * 
+ * 🎪 SPECIAL FIELD TYPES:
+ * - [DISPLAY FIELD] - Display-only field rendering with text preview
+ * - [SECTION FIELD] - Section field rendering with subfield count
+ * - [ADD BUTTON FIELD] - Dynamic add button field setup
+ * 
+ * All logs include field IDs, labels, types, values, and relevant context for comprehensive debugging!
+ */
+
 import React, { Suspense, useEffect, useState, useRef } from 'react';
-import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react';
 import {
   validateUKPostcode,
   formatUKPostcode,
@@ -37,7 +75,7 @@ const LazySignatureCanvas = React.lazy(async () => {
   return { default: mod.default };
 });
 
-export default function FieldRenderer({ field, formValues, setFormValues }) {
+function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditions }) {
   
   const [showInputs, setShowInputs] = useState({});
   const [inputValues, setInputValues] = useState({});
@@ -45,9 +83,13 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   const [dateInputValue, setDateInputValue] = useState('');
   const sigCanvasRef = useRef({});
   const inputRefs = useRef({});
+  const textInputRef = useRef(null);
   const sigContainerRef = useRef(null);
   const [sigCanvasWidth, setSigCanvasWidth] = useState(0);
   const isSignatureField = field?.type === 'signature';
+
+  // Console log every field render
+  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Type: ${field.type}, Required: ${field.required}, Current Value: ${formValues[field.id] || 'empty'}`);
 
   // Keep the signature canvas bitmap width in sync with its container.
   // Must be unconditional (hooks rule), so we no-op unless this FieldRenderer instance is a signature field.
@@ -76,6 +118,17 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const currentValue = formValues[field.id] || '';
     setDateInputValue(currentValue ? formatUKDate(currentValue) : '');
   }, [field?.type, field?.id, formValues]);
+
+  // Sync text input values when formValues change (for uncontrolled inputs)
+  useEffect(() => {
+    if (field?.type === 'text' && textInputRef.current) {
+      const expectedValue = formValues[field.id] || '';
+      const actualValue = textInputRef.current.value;
+      if (expectedValue !== actualValue) {
+        textInputRef.current.value = expectedValue;
+      }
+    }
+  }, [formValues, field?.id, field?.type]);
   
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
@@ -89,8 +142,28 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     return <Edit size={16} />;
   };
 
-  // Helper function to log form value changes (minimal logging)
+  // Helper function to log form value changes (comprehensive logging)
   const logFormChange = (fieldId, value) => {
+    // Detect if we're replacing a "test test test" placeholder
+    const previousValue = formValues[fieldId];
+    const isReplacingTest = previousValue && typeof previousValue === 'string' && 
+      (previousValue.toLowerCase().includes('test test test') || 
+       previousValue.toLowerCase().includes('test test') ||
+       previousValue.toLowerCase().trim() === 'test') &&
+      value && typeof value === 'string' &&
+      !value.toLowerCase().includes('test test test');
+    
+    if (isReplacingTest) {
+      console.log(`[QUESTION CHANGE] ✅✅✅ PLACEHOLDER REPLACED! Field "${fieldId}" - Replaced "${previousValue.substring(0, 80)}..." with "${value.substring(0, 80)}..."`);
+    }
+    
+    // Warn if new value still contains "test test test"
+    if (value && typeof value === 'string' && value.toLowerCase().includes('test test test')) {
+      console.warn(`[QUESTION CHANGE] ⚠️  WARNING: Field "${fieldId}" still contains "test test test"! Value: "${value.substring(0, 100)}"`);
+    }
+    // Log all form changes for debugging
+    console.log(`[QUESTION CHANGE] Field "${fieldId}" (${field.label}) changed to:`, value);
+    
     // Only log errors for corrupted data
     if (typeof value === 'number' && (!isFinite(value) || Math.abs(value) >= 1e10 || isNaN(value))) {
       console.error(`[FORM] Invalid number in field "${fieldId}":`, value);
@@ -102,8 +175,13 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   const evaluateConditions = (fieldToCheck) => {
     const conditions = fieldToCheck?.conditions;
     if (!conditions) return true;
+    
+    console.log(`[CONDITION CHECK] Evaluating conditions for field "${fieldToCheck.id}" (${fieldToCheck.label}):`, conditions);
+    
     const evalClause = (clause) => {
       const value = formValues[clause.field];
+      console.log(`[CONDITION] Checking clause - Field: ${clause.field}, Value: ${value}, Expected: ${clause.value}, Operator: ${clause.operator}`);
+      
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'in') return clause.value.includes(value);
       if (clause.operator === 'AND' || clause.operator === 'OR') {
@@ -112,17 +190,26 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
       }
       return false;
     };
-    if (Array.isArray(conditions)) {
-      const logic = fieldToCheck?.conditionLogic === 'OR' ? 'OR' : 'AND';
-      return logic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause);
-    }
-    return evalClause(conditions);
+    
+    const result = Array.isArray(conditions) 
+      ? (fieldToCheck?.conditionLogic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause))
+      : evalClause(conditions);
+      
+    console.log(`[CONDITION RESULT] Field "${fieldToCheck.id}" condition result:`, result);
+    return result;
   };
 
   if (field.conditions && !evaluateConditions(field)) {
+    console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
     return null;
+  } else if (field.conditions) {
+    console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - conditions met`);
+  } else {
+    console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - no conditions`);
   }
 
+  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Rendering as: ${field.type}${field.action ? ` (${field.action})` : ''}`);
+  
   if (field.type === 'button' && field.action === 'openAddForm') {
     const rawTarget = field.id.replace(/^add/i, '').replace(/Button$/i, 'Data');
     const targetFieldId = rawTarget.charAt(0).toLowerCase() + rawTarget.slice(1);
@@ -130,15 +217,22 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const existingItems = Array.isArray(formValues[targetFieldId]) 
       ? formValues[targetFieldId] 
       : (formValues[targetFieldId] ? [formValues[targetFieldId]] : []);
+    
+    console.log(`[ADD BUTTON FIELD] Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}", Existing items: ${existingItems.length}`);
 
     const handleAddItem = () => {
+      console.log(`[ADD ITEM BUTTON] Field "${field.id}" (${field.label}) - Current input: "${currentInputValue}"`);
+      
       if (!currentInputValue.trim()) {
+        console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Aborted: empty input`);
         return;
       }
 
       const newItem = currentInputValue.trim();
       const updatedItems = [...existingItems, newItem];
       
+      console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Added item: "${newItem}". Total items now: ${updatedItems.length}`);
+      console.log(`[ADD ITEM BUTTON] Field "${field.id}" - All items:`, updatedItems);
       
       setFormValues((prev) => ({
         ...prev,
@@ -151,7 +245,12 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     };
 
     const handleRemoveItem = (indexToRemove) => {
+      const itemToRemove = existingItems[indexToRemove];
       const updatedItems = existingItems.filter((_, index) => index !== indexToRemove);
+      
+      console.log(`[REMOVE ITEM] Field "${field.id}" (${field.label}) - Removed item at index ${indexToRemove}: "${itemToRemove}"`);
+      console.log(`[REMOVE ITEM] Field "${field.id}" - Remaining items: ${updatedItems.length}`, updatedItems);
+      
       setFormValues((prev) => ({
         ...prev,
         [targetFieldId]: updatedItems.length > 0 ? updatedItems : [],
@@ -171,6 +270,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         <button
           type="button"
           onClick={() => {
+            console.log(`[ADD BUTTON CLICK] Field "${field.id}" - Opening input form for "${targetFieldId}"`);
             setShowInputs((prev) => ({ ...prev, [targetFieldId]: true }));
             setTimeout(() => {
               inputRefs.current[targetFieldId]?.focus();
@@ -187,19 +287,21 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           <div className="mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-0">
                   <Edit size={18} />
                 </div>
                 <input
                   ref={(ref) => (inputRefs.current[targetFieldId] = ref)}
                   type="text"
-                  className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md"
+                  className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
                   placeholder={`Enter ${targetFieldId.replace(/([A-Z])/g, ' $1').replace('Data', '')} (press Enter to add)`}
                   value={currentInputValue}
                   onChange={(e) =>
                     setInputValues((prev) => ({ ...prev, [targetFieldId]: e.target.value }))
                   }
                   onKeyPress={handleKeyPress}
+                  disabled={false}
+                  readOnly={false}
                 />
               </div>
               <button
@@ -266,6 +368,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   }
 
   if (field.type === 'text' || field.type === 'number' || field.type === 'currency') {
+    console.log(`[TEXT FIELD] Field "${field.id}" (${field.label}) - Type: ${field.type}, Required: ${field.required}`);
     // UK-specific field handling
     const isPostcode = field.id === 'postcode' || field.id.toLowerCase().includes('postcode');
     const isPhone = field.id === 'mobile' || field.id === 'tel2' || field.id.toLowerCase().includes('phone') || field.id.toLowerCase().includes('tel');
@@ -290,6 +393,21 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const handleChange = (e) => {
       let value = e.target.value;
       const isBlur = e.type === 'blur';
+      
+      console.log(`[TEXT INPUT] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value: "${value}"`);
+      
+      // Special feedback for partner name field
+      if (field.id === 'partnerFullName' && value.trim() && isBlur) {
+        console.log(`[PARTNER NAME] Partner name saved: "${value.trim()}" - This will update the summary below automatically!`);
+        // Show success message for partner name
+        if (typeof window !== 'undefined' && window.showPartnerNameSuccess) {
+          window.showPartnerNameSuccess(value.trim());
+        }
+      }
+      
+      // Immediately update form state to ensure React and DOM stay in sync
+      logFormChange(field.id, value);
+      setFormValues((prev) => ({ ...prev, [field.id]: value }));
       
       // Clear previous errors on change (validate on blur)
       if (!isBlur) {
@@ -331,7 +449,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           }
           // Validate phone number
           if (value && !validateUKPhoneNumber(value)) {
-            setValidationErrors((prev) => ({ ...prev, [field.id]: 'Please enter a valid UK phone number (e.g., 07123 456789 or 020 1234 5678)' }));
+            setValidationErrors((prev) => ({ ...prev, [field.id]: 'Please enter a valid UK phone number (e.g., 07123 456789 for mobile or 020 1234 5678 for landline)' }));
           } else if (field.required && !value) {
             setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a phone number.' }));
           } else {
@@ -387,8 +505,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         }
       }
       
-      logFormChange(field.id, value);
-      setFormValues((prev) => ({ ...prev, [field.id]: value }));
+      // Note: We already updated formValues at the beginning of handleChange
+      // to ensure immediate synchronization between React state and DOM
     };
 
     // Get UK-specific placeholder
@@ -396,6 +514,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     if (isPostcode && !placeholder) {
       placeholder = 'e.g., SW1A 1AA';
     } else if (isPhone && !placeholder) {
+      // UK phone number formats: Mobile 07123 456789, London 020 1234 5678, Other 0117 123 4567
       placeholder = field.id === 'mobile' ? 'e.g., 07123 456789' : 'e.g., 020 1234 5678';
     }
 
@@ -417,23 +536,45 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           </p>
         )}
         <div className="relative">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-0">
             {FieldIcon}
           </div>
           <input
             type={field.type === 'currency' ? 'text' : field.type}
             placeholder={placeholder}
-            className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md ${
-              validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+            className={`w-full border rounded-xl pl-10 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10 ${
+              validationErrors[field.id] 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : formValues[field.id] && !validationErrors[field.id] && field.required
+                ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
+                : 'border-gray-300'
             }`}
-            value={formValues[field.id] || ''}
+            aria-label={field.label}
+            aria-required={field.required}
+            aria-invalid={!!validationErrors[field.id]}
+            aria-describedby={validationErrors[field.id] ? `${field.id}-error` : field.infoText ? `${field.id}-info` : undefined}
+            id={field.id}
+            defaultValue={formValues[field.id] || ''}
             onChange={handleChange}
             onBlur={handleChange}
+            disabled={false}
+            readOnly={false}
           />
+          {/* Validation feedback icons */}
+          {formValues[field.id] && !validationErrors[field.id] && field.required && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 z-20 pointer-events-none">
+              <CheckCircle2 size={18} className="animate-fadeIn" />
+            </div>
+          )}
+          {validationErrors[field.id] && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-red-500 z-20 pointer-events-none">
+              <AlertCircle size={18} />
+            </div>
+          )}
         </div>
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -441,18 +582,36 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           <p className="text-xs text-gray-500 mt-1.5">UK postcode format (e.g., SW1A 1AA, M1 1AA)</p>
         )}
         {isPhone && !validationErrors[field.id] && (
-          <p className="text-xs text-gray-500 mt-1.5">UK phone number (mobile: 07123 456789, landline: 020 1234 5678)</p>
+          <p className="text-xs text-gray-500 mt-1.5">UK phone number format: mobile 07123 456789, landline 020 1234 5678</p>
         )}
       </div>
     );
   }
 
   if (field.type === 'textarea') {
+    console.log(`[TEXTAREA FIELD] Field "${field.id}" (${field.label}) - Required: ${field.required}, Rows: ${field.rows || 4}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     const handleTextareaChange = (e) => {
       const value = e.target.value;
       const isBlur = e.type === 'blur';
+      const previousValue = formValues[field.id] || '';
+      
+      // Detect if "test test test" placeholder is being replaced
+      const hasTestPlaceholder = previousValue && (
+        previousValue.toLowerCase().includes('test test test') ||
+        previousValue.toLowerCase().includes('test test') ||
+        previousValue.toLowerCase().trim() === 'test'
+      );
+      
+      if (hasTestPlaceholder && value && !value.toLowerCase().includes('test test test')) {
+        console.log(`[TEXTAREA] ✅✅✅ PLACEHOLDER REPLACED! Field "${field.id}" - Replaced "${previousValue.substring(0, 50)}..." with "${value.substring(0, 50)}..."`);
+      }
+      
+      console.log(`[TEXTAREA] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value length: ${value.length} chars`);
+      if (value.toLowerCase().includes('test test')) {
+        console.warn(`[TEXTAREA] ⚠️  WARNING: Field "${field.id}" still contains "test test" placeholder! Current value: "${value.substring(0, 100)}"`);
+      }
       
       // Clear previous errors on change (validate on blur)
       if (!isBlur) {
@@ -494,23 +653,45 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           </p>
         )}
         <div className="relative">
-          <div className="absolute left-3 top-3 text-gray-400 pointer-events-none">
+          <div className="absolute left-3 top-3 text-gray-400 pointer-events-none z-0">
             {FieldIcon}
           </div>
           <textarea
+            id={field.id}
             rows={field.rows || 4}
             placeholder={field.placeholder || ''}
-            className={`w-full border rounded-xl pl-10 pr-4 py-3 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md ${
-              validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
+            className={`w-full border rounded-xl pl-10 pr-10 py-3 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10 ${
+              validationErrors[field.id] 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : formValues[field.id] && !validationErrors[field.id] && field.required
+                ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
+                : 'border-gray-300'
             }`}
-            value={formValues[field.id] || ''}
+            defaultValue={formValues[field.id] || ''}
             onChange={handleTextareaChange}
             onBlur={handleTextareaChange}
+            disabled={false}
+            readOnly={false}
+            aria-label={field.label}
+            aria-required={field.required}
+            aria-invalid={!!validationErrors[field.id]}
+            aria-describedby={validationErrors[field.id] ? `${field.id}-error` : field.infoText ? `${field.id}-info` : undefined}
           />
+          {/* Validation feedback icons */}
+          {formValues[field.id] && !validationErrors[field.id] && field.required && (
+            <div className="absolute right-3 top-3 text-green-500 z-20 pointer-events-none">
+              <CheckCircle2 size={18} className="animate-fadeIn" />
+            </div>
+          )}
+          {validationErrors[field.id] && (
+            <div className="absolute right-3 top-3 text-red-500 z-20 pointer-events-none">
+              <AlertCircle size={18} />
+            </div>
+          )}
         </div>
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -522,6 +703,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     const selectedOption = field.options.find(
       (opt) => opt.value === formValues[field.id]
     );
+    console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
@@ -554,6 +736,45 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                 checked={formValues[field.id] === opt.value}
                     onChange={(e) => {
                       const newValue = e.target.value;
+                      console.log(`[RADIO SELECTION] Field "${field.id}" (${field.label}) - Selected option: "${newValue}" (was: "${formValues[field.id] || 'none'}")`);
+                      
+                      // Special logging for Aristone Solicitors selection
+                      if ((field.id === 'chooseAristoneExecutor' || field.id === 'chooseAristoneSubstituteExecutor') && newValue === 'Aristone') {
+                        console.log(`[ARISTONE SELECTED] 🥇 User selected Aristone Solicitors as ${field.id.includes('Substitute') ? 'substitute ' : ''}executor!`);
+                        // Show success message for Aristone selection
+                        if (typeof window !== 'undefined' && window.showAristoneSuccess) {
+                          window.showAristoneSuccess(field.id.includes('Substitute') ? 'substitute executor' : 'executor');
+                        }
+                        
+                        // Auto-populate the corresponding data field with Aristone details
+                        const dataFieldId = field.id.includes('Substitute') ? 'substituteExecutorData' : 'executorData';
+                        const aristoneDetails = "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+                        
+                        // Update the executor data with Aristone details
+                        setTimeout(() => {
+                          setFormValues((prev) => ({
+                            ...prev,
+                            [dataFieldId]: [aristoneDetails]
+                          }));
+                          console.log(`[ARISTONE DATA] Auto-populated ${dataFieldId} with Aristone details`);
+                        }, 100);
+                      }
+                      
+                      // Handle switching to Individual option - clear Aristone data
+                      if ((field.id === 'chooseAristoneExecutor' || field.id === 'chooseAristoneSubstituteExecutor') && newValue === 'Individual') {
+                        console.log(`[INDIVIDUAL SELECTED] User chose to add individual ${field.id.includes('Substitute') ? 'substitute ' : ''}executor instead of Aristone`);
+                        const dataFieldId = field.id.includes('Substitute') ? 'substituteExecutorData' : 'executorData';
+                        
+                        // Clear any existing Aristone data
+                        setTimeout(() => {
+                          setFormValues((prev) => ({
+                            ...prev,
+                            [dataFieldId]: []
+                          }));
+                          console.log(`[INDIVIDUAL DATA] Cleared ${dataFieldId} for individual entry`);
+                        }, 100);
+                      }
+                      
                       logFormChange(field.id, newValue);
                       
                       // Clear validation errors when selection is made
@@ -574,8 +795,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           ))}
         </div>
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -596,6 +817,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   }
 
   if (field.type === 'checkboxGroup' && field.options) {
+    const selectedCount = Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0;
+    console.log(`[CHECKBOX GROUP] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: ${selectedCount}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
@@ -632,12 +855,16 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                     const newValue = Array.isArray(formValues[field.id])
                       ? [...formValues[field.id]]
                       : [];
+                    console.log(`[CHECKBOX CHANGE] Field "${field.id}" (${field.label}) - Option "${optValue}" ${e.target.checked ? 'CHECKED' : 'UNCHECKED'}`);
+                    
                     if (e.target.checked) {
                       newValue.push(optValue);
                     } else {
                       const index = newValue.indexOf(optValue);
                       if (index > -1) newValue.splice(index, 1);
                     }
+                    console.log(`[CHECKBOX RESULT] Field "${field.id}" new value:`, newValue);
+                    
                     // Clear validation errors when selection is made
                     if (newValue.length > 0 || !field.required) {
                       setValidationErrors((prev) => {
@@ -662,8 +889,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           })}
         </div>
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -672,6 +899,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   }
 
   if (field.type === 'section' && field.subFields) {
+    console.log(`[SECTION FIELD] Field "${field.id}" (${field.label}) - SubFields: ${field.subFields.length}`);
     const isAddressSection = field.label.toLowerCase().includes('address');
     
     return (
@@ -683,19 +911,142 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         {isAddressSection && (
           <p className="text-xs text-gray-600 mb-1.5 italic">UK address format: {getUKAddressExample()}</p>
         )}
-        {field.subFields.map((subField) => (
-          <FieldRenderer
-            key={subField.id}
-            field={subField}
-            formValues={formValues}
-            setFormValues={setFormValues}
-          />
-        ))}
+        {field.subFields.map((subField) => {
+          // Skip subFields that shouldn't be shown (conditions not met)
+          if (subField.conditions && evaluateFieldConditions && !evaluateFieldConditions(subField)) {
+            console.log(`[FIELD RENDER] SubField ${subField.id} skipped - conditions not met`);
+            return null; // Skip rendering this subField
+          }
+          
+          return (
+            <FieldRenderer
+              key={subField.id}
+              field={subField}
+              formValues={formValues}
+              setFormValues={setFormValues}
+              evaluateFieldConditions={evaluateFieldConditions}
+            />
+          );
+        }).filter(Boolean)}
       </div>
     );
   }
 
   if (field.type === 'display') {
+    console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
+    
+    // Check if this is the partner info display and if we have a partner name
+    const isPartnerDisplay = field.id === 'partnerInfoDisplay';
+    const partnerName = formValues.partnerFullName;
+    
+    // Check if this is executor status display
+    const isExecutorDisplay = field.id === 'executorStatusDisplay';
+    const aristoneExecutorSelected = formValues.chooseAristoneExecutor === 'Aristone';
+    const executorData = formValues.executorData;
+    
+    // Check if this is substitute executor status display
+    const isSubstituteExecutorDisplay = field.id === 'substituteExecutorStatusDisplay';
+    const aristoneSubstituteSelected = formValues.chooseAristoneSubstituteExecutor === 'Aristone';
+    const substituteExecutorData = formValues.substituteExecutorData;
+    
+    // Handle executor status display
+    if (isExecutorDisplay) {
+      if (aristoneExecutorSelected) {
+        return (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🥇</span>
+              <span className="font-semibold">Executor Selected:</span>
+              <span className="font-bold">Aristone Solicitors</span>
+            </div>
+            <p className="text-xs mt-1 opacity-75">Professional legal firm will handle your estate administration.</p>
+          </div>
+        );
+      } else if (executorData && Array.isArray(executorData) && executorData.length > 0) {
+        return (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <span className="font-semibold">Executors Added:</span>
+              <span className="font-bold">{executorData.length} executor(s)</span>
+            </div>
+            <p className="text-xs mt-1 opacity-75">{executorData.join(', ')}</p>
+          </div>
+        );
+      } else {
+        return (
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">👇</span>
+              <span>Choose Aristone Solicitors (recommended) or add individual executors below.</span>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // Handle substitute executor status display
+    if (isSubstituteExecutorDisplay) {
+      if (aristoneSubstituteSelected) {
+        return (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🥇</span>
+              <span className="font-semibold">Substitute Executor Selected:</span>
+              <span className="font-bold">Aristone Solicitors</span>
+            </div>
+            <p className="text-xs mt-1 opacity-75">Professional backup executor selected.</p>
+          </div>
+        );
+      } else if (substituteExecutorData && Array.isArray(substituteExecutorData) && substituteExecutorData.length > 0) {
+        return (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <span className="font-semibold">Substitute Executors Added:</span>
+              <span className="font-bold">{substituteExecutorData.length} substitute(s)</span>
+            </div>
+            <p className="text-xs mt-1 opacity-75">{substituteExecutorData.join(', ')}</p>
+          </div>
+        );
+      } else {
+        return (
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">👇</span>
+              <span>Choose Aristone Solicitors or add individual substitute executors below.</span>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // Show different content based on whether partner name is entered
+    if (isPartnerDisplay) {
+      if (partnerName && partnerName.trim()) {
+        return (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <span className="font-semibold">Partner name saved:</span>
+              <span className="font-bold">{partnerName.trim()}</span>
+            </div>
+            <p className="text-xs mt-1 opacity-75">This name will be used throughout your Will.</p>
+          </div>
+        );
+      } else {
+        return (
+          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💡</span>
+              <span>Enter your partner's full name in the field above - it will appear here automatically!</span>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // Regular display field
     return (
       <div className="bg-blue-100 text-blue-900 rounded p-3 my-4 text-sm">
         {field.text}
@@ -704,6 +1055,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
   }
 
   if (field.type === 'signature') {
+    console.log(`[SIGNATURE FIELD] Field "${field.id}" (${field.label}) - Required: ${field.required}, Has existing signature: ${!!formValues[field.id]}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     const canvasWidth = Math.max(280, Math.min(900, sigCanvasWidth || 500));
     const canvasHeight = 120;
@@ -733,9 +1085,14 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
               canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28' }}
               ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
               onEnd={() => {
+                console.log(`[SIGNATURE] Field "${field.id}" (${field.label}) - Signature drawing completed`);
+                
                 try {
                   const canvas = sigCanvasRef.current[field.id];
-                  if (!canvas) return;
+                  if (!canvas) {
+                    console.error(`[SIGNATURE] Canvas not found for field "${field.id}"`);
+                    return;
+                  }
                   
                   let dataUrl = null;
                   
@@ -743,11 +1100,13 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                     const trimmedCanvas = canvas.getTrimmedCanvas();
                     if (trimmedCanvas && typeof trimmedCanvas.toDataURL === 'function') {
                       dataUrl = trimmedCanvas.toDataURL('image/png');
+                      console.log(`[SIGNATURE] Field "${field.id}" - Generated signature data URL (length: ${dataUrl.length})`);
                     }
                   } catch (trimError) {
-                    console.warn('getTrimmedCanvas failed, falling back to regular canvas:', trimError);
+                    console.warn(`[SIGNATURE] Field "${field.id}" - getTrimmedCanvas failed, falling back:`, trimError);
                     if (canvas && canvas.getCanvas && typeof canvas.getCanvas().toDataURL === 'function') {
                       dataUrl = canvas.getCanvas().toDataURL('image/png');
+                      console.log(`[SIGNATURE] Field "${field.id}" - Generated fallback signature data URL (length: ${dataUrl.length})`);
                     }
                   }
                   
@@ -781,6 +1140,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
         <button
           type="button"
           onClick={() => {
+            console.log(`[SIGNATURE CLEAR] Field "${field.id}" (${field.label}) - Clearing signature`);
             sigCanvasRef.current[field.id]?.clear();
             
             // Set validation error if required when clearing
@@ -807,8 +1167,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           <p className="text-xs text-gray-500 mt-2">{field.subLabel}</p>
         )}
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -826,6 +1186,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
       : null;
 
     const isValidDate = dateValue && !isNaN(dateValue.getTime());
+    console.log(`[DATE FIELD] Field "${field.id}" (${field.label}) - Current value: "${formValues[field.id] || 'empty'}", Valid date: ${isValidDate}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
 
     return (
@@ -857,8 +1218,11 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
             <LazyDatePicker
               selected={isValidDate ? dateValue : null}
               onChange={(date) => {
+                console.log(`[DATE PICKER] Field "${field.id}" (${field.label}) - Date selected:`, date);
+                
                 if (date) {
                   const isoDate = date.toISOString().split('T')[0];
+                  console.log(`[DATE PICKER] Field "${field.id}" converted to ISO:`, isoDate);
                   logFormChange(field.id, isoDate);
                   
                   // Clear errors if valid
@@ -871,6 +1235,7 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
                   setDateInputValue(formatUKDate(isoDate));
                   setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
                 } else {
+                  console.log(`[DATE PICKER] Field "${field.id}" - Date cleared`);
                   if (field.required) {
                     setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
                   }
@@ -964,8 +1329,8 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
           </Suspense>
         </div>
         {validationErrors[field.id] && (
-          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-2">
-            <AlertCircle size={14} />
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
@@ -978,5 +1343,22 @@ export default function FieldRenderer({ field, formValues, setFormValues }) {
     );
   }
 
+  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Rendering NULL (unsupported field type: ${field.type})`);
   return null;
 }
+
+// Memoize FieldRenderer with proper comparison function
+export default React.memo(FieldRenderer, (prevProps, nextProps) => {
+  // Re-render if field props or form values change
+  if (prevProps.field.id !== nextProps.field.id) return false;
+  if (prevProps.field.type !== nextProps.field.type) return false;
+  if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;
+  if (prevProps.setFormValues !== nextProps.setFormValues) return false;
+  if (prevProps.evaluateFieldConditions !== nextProps.evaluateFieldConditions) return false;
+  
+  // Deep compare the field object for other changes
+  if (JSON.stringify(prevProps.field) !== JSON.stringify(nextProps.field)) return false;
+  
+  // If all checks pass, skip re-render (return true = no re-render needed)
+  return true;
+});
