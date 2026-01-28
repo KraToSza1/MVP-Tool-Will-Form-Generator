@@ -2020,11 +2020,45 @@ export default function FormRenderer() {
         clientSignature
       });
       
-      // Handle new return format: { doc, missingItems, schedulesMissing, hasPlaceholders }
+      // Handle new return format: { doc, missingItems, schedulesMissing, hasPlaceholders, criticalIssues, hasCriticalIssues }
       const doc = pdfResult.doc || pdfResult;
       const missingItems = pdfResult.missingItems || [];
       const schedulesMissing = pdfResult.schedulesMissing || [];
       const hasPlaceholders = pdfResult.hasPlaceholders !== undefined ? pdfResult.hasPlaceholders : (missingItems.length > 0 || schedulesMissing.length > 0);
+      const criticalIssues = pdfResult.criticalIssues || [];
+      const hasCriticalIssues = pdfResult.hasCriticalIssues || false;
+      
+      // CRITICAL: Block PDF download if critical issues exist
+      if (hasCriticalIssues && criticalIssues.length > 0) {
+        console.error('[PDF GENERATION] ❌ BLOCKED - Critical issues detected:', criticalIssues);
+        toast.error('PDF Generation Blocked', {
+          description: `Cannot generate PDF: ${criticalIssues.length} critical issue(s) found. Please complete all required fields with missing subjects/beneficiaries.`,
+          duration: 10000
+        });
+        
+        // Show validation modal with critical issues
+        const allIssues = [
+          ...criticalIssues.map(issue => ({
+            section: issue.section || 'Unknown',
+            field: issue.field || 'Unknown',
+            issue: issue.issue || 'Critical issue',
+            snippet: issue.snippet || '',
+            clauseNumber: issue.clauseNumber || null
+          })),
+          ...missingItems.filter(item => !criticalIssues.includes(item)),
+          ...schedulesMissing.map(s => ({ 
+            section: 'Schedules', 
+            field: s, 
+            issue: 'Schedule content not provided', 
+            snippet: '', 
+            clauseNumber: null
+          }))
+        ];
+        setValidationIssues(allIssues);
+        setValidationModalOpen(true);
+        setIsGeneratingPDF(false);
+        return;
+      }
       
       // Store missing items for "View Issues" link
       if (hasPlaceholders) {

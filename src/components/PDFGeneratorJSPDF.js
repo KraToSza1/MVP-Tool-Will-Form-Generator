@@ -145,6 +145,14 @@ const validateWillCompleteness = (formValues, willClauses) => {
     /I give the failed share to\s*\./gi, // "failed share to ." (blank fallback)
     /I give\s+of my net estate to/gi,    // "I give ___ of my net estate to" (blank percentage)
     /specifically for the.*Trust\s*\./gi, // Incomplete trust references
+    // CRITICAL: Missing subjects in clauses
+    /\bmy\s+\[missing\s+(?:person|beneficiary)\]/gi,  // "my [missing person]" or "my [missing beneficiary]"
+    /\brelease\s+and\s+forgive\s+my\s+\[missing/gi,  // "release and forgive my [missing"
+    /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/gi, // "no provision for my [missing"
+    /\bcare\s+for\s+.*\s+my\s+\[missing/gi,          // "care for my [missing"
+    /\bunable\s+.*\s+my\s+\[missing/gi,              // "unable my [missing"
+    /\bupon\s+trust\s+for\s+\[missing/gi,            // "upon trust for [missing"
+    /\bfor\s+\[missing\s+(?:person|beneficiary)\]/gi, // "for [missing person]" or "for [missing beneficiary]"
   ];
   
   willClauses.forEach((clause, index) => {
@@ -159,6 +167,26 @@ const validateWillCompleteness = (formValues, willClauses) => {
         });
       }
     });
+    
+    // CRITICAL: Check for incomplete Clause 31 (condition without gift)
+    if (index === 30) { // Clause 31 is index 30 (0-based)
+      const clause31Text = clause.text.trim();
+      const isIncompleteCondition = /^\(.*\)\s*$/.test(clause31Text) && 
+                                     !clause31Text.toLowerCase().includes('i give') &&
+                                     !clause31Text.toLowerCase().includes('i appoint') &&
+                                     !clause31Text.toLowerCase().includes('i direct') &&
+                                     !clause31Text.toLowerCase().includes('i wish');
+      
+      if (isIncompleteCondition) {
+        criticalIssues.push({
+          type: 'INCOMPLETE_CLAUSE_31',
+          clauseIndex: 31,
+          section: clause.sectionLabel,
+          issue: `Clause 31 is incomplete - contains only a condition without an actual gift: "${clause31Text}"`,
+          pattern: 'incomplete_condition'
+        });
+      }
+    }
   });
   
   // 2) ARISTONE NAME TYPO DETECTION - catch "solicitorss", "solicitorsss" etc
@@ -1218,10 +1246,65 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
             // Check field's willClauseText
             if (field.willClauseText) {
               const interpolated = interpolateText(field.willClauseText, formValues);
+              
+              // CRITICAL: Block clauses with missing subjects or empty critical interpolations
               if (interpolated && 
                   !/\{\{field:[^}]+\}\}/.test(interpolated) && 
                   interpolated.trim() !== '' &&
                   !isPlaceholderOrIncomplete(interpolated)) {
+                
+                // CRITICAL: Check for pet care clauses with missing data
+                if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
+                  const petCarerData = formValues.petCarerData || [];
+                  const substitutePetCarerData = formValues.substitutePetCarerData || [];
+                  const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0;
+                  const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0;
+                  
+                  if (field.id === 'petCarerSection' && !hasPetCarer) {
+                    console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - no pet carer data: "${interpolated.substring(0, 100)}"`);
+                    return; // Skip this clause
+                  }
+                  
+                  if (field.id === 'substitutePetCarerSection' && (!hasPetCarer || !hasSubstitutePetCarer)) {
+                    console.warn(`[PDF VALIDATION] ⚠️ BLOCKING substitute pet carer clause - missing data: "${interpolated.substring(0, 100)}"`);
+                    return; // Skip this clause
+                  }
+                }
+                
+                // CRITICAL: Check for inheritance tax condition clause without charity gift
+                if (field.id === 'charityGiftOnlyIfIHTDue' && formValues.give10PercentToCharity !== 'Yes') {
+                  console.warn(`[PDF VALIDATION] ⚠️ BLOCKING IHT condition clause - no charity gift: "${interpolated.substring(0, 100)}"`);
+                  return; // Skip this clause - it's meaningless without a charity gift
+                }
+                
+                // CRITICAL: Check for missing subjects BEFORE adding clause
+                // Detect patterns indicating empty interpolations that leave missing subjects
+                const hasMissingSubject = 
+                  // Explicit [missing person] markers
+                  /\bmy\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                  /\bfor\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                  /\brelease\s+and\s+forgive\s+my\s+\[missing/i.test(interpolated) ||
+                  /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/i.test(interpolated) ||
+                  /\bcare\s+for\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                  /\bunable\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                  /\bupon\s+trust\s+for\s+\[missing/i.test(interpolated) ||
+                  // Patterns indicating empty interpolation (missing name after "my " or "for ")
+                  /\brelease\s+and\s+forgive\s+my\s+(?:from|\.|$)/i.test(interpolated) ||
+                  /\bno\s+provision\s+.*\s+for\s+my\s+\./i.test(interpolated) ||
+                  /\bcare\s+for\s+.*\s+my\s+\./i.test(interpolated) ||
+                  /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
+                  /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
+                  // "my " followed immediately by punctuation or "from" (empty name)
+                  /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                  // "for " followed immediately by punctuation (empty beneficiary)
+                  /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated) ||
+                  // Pet care specific patterns - "I request that my " followed by "care" or "is unable" without a name
+                  (/\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated));
+                
+                if (hasMissingSubject) {
+                  console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
+                  return; // Skip this clause - don't add it to willClauses
+                }
                 
                 // Normalize clause for duplicate detection (ignore minor whitespace differences)
                 const normalizedClause = safeString(interpolated).replace(/\s+/g, ' ').trim().toLowerCase();
@@ -1249,6 +1332,28 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       !/\{\{field:[^}]+\}\}/.test(interpolated) && 
                       interpolated.trim() !== '' &&
                       !isPlaceholderOrIncomplete(interpolated)) {
+                    
+                    // CRITICAL: Check for missing subjects BEFORE adding clause
+                    const hasMissingSubject = 
+                      /\bmy\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                      /\bfor\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                      /\brelease\s+and\s+forgive\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bcare\s+for\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bunable\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+\[missing/i.test(interpolated) ||
+                      /\brelease\s+and\s+forgive\s+my\s+(?:from|\.|$)/i.test(interpolated) ||
+                      /\bno\s+provision\s+.*\s+for\s+my\s+\./i.test(interpolated) ||
+                      /\bcare\s+for\s+.*\s+my\s+\./i.test(interpolated) ||
+                      /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
+                      /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated);
+                    
+                    if (hasMissingSubject) {
+                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
+                      return; // Skip this clause
+                    }
                     
                     // Normalize clause for duplicate detection
                     const normalizedClause = safeString(interpolated).replace(/\s+/g, ' ').trim().toLowerCase();
@@ -1280,6 +1385,48 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       !/\{\{field:[^}]+\}\}/.test(interpolated) && 
                       interpolated.trim() !== '' &&
                       !isPlaceholderOrIncomplete(interpolated)) {
+                    
+                    // CRITICAL: Check for pet care clauses with missing data
+                    if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
+                      const petCarerData = formValues.petCarerData || [];
+                      const substitutePetCarerData = formValues.substitutePetCarerData || [];
+                      const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0;
+                      const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0;
+                      
+                      if (field.id === 'petCarerSection' && !hasPetCarer) {
+                        console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - no pet carer data: "${interpolated.substring(0, 100)}"`);
+                        return; // Skip this clause
+                      }
+                      
+                      if (field.id === 'substitutePetCarerSection' && (!hasPetCarer || !hasSubstitutePetCarer)) {
+                        console.warn(`[PDF VALIDATION] ⚠️ BLOCKING substitute pet carer clause - missing data: "${interpolated.substring(0, 100)}"`);
+                        return; // Skip this clause
+                      }
+                    }
+                    
+                    // CRITICAL: Check for missing subjects BEFORE adding clause
+                    const hasMissingSubject = 
+                      /\bmy\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                      /\bfor\s+\[missing\s+(?:person|beneficiary)\]/i.test(interpolated) ||
+                      /\brelease\s+and\s+forgive\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bcare\s+for\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bunable\s+.*\s+my\s+\[missing/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+\[missing/i.test(interpolated) ||
+                      /\brelease\s+and\s+forgive\s+my\s+(?:from|\.|$)/i.test(interpolated) ||
+                      /\bno\s+provision\s+.*\s+for\s+my\s+\./i.test(interpolated) ||
+                      /\bcare\s+for\s+.*\s+my\s+\./i.test(interpolated) ||
+                      /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
+                      /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated) ||
+                      // Pet care specific patterns
+                      /\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated);
+                    
+                    if (hasMissingSubject) {
+                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
+                      return; // Skip this clause
+                    }
                     
                     // Normalize clause for duplicate detection
                     const normalizedClause = safeString(interpolated).replace(/\s+/g, ' ').trim().toLowerCase();
@@ -1357,6 +1504,51 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         });
       }
       
+      // CRITICAL: Check for missing subjects in clauses (e.g., "my [missing person]", "for [missing beneficiary]")
+      const missingSubjectPatterns = [
+        /\bmy\s+\[missing\s+(?:person|beneficiary)\]/i,
+        /\bfor\s+\[missing\s+(?:person|beneficiary)\]/i,
+        /\brelease\s+and\s+forgive\s+my\s+\[missing/i,
+        /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/i,
+        /\bcare\s+for\s+.*\s+my\s+\[missing/i,
+        /\bunable\s+.*\s+my\s+\[missing/i,
+        /\bupon\s+trust\s+for\s+\[missing/i,
+        /\bdeliberately\s+made\s+no\s+provision\s+.*\s+for\s+my\s+\[missing/i,
+      ];
+      
+      missingSubjectPatterns.forEach(pattern => {
+        if (pattern.test(clause.text)) {
+          const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
+          missing.push({
+            section: clause.sectionLabel,
+            field: clause.fieldLabel,
+            clauseNumber: validationClauseNumber,
+            issue: 'CRITICAL: Missing subject/person/beneficiary in clause',
+            snippet: snippet
+          });
+        }
+      });
+      
+      // CRITICAL: Check for incomplete Clause 31 (condition without gift)
+      if (validationClauseNumber === 31) {
+        const clause31Text = clause.text.trim();
+        const isIncompleteCondition = /^\(.*\)\s*$/.test(clause31Text) && 
+                                       !clause31Text.toLowerCase().includes('i give') &&
+                                       !clause31Text.toLowerCase().includes('i appoint') &&
+                                       !clause31Text.toLowerCase().includes('i direct') &&
+                                       !clause31Text.toLowerCase().includes('i wish');
+        
+        if (isIncompleteCondition) {
+          missing.push({
+            section: clause.sectionLabel,
+            field: clause.fieldLabel,
+            clauseNumber: 31,
+            issue: 'CRITICAL: Clause 31 is incomplete - contains only a condition without an actual gift',
+            snippet: clause31Text
+          });
+        }
+      }
+      
       // Check for placeholder patterns
       placeholderPatterns.forEach(pattern => {
         if (pattern.test(clause.text)) {
@@ -1370,6 +1562,26 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
           });
         }
       });
+      
+      // CRITICAL: Additional check for missing subjects in clause text (catch any that slipped through)
+      const hasMissingSubjectInText = 
+        /\brelease\s+and\s+forgive\s+my\s+(?:from|\.|$)/i.test(clause.text) ||
+        /\bno\s+provision\s+.*\s+for\s+my\s+\./i.test(clause.text) ||
+        /\bcare\s+for\s+.*\s+my\s+\./i.test(clause.text) ||
+        /\bunable\s+.*\s+my\s+\./i.test(clause.text) ||
+        /\bupon\s+trust\s+for\s+\./i.test(clause.text) ||
+        /\bmy\s+[\.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(clause.text);
+      
+      if (hasMissingSubjectInText) {
+        const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
+        missing.push({
+          section: clause.sectionLabel,
+          field: clause.fieldLabel,
+          clauseNumber: validationClauseNumber,
+          issue: 'CRITICAL: Missing subject/person/beneficiary in clause',
+          snippet: snippet
+        });
+      }
       
       // Check for incomplete patterns
       if (isPlaceholderOrIncomplete(clause.text)) {
@@ -1451,8 +1663,23 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     }
     
     // Group missing items by category
-    const criticalBlanks = missing.filter(item => item.issue.includes('blank') || item.issue.includes('Empty') || item.issue.includes('incomplete'));
-    const placeholders = missing.filter(item => item.issue.includes('Placeholder') || item.snippet.includes('test'));
+    // CRITICAL: Separate critical issues from regular placeholders
+    const criticalBlanks = missing.filter(item => 
+      item.issue && (
+        item.issue.includes('CRITICAL: Missing subject') ||
+        item.issue.includes('CRITICAL: Clause 31') ||
+        item.issue.includes('CRITICAL:') ||
+        item.issue.includes('blank') || 
+        item.issue.includes('Empty') || 
+        item.issue.includes('incomplete')
+      )
+    );
+    const placeholders = missing.filter(item => 
+      !item.issue || (
+        !item.issue.includes('CRITICAL:') &&
+        (item.issue.includes('Placeholder') || item.snippet?.includes('test'))
+      )
+    );
     const executionRequirements = missing.filter(item => item.section === 'Execution' || item.issue.includes('signing date'));
     
     // Calculate missing schedules using the same logic as schedule rendering
@@ -1520,11 +1747,24 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     console.log(`[PDF SCHEDULES MISSING] Total schedule references: ${scheduleReferences.size}, Missing schedules: ${schedulesMissing.length}`, schedulesMissing);
     
     // Check if any placeholders or missing items exist (including schedules)
+    // CRITICAL: Check for missing subjects in clauses before allowing PDF generation
+    const hasCriticalMissingSubjects = missing.some(item => 
+      item.issue && item.issue.includes('CRITICAL: Missing subject')
+    );
+    const hasIncompleteClause31 = missing.some(item => 
+      item.clauseNumber === 31 && item.issue && item.issue.includes('Clause 31 is incomplete')
+    );
+    
     const hasPlaceholders = missing.length > 0 || schedulesMissing.length > 0;
+    const hasCriticalIssues = hasCriticalMissingSubjects || hasIncompleteClause31;
+    
+    console.log(`[PDF VALIDATION] Missing items: ${missing.length}, Schedules missing: ${schedulesMissing.length}`);
+    console.log(`[PDF VALIDATION] Critical missing subjects: ${hasCriticalMissingSubjects}, Incomplete Clause 31: ${hasIncompleteClause31}`);
+    console.log(`[PDF VALIDATION] Has placeholders: ${hasPlaceholders}, Has critical issues: ${hasCriticalIssues}`);
     
     // Helper function to render validation errors report (will be called at the END)
     const renderValidationErrorsReport = () => {
-      if (!hasPlaceholders) return;
+      if (!hasPlaceholders && criticalBlanks.length === 0) return;
       
       // Add new page for validation report
       doc.addPage();
@@ -1539,12 +1779,25 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       yPos += 12; // Advance Y after title
       
       // Introduction
-      reportLine('This Will cannot be finalized. Complete all items below before signing.', {
-        fontSize: 12,
-        spacingAfter: 10
-      });
+      if (criticalBlanks.length > 0) {
+        doc.setTextColor(200, 0, 0); // Red
+        reportLine('⚠️ CRITICAL: This Will contains incomplete clauses and CANNOT be signed.', {
+          fontSize: 13,
+          bold: true,
+          spacingAfter: 8
+        });
+        reportLine('The following clauses have missing subjects/beneficiaries and must be completed:', {
+          fontSize: 11,
+          spacingAfter: 10
+        });
+      } else {
+        reportLine('This Will cannot be finalized. Complete all items below before signing.', {
+          fontSize: 12,
+          spacingAfter: 10
+        });
+      }
       
-      // Critical Blanks
+      // Critical Blanks (show first and prominently)
       if (criticalBlanks.length > 0) {
         yPos += 4; // Section spacing
         reportLine('Critical Blanks:', {
@@ -1681,6 +1934,32 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     // CRITICAL: Show EVERYTHING - do not skip clauses, render with [MISSING] placeholders
     // Note: scheduleReferences is already tracked during validation above
     
+    // Build schedule number mapping: old number -> legal number (Schedule 1, Schedule 2, etc.)
+    const scheduleNumberMap = new Map();
+    let legalScheduleIndex = 1;
+    
+    // Map Property Trust schedule
+    if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
+      const oldNumber = String(formValues.propertyTrustScheduleNumber).trim();
+      if (oldNumber) {
+        scheduleNumberMap.set(oldNumber, legalScheduleIndex);
+        console.log(`[PDF SCHEDULE MAP] Property Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
+        legalScheduleIndex++;
+      }
+    }
+    
+    // Map BPR Trust schedule
+    if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+      const oldNumber = String(formValues.bprTrustScheduleNumber).trim();
+      if (oldNumber && !scheduleNumberMap.has(oldNumber)) {
+        scheduleNumberMap.set(oldNumber, legalScheduleIndex);
+        console.log(`[PDF SCHEDULE MAP] BPR Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
+        legalScheduleIndex++;
+      }
+    }
+    
+    console.log(`[PDF SCHEDULE MAP] Total schedule mappings:`, Array.from(scheduleNumberMap.entries()));
+    
     // Render will clauses with hanging indent (number and text on same line)
     let clauseNumber = 1;
     willClauses.forEach((clause) => {
@@ -1692,6 +1971,31 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         // Replace common placeholder patterns with [MISSING] markers
         processedClauseText = processedClauseText.replace(/\btest\s+test\s+test/gi, '[MISSING: content]');
         processedClauseText = processedClauseText.replace(/\btest\s+test/gi, '[MISSING: content]');
+        
+        // CRITICAL: Replace schedule references with legal schedule numbers BEFORE other processing
+        processedClauseText = processedClauseText.replace(/Schedule\s+(\d+)/gi, (match, oldNum) => {
+          const legalNum = scheduleNumberMap.get(oldNum);
+          if (legalNum) {
+            console.log(`[PDF SCHEDULE MAP] Replacing "${match}" with "Schedule ${legalNum}" in clause ${clauseNumber}`);
+            return `Schedule ${legalNum}`;
+          }
+          // If not mapped, still add to references but use original number
+          scheduleReferences.add(`Schedule ${oldNum}`);
+          return match;
+        });
+        
+        // Detect any remaining schedule references (for unmapped schedules)
+        const scheduleMatch = processedClauseText.match(/Schedule\s+(\d+)/gi);
+        if (scheduleMatch) {
+          scheduleMatch.forEach(match => {
+            const scheduleNum = match.match(/\d+/);
+            if (scheduleNum) {
+              scheduleReferences.add(`Schedule ${scheduleNum[0]}`);
+            }
+          });
+        }
+        
+        // Replace bracket placeholders with [MISSING] markers
         processedClauseText = processedClauseText.replace(/\[.*?\]/g, (match) => {
           // Keep bracket placeholders but mark them as missing
           if (match.length > 2) {
@@ -1706,16 +2010,24 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         processedClauseText = processedClauseText.replace(/children\s+\]/g, 'children [MISSING: details]');
         processedClauseText = processedClauseText.replace(/\band\s+after\s+their\s+death\s+for\s*$/gi, 'and after their death for [MISSING: remainder beneficiary]');
         
-        // Detect schedule references
-        const scheduleMatch = processedClauseText.match(/Schedule\s+(\d+)/gi);
-        if (scheduleMatch) {
-          scheduleMatch.forEach(match => {
-            const scheduleNum = match.match(/\d+/);
-            if (scheduleNum) {
-              scheduleReferences.add(`Schedule ${scheduleNum[0]}`);
-            }
-          });
-        }
+        // CRITICAL: Detect missing subjects in common clause patterns
+        const missingSubjectPatterns = [
+          /\bmy\s+\[missing\s+person\]/gi,
+          /\bmy\s+\[missing\s+beneficiary\]/gi,
+          /\bfor\s+\[missing\s+person\]/gi,
+          /\bfor\s+\[missing\s+beneficiary\]/gi,
+          /\brelease\s+and\s+forgive\s+my\s+\[missing/gi,
+          /\bno\s+provision\s+.*\s+for\s+my\s+\[missing/gi,
+          /\bcare\s+for\s+.*\s+my\s+\[missing/gi,
+          /\bunable\s+.*\s+my\s+\[missing/gi,
+          /\bupon\s+trust\s+for\s+\[missing/gi,
+        ];
+        
+        missingSubjectPatterns.forEach(pattern => {
+          if (pattern.test(processedClauseText)) {
+            console.warn(`[PDF VALIDATION] ⚠️ Clause ${clauseNumber} contains missing subject: "${processedClauseText.substring(0, 100)}"`);
+          }
+        });
       }
       
       // Apply final standardization and sanitization
@@ -1724,6 +2036,45 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       
       // Clean whitespace for hanging indent (remove newlines, normalize spaces)
       processedClauseText = String(processedClauseText).replace(/\s*\n\s*/g, ' ').trim();
+      
+      // CRITICAL: Detect incomplete clauses that should be blocked
+      const hasMissingSubject = 
+        // Explicit [missing person] markers
+        /\[missing\s+(?:person|beneficiary)\]/i.test(processedClauseText) ||
+        /\bmy\s+\[missing/i.test(processedClauseText) ||
+        /\bfor\s+\[missing/i.test(processedClauseText) ||
+        // Patterns indicating empty interpolation (missing name after "my " or "for ")
+        /\brelease\s+and\s+forgive\s+my\s+(?:from|\.|$)/i.test(processedClauseText) ||
+        /\bno\s+provision\s+.*\s+for\s+my\s+\./i.test(processedClauseText) ||
+        /\bcare\s+for\s+.*\s+my\s+\./i.test(processedClauseText) ||
+        /\bunable\s+.*\s+my\s+\./i.test(processedClauseText) ||
+        /\bupon\s+trust\s+for\s+\./i.test(processedClauseText) ||
+        // "my " followed immediately by punctuation or "from" (empty name)
+        /\bmy\s+[\.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(processedClauseText) ||
+        // "for " followed immediately by punctuation (empty beneficiary)  
+        /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(processedClauseText) ||
+        // Double space after "my " indicating missing name
+        /\brelease\s+and\s+forgive\s+my\s{2,}from/i.test(processedClauseText) ||
+        /\bno\s+provision\s+.*\s+for\s+my\s{2,}\./i.test(processedClauseText);
+      
+      const isIncompleteCondition = /^\(.*\)\s*$/.test(processedClauseText.trim()) && 
+                                     !processedClauseText.toLowerCase().includes('i give') &&
+                                     !processedClauseText.toLowerCase().includes('i appoint') &&
+                                     !processedClauseText.toLowerCase().includes('i direct') &&
+                                     !processedClauseText.toLowerCase().includes('i wish');
+      
+      // Block clauses with missing subjects or incomplete conditions
+      if (hasMissingSubject) {
+        console.error(`[PDF VALIDATION] ❌ BLOCKING Clause ${clauseNumber} - contains missing subject: "${processedClauseText.substring(0, 100)}"`);
+        // Don't render this clause - it's incomplete
+        return; // Skip this clause entirely
+      }
+      
+      if (isIncompleteCondition && clauseNumber === 31) {
+        console.error(`[PDF VALIDATION] ❌ BLOCKING Clause 31 - incomplete condition without actual gift: "${processedClauseText}"`);
+        // Don't render incomplete Clause 31
+        return; // Skip this clause entirely
+      }
       
       // Render clause even if empty or incomplete (show [MISSING] markers)
       if (!processedClauseText || processedClauseText.trim() === '') {
@@ -1784,7 +2135,45 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       const scheduleArray = Array.from(scheduleReferences);
       console.log(`[PDF SCHEDULE] Processing ${scheduleArray.length} schedule(s):`, scheduleArray);
       
-      scheduleArray.forEach((scheduleName, index) => {
+      // CRITICAL: Filter out schedules that don't have content BEFORE rendering
+      const schedulesWithContent = scheduleArray.filter(scheduleName => {
+        const scheduleNumMatch = scheduleName.match(/\d+/);
+        const scheduleNumber = scheduleNumMatch ? scheduleNumMatch[0] : null;
+        
+        if (!scheduleNumber) return false;
+        
+        // Check Property Trust schedule
+        const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
+          String(formValues.propertyTrustScheduleNumber).trim() : '';
+        if (propertyTrustScheduleNum === scheduleNumber) {
+          const hasDetails = formValues.propertyTrustDetails && String(formValues.propertyTrustDetails).trim() !== '';
+          const hasTerms = formValues.propertyTrustTerms && String(formValues.propertyTrustTerms).trim() !== '';
+          const hasContent = hasDetails || hasTerms;
+          console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Property Trust) - hasContent: ${hasContent}`);
+          return hasContent;
+        }
+        
+        // Check BPR Trust schedule
+        const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
+          String(formValues.bprTrustScheduleNumber).trim() : '';
+        if (bprTrustScheduleNum === scheduleNumber) {
+          const hasDetails = formValues.bprTrustDetails && String(formValues.bprTrustDetails).trim() !== '';
+          const hasTerms = formValues.bprTrustTerms && String(formValues.bprTrustTerms).trim() !== '';
+          const hasContent = hasDetails || hasTerms;
+          console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (BPR Trust) - hasContent: ${hasContent}`);
+          return hasContent;
+        }
+        
+        // For other schedules, check generic fields
+        const scheduleKey = scheduleName.toLowerCase().replace(/\s+/g, '');
+        const hasGenericContent = formValues[scheduleKey] || formValues[`${scheduleKey}Data`] || formValues[`${scheduleKey}Details`];
+        console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Generic) - hasContent: ${!!hasGenericContent}`);
+        return !!hasGenericContent;
+      });
+      
+      console.log(`[PDF SCHEDULE] Filtered schedules: ${schedulesWithContent.length} with content out of ${scheduleArray.length} total`);
+      
+      schedulesWithContent.forEach((scheduleName, index) => {
         console.log(`[PDF SCHEDULE] ========== PROCESSING SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
         console.log(`[PDF SCHEDULE] Original scheduleName from references: "${scheduleName}"`);
         console.log(`[PDF SCHEDULE] Current yPos: ${yPos.toFixed(1)}`);
@@ -1930,6 +2319,16 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
           scheduleData = formValues[scheduleName.toLowerCase().replace(/\s+/g, '')] || 
                         formValues[`${scheduleName}Data`] ||
                         formValues[`${scheduleName}Details`];
+        }
+        
+        // CRITICAL: Skip rendering schedule if no content exists
+        if (!scheduleData || (typeof scheduleData === 'string' && !scheduleData.trim())) {
+          console.log(`[PDF SCHEDULE] ❌ SKIPPING ${legalScheduleName} - no content found`);
+          console.log(`[PDF SCHEDULE] scheduleName: "${scheduleName}", scheduleNumber: "${scheduleNumber}"`);
+          console.log(`[PDF SCHEDULE] Property Trust schedule: ${formValues.propertyTrustScheduleNumber}, BPR Trust schedule: ${formValues.bprTrustScheduleNumber}`);
+          // Don't render this schedule - skip to next one
+          scheduleIndex++;
+          return; // Skip this schedule entirely
         }
         
         if (scheduleData && typeof scheduleData === 'string' && scheduleData.trim()) {
@@ -2227,7 +2626,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       doc,
       missingItems: missing,
       schedulesMissing: Array.from(schedulesMissing),
-      hasPlaceholders: hasPlaceholders
+      hasPlaceholders: hasPlaceholders,
+      criticalIssues: criticalBlanks,
+      hasCriticalIssues: criticalBlanks.length > 0
     };
   } catch (error) {
     console.error('Error generating PDF:', error);

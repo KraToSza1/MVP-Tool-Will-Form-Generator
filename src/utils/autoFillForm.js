@@ -387,13 +387,41 @@ export const generateDummyFormData = (formData) => {
                   dummyData[subField.id] = value;
                   console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
                 } else if (subField.id.includes('petCarerData')) {
-                  value = 'Charlie Pet Carer';
+                  // Pet carer data must be an array of objects
+                  value = [{
+                    title: 'Mr',
+                    firstName: 'Charlie',
+                    lastName: 'Pet Carer',
+                    relationship: 'Friend',
+                    address1: '789 Pet Street',
+                    address2: 'Animal District',
+                    address3: 'London',
+                    postcode: 'SW1A 2BB',
+                    mobile: '07123456789',
+                    email: 'charlie.petcarer@example.com',
+                    dateOfBirth: '1985-05-15',
+                    gender: 'Male'
+                  }];
                   dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
+                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = array with ${value.length} pet carer(s)`);
                 } else if (subField.id.includes('substitutePetCarerData')) {
-                  value = 'Diana Pet Helper';
+                  // Substitute pet carer data must be an array of objects
+                  value = [{
+                    title: 'Mrs',
+                    firstName: 'Diana',
+                    lastName: 'Pet Helper',
+                    relationship: 'Sister',
+                    address1: '321 Helper Lane',
+                    address2: 'Care District',
+                    address3: 'London',
+                    postcode: 'SW1A 3CC',
+                    mobile: '07987654321',
+                    email: 'diana.pethelper@example.com',
+                    dateOfBirth: '1988-08-20',
+                    gender: 'Female'
+                  }];
                   dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
+                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = array with ${value.length} substitute pet carer(s)`);
                 } else if (subField.id.includes('excludedPersonData')) {
                   value = 'Excluded Person Name';
                   dummyData[subField.id] = value;
@@ -439,6 +467,7 @@ export const generateDummyFormData = (formData) => {
   // These are critical fields that often show "test test test" placeholders
   const specialFields = {
     // Person data fields (these show as "test test" in the UI)
+    // Note: petCarerData and substitutePetCarerData must be arrays of objects
     'guardianData': 'Sarah Johnson',
     'substituteGuardianData': 'Michael Brown; Emma Williams',
     'executorData': 'David Thompson',
@@ -447,8 +476,34 @@ export const generateDummyFormData = (formData) => {
     'substituteTrusteeData': 'Patricia Martinez',
     'witness1Data': 'Alice Witness',
     'witness2Data': 'Bob Witness',
-    'petCarerData': 'Charlie Pet Carer',
-    'substitutePetCarerData': 'Diana Pet Helper',
+    'petCarerData': [{
+      title: 'Mr',
+      firstName: 'Charlie',
+      lastName: 'Pet Carer',
+      relationship: 'Friend',
+      address1: '789 Pet Street',
+      address2: 'Animal District',
+      address3: 'London',
+      postcode: 'SW1A 2BB',
+      mobile: '07123456789',
+      email: 'charlie.petcarer@example.com',
+      dateOfBirth: '1985-05-15',
+      gender: 'Male'
+    }],
+    'substitutePetCarerData': [{
+      title: 'Mrs',
+      firstName: 'Diana',
+      lastName: 'Pet Helper',
+      relationship: 'Sister',
+      address1: '321 Helper Lane',
+      address2: 'Care District',
+      address3: 'London',
+      postcode: 'SW1A 3CC',
+      mobile: '07987654321',
+      email: 'diana.pethelper@example.com',
+      dateOfBirth: '1988-08-20',
+      gender: 'Female'
+    }],
     'excludedPersonData': 'Excluded Person Name',
     'digitalExecutorData': 'Digital Executor Name',
     'separateTrusteeData': 'Separate Trustee Name',
@@ -487,6 +542,27 @@ export const generateDummyFormData = (formData) => {
     // Ensure Property Trust is enabled and has schedule content (to test schedule validation)
     'includePropertyTrust': 'Yes',
     'includeBPRTrust': 'Yes',
+    
+    // CRITICAL: Ensure pet provisions are enabled (so pet care clauses work)
+    'provisionsForPets': 'Yes',
+    'petCarerGift': '5000',
+    'amountToLeaveForPetCare': '5000',
+    
+    // CRITICAL: Ensure charity gift is enabled (so IHT clause can work if selected)
+    'give10PercentToCharity': 'Yes',
+    'charityBenefitDetails': 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)',
+    'minimumCharityAmount': 'Yes',
+    'minimumCharityAmountValue': '100000',
+    
+    // CRITICAL: Ensure residuary estate is properly filled
+    'howResidueDistributed': 'AsShares',
+    'residualBeneficiariesDetails': 'I give 50% of my residuary estate to my wife Jane Smith, 25% to my son John Smith, and 25% to my daughter Sarah Smith.',
+    
+    // CRITICAL: Ensure debt forgiveness has data if enabled
+    'relieveDebts': 'Yes',
+    
+    // CRITICAL: Ensure excluded persons have data if enabled
+    'deliberatelyExcludingAnyone': 'Yes',
     
     // FLIT (Flexible Life Interest Trust) fields
     'lifeTenantDetails': 'Jane Smith',
