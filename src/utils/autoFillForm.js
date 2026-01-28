@@ -93,8 +93,19 @@ export const generateDummyFormData = (formData) => {
 
       switch (field.type) {
         case 'radio':
-          value = getYesOption(field) || getFirstOption(field);
-          console.log(`[AUTOFILL]     ✅ Radio field - Selected: "${value}"`);
+          // Special handling for organ donation preference - select "YesButOnly" to test organ donation clause
+          if (field.id === 'organDonationPreference') {
+            const yesButOnlyOption = field.options?.find(opt => opt.value === 'YesButOnly');
+            if (yesButOnlyOption) {
+              value = 'YesButOnly';
+              console.log(`[AUTOFILL]     🫀 Organ donation preference - Selected: "YesButOnly" (to test organ donation clause)`);
+            } else {
+              value = getYesOption(field) || getFirstOption(field);
+            }
+          } else {
+            value = getYesOption(field) || getFirstOption(field);
+            console.log(`[AUTOFILL]     ✅ Radio field - Selected: "${value}"`);
+          }
           break;
 
         case 'text':
@@ -212,6 +223,12 @@ export const generateDummyFormData = (formData) => {
             value = 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464)';
           } else if (field.id.includes('debtor') || field.id.includes('Debtor')) {
             value = 'John Debtor Smith';
+          } else if (field.id === 'specificOrgansToDonate' || field.id.includes('specificOrgansToDonate')) {
+            value = 'eyes, heart, and brain';
+            console.log(`[AUTOFILL]     🫀 Organ donation field - Value: "${value}"`);
+          } else if (field.id === 'specificOrgansToExclude' || field.id.includes('specificOrgansToExclude')) {
+            value = 'eyes';
+            console.log(`[AUTOFILL]     🫀 Organ exclusion field - Value: "${value}"`);
           } else {
             // For any other text field, use a more descriptive value instead of "Dummy [label]"
             const fieldLabel = (field.label || field.id).toLowerCase();
@@ -308,6 +325,21 @@ export const generateDummyFormData = (formData) => {
             value = true;
           }
           console.log(`[AUTOFILL]     ✅ Checkbox field - Value:`, value);
+          break;
+
+        case 'checkboxGroup':
+          // For checkbox groups (like organPurposeGroup), select all options by ID
+          if (field.id === 'organPurposeGroup') {
+            // Select both purposes for comprehensive testing
+            value = field.options ? field.options.map(opt => opt.id || opt.value).filter(Boolean) : [];
+            console.log(`[AUTOFILL]     ✅ Organ purpose checkbox group - Selected:`, value);
+          } else if (field.options) {
+            // For other checkbox groups, select all options
+            value = field.options.map(opt => opt.id || opt.value).filter(Boolean);
+            console.log(`[AUTOFILL]     ✅ Checkbox group - Selected:`, value);
+          } else {
+            value = [];
+          }
           break;
 
         case 'select':
@@ -445,6 +477,16 @@ export const generateDummyFormData = (formData) => {
     // Schedule numbers (these need to be proper numbers, not "test")
     'propertyTrustScheduleNumber': String(Math.floor(Math.random() * 9000000) + 1000000),
     'bprTrustScheduleNumber': String(Math.floor(Math.random() * 9000000) + 1000000),
+    
+    // Organ donation fields (to test organ donation clause rendering)
+    'organDonationPreference': 'YesButOnly', // Select "Yes, but only..." to test specific organs
+    'specificOrgansToDonate': 'eyes, heart, and brain', // Specific organs for testing (shown when YesButOnly)
+    'specificOrgansToExclude': 'eyes', // Excluded organs for "YesAllExcept" option (shown when YesAllExcept)
+    'organPurposeGroup': ['purposeMedicalResearch', 'purposeTherapeutic'], // Select both purposes for testing
+    
+    // Ensure Property Trust is enabled and has schedule content (to test schedule validation)
+    'includePropertyTrust': 'Yes',
+    'includeBPRTrust': 'Yes',
     
     // FLIT (Flexible Life Interest Trust) fields
     'lifeTenantDetails': 'Jane Smith',

@@ -113,6 +113,107 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     return () => ro.disconnect();
   }, [isSignatureField]);
 
+  // Load existing signature when component mounts or formValues change
+  useEffect(() => {
+    if (!isSignatureField) return;
+    const existingSignature = formValues[field.id];
+    
+    let retryCount = 0;
+    const maxRetries = 10;
+    
+    // Wait for canvas to be initialized
+    const loadSignature = () => {
+      const canvas = sigCanvasRef.current[field.id];
+      if (!canvas) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          // Retry if canvas not ready yet
+          setTimeout(loadSignature, 100);
+          return;
+        } else {
+          console.warn(`[SIGNATURE LOAD] Field "${field.id}" - Canvas not found after ${maxRetries} retries`);
+          return;
+        }
+      }
+      
+      console.log(`[SIGNATURE LOAD] Field "${field.id}" - Canvas found, checking for existing signature`);
+      
+      if (existingSignature && typeof existingSignature === 'string' && existingSignature.startsWith('data:image')) {
+        console.log(`[SIGNATURE LOAD] Field "${field.id}" - Loading existing signature (length: ${existingSignature.length})`);
+        
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous'; // Handle CORS if needed
+          
+          img.onload = () => {
+            try {
+              const canvasElement = canvas.getCanvas();
+              if (canvasElement) {
+                const ctx = canvasElement.getContext('2d');
+                if (ctx) {
+                  // Clear canvas first
+                  ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                  
+                  // Calculate scaling to fit signature in canvas while maintaining aspect ratio
+                  const imgAspect = img.width / img.height;
+                  const canvasAspect = canvasElement.width / canvasElement.height;
+                  
+                  let drawWidth, drawHeight, drawX, drawY;
+                  
+                  if (imgAspect > canvasAspect) {
+                    // Image is wider - fit to width
+                    drawWidth = canvasElement.width;
+                    drawHeight = canvasElement.width / imgAspect;
+                    drawX = 0;
+                    drawY = (canvasElement.height - drawHeight) / 2;
+                  } else {
+                    // Image is taller - fit to height
+                    drawHeight = canvasElement.height;
+                    drawWidth = canvasElement.height * imgAspect;
+                    drawX = (canvasElement.width - drawWidth) / 2;
+                    drawY = 0;
+                  }
+                  
+                  // Draw the existing signature
+                  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+                  console.log(`[SIGNATURE LOAD] ✅ Successfully loaded existing signature for field "${field.id}"`);
+                } else {
+                  console.warn(`[SIGNATURE LOAD] Could not get 2D context for field "${field.id}"`);
+                }
+              } else {
+                console.warn(`[SIGNATURE LOAD] Could not get canvas element for field "${field.id}"`);
+              }
+            } catch (drawError) {
+              console.warn(`[SIGNATURE LOAD] Failed to draw existing signature for field "${field.id}":`, drawError);
+            }
+          };
+          
+          img.onerror = (error) => {
+            console.warn(`[SIGNATURE LOAD] Failed to load signature image for field "${field.id}":`, error);
+            console.warn(`[SIGNATURE LOAD] Signature data preview: ${existingSignature.substring(0, 100)}...`);
+          };
+          
+          img.src = existingSignature;
+        } catch (error) {
+          console.warn(`[SIGNATURE LOAD] Error loading signature for field "${field.id}":`, error);
+        }
+      } else if (!existingSignature) {
+        // Clear canvas if no signature exists
+        console.log(`[SIGNATURE LOAD] Field "${field.id}" - No existing signature, clearing canvas`);
+        try {
+          canvas.clear();
+        } catch (error) {
+          console.warn(`[SIGNATURE LOAD] Error clearing canvas for field "${field.id}":`, error);
+        }
+      } else {
+        console.log(`[SIGNATURE LOAD] Field "${field.id}" - Invalid signature format:`, typeof existingSignature, existingSignature?.substring?.(0, 50));
+      }
+    };
+    
+    // Initial delay to ensure canvas is mounted
+    setTimeout(loadSignature, 200);
+  }, [isSignatureField, field.id, formValues[field.id]]);
+
   useEffect(() => {
     if (field?.type !== 'date') return;
     const currentValue = formValues[field.id] || '';
@@ -521,13 +622,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
-      <div className="mb-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         {field.infoText && (
           <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
@@ -542,7 +643,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           <input
             type={field.type === 'currency' ? 'text' : field.type}
             placeholder={placeholder}
-            className={`w-full border rounded-xl pl-10 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10 ${
+            className={`w-full border rounded-xl pl-10 pr-10 py-2.5 sm:py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10 min-h-[44px] ${
               validationErrors[field.id] 
                 ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
                 : formValues[field.id] && !validationErrors[field.id] && field.required
@@ -638,13 +739,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     };
     
     return (
-      <div className="mb-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         {field.infoText && (
           <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
@@ -707,13 +808,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
-      <div className="mb-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         {field.infoText && (
           <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
@@ -822,13 +923,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
-      <div className="mb-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         {field.infoText && (
           <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
@@ -1061,29 +1162,82 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const canvasHeight = 120;
     
     return (
-      <div className="my-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="my-4 sm:my-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         <div
           ref={sigContainerRef}
-          className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300"
+          className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300 touch-none"
         >
           <Suspense
             fallback={
-              <div className="w-full h-28 flex items-center justify-center text-sm text-gray-500 bg-gray-50">
+              <div className="w-full h-28 sm:h-32 flex items-center justify-center text-sm text-gray-500 bg-gray-50">
                 Loading signature pad…
               </div>
             }
           >
             <LazySignatureCanvas
               penColor="black"
-              canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28' }}
-              ref={(ref) => (sigCanvasRef.current[field.id] = ref)}
+              canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28 sm:h-32 touch-none' }}
+              ref={(ref) => {
+                if (ref) {
+                  sigCanvasRef.current[field.id] = ref;
+                  console.log(`[SIGNATURE CANVAS] Field "${field.id}" - Canvas ref set successfully`);
+                  
+                  // Try to load existing signature immediately if available
+                  const existingSignature = formValues[field.id];
+                  if (existingSignature && typeof existingSignature === 'string' && existingSignature.startsWith('data:image')) {
+                    setTimeout(() => {
+                      try {
+                        const img = new Image();
+                        img.onload = () => {
+                          try {
+                            const canvasElement = ref.getCanvas();
+                            if (canvasElement) {
+                              const ctx = canvasElement.getContext('2d');
+                              if (ctx) {
+                                ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                                const imgAspect = img.width / img.height;
+                                const canvasAspect = canvasElement.width / canvasElement.height;
+                                
+                                let drawWidth, drawHeight, drawX, drawY;
+                                if (imgAspect > canvasAspect) {
+                                  drawWidth = canvasElement.width;
+                                  drawHeight = canvasElement.width / imgAspect;
+                                  drawX = 0;
+                                  drawY = (canvasElement.height - drawHeight) / 2;
+                                } else {
+                                  drawHeight = canvasElement.height;
+                                  drawWidth = canvasElement.height * imgAspect;
+                                  drawX = (canvasElement.width - drawWidth) / 2;
+                                  drawY = 0;
+                                }
+                                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+                                console.log(`[SIGNATURE CANVAS] ✅ Loaded existing signature immediately for field "${field.id}"`);
+                              }
+                            }
+                          } catch (error) {
+                            console.warn(`[SIGNATURE CANVAS] Error loading signature on ref set for field "${field.id}":`, error);
+                          }
+                        };
+                        img.onerror = () => {
+                          console.warn(`[SIGNATURE CANVAS] Failed to load signature image on ref set for field "${field.id}"`);
+                        };
+                        img.src = existingSignature;
+                      } catch (error) {
+                        console.warn(`[SIGNATURE CANVAS] Error setting up signature load for field "${field.id}":`, error);
+                      }
+                    }, 100);
+                  }
+                } else {
+                  console.warn(`[SIGNATURE CANVAS] Field "${field.id}" - Canvas ref is null`);
+                }
+              }}
               onEnd={() => {
                 console.log(`[SIGNATURE] Field "${field.id}" (${field.label}) - Signature drawing completed`);
                 
@@ -1159,7 +1313,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               [field.id]: '',
             }));
           }}
-          className="mt-2 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-300 font-medium"
+          className="mt-2 px-4 py-2.5 sm:py-2 text-sm sm:text-base text-red-600 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded-lg transition-all duration-300 font-medium min-h-[44px] touch-manipulation w-full sm:w-auto"
         >
           Clear Signature
         </button>
@@ -1190,13 +1344,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const FieldIcon = getFieldIcon(field.type, field.id);
 
     return (
-      <div className="mb-4 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600">
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
             {FieldIcon}
           </div>
-          <span>{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1" title="Required">*</span>}
+          <span className="break-words">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
         {field.infoText && (
           <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">

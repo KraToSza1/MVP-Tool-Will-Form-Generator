@@ -45,7 +45,7 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
               console.log('[SIDEBAR] Opening mobile sidebar menu');
               setIsOpen(true);
             }}
-            className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="inline-flex items-center justify-center h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"
             aria-label="Open sections"
           >
             <Menu size={18} />
@@ -76,7 +76,7 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
           />
 
           <aside
-            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white border-r border-gray-200 shadow-2xl p-4 overflow-y-auto"
+            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-white border-r border-gray-200 shadow-2xl p-4 sm:p-5 overflow-y-auto"
             aria-label="Sections"
           >
             <div className="flex items-center justify-between mb-4">
@@ -89,7 +89,7 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
                   console.log('[SIDEBAR] Closing mobile sidebar (X button click)');
                   setIsOpen(false);
                 }}
-                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="inline-flex items-center justify-center h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"
                 aria-label="Close"
               >
                 <X size={18} />
@@ -106,12 +106,12 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
                     <button
                       type="button"
                       onClick={() => goToSection(idx)}
-                      className={`w-full text-left px-4 py-3 rounded-xl transition-colors duration-200 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+                      className={`w-full text-left px-4 py-3.5 sm:py-3 rounded-xl transition-colors duration-200 font-medium min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
                         isActive
                           ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
                           : isCompleted
-                          ? 'text-gray-800 hover:bg-indigo-50 border border-transparent hover:border-indigo-100'
-                          : 'text-gray-700 hover:bg-gray-50 border border-transparent'
+                          ? 'text-gray-800 hover:bg-indigo-50 active:bg-indigo-100 border border-transparent hover:border-indigo-100'
+                          : 'text-gray-700 hover:bg-gray-50 active:bg-gray-100 border border-transparent'
                       }`}
                       aria-current={isActive ? 'page' : undefined}
                     >

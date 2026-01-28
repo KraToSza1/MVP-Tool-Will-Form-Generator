@@ -17,18 +17,18 @@ export default function App() {
       {/* Main Content Area */}
       {/* --------------------------- */}
       <main className="flex-1 w-full">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-10">
           {/* --------------------------- */}
           {/* Header Section */}
           {/* --------------------------- */}
-          <header className="relative border shadow-md px-4 sm:px-6 py-4 rounded-xl mb-6 bg-white border-gray-200">
+          <header className="relative border shadow-md px-4 sm:px-5 md:px-6 py-3 sm:py-4 rounded-lg sm:rounded-xl mb-4 sm:mb-6 bg-white border-gray-200">
             <div className="text-center">
               <img
                 src={logo}
                 alt="Aristone Logo"
-                className="h-10 sm:h-12 mx-auto mb-2"
+                className="h-8 sm:h-10 md:h-12 mx-auto mb-2"
               />
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Will Tool MVP</h1>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Will Tool</h1>
             </div>
           </header>
 

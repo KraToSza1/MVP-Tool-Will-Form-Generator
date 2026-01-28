@@ -503,6 +503,39 @@ const generateMissingDataReport = (formValues, willClauses, criticalIssues = [])
     }
   }
   
+  // Property Trust Schedule validation - catch missing schedule content before PDF generation
+  if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
+    const scheduleNumber = String(formValues.propertyTrustScheduleNumber).trim();
+    if (scheduleNumber && scheduleNumber !== '') {
+      // Schedule number exists, check if content is missing
+      const hasDetails = formValues.propertyTrustDetails && String(formValues.propertyTrustDetails).trim() !== '';
+      const hasTerms = formValues.propertyTrustTerms && String(formValues.propertyTrustTerms).trim() !== '';
+      
+      if (!hasDetails || !hasTerms) {
+        const missingParts = [];
+        if (!hasDetails) missingParts.push('Property Details');
+        if (!hasTerms) missingParts.push('Property Trust Terms');
+        missing.push(`PROPERTY TRUST: Missing Schedule content in Property Trust section. Schedule ${scheduleNumber} is referenced but ${missingParts.join(' and ')} ${missingParts.length === 1 ? 'is' : 'are'} missing.`);
+      }
+    }
+  }
+  
+  // Business Property Relief Trust Schedule validation
+  if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+    const scheduleNumber = String(formValues.bprTrustScheduleNumber).trim();
+    if (scheduleNumber && scheduleNumber !== '') {
+      const hasDetails = formValues.bprTrustDetails && String(formValues.bprTrustDetails).trim() !== '';
+      const hasTerms = formValues.bprTrustTerms && String(formValues.bprTrustTerms).trim() !== '';
+      
+      if (!hasDetails || !hasTerms) {
+        const missingParts = [];
+        if (!hasDetails) missingParts.push('Business Property Details');
+        if (!hasTerms) missingParts.push('Business Property Relief Trust Terms');
+        missing.push(`BPR TRUST: Missing Schedule content in Business Interests section. Schedule ${scheduleNumber} is referenced but ${missingParts.join(' and ')} ${missingParts.length === 1 ? 'is' : 'are'} missing.`);
+      }
+    }
+  }
+  
   return missing;
 };
 
@@ -595,6 +628,27 @@ const interpolateText = (text, values) => {
       return formatCurrencyValue(rawValue);
     }
 
+    // Handle 'value' subField - special handling for organ donation fields
+    if (subField === 'value') {
+      // Special handling for organ donation fields - if empty, return appropriate fallback
+      if (sectionId === 'specificOrgansToDonate' || sectionId === 'specificOrgansToExclude') {
+        const organValue = values[sectionId] || values[fullKey] || '';
+        if (organValue && String(organValue).trim() !== '') {
+          return String(organValue).trim();
+        }
+        // If organs are empty but purposes are selected, use generic phrase
+        // This prevents broken clauses like "I wish to donate only the following parts of my body:  for..."
+        return 'organs as appropriate';
+      }
+      
+      // Try direct field lookup
+      const directValue = values[sectionId] || values[fullKey];
+      if (directValue != null && directValue !== '') {
+        return String(directValue);
+      }
+      return '';
+    }
+
     // Handle special case: selectedPurposes for organPurposeGroup
     if (subField === 'selectedPurposes' && sectionId === 'organPurposeGroup') {
       const selectedPurposes = values[sectionId] || [];
@@ -616,7 +670,8 @@ const interpolateText = (text, values) => {
           }
         }
       }
-      return '';
+      // Default to "any lawful purpose" when no purposes are selected (as per UI hint)
+      return 'any lawful purpose';
     }
 
     // Handle special Aristone professional selections with auto-population
@@ -1399,10 +1454,70 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     const criticalBlanks = missing.filter(item => item.issue.includes('blank') || item.issue.includes('Empty') || item.issue.includes('incomplete'));
     const placeholders = missing.filter(item => item.issue.includes('Placeholder') || item.snippet.includes('test'));
     const executionRequirements = missing.filter(item => item.section === 'Execution' || item.issue.includes('signing date'));
-    const schedulesMissing = Array.from(scheduleReferences).filter(schedule => {
-      const scheduleKey = schedule.toLowerCase().replace(/\s+/g, '');
-      return !formValues[scheduleKey] && !formValues[`${scheduleKey}Data`] && !formValues[`${scheduleKey}Details`];
+    
+    // Calculate missing schedules using the same logic as schedule rendering
+    // This ensures Property Trust and BPR Trust schedules are correctly identified
+    const schedulesMissing = Array.from(scheduleReferences).filter(scheduleName => {
+      // Extract schedule number from scheduleName (e.g., "Schedule 3680359" -> "3680359")
+      const scheduleNumMatch = scheduleName.match(/\d+/);
+      const scheduleNumber = scheduleNumMatch ? scheduleNumMatch[0] : null;
+      
+      console.log(`[PDF SCHEDULES MISSING] Checking ${scheduleName}, extracted number: ${scheduleNumber}`);
+      
+      if (!scheduleNumber) {
+        // Can't identify schedule, consider it missing
+        console.log(`[PDF SCHEDULES MISSING] ❌ ${scheduleName} - no schedule number found, marking as missing`);
+        return true;
+      }
+      
+      // Check if this schedule number matches Property Trust schedule
+      const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
+        String(formValues.propertyTrustScheduleNumber).trim() : '';
+      
+      console.log(`[PDF SCHEDULES MISSING] Comparing "${propertyTrustScheduleNum}" === "${scheduleNumber}" for Property Trust`);
+      
+      if (propertyTrustScheduleNum === scheduleNumber) {
+        // This is a Property Trust schedule - check if content exists
+        const details = formValues.propertyTrustDetails ? 
+          String(formValues.propertyTrustDetails).trim() : '';
+        const terms = formValues.propertyTrustTerms ? 
+          String(formValues.propertyTrustTerms).trim() : '';
+        
+        const isMissing = !details && !terms;
+        console.log(`[PDF SCHEDULES MISSING] Property Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
+        
+        // Schedule is missing if both details and terms are empty
+        return isMissing;
+      }
+      
+      // Check if this schedule number matches BPR Trust schedule
+      const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
+        String(formValues.bprTrustScheduleNumber).trim() : '';
+      
+      console.log(`[PDF SCHEDULES MISSING] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}" for BPR Trust`);
+      
+      if (bprTrustScheduleNum === scheduleNumber) {
+        // This is a BPR Trust schedule - check if content exists
+        const details = formValues.bprTrustDetails ? 
+          String(formValues.bprTrustDetails).trim() : '';
+        const terms = formValues.bprTrustTerms ? 
+          String(formValues.bprTrustTerms).trim() : '';
+        
+        const isMissing = !details && !terms;
+        console.log(`[PDF SCHEDULES MISSING] BPR Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
+        
+        // Schedule is missing if both details and terms are empty
+        return isMissing;
+      }
+      
+      // For other schedule types, use generic lookup (fallback)
+      const scheduleKey = scheduleName.toLowerCase().replace(/\s+/g, '');
+      const hasGenericContent = formValues[scheduleKey] || formValues[`${scheduleKey}Data`] || formValues[`${scheduleKey}Details`];
+      console.log(`[PDF SCHEDULES MISSING] Generic schedule ${scheduleName} - hasContent: ${!!hasGenericContent}, isMissing: ${!hasGenericContent}`);
+      return !hasGenericContent;
     });
+    
+    console.log(`[PDF SCHEDULES MISSING] Total schedule references: ${scheduleReferences.size}, Missing schedules: ${schedulesMissing.length}`, schedulesMissing);
     
     // Check if any placeholders or missing items exist (including schedules)
     const hasPlaceholders = missing.length > 0 || schedulesMissing.length > 0;
@@ -1655,51 +1770,231 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       }
     });
     
-    // Add schedule pages if referenced
+    // Add schedules after the last clause (on same page if space allows, otherwise new page)
+    // Use sequential legal naming (Schedule 1, Schedule 2, etc.) instead of random numbers
+    console.log(`[PDF SCHEDULE] ========== STARTING SCHEDULE RENDERING ==========`);
+    console.log(`[PDF SCHEDULE] scheduleReferences.size: ${scheduleReferences.size}`);
+    console.log(`[PDF SCHEDULE] scheduleReferences contents:`, Array.from(scheduleReferences));
+    console.log(`[PDF SCHEDULE] Current yPos after last clause: ${yPos.toFixed(1)}`);
+    console.log(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
+    console.log(`[PDF SCHEDULE] Available space on current page: ${(pageHeight - margin - yPos).toFixed(1)} units`);
+    
     if (scheduleReferences.size > 0) {
-      scheduleReferences.forEach(scheduleName => {
-        doc.addPage();
-        yPos = margin;
+      let scheduleIndex = 1; // Start with Schedule 1 for legal numbering
+      const scheduleArray = Array.from(scheduleReferences);
+      console.log(`[PDF SCHEDULE] Processing ${scheduleArray.length} schedule(s):`, scheduleArray);
+      
+      scheduleArray.forEach((scheduleName, index) => {
+        console.log(`[PDF SCHEDULE] ========== PROCESSING SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
+        console.log(`[PDF SCHEDULE] Original scheduleName from references: "${scheduleName}"`);
+        console.log(`[PDF SCHEDULE] Current yPos: ${yPos.toFixed(1)}`);
+        console.log(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
+        
+        // Check if we need a new page - be lenient: only add new page if we're very close to bottom
+        // This allows schedule to appear on same page as last clause whenever possible
+        // We only need space for the heading initially - content can flow to next page if needed
+        const headingHeight = 30; // Space for "Schedule X" heading plus spacing
+        const availableSpace = pageHeight - margin - yPos;
+        console.log(`[PDF SCHEDULE] Available space calculation: pageHeight (${pageHeight}) - margin (${margin}) - yPos (${yPos.toFixed(1)}) = ${availableSpace.toFixed(1)}`);
+        console.log(`[PDF SCHEDULE] Threshold check: availableSpace (${availableSpace.toFixed(1)}) < 40? ${availableSpace < 40}`);
+        
+        // Only force new page if we're within 40 units of the bottom (very tight)
+        // Otherwise, render on same page and let content flow naturally
+        if (availableSpace < 40) {
+          console.log(`[PDF SCHEDULE] ❌ Very little space remaining (${availableSpace.toFixed(1)} units < 40), adding new page`);
+          doc.addPage();
+          yPos = margin;
+          console.log(`[PDF SCHEDULE] ✅ New page added, yPos reset to: ${yPos}`);
+        } else {
+          // Add spacing after last clause before schedule
+          console.log(`[PDF SCHEDULE] ✅ Enough space (${availableSpace.toFixed(1)} units >= 40), rendering on same page`);
+          console.log(`[PDF SCHEDULE] Adding 12 units spacing after last clause`);
+          yPos += 12; // Slightly more spacing for visual separation
+          console.log(`[PDF SCHEDULE] yPos after spacing: ${yPos.toFixed(1)}`);
+        }
+        
+        // Use legal sequential naming: Schedule 1, Schedule 2, etc.
+        const legalScheduleName = `Schedule ${scheduleIndex}`;
+        console.log(`[PDF SCHEDULE] Legal schedule name: "${legalScheduleName}" (replacing "${scheduleName}")`);
+        console.log(`[PDF SCHEDULE] scheduleIndex: ${scheduleIndex}`);
+        
+        // Final check before rendering heading - ensure we have space for at least the heading
+        const spaceForHeading = yPos + 30;
+        const maxAllowedY = pageHeight - margin;
+        console.log(`[PDF SCHEDULE] Final heading check: yPos (${yPos.toFixed(1)}) + 30 = ${spaceForHeading.toFixed(1)}, maxAllowedY: ${maxAllowedY.toFixed(1)}`);
+        console.log(`[PDF SCHEDULE] Final check condition: ${spaceForHeading.toFixed(1)} > ${maxAllowedY.toFixed(1)}? ${spaceForHeading > maxAllowedY}`);
+        
+        if (spaceForHeading > maxAllowedY) {
+          console.log(`[PDF SCHEDULE] ❌ Final check: not enough space for heading, adding new page`);
+          doc.addPage();
+          yPos = margin;
+          console.log(`[PDF SCHEDULE] ✅ New page added after final check, yPos reset to: ${yPos}`);
+        } else {
+          console.log(`[PDF SCHEDULE] ✅ Final check passed, enough space for heading`);
+        }
+        
+        console.log(`[PDF SCHEDULE] About to render heading "${legalScheduleName}" at yPos: ${yPos.toFixed(1)}`);
         doc.setFontSize(14);
         doc.setFont('times', 'bold');
-        const scheduleTitleWidth = doc.getTextWidth(scheduleName);
-        doc.text(scheduleName, pageWidth / 2 - scheduleTitleWidth / 2, yPos);
+        const scheduleTitleWidth = doc.getTextWidth(legalScheduleName);
+        console.log(`[PDF SCHEDULE] Heading text width: ${scheduleTitleWidth.toFixed(1)}, centering at: ${(pageWidth / 2 - scheduleTitleWidth / 2).toFixed(1)}`);
+        doc.text(legalScheduleName, pageWidth / 2 - scheduleTitleWidth / 2, yPos);
+        console.log(`[PDF SCHEDULE] ✅ Heading "${legalScheduleName}" rendered successfully`);
         yPos += 15;
+        console.log(`[PDF SCHEDULE] yPos after heading: ${yPos.toFixed(1)}`);
         
         doc.setFontSize(11.5);
         doc.setFont('times', 'normal');
         const availableWidth = pageWidth - (margin * 2);
         
-        // Check if schedule data exists in formValues
-        const scheduleData = formValues[scheduleName.toLowerCase().replace(/\s+/g, '')] || 
-                            formValues[`${scheduleName}Data`] ||
-                            formValues[`${scheduleName}Details`];
+        // Extract schedule number from scheduleName (e.g., "Schedule 2177354" -> "2177354")
+        const scheduleNumMatch = scheduleName.match(/\d+/);
+        const scheduleNumber = scheduleNumMatch ? scheduleNumMatch[0] : null;
+        
+        console.log(`[PDF SCHEDULE] Rendering ${scheduleName}, extracted number: ${scheduleNumber}`);
+        
+        // Map schedule number to actual form fields
+        let scheduleData = null;
+        
+        if (scheduleNumber) {
+          // Check if this schedule number matches Property Trust schedule
+          const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
+            String(formValues.propertyTrustScheduleNumber).trim() : '';
+          
+          console.log(`[PDF SCHEDULE] Property Trust schedule number in form: "${propertyTrustScheduleNum}"`);
+          
+          if (propertyTrustScheduleNum === scheduleNumber) {
+            console.log(`[PDF SCHEDULE] ✅ Matched Property Trust schedule ${scheduleNumber}`);
+            // This is a Property Trust schedule - combine details and terms
+            const details = formValues.propertyTrustDetails ? 
+              String(formValues.propertyTrustDetails).trim() : '';
+            const terms = formValues.propertyTrustTerms ? 
+              String(formValues.propertyTrustTerms).trim() : '';
+            
+            console.log(`[PDF SCHEDULE] Property Trust details length: ${details.length}, terms length: ${terms.length}`);
+            
+            // Combine details and terms if both exist
+            if (details && terms) {
+              scheduleData = `${details}\n\n${terms}`;
+            } else if (details) {
+              scheduleData = details;
+            } else if (terms) {
+              scheduleData = terms;
+            }
+            
+            console.log(`[PDF SCHEDULE] Property Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
+          }
+          
+          // Check if this schedule number matches BPR Trust schedule
+          if (!scheduleData) {
+            const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
+              String(formValues.bprTrustScheduleNumber).trim() : '';
+            
+            console.log(`[PDF SCHEDULE] BPR Trust schedule number in form: "${bprTrustScheduleNum}"`);
+            console.log(`[PDF SCHEDULE] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}"`);
+            
+            if (bprTrustScheduleNum === scheduleNumber) {
+              console.log(`[PDF SCHEDULE] ✅ Matched BPR Trust schedule ${scheduleNumber}`);
+              // This is a BPR Trust schedule - combine details and terms
+              const details = formValues.bprTrustDetails ? 
+                String(formValues.bprTrustDetails).trim() : '';
+              const terms = formValues.bprTrustTerms ? 
+                String(formValues.bprTrustTerms).trim() : '';
+              
+              console.log(`[PDF SCHEDULE] BPR Trust details exists: ${!!details}, length: ${details.length}`);
+              console.log(`[PDF SCHEDULE] BPR Trust terms exists: ${!!terms}, length: ${terms.length}`);
+              
+              // Combine details and terms if both exist
+              if (details && terms) {
+                scheduleData = `${details}\n\n${terms}`;
+                console.log(`[PDF SCHEDULE] ✅ Combined BPR Trust details + terms, total length: ${scheduleData.length}`);
+              } else if (details) {
+                scheduleData = details;
+                console.log(`[PDF SCHEDULE] ✅ Using BPR Trust details only, length: ${scheduleData.length}`);
+              } else if (terms) {
+                scheduleData = terms;
+                console.log(`[PDF SCHEDULE] ✅ Using BPR Trust terms only, length: ${scheduleData.length}`);
+              } else {
+                console.log(`[PDF SCHEDULE] ❌ BPR Trust schedule ${scheduleNumber} matched but no content found`);
+              }
+              
+              console.log(`[PDF SCHEDULE] BPR Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
+            } else {
+              console.log(`[PDF SCHEDULE] BPR Trust schedule number "${bprTrustScheduleNum}" does not match "${scheduleNumber}"`);
+            }
+          }
+        }
+        
+        // Fallback: Try generic lookup (for other schedule types)
+        if (!scheduleData) {
+          scheduleData = formValues[scheduleName.toLowerCase().replace(/\s+/g, '')] || 
+                        formValues[`${scheduleName}Data`] ||
+                        formValues[`${scheduleName}Details`];
+        }
         
         if (scheduleData && typeof scheduleData === 'string' && scheduleData.trim()) {
+          console.log(`[PDF SCHEDULE] ✅ Schedule content found, length: ${scheduleData.length} characters`);
+          console.log(`[PDF SCHEDULE] Rendering schedule content starting at yPos: ${yPos.toFixed(1)}`);
           const scheduleLines = doc.splitTextToSize(scheduleData, availableWidth);
+          console.log(`[PDF SCHEDULE] Schedule content split into ${scheduleLines.length} lines`);
           let lineY = yPos;
-          scheduleLines.forEach(line => {
+          let pageBreaksAdded = 0;
+          scheduleLines.forEach((line, lineIndex) => {
+            // Check for page break before each line
+            if (lineY + 5.5 > pageHeight - margin) {
+              console.log(`[PDF SCHEDULE] Page break needed at line ${lineIndex + 1}/${scheduleLines.length} (lineY: ${lineY.toFixed(1)})`);
+              doc.addPage();
+              lineY = margin;
+              pageBreaksAdded++;
+            }
             doc.text(line, margin, lineY);
             lineY += 5.5;
           });
           yPos = lineY;
+          console.log(`[PDF SCHEDULE] Schedule content rendered, pageBreaks added: ${pageBreaksAdded}, final yPos: ${yPos.toFixed(1)}`);
         } else {
+          console.log(`[PDF SCHEDULE] ❌ No schedule content found for "${legalScheduleName}"`);
           // Schedule stub - clearly mark as missing
+          // Check for page break before missing content
+          if (yPos + 20 > pageHeight - margin) {
+            console.log(`[PDF SCHEDULE] Not enough space for missing content message, adding new page`);
+            doc.addPage();
+            yPos = margin;
+          }
           doc.setFont('times', 'bold');
           doc.setTextColor(200, 0, 0);
-          doc.text(`[MISSING: ${scheduleName} content]`, margin, yPos);
+          console.log(`[PDF SCHEDULE] Rendering missing content message for "${legalScheduleName}"`);
+          doc.text(`[MISSING: ${legalScheduleName} content]`, margin, yPos);
           doc.setTextColor(0, 0, 0);
           yPos += 10;
           doc.setFont('times', 'normal');
           const stubLines = doc.splitTextToSize('This schedule is referenced in the Will but the content has not been provided.', availableWidth);
           let lineY = yPos;
           stubLines.forEach(line => {
+            // Check for page break before each line
+            if (lineY + 5.5 > pageHeight - margin) {
+              doc.addPage();
+              lineY = margin;
+            }
             doc.text(line, margin, lineY);
             lineY += 5.5;
           });
           yPos = lineY;
         }
+        
+        console.log(`[PDF SCHEDULE] ========== COMPLETED SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
+        console.log(`[PDF SCHEDULE] Final yPos after schedule content: ${yPos.toFixed(1)}`);
+        console.log(`[PDF SCHEDULE] Incrementing scheduleIndex from ${scheduleIndex} to ${scheduleIndex + 1}`);
+        
+        // Increment schedule index for next schedule
+        scheduleIndex++;
       });
+      
+      console.log(`[PDF SCHEDULE] ========== ALL SCHEDULES RENDERED ==========`);
+      console.log(`[PDF SCHEDULE] Total schedules rendered: ${scheduleArray.length}`);
+      console.log(`[PDF SCHEDULE] Final yPos: ${yPos.toFixed(1)}`);
+    } else {
+      console.log(`[PDF SCHEDULE] No schedules to render (scheduleReferences.size = 0)`);
     }
 
     // ===== EXECUTION PAGE (SIGNATURE PAGE) =====

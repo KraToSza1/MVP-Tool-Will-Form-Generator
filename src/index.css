@@ -156,6 +156,30 @@ textarea {
   z-index: 10 !important;
 }
 
+/* Mobile-friendly touch targets */
+button, a, input[type="button"], input[type="submit"] {
+  min-height: 44px; /* iOS/Android recommended minimum touch target */
+  touch-action: manipulation; /* Disable double-tap zoom on buttons */
+}
+
+/* Improve form field spacing on mobile */
+@media (max-width: 640px) {
+  .mb-4 {
+    margin-bottom: 1rem;
+  }
+  
+  input, textarea, select {
+    font-size: 16px; /* Prevents zoom on iOS when focusing inputs */
+  }
+}
+
+/* Better scrolling on mobile */
+@media (max-width: 1024px) {
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* Ensure input containers don't clip content */
 .relative {
   overflow: visible !important;
