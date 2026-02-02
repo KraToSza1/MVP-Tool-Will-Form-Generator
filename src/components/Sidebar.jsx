@@ -24,12 +24,6 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
   );
 
   const goToSection = (idx) => {
-    const targetSection = sections[idx];
-    console.log(`[SIDEBAR NAVIGATION] ========== NAVIGATING VIA SIDEBAR ==========`);
-    console.log(`[SIDEBAR NAVIGATION] From: Step ${currentIndex + 1} - "${sections[currentIndex]?.formSection}"`);
-    console.log(`[SIDEBAR NAVIGATION] To: Step ${idx + 1} - "${targetSection?.formSection}"`);
-    console.log(`[SIDEBAR NAVIGATION] Direction: ${idx > currentIndex ? 'Forward' : idx < currentIndex ? 'Backward' : 'Same'}`);
-    
     setCurrentIndex(idx);
     setIsOpen(false);
   };
@@ -41,10 +35,7 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
         <div className="px-3 sm:px-4 py-3 flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              console.log('[SIDEBAR] Opening mobile sidebar menu');
-              setIsOpen(true);
-            }}
+            onClick={() => setIsOpen(true)}
             className="inline-flex items-center justify-center h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"
             aria-label="Open sections"
           >
@@ -69,7 +60,6 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
             type="button"
             className="absolute inset-0 bg-black/50"
             onClick={() => {
-              console.log('[SIDEBAR] Closing mobile sidebar (backdrop click)');
               setIsOpen(false);
             }}
             aria-label="Close sections"
@@ -86,7 +76,6 @@ export default function Sidebar({ currentIndex, setCurrentIndex }) {
               <button
                 type="button"
                 onClick={() => {
-                  console.log('[SIDEBAR] Closing mobile sidebar (X button click)');
                   setIsOpen(false);
                 }}
                 className="inline-flex items-center justify-center h-11 w-11 sm:h-10 sm:w-10 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 touch-manipulation"

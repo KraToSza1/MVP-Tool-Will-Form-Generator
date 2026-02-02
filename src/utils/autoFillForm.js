@@ -1,15 +1,12 @@
 /**
  * Auto-fill utility for the Will Form
- * Fills all form fields with dummy data for testing
- * This version is comprehensive and handles ALL field types including arrays, textareas, and special cases
+ * Fills ALL form fields with dummy data for testing - literally everything possible
+ * Handles ALL field types, section subFields, conditional fields, and array data
  */
 
 export const generateDummyFormData = (formData) => {
-  console.log('[AUTOFILL] ========== GENERATING DUMMY FORM DATA ==========');
-  console.log('[AUTOFILL] Form sections count:', formData?.formSections?.length);
-  
   const dummyData = {};
-  
+
   if (!formData || !formData.formSections) {
     console.error('[AUTOFILL] Invalid form data structure');
     return dummyData;
@@ -26,627 +23,385 @@ export const generateDummyFormData = (formData) => {
   // Helper to get "Yes" option if available
   const getYesOption = (field) => {
     if (field.options) {
-      const yesOption = field.options.find(opt => 
-        opt.value === 'Yes' || opt.label === 'Yes' || 
-        opt.value === 'yes' || opt.label === 'yes' ||
+      const yesOpt = field.options.find(opt =>
+        opt.value === 'Yes' || opt.label === 'Yes' ||
         (typeof opt.label === 'string' && opt.label.toLowerCase().includes('yes'))
       );
-      if (yesOption) {
-        console.log(`[AUTOFILL]     Found "Yes" option: "${yesOption.value}"`);
-        return yesOption.value;
-      }
-      return getFirstOption(field);
+      return yesOpt ? yesOpt.value : getFirstOption(field);
     }
     return null;
   };
 
-  // Generate realistic names for different roles
-  const generateName = (role) => {
-    const names = {
-      guardian: ['Sarah Johnson', 'Michael Brown', 'Emma Williams'],
-      executor: ['David Thompson', 'Lisa Anderson', 'Robert Taylor'],
-      trustee: ['James Wilson', 'Patricia Martinez', 'Christopher Davis'],
-      witness: ['Alice Witness', 'Bob Witness'],
-      petCarer: ['Charlie Pet Carer', 'Diana Pet Helper'],
-      excluded: ['Excluded Person Name'],
-      substitute: ['Substitute Person Name']
-    };
-    
-    for (const [key, values] of Object.entries(names)) {
-      if (role.toLowerCase().includes(key)) {
-        return values[0];
-      }
-    }
-    return 'John Smith';
+  // Options that UNLOCK and FILL everything - select values that show the most sections
+  const unlockEverything = {
+    title: 'Mr',
+    maritalStatus: 'Married',
+    contemplation: 'No',
+    assetsAbroad: 'Yes',
+    propertyInEU: 'Yes',
+    englishLawGovernsEUAssets: 'Yes',
+    testatorUKNationalOrHabitual: 'UK National',
+    foreignWillNotRevoked: 'No',
+    willAppliesToUK: 'Yes - England and Wales',
+    appointGuardians: 'Yes',
+    chooseAristoneExecutor: 'Aristone',
+    chooseAristoneSubstituteExecutor: 'Aristone',
+    appointProfessionalExecutor: 'Yes',
+    professionalExecutorSelection: 'Aristone',
+    substituteProfessionalExecutorSelection: 'Aristone',
+    includeProfessionalRemuneration: 'Yes',
+    appointDigitalAssetsExecutor: 'Yes',
+    appointSeparateDigitalExecutor: 'Yes',
+    appointDifferentTrustees: 'Yes',
+    professionalTrusteeSelection: 'Aristone',
+    substituteProfessionalTrusteeSelection: 'Aristone',
+    includeBPRTrust: 'Yes',
+    leaveMoneyGifts: 'Yes',
+    leaveSpecificGifts: 'Yes',
+    leavePropertyGifts: 'Yes',
+    includePropertyTrust: 'Yes',
+    unspecifiedChattelsAction: 'SpecificRecipient',
+    chattelsInheritanceTax: 'PaidByEstate',
+    produceMemorandum: 'Yes',
+    personalChattelsGift: 'Beneficiary',
+    forgiveDebt: 'Yes',
+    deliberatelyExcludingAnyone: 'Yes',
+    provisionsForPets: 'Yes',
+    substitutePetCarer: 'Yes',
+    petsCaredForByRSPCA: 'No',
+    petCarerOptions: 'Yes',
+    relieveDebts: 'Yes',
+    includeReceiptByMinors: 'Yes',
+    includeCypresClause: 'Yes',
+    bringLifetimeGiftsIntoAccount: 'Yes',
+    specifyLifetimeLoansGifts: 'Yes',
+    howResidueDistributed: 'AsShares',
+    specifyFurtherResidualGiftsOnFail: 'Yes',
+    failedResiduePassProportionately: 'Yes',
+    give10PercentToCharity: 'Yes',
+    charityGiftOnlyIfIHTDue: 'No',
+    splitCharitableGift: 'No',
+    minimumCharityAmount: 'Yes',
+    howIHTDealtWithSplitting: 'BeforeTax',
+    capacityConcerns: 'No',
+    hasTestamentaryCapacity: 'Yes',
+    satisfiedUnderstandsInstructions: 'Yes',
+    satisfiedAwareOfClaims: 'Yes',
+    otherPeoplePresent: 'No',
+    satisfiedNotUndulyInfluenced: 'Yes',
+    hasDisabilityImpactingSignRead: 'No',
+    includeWitnessDetails: 'Yes',
+    organDonationPreference: 'YesButOnly',
+    specifyFuneralArrangements: 'Yes',
+    burialOrCremation: 'Cremated',
+    hasBusinessInterests: 'Yes',
+    trusteePowerCarryOnBusiness: 'Yes',
+    appointSeparateBusinessTrustee: 'Yes',
+    failedMoneyGiftPassProportionately: 'Yes',
+    failedSpecificGiftPassProportionately: 'Yes',
+    failedPropertyGiftPassProportionately: 'Yes',
+    spouseBenefitOnDivorce: 'No',
+    stopGiftToChildrenOnFail: 'Yes',
+    stepProvisionsApply: 'AllStandardSpecialInclude',
+    excludeSpecificStepProvisions: 'No',
+    powerToRevokeLifeInterest: 'Yes',
+    appointSeparateTrusteesFLIT: 'No',
+    executorAgeClause: '25',
   };
 
-  formData.formSections.forEach((section, sectionIndex) => {
-    console.log(`[AUTOFILL] ========== PROCESSING SECTION ${sectionIndex + 1}/${formData.formSections.length} ==========`);
-    console.log(`[AUTOFILL] Section name: "${section.formSection}"`);
-    console.log(`[AUTOFILL] Section fields count:`, section.fields?.length || 0);
-    
-    if (!section.fields) {
-      console.warn(`[AUTOFILL] Section "${section.formSection}" has no fields`);
-      return;
+  // Get value for a field - used in recursive processing
+  const getFieldValue = (field, dummyDataSoFar) => {
+    const values = { ...dummyDataSoFar };
+    const getVal = (k) => values[k];
+
+    if (unlockEverything[field.id] !== undefined) {
+      return unlockEverything[field.id];
     }
 
-    section.fields.forEach((field, fieldIndex) => {
-      console.log(`[AUTOFILL]   ──────────────────────────────────────────`);
-      console.log(`[AUTOFILL]   Field ${fieldIndex + 1}/${section.fields.length}: "${field.id}"`);
-      console.log(`[AUTOFILL]   Field type: ${field.type}`);
-      console.log(`[AUTOFILL]   Field label: "${field.label || 'N/A'}"`);
-      console.log(`[AUTOFILL]   Field required: ${field.required || false}`);
-      
-      // Skip display fields and buttons (but log them)
-      if (field.type === 'display' || field.type === 'button') {
-        console.log(`[AUTOFILL]     ⏭️  Skipping ${field.type} field`);
-        return;
-      }
+    switch (field.type) {
+      case 'radio':
+      case 'select':
+        if (field.id === 'organDonationPreference') return 'YesButOnly';
+        return getYesOption(field) || getFirstOption(field);
 
-      // Skip hidden fields (but we'll handle guardianData, executorData etc specially)
-      if (field.type === 'hidden') {
-        console.log(`[AUTOFILL]     ⏭️  Skipping hidden field (will be handled by section logic)`);
-        return;
-      }
+      case 'text':
+        if (field.id.includes('Name') || field.id.includes('name')) {
+          if (field.id.includes('firstName') || field.id === 'firstName') return 'John';
+          if (field.id.includes('lastName') || field.id === 'lastName') return 'Smith';
+          if (field.id.includes('partner') || field.id === 'partnerFullName') return 'Jane Smith';
+          if (field.id.includes('middle') || field.id === 'middleName') return 'Michael';
+          if (field.id.includes('knownAs')) return 'Johnny';
+          if (field.id === 'chattelsGiftBeneficiaryName') return 'Emma Thompson';
+          if (field.id === 'foreignWillLocation') return 'France';
+          if (field.id === 'nativeLanguage') return 'English';
+          return 'John Smith';
+        }
+        if (field.id.includes('email')) return 'john.smith@example.com';
+        if (field.id.includes('mobile') || field.id.includes('tel')) return '07123456789';
+        if (field.id.includes('address1') || field.id === 'address1') return field.id?.includes('partner') ? '456 Park Lane' : '123 High Street';
+        if (field.id.includes('address2') || field.id === 'address2') return field.id?.includes('partner') ? 'Mayfair' : 'Westminster';
+        if (field.id.includes('address3') || field.id === 'address3') return 'London';
+        if (field.id.includes('postcode') || field.id === 'postcode') return field.id?.includes('partner') ? 'W1K 6HP' : 'SW1A 1AA';
+        if (field.id.includes('occupation')) return 'Software Developer';
+        if (field.id.includes('Schedule') || field.id.includes('schedule')) return String(Math.floor(Math.random() * 9000000) + 1000000);
+        if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? '5000' : '100000';
+        if (field.id === 'specificOrgansToDonate') return 'eyes, heart, and brain';
+        if (field.id === 'specificOrgansToExclude') return 'eyes';
+        if (field.id === 'minimumCharityAmountValue') return '100000';
+        if (field.id === 'stepProvisionToExcludeOne') return '1';
+        if (field.id === 'stepProvisionsToExcludeMultiple') return '1, 2 & 3';
+        return 'Standard value';
+
+      case 'textarea':
+        if (field.id.includes('charity') || field.id === 'charityBenefitDetails') return 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)';
+        if (field.id.includes('monetaryGiftsDetails')) return 'I give £10,000 to my son John Smith when he reaches 25. I give £5,000 to my daughter Sarah Smith when she reaches 21.';
+        if (field.id.includes('specificGiftsDetails')) return 'I give my vintage watch collection to my son John Smith. I give my art collection to my daughter Sarah Smith.';
+        if (field.id.includes('propertyGiftsDetails')) return 'I give my property at 123 Main Street, London to my wife Jane Smith.';
+        if (field.id.includes('propertyTrustDetails')) return 'my property at 1 Melk Bos Place, London';
+        if (field.id.includes('propertyTrustTerms')) return 'The trustees shall have full power to manage, maintain, and if necessary sell the property.';
+        if (field.id.includes('bprTrustDetails')) return 'My business interests in ABC Company Ltd shall be held in trust.';
+        if (field.id.includes('bprTrustTerms')) return 'The business property relief trust shall operate according to standard terms.';
+        if (field.id.includes('furtherResidualGiftsDetails')) return 'If any gifts fail, I give the failed share equally to my siblings Mary Smith and Peter Smith.';
+        if (field.id.includes('residualGiftsDetails')) return 'I give 50% to my wife Jane Smith, 25% to my son John Smith, 25% to my daughter Sarah Smith.';
+        if (field.id.includes('specifyLoansGiftsText')) return 'I loaned £5,000 to my son John Smith in 2020.';
+        if (field.id.includes('lifeTenantDetails')) return 'My wife Jane Smith';
+        if (field.id.includes('beneficiariesDetails')) return 'John Smith and Sarah Smith';
+        if (field.id.includes('trustEndDistributionDetails')) return 'Upon the death of the life tenant, the trust property shall pass equally to John Smith and Sarah Smith.';
+        if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation. Please ensure all loved ones are informed.';
+        if (field.id.includes('otherFuneralRequirements')) return 'Ashes to be scattered at sea.';
+        if (field.id.includes('physicalHealthDescription')) return 'The testator is in good health and of sound mind.';
+        return `Comprehensive dummy text for ${field.label || field.id}. All necessary details provided for testing.`;
+
+      case 'date':
+        if (field.id.includes('Birth') || field.id.includes('birth')) return '1980-01-15';
+        if (field.id.includes('Execution') || field.id.includes('execution') || field.id.includes('Signing') || field.id.includes('signing') || field.id === 'willExecutionDate') return new Date().toISOString().split('T')[0];
+        return '2020-01-01';
+
+      case 'number':
+      case 'currency':
+        if (field.id.includes('age')) return 35;
+        if (field.id.includes('pet') && (field.id.includes('amount') || field.id.includes('Gift') || field.id.includes('gift'))) return 5000;
+        if (field.id.includes('executorSpecifyAge')) return 25;
+        if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? 5000 : 10000;
+        return 10000;
+
+      case 'checkboxGroup':
+        if (field.id === 'organPurposeGroup') return field.options ? field.options.map(o => o.id || o.value).filter(Boolean) : [];
+        return field.options ? field.options.map(o => o.id || o.value).filter(Boolean) : [];
+
+      default:
+        return null;
+    }
+  };
+
+  // Process fields recursively (including section subFields)
+  const processFields = (fields, sectionName = '') => {
+    if (!fields || !Array.isArray(fields)) return;
+    fields.forEach((field) => {
+      if (!field || !field.id) return;
+      if (field.type === 'display' || field.type === 'button') return;
+      if (field.type === 'hidden') return;
 
       let value = null;
 
-      switch (field.type) {
-        case 'radio':
-          // Special handling for organ donation preference - select "YesButOnly" to test organ donation clause
-          if (field.id === 'organDonationPreference') {
-            const yesButOnlyOption = field.options?.find(opt => opt.value === 'YesButOnly');
-            if (yesButOnlyOption) {
-              value = 'YesButOnly';
-              console.log(`[AUTOFILL]     🫀 Organ donation preference - Selected: "YesButOnly" (to test organ donation clause)`);
-            } else {
-              value = getYesOption(field) || getFirstOption(field);
-            }
-          } else {
-            value = getYesOption(field) || getFirstOption(field);
-            console.log(`[AUTOFILL]     ✅ Radio field - Selected: "${value}"`);
+      if (field.type === 'section' && field.subFields) {
+        processFields(field.subFields, field.label);
+        field.subFields.forEach((sub) => {
+          if (sub.type === 'hidden' && sub.id) {
+            if (sub.id.includes('guardianData')) dummyData[sub.id] = ['Sarah Johnson', 'Michael Brown'];
+            else if (sub.id.includes('substituteGuardianData')) dummyData[sub.id] = ['Emma Williams'];
+            else if (sub.id.includes('executorData')) dummyData[sub.id] = ['David Thompson', 'Lisa Anderson'];
+            else if (sub.id.includes('substituteExecutorData')) dummyData[sub.id] = ['Robert Taylor'];
+            else if (sub.id.includes('trusteeData')) dummyData[sub.id] = ['James Wilson'];
+            else if (sub.id.includes('substituteTrusteeData')) dummyData[sub.id] = ['Patricia Martinez'];
+            else if (sub.id.includes('witness1Data')) dummyData[sub.id] = ['Alice Witness'];
+            else if (sub.id.includes('witness2Data')) dummyData[sub.id] = ['Bob Witness'];
+            else if (sub.id.includes('petCarerData')) dummyData[sub.id] = [{
+              title: 'Mr', firstName: 'Charlie', lastName: 'Pet Carer', relationship: 'Friend',
+              address1: '789 Pet Street', address2: 'Animal District', address3: 'London', postcode: 'SW1A 2BB',
+              mobile: '07123456789', email: 'charlie.petcarer@example.com', dateOfBirth: '1985-05-15', gender: 'Male'
+            }];
+            else if (sub.id.includes('substitutePetCarerData')) dummyData[sub.id] = [{
+              title: 'Mrs', firstName: 'Diana', lastName: 'Pet Helper', relationship: 'Sister',
+              address1: '321 Helper Lane', address2: 'Care District', address3: 'London', postcode: 'SW1A 3CC',
+              mobile: '07987654321', email: 'diana.pethelper@example.com', dateOfBirth: '1988-08-20', gender: 'Female'
+            }];
+            else if (sub.id.includes('excludedPersonData')) dummyData[sub.id] = ['Robert Brown'];
+            else if (sub.id.includes('digitalExecutorData')) dummyData[sub.id] = ['Sarah Wilson'];
+            else if (sub.id.includes('separateTrusteeData')) dummyData[sub.id] = ['Christopher Davis'];
+            else if (sub.id.includes('chattelRecipientData')) dummyData[sub.id] = ['Emma Wilson'];
+            else if (sub.id.includes('debtorData')) dummyData[sub.id] = ['James Smith'];
+            else if (sub.id.includes('signingOnBehalfData')) dummyData[sub.id] = ['Margaret Harris'];
+            else if (sub.id.includes('interpreterData')) dummyData[sub.id] = ['Thomas Clark'];
+          } else if (sub.type === 'text' || sub.type === 'textarea' || sub.type === 'number' || sub.type === 'date') {
+            value = getFieldValue(sub, dummyData);
+            if (value != null) dummyData[sub.id] = value;
+          } else if (sub.type === 'radio' || sub.type === 'select') {
+            value = unlockEverything[sub.id] ?? getYesOption(sub) ?? getFirstOption(sub);
+            if (value != null) dummyData[sub.id] = value;
+          } else if (sub.type === 'checkboxGroup') {
+            value = sub.options ? sub.options.map(o => o.id || o.value).filter(Boolean) : [];
+            dummyData[sub.id] = value;
           }
-          break;
-
-        case 'text':
-          if (field.id.includes('Name') || field.id.includes('name')) {
-            if (field.id.includes('firstName') || field.id === 'firstName') {
-              value = 'John';
-            } else if (field.id.includes('lastName') || field.id === 'lastName') {
-              value = 'Smith';
-            } else if (field.id.includes('partner') || field.id === 'partnerFullName') {
-              value = 'Jane Smith';
-            } else if (field.id.includes('middle') || field.id === 'middleName') {
-              value = 'Michael';
-            } else if (field.id.includes('knownAs')) {
-              value = 'Johnny';
-            } else if (field.id.includes('alias')) {
-              value = '';
-            } else {
-              value = 'Test Name';
-            }
-          } else if (field.id.includes('email')) {
-            value = 'john.smith@example.com';
-          } else if (field.id.includes('mobile') || field.id.includes('tel')) {
-            value = '07123456789';
-          } else if (field.id.includes('address') || field.id.includes('Address')) {
-            // Use realistic UK addresses - different addresses for different people
-            if (field.id.includes('partner') || field.id.includes('Partner') || field.id.includes('spouse')) {
-              // Partner/Spouse address
-              if (field.id.includes('address1') || field.id === 'partnerAddress1' || field.id === 'spouseAddress1') {
-                value = '456 Park Lane';
-              } else if (field.id.includes('address2') || field.id === 'partnerAddress2' || field.id === 'spouseAddress2') {
-                value = 'Mayfair';
-              } else if (field.id.includes('address3') || field.id === 'partnerAddress3' || field.id === 'spouseAddress3') {
-                value = 'London';
-              } else {
-                value = '456 Park Lane, Mayfair, London, W1K 6HP';
-              }
-            } else if (field.id.includes('executor') || field.id.includes('Executor')) {
-              // Executor address
-              if (field.id.includes('address1') || field.id === 'executorAddress1') {
-                value = '789 Oxford Street';
-              } else if (field.id.includes('address2') || field.id === 'executorAddress2') {
-                value = 'Marylebone';
-              } else if (field.id.includes('address3') || field.id === 'executorAddress3') {
-                value = 'London';
-              } else {
-                value = '789 Oxford Street, Marylebone, London, W1D 2HX';
-              }
-            } else if (field.id.includes('witness') || field.id.includes('Witness')) {
-              // Witness address
-              if (field.id.includes('address1')) {
-                value = '321 Baker Street';
-              } else if (field.id.includes('address2')) {
-                value = 'Marylebone';
-              } else if (field.id.includes('address3')) {
-                value = 'London';
-              } else {
-                value = '321 Baker Street, Marylebone, London, NW1 6XE';
-              }
-            } else {
-              // Default/Testator address
-              if (field.id.includes('address1') || field.id === 'address1' || field.id === 'testatorAddress1') {
-                value = '123 High Street';
-              } else if (field.id.includes('address2') || field.id === 'address2' || field.id === 'testatorAddress2') {
-                value = 'Westminster';
-              } else if (field.id.includes('address3') || field.id === 'address3' || field.id === 'testatorAddress3') {
-                value = 'London';
-              } else {
-                value = '123 High Street, Westminster, London, SW1A 1AA';
-              }
-            }
-            console.log(`[AUTOFILL]     🏠 UK Address field "${field.id}" - Value: "${value}"`);
-          } else if (field.id.includes('postcode') || field.id === 'postcode' || field.id.includes('Postcode') || field.id.includes('PostCode')) {
-            // Use realistic UK postcodes - different postcodes for different people
-            const ukPostcodes = {
-              default: 'SW1A 1AA',      // Westminster (famous - 10 Downing Street)
-              partner: 'W1K 6HP',       // Mayfair, London
-              executor: 'W1D 2HX',      // Marylebone, London
-              witness: 'NW1 6XE',       // Marylebone, London (Baker Street area)
-              testator: 'SW1A 1AA',     // Westminster
-            };
-            
-            let postcodeKey = 'default';
-            if (field.id.includes('partner') || field.id.includes('Partner') || field.id.includes('spouse')) {
-              postcodeKey = 'partner';
-            } else if (field.id.includes('executor') || field.id.includes('Executor')) {
-              postcodeKey = 'executor';
-            } else if (field.id.includes('witness') || field.id.includes('Witness')) {
-              postcodeKey = 'witness';
-            } else if (field.id.includes('testator') || field.id === 'postcode') {
-              postcodeKey = 'testator';
-            }
-            
-            value = ukPostcodes[postcodeKey];
-            console.log(`[AUTOFILL]     📮 UK Postcode field "${field.id}" - Generated: "${value}" (${postcodeKey})`);
-          } else if (field.id.includes('occupation')) {
-            value = 'Software Developer';
-          } else if (field.id.includes('Schedule') || field.id.includes('schedule') || field.id.includes('ScheduleNumber')) {
-            // Generate a realistic schedule number (6-7 digits)
-            value = String(Math.floor(Math.random() * 9000000) + 1000000);
-            console.log(`[AUTOFILL]     📋 Schedule number field - Generated: "${value}"`);
-          } else if (field.id.includes('language') || field.id.includes('Language')) {
-            value = 'English';
-          } else if (field.id.includes('location') || field.id.includes('Location')) {
-            value = 'London, United Kingdom';
-          } else if (field.id.includes('amount') || field.id.includes('Amount')) {
-            // For amount fields, use a realistic number (as string for text inputs)
-            if (field.id.includes('pet') || field.id.includes('Pet') || field.id.includes('petCarer')) {
-              value = '5000'; // Pet care amount
-            } else if (field.id.includes('iht') || field.id.includes('IHT') || field.id.includes('inheritance') || field.id.includes('tax')) {
-              value = '100000'; // Inheritance tax amount
-            } else {
-              value = '10000'; // Generic amount
-            }
-          } else if (field.id.includes('charity') || field.id.includes('Charity')) {
-            value = 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464)';
-          } else if (field.id.includes('debtor') || field.id.includes('Debtor')) {
-            value = 'John Debtor Smith';
-          } else if (field.id === 'specificOrgansToDonate' || field.id.includes('specificOrgansToDonate')) {
-            value = 'eyes, heart, and brain';
-            console.log(`[AUTOFILL]     🫀 Organ donation field - Value: "${value}"`);
-          } else if (field.id === 'specificOrgansToExclude' || field.id.includes('specificOrgansToExclude')) {
-            value = 'eyes';
-            console.log(`[AUTOFILL]     🫀 Organ exclusion field - Value: "${value}"`);
-          } else {
-            // For any other text field, use a more descriptive value instead of "Dummy [label]"
-            const fieldLabel = (field.label || field.id).toLowerCase();
-            if (fieldLabel.includes('name')) {
-              value = 'John Smith';
-            } else if (fieldLabel.includes('description') || fieldLabel.includes('detail')) {
-              value = 'Standard details as required for this field.';
-            } else if (fieldLabel.includes('note') || fieldLabel.includes('comment')) {
-              value = 'Additional notes and comments relevant to this section.';
-            } else if (fieldLabel.includes('what is') || fieldLabel.includes('amount')) {
-              // Handle "What is the amount?" type fields
-              value = '100000';
-            } else {
-              // Last resort: use a generic but meaningful value (NOT "Dummy [label]")
-              value = 'Standard value';
-            }
-          }
-          console.log(`[AUTOFILL]     ✅ Text field - Value: "${value}"`);
-          break;
-
-        case 'textarea':
-          // Handle all the textarea fields that show "test test test"
-          if (field.id.includes('charity') || field.id.includes('Charity') || field.id === 'charityDetails') {
-            value = 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)';
-            console.log(`[AUTOFILL]     ✅ Charity details field - Value: "${value.substring(0, 80)}..."`);
-          } else if (field.id.includes('monetaryGiftsDetails') || field.id === 'monetaryGiftsDetails') {
-            value = 'I give £10,000 to my son John Smith when he reaches the age of 25. I give £5,000 to my daughter Sarah Smith when she reaches the age of 21.';
-          } else if (field.id.includes('specificGiftsDetails') || field.id === 'specificGiftsDetails') {
-            value = 'I give my vintage watch collection to my son John Smith. I give my art collection to my daughter Sarah Smith.';
-          } else if (field.id.includes('propertyGiftsDetails') || field.id === 'propertyGiftsDetails') {
-            value = 'I give my property at 123 Main Street, London to my wife Jane Smith. I give my holiday home in Cornwall to my son John Smith.';
-          } else if (field.id.includes('propertyTrustDetails') || field.id === 'propertyTrustDetails') {
-            value = 'My property at 1 Melk Bos Place, London shall be held in trust for my son until he reaches the age of 25, at which point full ownership shall transfer to him.';
-          } else if (field.id.includes('propertyTrustTerms') || field.id === 'propertyTrustTerms') {
-            value = 'The trustees shall have full power to manage, maintain, and if necessary sell the property. The income from the property shall be used for the benefit of my son until he reaches the age of 25.';
-          } else if (field.id.includes('bprTrustDetails') || field.id === 'bprTrustDetails') {
-            value = 'My business interests in ABC Company Ltd shall be held in trust. The trustees shall manage the business and distribute income as appropriate.';
-          } else if (field.id.includes('bprTrustTerms') || field.id === 'bprTrustTerms') {
-            value = 'The business property relief trust shall operate according to standard terms. Trustees have full discretion to manage the business assets.';
-          } else if (field.id.includes('furtherResidualGiftsDetails') || field.id === 'furtherResidualGiftsDetails') {
-            value = 'If any of the above gifts fail, I give the failed share equally to my siblings: Mary Smith and Peter Smith.';
-          } else if (field.id.includes('residualGiftsDetails') || field.id === 'residualGiftsDetails') {
-            value = 'I give 50% of my residuary estate to my wife Jane Smith, 25% to my son John Smith, and 25% to my daughter Sarah Smith.';
-          } else if (field.id.includes('specifyLoansGiftsText') || field.id === 'specifyLoansGiftsText') {
-            value = 'I loaned £5,000 to my son John Smith in 2020. I gave £2,000 to my daughter Sarah Smith in 2021.';
-          } else if (field.id.includes('wishes') || field.id.includes('Wishes')) {
-            value = 'I wish for a simple and peaceful ceremony. Please ensure all my loved ones are informed. I prefer a cremation with my ashes scattered at sea.';
-          } else if (field.id.includes('requirements') || field.id.includes('Requirements')) {
-            value = 'Standard requirements apply. Please follow all legal procedures. Ensure all beneficiaries are notified in a timely manner.';
-          } else if (field.id.includes('details') || field.id.includes('Details')) {
-            value = 'All relevant details have been provided. Please refer to the main documentation for complete information. This includes all necessary legal requirements and personal preferences.';
-          } else if (field.id.includes('description') || field.id.includes('Description')) {
-            value = 'The testator is in good health and of sound mind. All necessary medical information has been provided to the solicitors.';
-          } else {
-            value = `This is comprehensive dummy text for ${field.label || field.id}. It contains sufficient detail to replace any placeholder text like "test test test". Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.`;
-          }
-          console.log(`[AUTOFILL]     ✅ Textarea field - Value length: ${value.length} chars`);
-          console.log(`[AUTOFILL]     ✅ Textarea preview: "${value.substring(0, 80)}..."`);
-          break;
-
-        case 'date':
-          if (field.id.includes('Birth') || field.id.includes('birth')) {
-            value = '1980-01-15';
-          } else if (field.id.includes('Execution') || field.id.includes('execution') || field.id.includes('Signing') || field.id.includes('signing')) {
-            value = new Date().toISOString().split('T')[0]; // Today's date
-          } else {
-            value = '2020-01-01';
-          }
-          console.log(`[AUTOFILL]     ✅ Date field - Value: "${value}"`);
-          break;
-
-        case 'number':
-          if (field.id.includes('age') || field.id.includes('Age')) {
-            value = 35;
-          } else if (field.id.includes('pet') && (field.id.includes('amount') || field.id.includes('Amount') || field.id.includes('care'))) {
-            value = 5000; // Pet care amount
-          } else if (field.id.includes('iht') || field.id.includes('IHT') || field.id.includes('inheritance') || field.id.includes('tax')) {
-            value = 100000; // Inheritance tax amount
-          } else if (field.id.includes('amount') || field.id.includes('Amount') || field.id.includes('gift') || field.id.includes('Gift')) {
-            value = 10000;
-          } else if (field.id.includes('percentage') || field.id.includes('Percentage')) {
-            value = 50;
-          } else {
-            value = 1000;
-          }
-          console.log(`[AUTOFILL]     ✅ Number field - Value: ${value}`);
-          break;
-
-        case 'checkbox':
-          // For checkbox groups, select all options
-          if (field.options) {
-            value = field.options.map(opt => opt.value);
-          } else {
-            value = true;
-          }
-          console.log(`[AUTOFILL]     ✅ Checkbox field - Value:`, value);
-          break;
-
-        case 'checkboxGroup':
-          // For checkbox groups (like organPurposeGroup), select all options by ID
-          if (field.id === 'organPurposeGroup') {
-            // Select both purposes for comprehensive testing
-            value = field.options ? field.options.map(opt => opt.id || opt.value).filter(Boolean) : [];
-            console.log(`[AUTOFILL]     ✅ Organ purpose checkbox group - Selected:`, value);
-          } else if (field.options) {
-            // For other checkbox groups, select all options
-            value = field.options.map(opt => opt.id || opt.value).filter(Boolean);
-            console.log(`[AUTOFILL]     ✅ Checkbox group - Selected:`, value);
-          } else {
-            value = [];
-          }
-          break;
-
-        case 'select':
-          value = getYesOption(field) || getFirstOption(field);
-          console.log(`[AUTOFILL]     ✅ Select field - Selected: "${value}"`);
-          break;
-
-        case 'section':
-          // For section fields, we need to handle the subFields
-          if (field.subFields) {
-            console.log(`[AUTOFILL]     📦 Section field with ${field.subFields.length} subFields`);
-            field.subFields.forEach(subField => {
-              if (subField.type === 'hidden' && subField.id) {
-                // Handle data fields like guardianData, executorData, etc.
-                if (subField.id.includes('guardianData')) {
-                  value = 'Sarah Johnson';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('substituteGuardianData')) {
-                  value = 'Michael Brown; Emma Williams';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('executorData')) {
-                  value = 'David Thompson';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('substituteExecutorData')) {
-                  value = 'Lisa Anderson';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('trusteeData')) {
-                  value = 'James Wilson';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('substituteTrusteeData')) {
-                  value = 'Patricia Martinez';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('witness1Data')) {
-                  value = 'Alice Witness';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('witness2Data')) {
-                  value = 'Bob Witness';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('petCarerData')) {
-                  // Pet carer data must be an array of objects
-                  value = [{
-                    title: 'Mr',
-                    firstName: 'Charlie',
-                    lastName: 'Pet Carer',
-                    relationship: 'Friend',
-                    address1: '789 Pet Street',
-                    address2: 'Animal District',
-                    address3: 'London',
-                    postcode: 'SW1A 2BB',
-                    mobile: '07123456789',
-                    email: 'charlie.petcarer@example.com',
-                    dateOfBirth: '1985-05-15',
-                    gender: 'Male'
-                  }];
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = array with ${value.length} pet carer(s)`);
-                } else if (subField.id.includes('substitutePetCarerData')) {
-                  // Substitute pet carer data must be an array of objects
-                  value = [{
-                    title: 'Mrs',
-                    firstName: 'Diana',
-                    lastName: 'Pet Helper',
-                    relationship: 'Sister',
-                    address1: '321 Helper Lane',
-                    address2: 'Care District',
-                    address3: 'London',
-                    postcode: 'SW1A 3CC',
-                    mobile: '07987654321',
-                    email: 'diana.pethelper@example.com',
-                    dateOfBirth: '1988-08-20',
-                    gender: 'Female'
-                  }];
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = array with ${value.length} substitute pet carer(s)`);
-                } else if (subField.id.includes('excludedPersonData')) {
-                  value = 'Excluded Person Name';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('digitalExecutorData')) {
-                  value = 'Digital Executor Name';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('separateTrusteeData')) {
-                  value = 'Separate Trustee Name';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('chattelRecipientData')) {
-                  value = 'Chattel Recipient Name';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                } else if (subField.id.includes('debtorData') || subField.id.includes('debtRelief')) {
-                  value = 'John Debtor Smith';
-                  dummyData[subField.id] = value;
-                  console.log(`[AUTOFILL]       ✅ Set ${subField.id} = "${value}"`);
-                }
-              }
-            });
-          }
-          // Don't set value for section itself, only for subFields
-          value = null;
-          break;
-
-        default:
-          console.warn(`[AUTOFILL]     ⚠️  Unknown field type: ${field.type}`);
+        });
+        return;
       }
 
-      if (value !== null && value !== undefined && field.id) {
+      value = getFieldValue(field, dummyData);
+      if (value !== null && value !== undefined) {
         dummyData[field.id] = value;
-        console.log(`[AUTOFILL]     ✅✅✅ SET ${field.id} =`, typeof value === 'string' && value.length > 50 ? `${value.substring(0, 50)}...` : value);
-      } else if (field.id && !dummyData[field.id]) {
-        console.log(`[AUTOFILL]     ⚠️  Skipped ${field.id} (no value generated)`);
       }
     });
-  });
-
-  // Add special handling for fields that might not be in the form structure but are used
-  // These are critical fields that often show "test test test" placeholders
-  const specialFields = {
-    // Person data fields (these show as "test test" in the UI)
-    // Note: petCarerData and substitutePetCarerData must be arrays of objects
-    'guardianData': 'Sarah Johnson',
-    'substituteGuardianData': 'Michael Brown; Emma Williams',
-    'executorData': 'David Thompson',
-    'substituteExecutorData': 'Lisa Anderson',
-    'trusteeData': 'James Wilson',
-    'substituteTrusteeData': 'Patricia Martinez',
-    'witness1Data': 'Alice Witness',
-    'witness2Data': 'Bob Witness',
-    'petCarerData': [{
-      title: 'Mr',
-      firstName: 'Charlie',
-      lastName: 'Pet Carer',
-      relationship: 'Friend',
-      address1: '789 Pet Street',
-      address2: 'Animal District',
-      address3: 'London',
-      postcode: 'SW1A 2BB',
-      mobile: '07123456789',
-      email: 'charlie.petcarer@example.com',
-      dateOfBirth: '1985-05-15',
-      gender: 'Male'
-    }],
-    'substitutePetCarerData': [{
-      title: 'Mrs',
-      firstName: 'Diana',
-      lastName: 'Pet Helper',
-      relationship: 'Sister',
-      address1: '321 Helper Lane',
-      address2: 'Care District',
-      address3: 'London',
-      postcode: 'SW1A 3CC',
-      mobile: '07987654321',
-      email: 'diana.pethelper@example.com',
-      dateOfBirth: '1988-08-20',
-      gender: 'Female'
-    }],
-    'excludedPersonData': 'Excluded Person Name',
-    'digitalExecutorData': 'Digital Executor Name',
-    'separateTrusteeData': 'Separate Trustee Name',
-    'chattelRecipientData': 'Chattel Recipient Name',
-    'debtorData': 'John Debtor Smith',
-    
-    // Textarea fields that show "test test test" (CRITICAL - these are the main offenders)
-    'monetaryGiftsDetails': 'I give £10,000 to my son John Smith when he reaches the age of 25. I give £5,000 to my daughter Sarah Smith when she reaches the age of 21.',
-    'specificGiftsDetails': 'I give my vintage watch collection to my son John Smith. I give my art collection to my daughter Sarah Smith.',
-    'propertyGiftsDetails': 'I give my property at 123 Main Street, London to my wife Jane Smith. I give my holiday home in Cornwall to my son John Smith.',
-    'propertyTrustDetails': 'My property at 1 Melk Bos Place, London shall be held in trust for my son until he reaches the age of 25, at which point full ownership shall transfer to him.',
-    'propertyTrustTerms': 'The trustees shall have full power to manage, maintain, and if necessary sell the property. The income from the property shall be used for the benefit of my son until he reaches the age of 25.',
-    'bprTrustDetails': 'My business interests in ABC Company Ltd shall be held in trust. The trustees shall manage the business and distribute income as appropriate.',
-    'bprTrustTerms': 'The business property relief trust shall operate according to standard terms. Trustees have full discretion to manage the business assets.',
-    'furtherResidualGiftsDetails': 'If any of the above gifts fail, I give the failed share equally to my siblings: Mary Smith and Peter Smith.',
-    'residualGiftsDetails': 'I give 50% of my residuary estate to my wife Jane Smith, 25% to my son John Smith, and 25% to my daughter Sarah Smith.',
-    'specifyLoansGiftsText': 'I loaned £5,000 to my son John Smith in 2020. I gave £2,000 to my daughter Sarah Smith in 2021.',
-    'charityDetails': 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)',
-    
-    // Amount fields (these need proper numbers, not "test" or "Dummy [label]")
-    'ihtAmount': '100000',
-    'petCarerGift': '5000',
-    'amountToLeaveForPetCare': '5000',
-    'minimumCharityAmountValue': '100000',
-    
-    // Schedule numbers (these need to be proper numbers, not "test")
-    'propertyTrustScheduleNumber': String(Math.floor(Math.random() * 9000000) + 1000000),
-    'bprTrustScheduleNumber': String(Math.floor(Math.random() * 9000000) + 1000000),
-    
-    // Organ donation fields (to test organ donation clause rendering)
-    'organDonationPreference': 'YesButOnly', // Select "Yes, but only..." to test specific organs
-    'specificOrgansToDonate': 'eyes, heart, and brain', // Specific organs for testing (shown when YesButOnly)
-    'specificOrgansToExclude': 'eyes', // Excluded organs for "YesAllExcept" option (shown when YesAllExcept)
-    'organPurposeGroup': ['purposeMedicalResearch', 'purposeTherapeutic'], // Select both purposes for testing
-    
-    // Ensure Property Trust is enabled and has schedule content (to test schedule validation)
-    'includePropertyTrust': 'Yes',
-    'includeBPRTrust': 'Yes',
-    
-    // CRITICAL: Ensure pet provisions are enabled (so pet care clauses work)
-    'provisionsForPets': 'Yes',
-    'petCarerGift': '5000',
-    'amountToLeaveForPetCare': '5000',
-    
-    // CRITICAL: Ensure charity gift is enabled (so IHT clause can work if selected)
-    'give10PercentToCharity': 'Yes',
-    'charityBenefitDetails': 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)',
-    'minimumCharityAmount': 'Yes',
-    'minimumCharityAmountValue': '100000',
-    
-    // CRITICAL: Ensure residuary estate is properly filled
-    'howResidueDistributed': 'AsShares',
-    'residualBeneficiariesDetails': 'I give 50% of my residuary estate to my wife Jane Smith, 25% to my son John Smith, and 25% to my daughter Sarah Smith.',
-    
-    // CRITICAL: Ensure debt forgiveness has data if enabled
-    'relieveDebts': 'Yes',
-    
-    // CRITICAL: Ensure excluded persons have data if enabled
-    'deliberatelyExcludingAnyone': 'Yes',
-    
-    // FLIT (Flexible Life Interest Trust) fields
-    'lifeTenantDetails': 'Jane Smith',
-    'beneficiariesDetails': 'John Smith; Sarah Smith',
-    'trustEndDistributionDetails': 'Upon the death of the life tenant, the trust property shall pass equally to John Smith and Sarah Smith.',
-    'flitLifeTenant': 'Jane Smith',
-    'flitFinalBeneficiaries': 'John Smith and Sarah Smith',
-    
-    // UK Address fields (ensure all address components are filled with realistic UK addresses)
-    // Testator/Default address
-    'address1': '123 High Street',
-    'address2': 'Westminster',
-    'address3': 'London',
-    'postcode': 'SW1A 1AA',
-    'testatorAddress1': '123 High Street',
-    'testatorAddress2': 'Westminster',
-    'testatorAddress3': 'London',
-    'testatorPostcode': 'SW1A 1AA',
-    
-    // Partner/Spouse address
-    'partnerAddress1': '456 Park Lane',
-    'partnerAddress2': 'Mayfair',
-    'partnerAddress3': 'London',
-    'partnerPostcode': 'W1K 6HP',
-    'spouseAddress1': '456 Park Lane',
-    'spouseAddress2': 'Mayfair',
-    'spouseAddress3': 'London',
-    'spousePostcode': 'W1K 6HP',
-    
-    // Executor address
-    'executorAddress1': '789 Oxford Street',
-    'executorAddress2': 'Marylebone',
-    'executorAddress3': 'London',
-    'executorPostcode': 'W1D 2HX',
-    
-    // Witness addresses
-    'witness1Address1': '321 Baker Street',
-    'witness1Address2': 'Marylebone',
-    'witness1Address3': 'London',
-    'witness1Postcode': 'NW1 6XE',
-    'witness2Address1': '654 Regent Street',
-    'witness2Address2': 'Soho',
-    'witness2Address3': 'London',
-    'witness2Postcode': 'W1B 2HQ',
   };
 
-  console.log('[AUTOFILL] ========== ADDING SPECIAL FIELDS ==========');
+  // Main: process all sections
+  formData.formSections.forEach((section) => {
+    if (section.fields) processFields(section.fields, section.formSection);
+  });
+
+  // COMPREHENSIVE special fields - fill EVERYTHING that might be missed
+  const specialFields = {
+    // Person/array data - must be ARRAYS for fullDetails interpolation (use REAL names, not placeholders)
+    guardianData: ['Sarah Johnson', 'Michael Brown'],
+    substituteGuardianData: ['Emma Williams'],
+    executorData: ['David Thompson', 'Lisa Anderson'],
+    substituteExecutorData: ['Robert Taylor'],
+    trusteeData: ['James Wilson'],
+    substituteTrusteeData: ['Patricia Martinez'],
+    witness1Data: ['Alice Cooper'],
+    witness2Data: ['Bob Mitchell'],
+    excludedPersonData: ['Robert Brown'],
+    digitalExecutorData: ['Sarah Wilson'],
+    separateTrusteeData: ['Christopher Davis'],
+    chattelRecipientData: ['Emma Wilson'],
+    debtorData: ['James Smith'],
+    signingOnBehalfData: ['Margaret Harris'],
+    interpreterData: ['Thomas Clark'],
+
+    petCarerData: [{
+      title: 'Mr', firstName: 'Charlie', lastName: 'Pet Carer', relationship: 'Friend',
+      address1: '789 Pet Street', address2: 'Animal District', address3: 'London', postcode: 'SW1A 2BB',
+      mobile: '07123456789', email: 'charlie.petcarer@example.com', dateOfBirth: '1985-05-15', gender: 'Male'
+    }],
+    substitutePetCarerData: [{
+      title: 'Mrs', firstName: 'Diana', lastName: 'Pet Helper', relationship: 'Sister',
+      address1: '321 Helper Lane', address2: 'Care District', address3: 'London', postcode: 'SW1A 3CC',
+      mobile: '07987654321', email: 'diana.pethelper@example.com', dateOfBirth: '1988-08-20', gender: 'Female'
+    }],
+
+    chattelsGiftBeneficiaryName: 'Emma Thompson',
+
+    address1: '123 High Street',
+    address2: 'Westminster',
+    address3: 'London',
+    postcode: 'SW1A 1AA',
+    partnerAddress1: '456 Park Lane',
+    partnerAddress2: 'Mayfair',
+    partnerAddress3: 'London',
+    partnerPostcode: 'W1K 6HP',
+    executorAddress1: '789 Oxford Street',
+    executorAddress2: 'Marylebone',
+    executorAddress3: 'London',
+    executorPostcode: 'W1D 2HX',
+    witness1Address1: '321 Baker Street',
+    witness1Address2: 'Marylebone',
+    witness1Address3: 'London',
+    witness1Postcode: 'NW1 6XE',
+    witness1Phone: '020 7946 0958',
+    witness1Occupation: 'Accountant',
+    witness2Address1: '654 Regent Street',
+    witness2Address2: 'Soho',
+    witness2Address3: 'London',
+    witness2Postcode: 'W1B 2HQ',
+    witness2Phone: '020 7946 0123',
+    witness2Occupation: 'Teacher',
+
+    monetaryGiftsDetails: 'I give £10,000 to my son John Smith when he reaches 25. I give £5,000 to my daughter Sarah Smith when she reaches 21.',
+    specificGiftsDetails: 'I give my vintage watch collection to my son John Smith. I give my art collection to my daughter Sarah Smith.',
+    propertyGiftsDetails: 'I give my property at 123 Main Street, London to my wife Jane Smith.',
+    propertyTrustDetails: 'my property at 1 Melk Bos Place, London',
+    propertyTrustTerms: 'The trustees shall have full power to manage, maintain, and if necessary sell the property.',
+    bprTrustDetails: 'My business interests in ABC Company Ltd shall be held in trust.',
+    bprTrustTerms: 'The business property relief trust shall operate according to standard terms.',
+    furtherResidualGiftsDetails: 'If any gifts fail, I give the failed share equally to my siblings Mary Smith and Peter Smith.',
+    residualGiftsDetails: 'I give 50% to my wife Jane Smith, 25% to my son John Smith, 25% to my daughter Sarah Smith.',
+    specifyLoansGiftsText: 'I loaned £5,000 to my son John Smith in 2020.',
+    charityBenefitDetails: 'The British Red Cross (Charity No. 220949); Cancer Research UK (Charity No. 1089464); The Salvation Army (Charity No. 214779)',
+    lifeTenantDetails: 'My wife Jane Smith',
+    beneficiariesDetails: 'John Smith and Sarah Smith',
+    trustEndDistributionDetails: 'Upon the death of the life tenant, the trust property shall pass equally to John Smith and Sarah Smith.',
+    funeralWishes: 'I wish for a simple cremation. Please ensure all loved ones are informed.',
+    otherFuneralRequirements: 'Ashes to be scattered at sea.',
+    physicalHealthDescription: 'The testator is in good health and of sound mind.',
+
+    propertyTrustScheduleNumber: String(Math.floor(Math.random() * 9000000) + 1000000),
+    bprTrustScheduleNumber: String(Math.floor(Math.random() * 9000000) + 1000000),
+
+    organDonationPreference: 'YesButOnly',
+    specificOrgansToDonate: 'eyes, heart, and brain',
+    specificOrgansToExclude: 'eyes',
+    organPurposeGroup: ['purposeMedicalResearch', 'purposeTherapeutic'],
+
+    petCarerGift: '5000',
+    amountToLeaveForPetCare: '5000',
+    minimumCharityAmountValue: '100000',
+    willExecutionDate: new Date().toISOString().split('T')[0],
+    nativeLanguage: 'English',
+    foreignWillLocation: 'France',
+    stepProvisionToExcludeOne: '1',
+    stepProvisionsToExcludeMultiple: '1, 2 & 3',
+    executorSpecifyAge: 25,
+  };
+
   Object.entries(specialFields).forEach(([key, val]) => {
-    if (!dummyData[key]) {
+    if (dummyData[key] === undefined || dummyData[key] === null || dummyData[key] === '') {
       dummyData[key] = val;
-      console.log(`[AUTOFILL] ✅ Added special field ${key} =`, typeof val === 'string' && val.length > 50 ? `${val.substring(0, 50)}...` : val);
-    } else {
-      console.log(`[AUTOFILL] ⏭️  Skipped ${key} (already set)`);
     }
   });
 
-  console.log('[AUTOFILL] ========== DUMMY DATA GENERATION COMPLETE ==========');
-  console.log('[AUTOFILL] Total fields filled:', Object.keys(dummyData).length);
-  console.log('[AUTOFILL] Sample of filled fields:', Object.keys(dummyData).slice(0, 20));
-  console.log('[AUTOFILL] Full dummy data object:', dummyData);
-  
+  // Apply unlockEverything for any radio/select not yet set
+  Object.entries(unlockEverything).forEach(([key, val]) => {
+    if (dummyData[key] === undefined || dummyData[key] === null) {
+      dummyData[key] = val;
+    }
+  });
+
+  // FINAL PASS: Collect every fillable field ID from the entire form and fill any we missed
+  const collectAllFieldIds = (fields, ids = new Set()) => {
+    if (!fields || !Array.isArray(fields)) return ids;
+    fields.forEach((f) => {
+      if (!f?.id) return;
+      if (['display', 'button', 'hidden', 'signature'].includes(f.type)) return;
+      ids.add(f.id);
+      if (f.type === 'section' && f.subFields) collectAllFieldIds(f.subFields, ids);
+    });
+    return ids;
+  };
+  const allIds = new Set();
+  formData.formSections?.forEach((s) => collectAllFieldIds(s.fields, allIds));
+  const missingIds = [...allIds].filter((id) => dummyData[id] === undefined || dummyData[id] === null || dummyData[id] === '');
+  missingIds.forEach((id) => {
+    const defaultVal = id.includes('Name') ? 'John Smith'
+      : id.includes('email') ? 'john.smith@example.com'
+      : id.includes('mobile') || id.includes('tel') ? '07123456789'
+      : id.includes('address') ? '123 High Street'
+      : id.includes('postcode') ? 'SW1A 1AA'
+      : id.includes('date') || id.includes('Date') ? new Date().toISOString().split('T')[0]
+      : id.includes('amount') || id.includes('Amount') ? '10000'
+      : id.includes('Details') || id.includes('details') ? 'Standard details as required for this field.'
+      : 'Standard value';
+    dummyData[id] = defaultVal;
+  });
+
   return dummyData;
 };
 
-/**
- * Auto-fill form with dummy data
- * This function will be called from the browser console or a button
- */
 export const autoFillForm = (setFormValues, formData) => {
-  console.log('[AUTOFILL] ========== STARTING AUTO-FILL PROCESS ==========');
-  console.log('[AUTOFILL] Form data available:', !!formData);
-  
   if (!formData) {
     console.error('[AUTOFILL] No form data provided');
     return;
   }
-
   const dummyData = generateDummyFormData(formData);
-  
-  console.log('[AUTOFILL] Applying dummy data to form...');
   setFormValues(dummyData);
-  
-  console.log('[AUTOFILL] ========== AUTO-FILL COMPLETE ==========');
-  console.log('[AUTOFILL] Form should now be filled with dummy data');
-  
   return dummyData;
 };

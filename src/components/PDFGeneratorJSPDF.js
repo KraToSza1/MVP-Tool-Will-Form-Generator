@@ -58,6 +58,56 @@ const safeString = (value) => {
   return str.substring(0, 5000); // Limit length
 };
 
+// Parse PNG dimensions from base64 data URL (synchronous)
+const getPngDimensions = (dataUrl) => {
+  try {
+    const base64 = dataUrl.split(',')[1];
+    if (!base64) return null;
+    const binary = atob(base64);
+    const data = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
+    if (data.length < 24) return null;
+    return {
+      width: (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19],
+      height: (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23],
+    };
+  } catch {
+    return null;
+  }
+};
+
+// Draw signature image in a fixed box: "contain" scaling, never upscale, padding, centered
+const drawSignatureInBox = (doc, dataUrl, boxX, boxY, boxW, boxH, padPoints = 6) => {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image') || dataUrl.length < 100) return false;
+  const dims = getPngDimensions(dataUrl);
+  if (!dims || dims.width <= 0 || dims.height <= 0) return false;
+  const maxW = boxW - padPoints * 2;
+  const maxH = boxH - padPoints * 2;
+  if (maxW <= 0 || maxH <= 0) return false;
+  const scale = Math.min(maxW / dims.width, maxH / dims.height, 1);
+  const drawW = dims.width * scale;
+  const drawH = dims.height * scale;
+  const cx = boxX + (boxW - drawW) / 2;
+  const cy = boxY + (boxH - drawH) / 2;
+  try {
+    doc.addImage(dataUrl, 'PNG', cx, cy, drawW, drawH);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Sanitize punctuation in clause text (double periods, stray punctuation)
+const sanitizeClausePunctuation = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/\.{2,}/g, '.')           // ".." or "..." -> "."
+    .replace(/\s{2,}/g, ' ')           // multiple spaces -> single space
+    .replace(/\s+\./g, '.')            // " ." -> "."
+    .replace(/\.\s*\./g, '.')          // ". ." -> "."
+    .trim();
+};
+
 const formatCurrencyValue = (value) => {
   if (value == null || value === '') return '';
   const numeric = typeof value === 'number'
@@ -105,6 +155,15 @@ const isPlaceholderOrIncomplete = (text) => {
     /attestation clause to note signature is weak/i, // Internal note
     /please let people know i love them/i,           // Unprofessional funeral text
     /etc\.\.\.?\s*$/i,                              // "etc..." endings
+    
+    // Known placeholder names that must never appear in PDF
+    /\bChattel Recipient Name\b/i,
+    /\bExcluded Person Name\b/i,
+    /\bJohn Debtor Smith\b/i,
+    /\bDigital Executor Name\b/i,
+    /\bSeparate Trustee Name\b/i,
+    /\bAuthorised Signatory Name\b/i,
+    /\bInterpreter Name\b/i,
     
     // Standard placeholder patterns
     /\[.*?\]/,                          // Square bracket placeholders like [Life Tenant Name]
@@ -639,14 +698,33 @@ const interpolateText = (text, values) => {
     const [sectionId, subField] = fullKey.split(':');
 
     if (subField === 'fullDetails' || subField === 'fullList') {
+      // Special handling: chattelsGiftBeneficiarySection uses chattelsGiftBeneficiaryName when no array data
+      // When name is empty, return placeholder so clause is blocked (hasUnresolved stays true)
+      if (sectionId === 'chattelsGiftBeneficiarySection') {
+        const name = values.chattelsGiftBeneficiaryName;
+        if (name && String(name).trim() !== '') {
+          return String(name).trim();
+        }
+        return `{{field:${fullKey}}}`;
+      }
       const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
       const array = values[fallbackId] || values[sectionId] || [];
       if (Array.isArray(array) && array.length > 0) {
-        return array.map(item =>
+        const resolved = array.map(item =>
           typeof item === 'object'
             ? Object.values(item).filter(Boolean).join(', ')
             : item
         ).join('; ');
+        // Block known placeholder strings - return unresolved so clause is omitted
+        const placeholderNames = [
+          'Chattel Recipient Name', 'Excluded Person Name', 'John Debtor Smith',
+          'Digital Executor Name', 'Separate Trustee Name', 'Authorised Signatory Name', 'Interpreter Name'
+        ];
+        const isPlaceholder = placeholderNames.some(p =>
+          resolved === p || resolved.startsWith(p + ';') || resolved.endsWith('; ' + p) || resolved.includes('; ' + p + ';')
+        );
+        if (isPlaceholder) return `{{field:${fullKey}}}`;
+        return resolved;
       }
       return '';
     }
@@ -688,13 +766,22 @@ const interpolateText = (text, values) => {
         if (purposeField && purposeField.options) {
           const selectedFragments = purposeField.options
             .filter(opt => {
-              // Check if this option is selected by ID or value
-              return selectedPurposes.includes(opt.id) || selectedPurposes.includes(opt.value);
+              const fragment = opt.willClauseTextFragment || opt.label;
+              const optValue = (opt.value !== undefined && opt.value !== false && opt.value !== null && opt.value !== '')
+                ? opt.value
+                : (fragment || opt.id);
+              // Match by id, value, willClauseTextFragment, or label (checkbox can store any of these)
+              return selectedPurposes.includes(opt.id) ||
+                selectedPurposes.includes(opt.value) ||
+                selectedPurposes.includes(opt.willClauseTextFragment) ||
+                selectedPurposes.includes(opt.label) ||
+                selectedPurposes.includes(optValue);
             })
             .map(opt => opt.willClauseTextFragment || opt.label)
             .filter(Boolean);
           if (selectedFragments.length > 0) {
-            return selectedFragments.join(', ');
+            // Concatenate with "and/or" for legally correct multi-purpose wording
+            return selectedFragments.join(' and/or ');
           }
         }
       }
@@ -1214,6 +1301,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     const willClauses = [];
     const seenClauses = new Set(); // Track seen clauses to prevent duplicates
     const scheduleReferences = new Set(); // Track schedule references throughout function
+    let hasPersonalPossessionsClause = false; // Only ONE "personal possessions" clause may render
+    const PERSONAL_POSSESSIONS_PATTERN = /I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it/i;
     
     // Explicit signing date fields - declared once for use throughout function
     const explicitSigningDateFields = [
@@ -1315,7 +1404,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                   willClauses.push({
                     sectionLabel: section.formSection,
                     fieldLabel: field.label,
-                    text: safeString(interpolated)
+                    text: sanitizeClausePunctuation(safeString(interpolated))
                   });
                 }
               }
@@ -1327,11 +1416,32 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
               if (selectedValue) {
                 const selectedOption = field.options.find(opt => opt && opt.value === selectedValue);
                 if (selectedOption?.willClauseText) {
+                  // CRITICAL: Block personal chattels beneficiary clause when beneficiary name is missing
+                  if (field.id === 'personalChattelsGift' && selectedValue === 'Beneficiary') {
+                    const name = (formValues.chattelsGiftBeneficiaryName || '').toString().trim();
+                    if (!name) {
+                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING personal chattels beneficiary clause - no beneficiary name`);
+                      return; // Skip - clause must not render without beneficiary name
+                    }
+                  }
+                  // DE-DUPLICATION: Skip unspecifiedChattelsAction "SpecificRecipient" when personalChattelsGift is "Beneficiary"
+                  // Only one "personal possessions" clause may appear - Beneficiary takes precedence
+                  if (field.id === 'unspecifiedChattelsAction' && selectedValue === 'SpecificRecipient' && formValues.personalChattelsGift === 'Beneficiary') {
+                    console.warn(`[PDF VALIDATION] ⚠️ SKIPPING unspecifiedChattelsAction SpecificRecipient - personalChattelsGift Beneficiary takes precedence`);
+                    return;
+                  }
                   const interpolated = interpolateText(selectedOption.willClauseText, formValues);
                   if (interpolated && 
                       !/\{\{field:[^}]+\}\}/.test(interpolated) && 
                       interpolated.trim() !== '' &&
                       !isPlaceholderOrIncomplete(interpolated)) {
+                    
+                    // DE-DUPLICATION: Only one "personal possessions" clause may render
+                    if (PERSONAL_POSSESSIONS_PATTERN.test(interpolated) && hasPersonalPossessionsClause) {
+                      console.warn(`[PDF VALIDATION] ⚠️ SKIPPING duplicate personal possessions clause`);
+                      return;
+                    }
+                    if (PERSONAL_POSSESSIONS_PATTERN.test(interpolated)) hasPersonalPossessionsClause = true;
                     
                     // CRITICAL: Check for missing subjects BEFORE adding clause
                     const hasMissingSubject = 
@@ -1364,7 +1474,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       willClauses.push({
                         sectionLabel: section.formSection,
                         fieldLabel: field.label,
-                        text: safeString(interpolated)
+                        text: sanitizeClausePunctuation(safeString(interpolated))
                       });
                     }
                   }
@@ -1437,7 +1547,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       willClauses.push({
                         sectionLabel: section.formSection,
                         fieldLabel: subField.label || field.label,
-                        text: safeString(interpolated)
+                        text: sanitizeClausePunctuation(safeString(interpolated))
                       });
                     }
                   }
@@ -2401,15 +2511,35 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     // NOTE: Page numbering is done AFTER all pages are added (at the very end)
     doc.addPage();
     
-    // Helper function to draw identical witness boxes - MUST be identical for both
-    // NO outer border - clean professional look with just field lines
-    const drawWitnessBox = (doc, x, y, w, h, title) => {
+    // Helper to get witness details from formValues (witness1 or witness2)
+    const getWitnessDetails = (n) => {
+      const prefix = `witness${n}`;
+      const name = formValues[`${prefix}Name`] ||
+        (formValues[`${prefix}Data`] && Array.isArray(formValues[`${prefix}Data`]) && formValues[`${prefix}Data`][0]
+          ? (typeof formValues[`${prefix}Data`][0] === 'object'
+              ? [formValues[`${prefix}Data`][0].firstName, formValues[`${prefix}Data`][0].lastName].filter(Boolean).join(' ')
+              : String(formValues[`${prefix}Data`][0]))
+          : '') || '';
+      const addrParts = [
+        formValues[`${prefix}Address1`] || formValues[`${prefix}address1`],
+        formValues[`${prefix}Address2`] || formValues[`${prefix}address2`],
+        [formValues[`${prefix}Address3`] || formValues[`${prefix}address3`], formValues[`${prefix}Postcode`] || formValues[`${prefix}postcode`]].filter(Boolean).join(' ')
+      ].filter(Boolean);
+      const address = addrParts.join(', ') || '';
+      const phone = formValues[`${prefix}Phone`] || formValues[`${prefix}mobile`] || formValues[`${prefix}Mobile`] || '';
+      const occupation = formValues[`${prefix}Occupation`] || '';
+      return { name: String(name).trim(), address: String(address).trim(), phone: String(phone).trim(), occupation: String(occupation).trim() };
+    };
+
+    const WITNESS_SIG_BOX_W = 42;
+    const WITNESS_SIG_BOX_H = 18;
+
+    const drawWitnessBox = (doc, x, y, w, h, title, signatureDataUrl = null, details = {}) => {
       const pad = 6;
       const lineX1 = x + pad;
       const lineX2 = x + w - pad;
+      const { name = '', address = '', phone = '', occupation = '' } = details;
 
-      // NO outer rect() - both witness boxes render identically without borders
-      // Calculate positions - ensure all content fits
       let cy = y + 8;
       doc.setFont('times', 'bold');
       doc.setFontSize(11);
@@ -2420,31 +2550,39 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       doc.setFontSize(10);
       doc.text('SIGNATURE', x + pad, cy);
       cy += 6;
+      // Fixed signature bounding box - always reserve space, visible border
       doc.setLineWidth(0.2);
       doc.setDrawColor(0, 0, 0);
-      doc.line(lineX1, cy, lineX2, cy);
-
-      cy += 10;
+      const sigBoxX = lineX1;
+      const sigBoxY = cy;
+      doc.rect(sigBoxX, sigBoxY, WITNESS_SIG_BOX_W, WITNESS_SIG_BOX_H);
+      if (signatureDataUrl && typeof signatureDataUrl === 'string' && signatureDataUrl.startsWith('data:image') && signatureDataUrl.length > 100) {
+        drawSignatureInBox(doc, signatureDataUrl, sigBoxX, sigBoxY, WITNESS_SIG_BOX_W, WITNESS_SIG_BOX_H);
+      }
+      cy += WITNESS_SIG_BOX_H + 4;
       doc.text('Full name', x + pad, cy);
       cy += 6;
+      if (name) doc.text(name.substring(0, 35), lineX1, cy - 1);
       doc.line(lineX1, cy, lineX2, cy);
 
       cy += 10;
       doc.text('Address', x + pad, cy);
       cy += 6;
+      if (address) doc.text(address.substring(0, 45), lineX1, cy - 1);
       doc.line(lineX1, cy, lineX2, cy);
-      // Second address line for better structure
       cy += 8;
       doc.line(lineX1, cy, lineX2, cy);
 
       cy += 10;
       doc.text('Phone', x + pad, cy);
       cy += 6;
+      if (phone) doc.text(phone.substring(0, 25), lineX1, cy - 1);
       doc.line(lineX1, cy, lineX2, cy);
 
       cy += 10;
       doc.text('Occupation', x + pad, cy);
       cy += 6;
+      if (occupation) doc.text(occupation.substring(0, 35), lineX1, cy - 1);
       doc.line(lineX1, cy, lineX2, cy);
     };
 
@@ -2531,33 +2669,22 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     // If executionDate is null, the line remains blank (user fills in at signing)
     y += 14;
 
-    // Testator signature line
-    if (testatorSignature && 
-        typeof testatorSignature === 'string' && 
-        testatorSignature.startsWith('data:image') &&
-        testatorSignature.length > 100 &&
-        testatorSignature.length < 3000000) {
-      try {
-        doc.addImage(testatorSignature, 'PNG', margin, y, 90, 25);
-        y += 30;
-      } catch {
-        doc.setFont('times', 'bold');
-        doc.setFontSize(11);
-        doc.text('TESTATOR SIGNATURE', margin, y);
-        y += 8;
-        doc.setLineWidth(0.35);
-        doc.line(margin, y, margin + 90, y);
-        y += 18;
-      }
-    } else {
-      doc.setFont('times', 'bold');
-      doc.setFontSize(11);
-      doc.text('TESTATOR SIGNATURE', margin, y);
-      y += 8;
-      doc.setLineWidth(0.35);
-      doc.line(margin, y, margin + 90, y);
-      y += 18;
+    // Testator signature: fixed box (56mm x 21mm), always reserve space
+    const TESTATOR_BOX_W = 56;
+    const TESTATOR_BOX_H = 21;
+    doc.setFont('times', 'bold');
+    doc.setFontSize(11);
+    doc.text('TESTATOR SIGNATURE', margin, y);
+    y += 8;
+    // Fixed bounding box with visible border
+    doc.setLineWidth(0.2);
+    doc.setDrawColor(0, 0, 0);
+    doc.rect(margin, y, TESTATOR_BOX_W, TESTATOR_BOX_H);
+    if (testatorSignature && typeof testatorSignature === 'string' && testatorSignature.startsWith('data:image') &&
+        testatorSignature.length > 100 && testatorSignature.length < 3000000) {
+      drawSignatureInBox(doc, testatorSignature, margin, y, TESTATOR_BOX_W, TESTATOR_BOX_H);
     }
+    y += TESTATOR_BOX_H + 6;
 
     // Attestation sentence
     doc.setFont('times', 'normal');
@@ -2574,15 +2701,15 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     // --- Witness boxes (2 columns) ---
     const gap = 10;
     const colW = (contentW - gap) / 2;
-    const boxH = 70; // Increased from 55 to ensure all fields (including Occupation) fit inside box
+    const boxH = 105; // Fixed height for witness blocks - signature box + name/address/phone/occupation
 
     const w1x = margin;
     const w2x = margin + colW + gap;
 
-    // Draw both witness boxes using the SAME function to ensure they're identical
-    // This guarantees both boxes have identical styling, spacing, and structure
-    drawWitnessBox(doc, w1x, y, colW, boxH, 'Witness 1');
-    drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2');
+    const witness1Details = getWitnessDetails(1);
+    const witness2Details = getWitnessDetails(2);
+    drawWitnessBox(doc, w1x, y, colW, boxH, 'Witness 1', consultantSignature, witness1Details);
+    drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2', clientSignature, witness2Details);
 
     // ===== VALIDATION ERRORS APPENDIX (AT THE END) =====
     // Render validation errors report at the end of the document

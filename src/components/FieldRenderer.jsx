@@ -36,6 +36,8 @@
  * All logs include field IDs, labels, types, values, and relevant context for comprehensive debugging!
  */
 
+const DEBUG_LOGS = false;
+
 import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react';
 import {
@@ -70,10 +72,7 @@ const LazyDatePicker = React.lazy(async () => {
   return { default: Comp };
 });
 
-const LazySignatureCanvas = React.lazy(async () => {
-  const mod = await import('react-signature-canvas');
-  return { default: mod.default };
-});
+const LazySignaturePad = React.lazy(() => import('./SignaturePad.jsx'));
 
 function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditions }) {
   
@@ -81,138 +80,12 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   const [inputValues, setInputValues] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [dateInputValue, setDateInputValue] = useState('');
-  const sigCanvasRef = useRef({});
+  const sigPadRef = useRef({});
+  const signatureToastShownRef = useRef({});
   const inputRefs = useRef({});
   const textInputRef = useRef(null);
   const sigContainerRef = useRef(null);
-  const [sigCanvasWidth, setSigCanvasWidth] = useState(0);
   const isSignatureField = field?.type === 'signature';
-
-  // Console log every field render
-  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Type: ${field.type}, Required: ${field.required}, Current Value: ${formValues[field.id] || 'empty'}`);
-
-  // Keep the signature canvas bitmap width in sync with its container.
-  // Must be unconditional (hooks rule), so we no-op unless this FieldRenderer instance is a signature field.
-  useEffect(() => {
-    if (!isSignatureField) return;
-    const el = sigContainerRef.current;
-    if (!el) return;
-
-    const measure = () => {
-      const w = Math.floor(el.clientWidth || 0);
-      if (w > 0) {
-        setSigCanvasWidth((prev) => (prev === w ? prev : w));
-      }
-    };
-
-    measure();
-
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measure());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isSignatureField]);
-
-  // Load existing signature when component mounts or formValues change
-  useEffect(() => {
-    if (!isSignatureField) return;
-    const existingSignature = formValues[field.id];
-    
-    let retryCount = 0;
-    const maxRetries = 10;
-    
-    // Wait for canvas to be initialized
-    const loadSignature = () => {
-      const canvas = sigCanvasRef.current[field.id];
-      if (!canvas) {
-        retryCount++;
-        if (retryCount < maxRetries) {
-          // Retry if canvas not ready yet
-          setTimeout(loadSignature, 100);
-          return;
-        } else {
-          console.warn(`[SIGNATURE LOAD] Field "${field.id}" - Canvas not found after ${maxRetries} retries`);
-          return;
-        }
-      }
-      
-      console.log(`[SIGNATURE LOAD] Field "${field.id}" - Canvas found, checking for existing signature`);
-      
-      if (existingSignature && typeof existingSignature === 'string' && existingSignature.startsWith('data:image')) {
-        console.log(`[SIGNATURE LOAD] Field "${field.id}" - Loading existing signature (length: ${existingSignature.length})`);
-        
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous'; // Handle CORS if needed
-          
-          img.onload = () => {
-            try {
-              const canvasElement = canvas.getCanvas();
-              if (canvasElement) {
-                const ctx = canvasElement.getContext('2d');
-                if (ctx) {
-                  // Clear canvas first
-                  ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                  
-                  // Calculate scaling to fit signature in canvas while maintaining aspect ratio
-                  const imgAspect = img.width / img.height;
-                  const canvasAspect = canvasElement.width / canvasElement.height;
-                  
-                  let drawWidth, drawHeight, drawX, drawY;
-                  
-                  if (imgAspect > canvasAspect) {
-                    // Image is wider - fit to width
-                    drawWidth = canvasElement.width;
-                    drawHeight = canvasElement.width / imgAspect;
-                    drawX = 0;
-                    drawY = (canvasElement.height - drawHeight) / 2;
-                  } else {
-                    // Image is taller - fit to height
-                    drawHeight = canvasElement.height;
-                    drawWidth = canvasElement.height * imgAspect;
-                    drawX = (canvasElement.width - drawWidth) / 2;
-                    drawY = 0;
-                  }
-                  
-                  // Draw the existing signature
-                  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-                  console.log(`[SIGNATURE LOAD] ✅ Successfully loaded existing signature for field "${field.id}"`);
-                } else {
-                  console.warn(`[SIGNATURE LOAD] Could not get 2D context for field "${field.id}"`);
-                }
-              } else {
-                console.warn(`[SIGNATURE LOAD] Could not get canvas element for field "${field.id}"`);
-              }
-            } catch (drawError) {
-              console.warn(`[SIGNATURE LOAD] Failed to draw existing signature for field "${field.id}":`, drawError);
-            }
-          };
-          
-          img.onerror = (error) => {
-            console.warn(`[SIGNATURE LOAD] Failed to load signature image for field "${field.id}":`, error);
-            console.warn(`[SIGNATURE LOAD] Signature data preview: ${existingSignature.substring(0, 100)}...`);
-          };
-          
-          img.src = existingSignature;
-        } catch (error) {
-          console.warn(`[SIGNATURE LOAD] Error loading signature for field "${field.id}":`, error);
-        }
-      } else if (!existingSignature) {
-        // Clear canvas if no signature exists
-        console.log(`[SIGNATURE LOAD] Field "${field.id}" - No existing signature, clearing canvas`);
-        try {
-          canvas.clear();
-        } catch (error) {
-          console.warn(`[SIGNATURE LOAD] Error clearing canvas for field "${field.id}":`, error);
-        }
-      } else {
-        console.log(`[SIGNATURE LOAD] Field "${field.id}" - Invalid signature format:`, typeof existingSignature, existingSignature?.substring?.(0, 50));
-      }
-    };
-    
-    // Initial delay to ensure canvas is mounted
-    setTimeout(loadSignature, 200);
-  }, [isSignatureField, field.id, formValues[field.id]]);
 
   useEffect(() => {
     if (field?.type !== 'date') return;
@@ -255,15 +128,15 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       !value.toLowerCase().includes('test test test');
     
     if (isReplacingTest) {
-      console.log(`[QUESTION CHANGE] ✅✅✅ PLACEHOLDER REPLACED! Field "${fieldId}" - Replaced "${previousValue.substring(0, 80)}..." with "${value.substring(0, 80)}..."`);
+      DEBUG_LOGS&&console.log(`[QUESTION CHANGE] ✅✅✅ PLACEHOLDER REPLACED! Field "${fieldId}" - Replaced "${previousValue.substring(0, 80)}..." with "${value.substring(0, 80)}..."`);
     }
     
     // Warn if new value still contains "test test test"
     if (value && typeof value === 'string' && value.toLowerCase().includes('test test test')) {
-      console.warn(`[QUESTION CHANGE] ⚠️  WARNING: Field "${fieldId}" still contains "test test test"! Value: "${value.substring(0, 100)}"`);
+      DEBUG_LOGS&&console.warn(`[QUESTION CHANGE] ⚠️  WARNING: Field "${fieldId}" still contains "test test test"! Value: "${value.substring(0, 100)}"`);
     }
     // Log all form changes for debugging
-    console.log(`[QUESTION CHANGE] Field "${fieldId}" (${field.label}) changed to:`, value);
+    DEBUG_LOGS&&console.log(`[QUESTION CHANGE] Field "${fieldId}" (${field.label}) changed to:`, value);
     
     // Only log errors for corrupted data
     if (typeof value === 'number' && (!isFinite(value) || Math.abs(value) >= 1e10 || isNaN(value))) {
@@ -277,11 +150,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const conditions = fieldToCheck?.conditions;
     if (!conditions) return true;
     
-    console.log(`[CONDITION CHECK] Evaluating conditions for field "${fieldToCheck.id}" (${fieldToCheck.label}):`, conditions);
+    DEBUG_LOGS&&console.log(`[CONDITION CHECK] Evaluating conditions for field "${fieldToCheck.id}" (${fieldToCheck.label}):`, conditions);
     
     const evalClause = (clause) => {
       const value = formValues[clause.field];
-      console.log(`[CONDITION] Checking clause - Field: ${clause.field}, Value: ${value}, Expected: ${clause.value}, Operator: ${clause.operator}`);
+      DEBUG_LOGS&&console.log(`[CONDITION] Checking clause - Field: ${clause.field}, Value: ${value}, Expected: ${clause.value}, Operator: ${clause.operator}`);
       
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'in') return clause.value.includes(value);
@@ -296,20 +169,19 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       ? (fieldToCheck?.conditionLogic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause))
       : evalClause(conditions);
       
-    console.log(`[CONDITION RESULT] Field "${fieldToCheck.id}" condition result:`, result);
+    DEBUG_LOGS&&console.log(`[CONDITION RESULT] Field "${fieldToCheck.id}" condition result:`, result);
     return result;
   };
 
   if (field.conditions && !evaluateConditions(field)) {
-    console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
+    DEBUG_LOGS&&console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
     return null;
   } else if (field.conditions) {
-    console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - conditions met`);
+    DEBUG_LOGS&&console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - conditions met`);
   } else {
-    console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - no conditions`);
+    DEBUG_LOGS&&console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - no conditions`);
   }
 
-  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Rendering as: ${field.type}${field.action ? ` (${field.action})` : ''}`);
   
   if (field.type === 'button' && field.action === 'openAddForm') {
     const rawTarget = field.id.replace(/^add/i, '').replace(/Button$/i, 'Data');
@@ -319,21 +191,21 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       ? formValues[targetFieldId] 
       : (formValues[targetFieldId] ? [formValues[targetFieldId]] : []);
     
-    console.log(`[ADD BUTTON FIELD] Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}", Existing items: ${existingItems.length}`);
+    DEBUG_LOGS&&console.log(`[ADD BUTTON FIELD] Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}", Existing items: ${existingItems.length}`);
 
     const handleAddItem = () => {
-      console.log(`[ADD ITEM BUTTON] Field "${field.id}" (${field.label}) - Current input: "${currentInputValue}"`);
+      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" (${field.label}) - Current input: "${currentInputValue}"`);
       
       if (!currentInputValue.trim()) {
-        console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Aborted: empty input`);
+        DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Aborted: empty input`);
         return;
       }
 
       const newItem = currentInputValue.trim();
       const updatedItems = [...existingItems, newItem];
       
-      console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Added item: "${newItem}". Total items now: ${updatedItems.length}`);
-      console.log(`[ADD ITEM BUTTON] Field "${field.id}" - All items:`, updatedItems);
+      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Added item: "${newItem}". Total items now: ${updatedItems.length}`);
+      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - All items:`, updatedItems);
       
       setFormValues((prev) => ({
         ...prev,
@@ -349,8 +221,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       const itemToRemove = existingItems[indexToRemove];
       const updatedItems = existingItems.filter((_, index) => index !== indexToRemove);
       
-      console.log(`[REMOVE ITEM] Field "${field.id}" (${field.label}) - Removed item at index ${indexToRemove}: "${itemToRemove}"`);
-      console.log(`[REMOVE ITEM] Field "${field.id}" - Remaining items: ${updatedItems.length}`, updatedItems);
+      DEBUG_LOGS&&console.log(`[REMOVE ITEM] Field "${field.id}" (${field.label}) - Removed item at index ${indexToRemove}: "${itemToRemove}"`);
+      DEBUG_LOGS&&console.log(`[REMOVE ITEM] Field "${field.id}" - Remaining items: ${updatedItems.length}`, updatedItems);
       
       setFormValues((prev) => ({
         ...prev,
@@ -371,7 +243,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         <button
           type="button"
           onClick={() => {
-            console.log(`[ADD BUTTON CLICK] Field "${field.id}" - Opening input form for "${targetFieldId}"`);
+            DEBUG_LOGS&&console.log(`[ADD BUTTON CLICK] Field "${field.id}" - Opening input form for "${targetFieldId}"`);
             setShowInputs((prev) => ({ ...prev, [targetFieldId]: true }));
             setTimeout(() => {
               inputRefs.current[targetFieldId]?.focus();
@@ -469,7 +341,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'text' || field.type === 'number' || field.type === 'currency') {
-    console.log(`[TEXT FIELD] Field "${field.id}" (${field.label}) - Type: ${field.type}, Required: ${field.required}`);
+    DEBUG_LOGS&&console.log(`[TEXT FIELD] Field "${field.id}" (${field.label}) - Type: ${field.type}, Required: ${field.required}`);
     // UK-specific field handling
     const isPostcode = field.id === 'postcode' || field.id.toLowerCase().includes('postcode');
     const isPhone = field.id === 'mobile' || field.id === 'tel2' || field.id.toLowerCase().includes('phone') || field.id.toLowerCase().includes('tel');
@@ -495,11 +367,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       let value = e.target.value;
       const isBlur = e.type === 'blur';
       
-      console.log(`[TEXT INPUT] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value: "${value}"`);
+      DEBUG_LOGS&&console.log(`[TEXT INPUT] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value: "${value}"`);
       
       // Special feedback for partner name field
       if (field.id === 'partnerFullName' && value.trim() && isBlur) {
-        console.log(`[PARTNER NAME] Partner name saved: "${value.trim()}" - This will update the summary below automatically!`);
+        DEBUG_LOGS&&console.log(`[PARTNER NAME] Partner name saved: "${value.trim()}" - This will update the summary below automatically!`);
         // Show success message for partner name
         if (typeof window !== 'undefined' && window.showPartnerNameSuccess) {
           window.showPartnerNameSuccess(value.trim());
@@ -690,7 +562,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'textarea') {
-    console.log(`[TEXTAREA FIELD] Field "${field.id}" (${field.label}) - Required: ${field.required}, Rows: ${field.rows || 4}`);
+    DEBUG_LOGS&&console.log(`[TEXTAREA FIELD] Field "${field.id}" (${field.label}) - Required: ${field.required}, Rows: ${field.rows || 4}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     const handleTextareaChange = (e) => {
@@ -706,12 +578,12 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       );
       
       if (hasTestPlaceholder && value && !value.toLowerCase().includes('test test test')) {
-        console.log(`[TEXTAREA] ✅✅✅ PLACEHOLDER REPLACED! Field "${field.id}" - Replaced "${previousValue.substring(0, 50)}..." with "${value.substring(0, 50)}..."`);
+        DEBUG_LOGS&&console.log(`[TEXTAREA] ✅✅✅ PLACEHOLDER REPLACED! Field "${field.id}" - Replaced "${previousValue.substring(0, 50)}..." with "${value.substring(0, 50)}..."`);
       }
       
-      console.log(`[TEXTAREA] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value length: ${value.length} chars`);
+      DEBUG_LOGS&&console.log(`[TEXTAREA] Field "${field.id}" (${field.label}) - ${isBlur ? 'BLUR' : 'CHANGE'} event - Value length: ${value.length} chars`);
       if (value.toLowerCase().includes('test test')) {
-        console.warn(`[TEXTAREA] ⚠️  WARNING: Field "${field.id}" still contains "test test" placeholder! Current value: "${value.substring(0, 100)}"`);
+        DEBUG_LOGS&&console.warn(`[TEXTAREA] ⚠️  WARNING: Field "${field.id}" still contains "test test" placeholder! Current value: "${value.substring(0, 100)}"`);
       }
       
       // Clear previous errors on change (validate on blur)
@@ -804,7 +676,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const selectedOption = field.options.find(
       (opt) => opt.value === formValues[field.id]
     );
-    console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
+    DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
@@ -837,11 +709,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                 checked={formValues[field.id] === opt.value}
                     onChange={(e) => {
                       const newValue = e.target.value;
-                      console.log(`[RADIO SELECTION] Field "${field.id}" (${field.label}) - Selected option: "${newValue}" (was: "${formValues[field.id] || 'none'}")`);
+                      DEBUG_LOGS&&console.log(`[RADIO SELECTION] Field "${field.id}" (${field.label}) - Selected option: "${newValue}" (was: "${formValues[field.id] || 'none'}")`);
                       
                       // Special logging for Aristone Solicitors selection
                       if ((field.id === 'chooseAristoneExecutor' || field.id === 'chooseAristoneSubstituteExecutor') && newValue === 'Aristone') {
-                        console.log(`[ARISTONE SELECTED] 🥇 User selected Aristone Solicitors as ${field.id.includes('Substitute') ? 'substitute ' : ''}executor!`);
+                        DEBUG_LOGS&&console.log(`[ARISTONE SELECTED] 🥇 User selected Aristone Solicitors as ${field.id.includes('Substitute') ? 'substitute ' : ''}executor!`);
                         // Show success message for Aristone selection
                         if (typeof window !== 'undefined' && window.showAristoneSuccess) {
                           window.showAristoneSuccess(field.id.includes('Substitute') ? 'substitute executor' : 'executor');
@@ -857,13 +729,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                             ...prev,
                             [dataFieldId]: [aristoneDetails]
                           }));
-                          console.log(`[ARISTONE DATA] Auto-populated ${dataFieldId} with Aristone details`);
+                          DEBUG_LOGS&&console.log(`[ARISTONE DATA] Auto-populated ${dataFieldId} with Aristone details`);
                         }, 100);
                       }
                       
                       // Handle switching to Individual option - clear Aristone data
                       if ((field.id === 'chooseAristoneExecutor' || field.id === 'chooseAristoneSubstituteExecutor') && newValue === 'Individual') {
-                        console.log(`[INDIVIDUAL SELECTED] User chose to add individual ${field.id.includes('Substitute') ? 'substitute ' : ''}executor instead of Aristone`);
+                        DEBUG_LOGS&&console.log(`[INDIVIDUAL SELECTED] User chose to add individual ${field.id.includes('Substitute') ? 'substitute ' : ''}executor instead of Aristone`);
                         const dataFieldId = field.id.includes('Substitute') ? 'substituteExecutorData' : 'executorData';
                         
                         // Clear any existing Aristone data
@@ -872,7 +744,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                             ...prev,
                             [dataFieldId]: []
                           }));
-                          console.log(`[INDIVIDUAL DATA] Cleared ${dataFieldId} for individual entry`);
+                          DEBUG_LOGS&&console.log(`[INDIVIDUAL DATA] Cleared ${dataFieldId} for individual entry`);
                         }, 100);
                       }
                       
@@ -919,7 +791,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
   if (field.type === 'checkboxGroup' && field.options) {
     const selectedCount = Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0;
-    console.log(`[CHECKBOX GROUP] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: ${selectedCount}, Required: ${field.required}`);
+    DEBUG_LOGS&&console.log(`[CHECKBOX GROUP] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: ${selectedCount}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
     return (
@@ -956,7 +828,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                     const newValue = Array.isArray(formValues[field.id])
                       ? [...formValues[field.id]]
                       : [];
-                    console.log(`[CHECKBOX CHANGE] Field "${field.id}" (${field.label}) - Option "${optValue}" ${e.target.checked ? 'CHECKED' : 'UNCHECKED'}`);
+                    DEBUG_LOGS&&console.log(`[CHECKBOX CHANGE] Field "${field.id}" (${field.label}) - Option "${optValue}" ${e.target.checked ? 'CHECKED' : 'UNCHECKED'}`);
                     
                     if (e.target.checked) {
                       newValue.push(optValue);
@@ -964,7 +836,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                       const index = newValue.indexOf(optValue);
                       if (index > -1) newValue.splice(index, 1);
                     }
-                    console.log(`[CHECKBOX RESULT] Field "${field.id}" new value:`, newValue);
+                    DEBUG_LOGS&&console.log(`[CHECKBOX RESULT] Field "${field.id}" new value:`, newValue);
                     
                     // Clear validation errors when selection is made
                     if (newValue.length > 0 || !field.required) {
@@ -1000,7 +872,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'section' && field.subFields) {
-    console.log(`[SECTION FIELD] Field "${field.id}" (${field.label}) - SubFields: ${field.subFields.length}`);
     const isAddressSection = field.label.toLowerCase().includes('address');
     
     return (
@@ -1015,7 +886,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         {field.subFields.map((subField) => {
           // Skip subFields that shouldn't be shown (conditions not met)
           if (subField.conditions && evaluateFieldConditions && !evaluateFieldConditions(subField)) {
-            console.log(`[FIELD RENDER] SubField ${subField.id} skipped - conditions not met`);
             return null; // Skip rendering this subField
           }
           
@@ -1034,7 +904,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'display') {
-    console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
+    DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
     
     // Check if this is the partner info display and if we have a partner name
     const isPartnerDisplay = field.id === 'partnerInfoDisplay';
@@ -1156,11 +1026,46 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'signature') {
-    console.log(`[SIGNATURE FIELD] Field "${field.id}" (${field.label}) - Required: ${field.required}, Has existing signature: ${!!formValues[field.id]}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
-    const canvasWidth = Math.max(280, Math.min(900, sigCanvasWidth || 500));
-    const canvasHeight = 120;
-    
+    const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+    const [modalSignature, setModalSignature] = useState('');
+    const modalRef = useRef(null);
+    useEffect(() => {
+      if (!signatureModalOpen) return;
+      modalRef.current?.focus();
+      const onEsc = (e) => { if (e.key === 'Escape') setSignatureModalOpen(false); };
+      document.addEventListener('keydown', onEsc);
+      return () => document.removeEventListener('keydown', onEsc);
+    }, [signatureModalOpen]);
+    // Canvas aspect ratio matches PDF box (wide format for signatures)
+    const isTestator = field.id === 'testatorSignature';
+    const canvasWidth = isTestator ? 260 : 220;
+    const canvasHeight = isTestator ? 90 : 80;
+    const hasSignature = formValues[field.id] && typeof formValues[field.id] === 'string' && formValues[field.id].startsWith('data:image');
+
+    const openModal = () => {
+      setModalSignature(formValues[field.id] || '');
+      setSignatureModalOpen(true);
+    };
+    const closeModal = () => setSignatureModalOpen(false);
+    const handleApply = () => {
+      const sig = modalSignature;
+      if (sig && sig.startsWith('data:image')) {
+        logFormChange(field.id, 'Signature data URL');
+        setValidationErrors((prev) => { const n = { ...prev }; delete n[field.id]; return n; });
+        setFormValues((prev) => ({ ...prev, [field.id]: sig }));
+        if (typeof window !== 'undefined' && window.showSignatureSuccess) {
+          window.showSignatureSuccess(field.label);
+        }
+      }
+      closeModal();
+    };
+    const handleClearInModal = () => {
+      setModalSignature('');
+      sigPadRef.current[field.id]?.clear?.();
+    };
+    const onPadClear = () => setModalSignature('');
+
     return (
       <div className="my-4 sm:my-5 group" data-field-id={field.id}>
         <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
@@ -1170,161 +1075,115 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           <span className="break-words">{field.label}</span>
           {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
         </label>
+        {field.subLabel && (
+          <p className="text-xs text-gray-500 mb-2">{field.subLabel}</p>
+        )}
         <div
           ref={sigContainerRef}
-          className="border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm transition-colors duration-300 touch-none"
+          onClick={openModal}
+          className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 rounded-xl p-6 flex flex-col items-center justify-center min-h-[120px] cursor-pointer transition-all duration-200 touch-manipulation"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(); } }}
+          aria-label={`${hasSignature ? 'Change' : 'Add'} signature for ${field.label}`}
         >
-          <Suspense
-            fallback={
-              <div className="w-full h-28 sm:h-32 flex items-center justify-center text-sm text-gray-500 bg-gray-50">
-                Loading signature pad…
-              </div>
-            }
-          >
-            <LazySignatureCanvas
-              penColor="black"
-              canvasProps={{ width: canvasWidth, height: canvasHeight, className: 'sigCanvas w-full h-28 sm:h-32 touch-none' }}
-              ref={(ref) => {
-                if (ref) {
-                  sigCanvasRef.current[field.id] = ref;
-                  console.log(`[SIGNATURE CANVAS] Field "${field.id}" - Canvas ref set successfully`);
-                  
-                  // Try to load existing signature immediately if available
-                  const existingSignature = formValues[field.id];
-                  if (existingSignature && typeof existingSignature === 'string' && existingSignature.startsWith('data:image')) {
-                    setTimeout(() => {
-                      try {
-                        const img = new Image();
-                        img.onload = () => {
-                          try {
-                            const canvasElement = ref.getCanvas();
-                            if (canvasElement) {
-                              const ctx = canvasElement.getContext('2d');
-                              if (ctx) {
-                                ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                                const imgAspect = img.width / img.height;
-                                const canvasAspect = canvasElement.width / canvasElement.height;
-                                
-                                let drawWidth, drawHeight, drawX, drawY;
-                                if (imgAspect > canvasAspect) {
-                                  drawWidth = canvasElement.width;
-                                  drawHeight = canvasElement.width / imgAspect;
-                                  drawX = 0;
-                                  drawY = (canvasElement.height - drawHeight) / 2;
-                                } else {
-                                  drawHeight = canvasElement.height;
-                                  drawWidth = canvasElement.height * imgAspect;
-                                  drawX = (canvasElement.width - drawWidth) / 2;
-                                  drawY = 0;
-                                }
-                                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-                                console.log(`[SIGNATURE CANVAS] ✅ Loaded existing signature immediately for field "${field.id}"`);
-                              }
-                            }
-                          } catch (error) {
-                            console.warn(`[SIGNATURE CANVAS] Error loading signature on ref set for field "${field.id}":`, error);
-                          }
-                        };
-                        img.onerror = () => {
-                          console.warn(`[SIGNATURE CANVAS] Failed to load signature image on ref set for field "${field.id}"`);
-                        };
-                        img.src = existingSignature;
-                      } catch (error) {
-                        console.warn(`[SIGNATURE CANVAS] Error setting up signature load for field "${field.id}":`, error);
-                      }
-                    }, 100);
-                  }
-                } else {
-                  console.warn(`[SIGNATURE CANVAS] Field "${field.id}" - Canvas ref is null`);
-                }
-              }}
-              onEnd={() => {
-                console.log(`[SIGNATURE] Field "${field.id}" (${field.label}) - Signature drawing completed`);
-                
-                try {
-                  const canvas = sigCanvasRef.current[field.id];
-                  if (!canvas) {
-                    console.error(`[SIGNATURE] Canvas not found for field "${field.id}"`);
-                    return;
-                  }
-                  
-                  let dataUrl = null;
-                  
-                  try {
-                    const trimmedCanvas = canvas.getTrimmedCanvas();
-                    if (trimmedCanvas && typeof trimmedCanvas.toDataURL === 'function') {
-                      dataUrl = trimmedCanvas.toDataURL('image/png');
-                      console.log(`[SIGNATURE] Field "${field.id}" - Generated signature data URL (length: ${dataUrl.length})`);
-                    }
-                  } catch (trimError) {
-                    console.warn(`[SIGNATURE] Field "${field.id}" - getTrimmedCanvas failed, falling back:`, trimError);
-                    if (canvas && canvas.getCanvas && typeof canvas.getCanvas().toDataURL === 'function') {
-                      dataUrl = canvas.getCanvas().toDataURL('image/png');
-                      console.log(`[SIGNATURE] Field "${field.id}" - Generated fallback signature data URL (length: ${dataUrl.length})`);
-                    }
-                  }
-                  
-                  if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:image')) {
-                    logFormChange(field.id, dataUrl ? 'Signature data URL' : null);
-                    
-                    // Clear validation errors when signature is captured
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors[field.id];
-                      return newErrors;
-                    });
-                    
-                    setFormValues((prev) => ({
-                      ...prev,
-                      [field.id]: dataUrl,
-                    }));
-                  } else {
-                    console.warn('Invalid signature data URL generated');
-                    if (field.required) {
-                      setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please provide a signature.' }));
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error processing signature:', error);
-                }
-              }}
-            />
-          </Suspense>
+          {hasSignature ? (
+            <>
+              <img
+                src={formValues[field.id]}
+                alt="Your signature"
+                className="max-w-full max-h-20 object-contain pointer-events-none"
+                style={{ maxWidth: canvasWidth, maxHeight: canvasHeight }}
+              />
+              <span className="mt-2 text-sm font-medium text-indigo-600">Click to change signature</span>
+            </>
+          ) : (
+            <>
+              <PenTool className="w-10 h-10 text-indigo-400 mb-2" />
+              <span className="text-sm font-medium text-gray-600">Click to sign</span>
+            </>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            console.log(`[SIGNATURE CLEAR] Field "${field.id}" (${field.label}) - Clearing signature`);
-            sigCanvasRef.current[field.id]?.clear();
-            
-            // Set validation error if required when clearing
-            if (field.required) {
-              setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please provide a signature.' }));
-            } else {
+        {hasSignature && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFormValues((prev) => ({ ...prev, [field.id]: '' }));
               setValidationErrors((prev) => {
-                const newErrors = { ...prev };
-                delete newErrors[field.id];
-                return newErrors;
+                const n = { ...prev };
+                delete n[field.id];
+                return n;
               });
-            }
-            
-            setFormValues((prev) => ({
-              ...prev,
-              [field.id]: '',
-            }));
-          }}
-          className="mt-2 px-4 py-2.5 sm:py-2 text-sm sm:text-base text-red-600 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded-lg transition-all duration-300 font-medium min-h-[44px] touch-manipulation w-full sm:w-auto"
-        >
-          Clear Signature
-        </button>
-        {field.subLabel && (
-          <p className="text-xs text-gray-500 mt-2">{field.subLabel}</p>
+              if (field.required) setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please provide a signature.' }));
+            }}
+            className="mt-2 px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg font-medium"
+          >
+            Clear Signature
+          </button>
         )}
         {validationErrors[field.id] && (
           <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
             <AlertCircle size={14} aria-hidden="true" />
             <span>{validationErrors[field.id]}</span>
           </p>
+        )}
+
+        {signatureModalOpen && (
+          <div
+            ref={modalRef}
+            tabIndex={-1}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 outline-none"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signature-modal-title"
+            onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          >
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="px-6 pt-6 pb-2">
+                <h3 id="signature-modal-title" className="text-lg font-semibold text-gray-900">{field.label}</h3>
+                <p className="text-sm text-gray-500 mt-1">Draw your signature in the box below, then click Apply.</p>
+              </div>
+              <div className="px-6 py-4 flex justify-center bg-gray-50">
+                <Suspense fallback={<div className="h-20 flex items-center text-gray-500">Loading…</div>}>
+                  <LazySignaturePad
+                    ref={(r) => { sigPadRef.current[field.id] = r; }}
+                    fieldId={field.id}
+                    width={canvasWidth}
+                    height={canvasHeight}
+                    existingSignature={modalSignature}
+                    onSignatureEnd={(dataUrl) => setModalSignature(dataUrl)}
+                    onClear={onPadClear}
+                    className="border border-gray-300 rounded-lg overflow-hidden bg-white"
+                    style={{ width: 'fit-content' }}
+                  />
+                </Suspense>
+              </div>
+              <div className="px-6 pb-6 pt-2 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleClearInModal}
+                  className="px-4 py-2.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg font-medium"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApply}
+                  className="ml-auto px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -1340,7 +1199,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       : null;
 
     const isValidDate = dateValue && !isNaN(dateValue.getTime());
-    console.log(`[DATE FIELD] Field "${field.id}" (${field.label}) - Current value: "${formValues[field.id] || 'empty'}", Valid date: ${isValidDate}, Required: ${field.required}`);
+    DEBUG_LOGS&&console.log(`[DATE FIELD] Field "${field.id}" (${field.label}) - Current value: "${formValues[field.id] || 'empty'}", Valid date: ${isValidDate}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
 
     return (
@@ -1372,11 +1231,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             <LazyDatePicker
               selected={isValidDate ? dateValue : null}
               onChange={(date) => {
-                console.log(`[DATE PICKER] Field "${field.id}" (${field.label}) - Date selected:`, date);
+                DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" (${field.label}) - Date selected:`, date);
                 
                 if (date) {
                   const isoDate = date.toISOString().split('T')[0];
-                  console.log(`[DATE PICKER] Field "${field.id}" converted to ISO:`, isoDate);
+                  DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" converted to ISO:`, isoDate);
                   logFormChange(field.id, isoDate);
                   
                   // Clear errors if valid
@@ -1389,7 +1248,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   setDateInputValue(formatUKDate(isoDate));
                   setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
                 } else {
-                  console.log(`[DATE PICKER] Field "${field.id}" - Date cleared`);
+                  DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" - Date cleared`);
                   if (field.required) {
                     setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
                   }
@@ -1497,7 +1356,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     );
   }
 
-  console.log(`[FIELD RENDER] Field "${field.id}" (${field.label}) - Rendering NULL (unsupported field type: ${field.type})`);
   return null;
 }
 

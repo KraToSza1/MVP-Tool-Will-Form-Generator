@@ -1327,7 +1327,7 @@
             "label": "Include a property trust?",
             "options": [
               { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes", "willClauseText": "I give the following property: {{field:propertyTrustDetails:value}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will." }
+              { "value": "Yes", "label": "Yes", "willClauseText": "I give {{field:propertyTrustDetails:value}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will." }
             ],
             "value": null
           },
@@ -1434,9 +1434,20 @@
             "options": [
               { "value": "No", "label": "No specific gift" },
               { "value": "ResidueIncluded", "label": "Include with residuary estate" },
-              { "value": "Beneficiary", "label": "To specific beneficiary", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelsGiftBeneficiarySection:fullDetails}}, absolutely and beneficially." }
+              { "value": "Beneficiary", "label": "To specific beneficiary", "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to {{field:chattelsGiftBeneficiarySection:fullDetails}}, absolutely and beneficially." }
             ],
             "value": null
+          },
+          {
+            "id": "chattelsGiftBeneficiaryName",
+            "type": "text",
+            "label": "Beneficiary name",
+            "placeholder": "Full name of the beneficiary",
+            "value": "",
+            "required": true,
+            "conditions": [
+              { "field": "personalChattelsGift", "operator": "eq", "value": "Beneficiary" }
+            ]
           },
           {
             "id": "forgiveDebt",
