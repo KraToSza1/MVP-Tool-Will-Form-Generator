@@ -3345,7 +3345,8 @@
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes",
+              "willClauseText": "If any monetary gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that gift."
             }
           ],
           "value": null,
@@ -3412,7 +3413,8 @@
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes",
+              "willClauseText": "If any specific gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that specific gift."
             }
           ],
           "value": null,
@@ -3479,7 +3481,8 @@
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes",
+              "willClauseText": "If any gift of property made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that property gift."
             }
           ],
           "value": null,

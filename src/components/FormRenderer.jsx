@@ -58,6 +58,7 @@ import FieldRenderer from './FieldRenderer.jsx';
 import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
 import { autoFillForm, generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
+import { buildClauses } from '../utils/buildClauses.js';
 import { toast } from 'sonner';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
@@ -382,6 +383,64 @@ export default function FormRenderer() {
         return 'any lawful purpose';
       }
 
+      // Handle pet carer sections - format more readably
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection') && 
+          (subField === 'relationshipList' || subField === 'nameList' || subField === 'addressList')) {
+        const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
+        const sectionData = values[fallbackId] || values[sectionId];
+        
+        if (Array.isArray(sectionData) && sectionData.length > 0) {
+          const mappedValues = sectionData
+            .map((item) => {
+              if (!item || typeof item !== 'object') return '';
+              // Extract specific field based on subField type
+              let fieldValue = '';
+              if (subField === 'relationshipList') {
+                fieldValue = item.relationship || item.relationshipToTestator || '';
+              } else if (subField === 'nameList') {
+                // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
+                const parts = [
+                  item.title,
+                  item.firstName,
+                  item.lastName
+                ].filter(Boolean);
+                fieldValue = parts.join(' ');
+              } else if (subField === 'addressList') {
+                // Format address nicely
+                const addressParts = [
+                  item.address1,
+                  item.address2,
+                  item.address3,
+                  item.city,
+                  item.postcode
+                ].filter(Boolean);
+                fieldValue = addressParts.join(', ');
+              } else {
+                // Fallback to generic subField lookup
+                fieldValue = item[subField] ||
+                  item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
+                  item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
+                  item[subField.toLowerCase()] ||
+                  item[subField.toUpperCase()];
+              }
+              return fieldValue != null ? String(fieldValue) : '';
+            })
+            .filter(Boolean);
+          
+          if (mappedValues.length > 0) {
+            // Join with "and" for multiple items, or just return single value
+            if (mappedValues.length === 1) {
+              return mappedValues[0];
+            } else if (mappedValues.length === 2) {
+              return mappedValues.join(' and ');
+            } else {
+              return mappedValues.slice(0, -1).join(', ') + ', and ' + mappedValues[mappedValues.length - 1];
+            }
+          }
+        }
+        return '';
+      }
+      
       // Handle nested section fields (e.g., partnerSection:relationship, partnerSection:fullName)
       const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
       const sectionData = values[fallbackId] || values[sectionId];
@@ -431,8 +490,214 @@ export default function FormRenderer() {
       return result;
     });
 
+    let processed = interpolated;
+
+    // Replace bracket placeholders with real values where possible
+    const loansGifts = values.specifyLoansGiftsText || '';
+    const residualList = values.residualGiftsDetails || values.residualBeneficiariesDetails || '';
+    const furtherResidualList = values.furtherResidualGiftsDetails || '';
+    const charityList = values.charityBenefitDetails || '';
+    const minCharityValue = values.minimumCharityAmountValue || '';
+    const charityAmount = values.minimumCharityAmount === 'Yes' && minCharityValue
+      ? `a minimum amount of £${parseInt(String(minCharityValue).replace(/[^0-9.]/g, ''), 10).toLocaleString('en-GB')} of my net estate`
+      : '10% of my net estate';
+    const charityCondition = values.charityGiftOnlyIfIHTDue === 'Yes'
+      ? 'if Inheritance Tax is due'
+      : '';
+
+    // Fix Clause 33: Insert loans/gifts text properly (add period if missing, ensure proper sentence structure)
+    let formattedLoansGifts = loansGifts.trim();
+    if (formattedLoansGifts && !formattedLoansGifts.endsWith('.')) {
+      formattedLoansGifts += '.';
+    }
+    // If the template has "[as specified: ...]", replace it properly
+    processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, (match) => {
+      if (formattedLoansGifts) {
+        return `as specified: ${formattedLoansGifts}`;
+      }
+      return '';
+    });
+    // CRITICAL FIX: Ensure proper sentence separation when inserting loans/gifts text
+    // If template ends with "children" and loans text starts with "I", add period separator
+    processed = processed.replace(/\bchildren\s+\[Specific Loans\/Gifts List\]/gi, (match) => {
+      if (formattedLoansGifts && formattedLoansGifts.match(/^I\s+/i)) {
+        return `children. ${formattedLoansGifts}`;
+      }
+      return match.replace('[Specific Loans/Gifts List]', formattedLoansGifts);
+    });
+    processed = processed.replace(/\[Specific Loans\/Gifts List\]/gi, formattedLoansGifts);
+    
+    // Fix Clause 35: Add proper lead-in for residual gifts if missing
+    let formattedResidualList = residualList.trim();
+    if (formattedResidualList && !formattedResidualList.match(/^(I\s+give|upon\s+trust|My\s+Trustees)/i)) {
+      // If it doesn't start with proper lead-in, it's likely raw text like "50% to my wife..."
+      // The template should handle this, but if it's being inserted into "upon trust for", fix it
+      if (processed.includes('upon trust for') && formattedResidualList) {
+        formattedResidualList = `the following: ${formattedResidualList}`;
+      }
+    }
+    processed = processed.replace(/\[Residual Beneficiary List and Shares\]/gi, formattedResidualList);
+    
+    // Fix Clause 36: Prevent duplication - if furtherResidualList already contains the lead-in, 
+    // remove the template's duplicate lead-in sentence
+    let formattedFurtherResidualList = furtherResidualList.trim();
+    if (formattedFurtherResidualList) {
+      // Check if user text already contains "If any gifts fail" or similar lead-in
+      const hasLeadIn = formattedFurtherResidualList.match(/^(If\s+any\s+gifts?\s+fail|I\s+give\s+the\s+failed\s+share)/i);
+      
+      if (hasLeadIn) {
+        // User text already has the full clause, so remove the template's lead-in entirely
+        // Template: "If any gift of my Residuary Estate should fail, I give the failed share to [Further Residual Beneficiary List and Shares]."
+        // Replace with just the user text (which already has the lead-in)
+        processed = processed.replace(/If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*I\s+give\s+the\s+failed\s+share\s+to\s*\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
+        // Also handle standalone bracket replacement
+        processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
+      } else {
+        // User text is just the beneficiary list, use the template's lead-in
+        processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
+      }
+    } else {
+      processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
+    }
+    processed = processed.replace(/\[Charity\/Charities List\]/gi, charityList);
+    processed = processed.replace(/\[10% \/ minimum amount specified\]/gi, charityAmount);
+    processed = processed.replace(/\[conditionally if IHT due\]/gi, charityCondition);
+
+    // Clean up leftover bracket wrappers like "[as specified: ...]"
+    processed = processed.replace(/\[\s*as specified:\s*([^\]]*)\]/gi, '$1');
+
     // Remove any remaining unresolved placeholders
-    return interpolated.replace(/\{\{field:[^}]+\}\}/g, '');
+    processed = processed.replace(/\{\{field:[^}]+\}\}/g, '');
+    
+    // Apply text normalization (fix punctuation, grammar, etc.)
+    processed = normalizeClauseText(processed);
+    
+    return processed;
+  };
+  
+  // Comprehensive text normalization function (shared with PDFGenerator)
+  const normalizeClauseText = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    
+    let normalized = text;
+    
+    // STEP 1: Fix double spaces FIRST (before other processing)
+    normalized = normalized.replace(/\s{2,}/g, ' ');
+    
+    // STEP 2: Fix all double/triple periods (most aggressive)
+    // Replace any sequence of 2+ periods with a single period
+    normalized = normalized.replace(/\.{2,}/g, '.');
+    
+    // STEP 3: Fix trailing periods/spaces (e.g., "text.." -> "text.")
+    normalized = normalized.replace(/([a-zA-Z0-9])\s*\.{2,}/g, '$1.');
+    
+    // STEP 4: Fix space before period
+    normalized = normalized.replace(/\s+\./g, '.');
+    
+    // STEP 5: Fix period-space-period
+    normalized = normalized.replace(/\.\s*\./g, '.');
+    
+    // STEP 6: Fix trailing triple dots at end of clause (e.g., "clause...")
+    normalized = normalized.replace(/\.{3,}\s*$/g, '.');
+    
+    // STEP 7: Fix "to my <Name>" grammar - more comprehensive pattern
+    // Pattern: "to my Emma Wilson" -> "to Emma Wilson" (when name doesn't need "my")
+    // But keep "to my wife Jane Smith" (relationship present)
+    // Match: "to my" followed by capitalized name (first name + last name)
+    normalized = normalized.replace(/\bto\s+my\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g, (match, name) => {
+      // Check if name already starts with a relationship word
+      const relationshipWords = ['wife', 'husband', 'son', 'daughter', 'brother', 'sister', 'mother', 'father', 'partner', 'spouse', 'child', 'children', 'nephew', 'niece', 'uncle', 'aunt', 'cousin', 'friend', 'executor', 'trustee'];
+      const nameParts = name.toLowerCase().split(/\s+/);
+      const hasRelationship = relationshipWords.some(rel => nameParts.includes(rel));
+      
+      // If name already contains relationship, keep "my"
+      if (hasRelationship) {
+        return match;
+      }
+      // Otherwise, remove "my" prefix
+      return `to ${name}`;
+    });
+    
+    // STEP 8: Fix "for my <Name>" grammar (same logic)
+    normalized = normalized.replace(/\bfor\s+my\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g, (match, name) => {
+      const relationshipWords = ['wife', 'husband', 'son', 'daughter', 'brother', 'sister', 'mother', 'father', 'partner', 'spouse', 'child', 'children', 'nephew', 'niece', 'uncle', 'aunt', 'cousin', 'friend', 'executor', 'trustee'];
+      const nameParts = name.toLowerCase().split(/\s+/);
+      const hasRelationship = relationshipWords.some(rel => nameParts.includes(rel));
+      if (hasRelationship) {
+        return match;
+      }
+      return `for ${name}`;
+    });
+    
+    // STEP 9: Fix clause 33 issue: "to any of my children I loaned..." -> "to any of my children. I loaned..."
+    // Insert period before standalone "I" after "children" if missing
+    normalized = normalized.replace(/\bchildren\s+(I\s+(?:loaned|gave|made|wish|direct|appoint))/gi, 'children. $1');
+    
+    // Also fix: "to any of my children" followed directly by "I" (more general)
+    normalized = normalized.replace(/\bchildren\s+(I\s+[a-z])/gi, 'children. I$1');
+    
+    // STEP 10: Fix clause 35 issue: "upon trust for I give..." -> "upon trust for the following: I give..."
+    // More comprehensive pattern matching
+    normalized = normalized.replace(/\bupon\s+trust\s+for\s+(I\s+give)/gi, 'upon trust for the following: $1');
+    // Also catch variations like "upon trust for" followed by percentage or number
+    normalized = normalized.replace(/\bupon\s+trust\s+for\s+(\d+%|50%|25%|I\s+give)/gi, 'upon trust for the following: $1');
+    
+    // STEP 11: Fix clause 36 duplication: Multiple patterns
+    // Pattern 1: "I give the failed share to If any gifts fail..."
+    normalized = normalized.replace(/\bI\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+gifts?\s+fail/gi, 'If any gifts fail');
+    
+    // Pattern 2: "should fail, I give the failed share to If any gifts fail..."
+    normalized = normalized.replace(/\bshould\s+fail,\s+I\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+gifts?\s+fail/gi, 'should fail. If any gifts fail');
+    
+    // Pattern 3: Remove duplicate "I give the failed share" if it appears twice
+    normalized = normalized.replace(/(I\s+give\s+the\s+failed\s+share\s+to[^.]*?)\s+I\s+give\s+the\s+failed\s+share\s+to/gi, '$1');
+    
+    // Pattern 4: Fix Clause 36 duplication - remove duplicated lead-in sentence
+    // Catch: "If any gift of my Residuary Estate should fail. If any gifts fail..." 
+    // Result: Keep only one lead-in
+    normalized = normalized.replace(/\bIf\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*If\s+any\s+gifts?\s+fail/gi, 'If any gift of my Residuary Estate should fail. If any gifts fail');
+    
+    // Pattern 5: Also catch when separated by period but still duplicated
+    normalized = normalized.replace(/\bIf\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail\.\s+If\s+any\s+gifts?\s+fail/gi, 'If any gift of my Residuary Estate should fail. If any gifts fail');
+    
+    // Pattern 6: Catch case where template lead-in appears twice
+    normalized = normalized.replace(/(If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]?\s*){2,}/gi, 'If any gift of my Residuary Estate should fail. ');
+    
+    // STEP 12: Fix grammar - "minimum amount of" -> "a minimum amount of"
+    // BUT: Only add "a" if it's not already there (prevent "a a a")
+    normalized = normalized.replace(/\bI\s+give\s+(?:a\s+){0,2}minimum\s+amount\s+of/gi, 'I give a minimum amount of');
+    normalized = normalized.replace(/\b(?:a\s+){0,2}minimum\s+amount\s+of\s+£/gi, 'a minimum amount of £');
+    
+    // STEP 12b: Remove duplicate "a" words (catch "a a a", "a a", etc.)
+    normalized = normalized.replace(/\b(a\s+){2,}/gi, 'a ');
+    
+    // STEP 13: Final cleanup - remove any remaining double periods that might have been introduced
+    // This must be VERY aggressive - catch ALL cases
+    normalized = normalized.replace(/\.{2,}/g, '.');
+    
+    // STEP 14: Fix trailing double periods after words (e.g., "at sea..", "21..")
+    normalized = normalized.replace(/([a-zA-Z0-9])\s*\.{2,}(?=\s|$|,|;)/g, '$1.');
+    
+    // STEP 15: Fix double periods in the middle of sentences
+    normalized = normalized.replace(/\s+\.{2,}\s+/g, '. ');
+    
+    // STEP 16: Trim trailing punctuation (but keep final period)
+    normalized = normalized.replace(/\s*\.{2,}\s*$/g, '.');
+    
+    // STEP 17: Final pass - catch any remaining double periods anywhere
+    normalized = normalized.replace(/\.{2,}/g, '.');
+    
+    // STEP 18: Remove duplicate words (catch "a a", "the the", "of of", etc.)
+    normalized = normalized.replace(/\b(a|an|the|of|to|for|in|on|at|by|with|from)\s+\1\b/gi, '$1');
+    
+    // STEP 19: Remove triple+ duplicate words (catch "a a a", etc.)
+    normalized = normalized.replace(/\b(a|an|the|of|to|for|in|on|at|by|with|from)(\s+\1){2,}\b/gi, '$1');
+    
+    // STEP 20: Final double space cleanup (after all other processing)
+    normalized = normalized.replace(/\s{2,}/g, ' ');
+    
+    // Trim and return
+    return normalized.trim();
   };
 
   // Evaluate field conditions to determine if field should be shown
@@ -452,6 +717,17 @@ export default function FormRenderer() {
         });
       }
       
+      // ALWAYS-ON Debug logging for foreignWillNotRevoked condition evaluation
+      if (field.id === 'foreignWillNotRevoked' || clause.field === 'assetsAbroad') {
+        console.log(`[CONDITION EVAL] 🔍 Evaluating condition for field "${field.id}":`, {
+          clauseField: clause.field,
+          clauseValue: clause.value,
+          clauseOperator: clause.operator,
+          actualFormValue: value,
+          matches: clause.operator === 'eq' ? value === clause.value : 'N/A (not eq)'
+        });
+      }
+      
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
       if (clause.operator === 'AND' || clause.operator === 'OR') {
@@ -464,6 +740,18 @@ export default function FormRenderer() {
     const result = Array.isArray(field.conditions) 
       ? (field.conditionLogic === 'OR' ? field.conditions.some(evalClause) : field.conditions.every(evalClause))
       : evalClause(field.conditions);
+    
+    // ALWAYS-ON Debug logging for foreignWillNotRevoked
+    if (field.id === 'foreignWillNotRevoked') {
+      console.log(`[CONDITION EVAL] ✅ Final result for field "${field.id}":`, {
+        fieldId: field.id,
+        conditions: field.conditions,
+        conditionLogic: field.conditionLogic,
+        result: result,
+        assetsAbroad: formValues.assetsAbroad,
+        willBeRendered: result
+      });
+    }
     
     // Enhanced debug logging for FLIT fields
     if (field.id && field.id.includes('FLIT') && isDev) {
@@ -724,6 +1012,94 @@ export default function FormRenderer() {
     }
   };
 
+  // Helper function to recursively search through a field and its nested structures
+  const searchFieldRecursively = (field, normalized, keyWords, allowPartial) => {
+    if (!field) return null;
+    
+    // Special logging for foreignWillNotRevoked
+    if (normalized === 'foreignwillnotrevoked' || normalized.includes('foreignwill')) {
+      console.log('[SEARCH FIELD RECURSIVELY] 🔍 Checking field:', {
+        fieldId: field.id,
+        fieldLabel: field.label,
+        fieldType: field.type,
+        hasOptions: !!field.options,
+        optionsCount: field.options?.length,
+        hasSubFields: !!field.subFields,
+        subFieldsCount: field.subFields?.length,
+        normalized,
+        match: field.id?.toLowerCase() === normalized
+      });
+    }
+    
+    // Check field ID directly
+    if (field.id && field.id.toLowerCase() === normalized) {
+      if (normalized === 'foreignwillnotrevoked' || normalized.includes('foreignwill')) {
+        console.log('[SEARCH FIELD RECURSIVELY] ✅ DIRECT ID MATCH:', field.id);
+      }
+      return field.id;
+    }
+    
+    // Check field label
+    const fieldLabel = field.label ? String(field.label).trim().toLowerCase() : '';
+    if (fieldLabel === normalized) return field.id;
+    
+    // Partial match on label
+    if (allowPartial && fieldLabel) {
+      if (fieldLabel.includes(normalized.substring(0, 30)) || 
+          normalized.includes(fieldLabel.substring(0, 30))) {
+        return field.id;
+      }
+      if (keyWords.length > 0 && keyWords.some(word => fieldLabel.includes(word))) {
+        return field.id;
+      }
+    }
+    
+    // Check subFields (for section-type fields)
+    if (field.type === 'section' && field.subFields) {
+      for (const subField of field.subFields) {
+        const result = searchFieldRecursively(subField, normalized, keyWords, allowPartial);
+        if (result) return result;
+      }
+    }
+    
+    // Check option.fields (for fields nested within radio/select options)
+    if (field.options && Array.isArray(field.options)) {
+      for (const option of field.options) {
+        if (option && option.fields && Array.isArray(option.fields)) {
+          for (const nestedField of option.fields) {
+            const result = searchFieldRecursively(nestedField, normalized, keyWords, allowPartial);
+            if (result) return result;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
+  // Helper function to collect all field IDs recursively for debugging
+  const collectAllFieldIds = (fields = [], collected = new Set()) => {
+    for (const field of fields) {
+      if (!field) continue;
+      if (field.id) collected.add(field.id);
+      
+      // Collect from subFields
+      if (field.type === 'section' && field.subFields) {
+        collectAllFieldIds(field.subFields, collected);
+      }
+      
+      // Collect from option.fields
+      if (field.options && Array.isArray(field.options)) {
+        for (const option of field.options) {
+          if (option && option.fields && Array.isArray(option.fields)) {
+            collectAllFieldIds(option.fields, collected);
+          }
+        }
+      }
+    }
+    return collected;
+  };
+
   const scrollToField = (fieldId, targetFieldIds = []) => {
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ========== SCROLLING TO FIELD "${fieldId}" ==========`);
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field ID type:`, typeof fieldId);
@@ -827,7 +1203,43 @@ export default function FormRenderer() {
       console.error(`[SCROLL TO FIELD] ❌ Field not found even with case-insensitive search`);
       console.error(`[SCROLL TO FIELD] Searched for:`, searchIds);
       console.error(`[SCROLL TO FIELD] Available field IDs (first 20):`, Array.from(allFields).slice(0, 20).map(f => f.getAttribute('data-field-id')));
+      
+      // Use collectAllFieldIds to show all available field IDs from formData structure
+      const allFieldIdsFromData = collectAllFieldIds(
+        formData?.formSections?.flatMap(s => s.fields || []) || []
+      );
+      console.error(`[SCROLL TO FIELD] All field IDs from formData structure (${allFieldIdsFromData.size} total):`, 
+        Array.from(allFieldIdsFromData).sort().slice(0, 50));
+      console.error(`[SCROLL TO FIELD] Is "${fieldId}" in formData?`, allFieldIdsFromData.has(fieldId));
     }
+  };
+
+  const findFieldIdByLabel = (label, allowPartial = true) => {
+    console.log('[FIND FIELD BY LABEL] 🔍 Starting search:', { label, allowPartial });
+    if (!label || !formData?.formSections) {
+      console.error('[FIND FIELD BY LABEL] ❌ Invalid input:', { label, hasFormData: !!formData, hasFormSections: !!formData?.formSections });
+      return null;
+    }
+    const normalized = String(label).trim().toLowerCase();
+    console.log('[FIND FIELD BY LABEL] 🔍 Normalized label:', normalized);
+    // Extract key words from the label (first 30-50 chars usually contain the question)
+    const keyWords = normalized.split(/\s+/).filter(w => w.length > 3).slice(0, 5);
+    console.log('[FIND FIELD BY LABEL] 🔍 Key words:', keyWords);
+    
+    let searchCount = 0;
+    for (const section of formData.formSections) {
+      if (!section?.fields) continue;
+      for (const field of section.fields) {
+        searchCount++;
+        const result = searchFieldRecursively(field, normalized, keyWords, allowPartial);
+        if (result) {
+          console.log('[FIND FIELD BY LABEL] ✅ Found match:', { result, searchCount, section: section.formSection });
+          return result;
+        }
+      }
+    }
+    console.error('[FIND FIELD BY LABEL] ❌ No match found after searching', searchCount, 'fields');
+    return null;
   };
 
   // Helper to find and scroll to schedule fields
@@ -1032,6 +1444,59 @@ export default function FormRenderer() {
     toast.success('Form reset', { description: 'All data has been cleared. You can now start fresh.' });
   };
 
+  const getClauseDisplayText = (clause) => {
+    if (!clause) return '';
+    if (!clause.incomplete) return clause.text || '';
+    const fields = Array.isArray(clause.missingFields) && clause.missingFields.length > 0
+      ? clause.missingFields.join(', ')
+      : 'required fields';
+    return `[Incomplete clause — requires user input: ${fields}]`;
+  };
+
+  const buildClauseDebugExport = useCallback((values, previewMaxSectionIndex) => {
+    const toHash = (text) => {
+      const str = String(text || '');
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+      }
+      return `${hash}:${str.length}`;
+    };
+    const preview = buildClauses({
+      formValues: values,
+      formData,
+      interpolateText,
+      maxSectionIndex: previewMaxSectionIndex
+    });
+    const pdf = buildClauses({
+      formValues: values,
+      formData,
+      interpolateText
+    });
+    const mapClause = (c) => {
+      const displayText = getClauseDisplayText(c);
+      return {
+        id: c.id,
+        title: c.title,
+        hash: toHash(displayText),
+        textSample: String(displayText || '').slice(0, 200)
+      };
+    };
+    const previewClauses = preview.map(mapClause);
+    const pdfClauses = pdf.map(mapClause);
+    const previewSet = new Set(previewClauses.map(c => `${c.id}:${c.hash}`));
+    const pdfSet = new Set(pdfClauses.map(c => `${c.id}:${c.hash}`));
+    const missingInPdf = previewClauses.filter(c => !pdfSet.has(`${c.id}:${c.hash}`)).map(c => c.id);
+    const extraInPdf = pdfClauses.filter(c => !previewSet.has(`${c.id}:${c.hash}`)).map(c => c.id);
+    const orderMismatch = previewClauses.length === pdfClauses.length &&
+      previewClauses.some((c, i) => c.id !== pdfClauses[i]?.id || c.hash !== pdfClauses[i]?.hash);
+    return {
+      previewClauses,
+      pdfClauses,
+      diff: { missingInPdf, extraInPdf, orderMismatch }
+    };
+  }, [formData, interpolateText, getClauseDisplayText]);
+
   // Auto-fill form with dummy data
   const handleAutoFill = useCallback(() => {
     try {
@@ -1043,11 +1508,21 @@ export default function FormRenderer() {
         description: `Filled ${Object.keys(dummyData).length} fields from start to finish. Ready for PDF preview.`,
         duration: 4000
       });
+      if (import.meta.env.DEV) {
+        const previewMaxIndex = formData.formSections.length - 1;
+        const exportPayload = buildClauseDebugExport(dummyData, previewMaxIndex);
+        window.lastClauseDebugExport = exportPayload;
+        console.group('[CLAUSE DEBUG][AUTO-FILL]');
+        console.info('diff', exportPayload.diff);
+        console.info('previewClauses', exportPayload.previewClauses);
+        console.info('pdfClauses', exportPayload.pdfClauses);
+        console.groupEnd();
+      }
     } catch (error) {
       console.error('[FORM] Auto-fill error:', error);
       toast.error('Auto-fill failed', { description: error.message });
     }
-  }, [formData]);
+  }, [formData, buildClauseDebugExport]);
 
   // Expose auto-fill function to window for console access
   useEffect(() => {
@@ -1215,79 +1690,33 @@ export default function FormRenderer() {
 
   const clausePreview = useMemo(() => {
     if (currentIndex < 1) return null;
-
-    const allClauses = [];
-    const sectionsToProcess = formData.formSections.slice(0, currentIndex + 1);
-
-    sectionsToProcess.forEach(section => {
-      section.fields.forEach(field => {
-        if (field.conditions && !evaluateFieldConditions(field)) return;
-        if (['button', 'hidden', 'display'].includes(field.type)) return;
-
-        if (field.willClauseText) {
-          const interpolated = interpolateText(field.willClauseText, debouncedFormValues);
-          const hasUnresolved = /\{\{field:[^}]+\}\}/.test(interpolated);
-          if (interpolated && !hasUnresolved && interpolated.trim() !== '') {
-            allClauses.push({
-              id: `${section.formSection}-${field.id}`,
-              text: interpolated,
-              fieldLabel: field.label,
-              section: section.formSection
-            });
-          }
-        }
-
-        if (field.options && (field.type === 'radio' || field.type === 'select')) {
-          const selectedValue = debouncedFormValues[field.id];
-          if (selectedValue) {
-            const selectedOption = field.options.find(opt => opt.value === selectedValue);
-            if (selectedOption?.willClauseText) {
-              const interpolated = interpolateText(selectedOption.willClauseText, debouncedFormValues);
-              const hasUnresolved = /\{\{field:[^}]+\}\}/.test(interpolated);
-              if (interpolated && !hasUnresolved && interpolated.trim() !== '') {
-                allClauses.push({
-                  id: `${section.formSection}-${field.id}-${selectedOption.value}`,
-                  text: interpolated,
-                  fieldLabel: field.label,
-                  section: section.formSection
-                });
-              }
-            }
-          }
-        }
-        
-        // Handle section fields with subFields
-        if (field.type === 'section' && field.subFields) {
-          field.subFields.forEach(subField => {
-            // Skip subFields that shouldn't be shown
-            if (subField.conditions && !evaluateFieldConditions(subField)) {
-              return;
-            }
-            
-            // Check subField's willClauseText
-            if (subField.willClauseText) {
-              const interpolated = interpolateText(subField.willClauseText, debouncedFormValues);
-              if (interpolated && !/\{\{field:[^}]+\}\}/.test(interpolated) && interpolated.trim() !== '') {
-                allClauses.push({
-                  id: `${section.formSection}-${field.id}-${subField.id}`,
-                  text: interpolated,
-                  fieldLabel: subField.label || field.label,
-                  section: section.formSection
-                });
-              }
-            }
-          });
-        }
-      });
+    const clauses = buildClauses({
+      formValues: debouncedFormValues,
+      formData,
+      interpolateText,
+      maxSectionIndex: currentIndex
     });
+    return clauses.length > 0 ? clauses : null;
+  }, [currentIndex, debouncedFormValues, interpolateText]);
 
-    if (allClauses.length === 0) return null;
+  const clauseDebugExport = useMemo(() => {
+    if (!import.meta.env.DEV) return null;
+    return buildClauseDebugExport(debouncedFormValues, currentIndex);
+  }, [currentIndex, debouncedFormValues, buildClauseDebugExport]);
 
-    // Maintain consistent ordering: show clauses in the order they appear in the form
-    // Only update clause content when fields change, but don't reorder or scroll
-    // This prevents the "jump to top then drop" behavior
-    return allClauses;
-  }, [currentIndex, debouncedFormValues, evaluateFieldConditions]);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !clauseDebugExport) return;
+    const payload = clauseDebugExport;
+    window.downloadClauseDebug = () => {
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'clause-debug-export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+  }, [clauseDebugExport]);
 
   const renderClausePreview = (wrapperClassName = '') => {
     if (currentIndex < 1) {
@@ -1320,10 +1749,10 @@ export default function FormRenderer() {
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">
-                          {clause.fieldLabel}
+                          {clause.title}
                         </p>
                         <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-line">
-                          {clause.text}
+                          {getClauseDisplayText(clause)}
                         </p>
                       </div>
                     </div>
@@ -2057,7 +2486,29 @@ export default function FormRenderer() {
                 {currentSection.fields.map((field, idx) => {
                   // Skip fields that shouldn't be shown (conditions not met)
                   if (field.conditions && !evaluateFieldConditions(field)) {
+                    // ALWAYS-ON Debug logging for foreignWillNotRevoked
+                    if (field.id === 'foreignWillNotRevoked') {
+                      console.log(`[FIELD RENDER] ❌ Field "${field.id}" SKIPPED - conditions not met:`, {
+                        fieldId: field.id,
+                        fieldLabel: field.label,
+                        conditions: field.conditions,
+                        conditionLogic: field.conditionLogic,
+                        assetsAbroad: formValues.assetsAbroad,
+                        currentSection: currentSection.formSection
+                      });
+                    }
                     return null;
+                  }
+                  
+                  // ALWAYS-ON Debug logging for foreignWillNotRevoked when it IS rendered
+                  if (field.id === 'foreignWillNotRevoked') {
+                    console.log(`[FIELD RENDER] ✅ Field "${field.id}" WILL BE RENDERED:`, {
+                      fieldId: field.id,
+                      fieldLabel: field.label,
+                      currentSection: currentSection.formSection,
+                      hasConditions: !!field.conditions,
+                      conditionResult: field.conditions ? evaluateFieldConditions(field) : 'N/A (no conditions)'
+                    });
                   }
                   
                   // Enhanced label for partner name field with clear instructions
@@ -2255,10 +2706,10 @@ export default function FormRenderer() {
                       <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-indigo-700 mb-2 uppercase tracking-wide">
-                            {clause.fieldLabel}
+                            {clause.title}
                           </p>
                           <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-line">
-                            {clause.text}
+                            {getClauseDisplayText(clause)}
                           </p>
                         </div>
                       </div>
@@ -2441,7 +2892,7 @@ export default function FormRenderer() {
                   
                   return (
                     <button
-                      key={fieldId || index}
+                      key={`${fieldId || issue.field || issue.fieldLabel || 'issue'}-${index}`}
                       ref={(el) => {
                         if (el) {
                           DEBUG_LOGS&&console.log(`[ITEM RENDER] ========== ITEM BUTTON RENDERED ==========`);
@@ -2615,7 +3066,14 @@ export default function FormRenderer() {
                                 }
                                 setValidationModalOpen(false);
                               } else {
-                                console.error('[ITEM CLICK] ❌ Could not find field:', issue.field);
+                                const labelMatchId = findFieldIdByLabel(issue.field || issue.fieldLabel || fieldLabel);
+                                if (labelMatchId) {
+                                  DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found field by label mapping:', labelMatchId);
+                                  scrollToField(labelMatchId);
+                                  setValidationModalOpen(false);
+                                } else {
+                                  console.error('[ITEM CLICK] ❌ Could not find field:', issue.field);
+                                }
                               }
                             }
                           }
@@ -2760,8 +3218,24 @@ export default function FormRenderer() {
                     e.stopPropagation();
                     
                     try {
+                      console.log('[GO TO FIRST ISSUE] 🔍 ========== BUTTON CLICKED ==========');
+                      console.log('[GO TO FIRST ISSUE] 🔍 Validation issues count:', validationIssues?.length);
+                      console.log('[GO TO FIRST ISSUE] 🔍 Validation issues:', validationIssues);
+                      
                       const firstIssue = validationIssues[0];
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Processing first issue:', firstIssue);
+                      console.log('[GO TO FIRST ISSUE] 🔍 First issue object:', firstIssue);
+                      console.log('[GO TO FIRST ISSUE] 🔍 First issue keys:', firstIssue ? Object.keys(firstIssue) : 'N/A');
+                      console.log('[GO TO FIRST ISSUE] 🔍 First issue details:', {
+                        field: firstIssue?.field,
+                        fieldId: firstIssue?.fieldId,
+                        fieldLabel: firstIssue?.fieldLabel,
+                        section: firstIssue?.section,
+                        sectionId: firstIssue?.sectionId,
+                        clauseNumber: firstIssue?.clauseNumber,
+                        issue: firstIssue?.issue,
+                        targetFieldIds: firstIssue?.targetFieldIds,
+                        targetSectionIndex: firstIssue?.targetSectionIndex
+                      });
                       
                       if (!firstIssue) {
                         console.error('[GO TO FIRST ISSUE] ❌ No first issue found!');
@@ -2770,8 +3244,9 @@ export default function FormRenderer() {
                       
                       // PRIORITY 1: Use fieldId if available (most reliable) - check this FIRST
                       // This handles Property Trust and BPR Trust schedule issues that have fieldId
+                      console.log('[GO TO FIRST ISSUE] 🔍 Checking PRIORITY 1: fieldId =', firstIssue.fieldId);
                       if (firstIssue.fieldId) {
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ PRIORITY 1: Has fieldId, navigating to field:', firstIssue.fieldId);
+                        console.log('[GO TO FIRST ISSUE] ✅ PRIORITY 1: Has fieldId, navigating to field:', firstIssue.fieldId);
                         DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Issue details:', {
                           section: firstIssue.section,
                           sectionId: firstIssue.sectionId,
@@ -2945,39 +3420,167 @@ export default function FormRenderer() {
                         scrollToScheduleField(firstIssue.field || `Schedule ${firstIssue.scheduleNumber || ''}`);
                       } else if (firstIssue.field) {
                         DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Has field (not schedule), searching for:', firstIssue.field);
-                        const fieldElement = document.querySelector(`[data-field-id="${firstIssue.field}"]`);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Direct querySelector result:', fieldElement);
+                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Issue details:', {
+                          section: firstIssue.section,
+                          field: firstIssue.field,
+                          clauseNumber: firstIssue.clauseNumber,
+                          fieldLabel: firstIssue.fieldLabel
+                        });
+                        
+                        // Strategy 1: Try direct field ID match (if field is actually an ID)
+                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 1: Trying direct field ID match:', {
+                          fieldId: firstIssue.field,
+                          selector: `[data-field-id="${firstIssue.field}"]`
+                        });
+                        let fieldElement = document.querySelector(`[data-field-id="${firstIssue.field}"]`);
+                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 1 result:', {
+                          fieldElement: !!fieldElement,
+                          found: !!fieldElement
+                        });
                         if (fieldElement) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found field element, scrolling...');
+                          console.log('[GO TO FIRST ISSUE] ✅ Found field element via direct ID, scrolling...');
                           fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                           const input = fieldElement.querySelector('input, textarea, select');
                           if (input) {
                             setTimeout(() => input.focus(), 500);
                           }
                           setValidationModalOpen(false);
-                        } else {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Direct search failed, trying case-insensitive search...');
-                          // Try case-insensitive search
-                          const allFields = document.querySelectorAll('[data-field-id]');
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Total fields with data-field-id:', allFields.length);
-                          const foundField = Array.from(allFields).find(field => {
-                            const fieldId = field.getAttribute('data-field-id') || '';
-                            return fieldId.toLowerCase() === firstIssue.field.toLowerCase() || 
-                                   fieldId.toLowerCase().includes(firstIssue.field.toLowerCase());
-                          });
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Case-insensitive search result:', foundField);
-                          if (foundField) {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found field via case-insensitive search, scrolling...');
-                            foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            const input = foundField.querySelector('input, textarea, select');
-                            if (input) {
-                              setTimeout(() => input.focus(), 500);
+                          return;
+                        }
+                        console.error('[GO TO FIRST ISSUE] ❌ Strategy 1 failed - field element not found');
+                        
+                        // Strategy 2: Try to find field by label (most reliable for PDF issues)
+                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 2: Searching for field by label:', {
+                          fieldLabel: firstIssue.field,
+                          fieldLabelAlt: firstIssue.fieldLabel,
+                          searchString: firstIssue.field || firstIssue.fieldLabel
+                        });
+                        const labelMatchId = findFieldIdByLabel(firstIssue.field || firstIssue.fieldLabel);
+                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 2 result:', {
+                          labelMatchId,
+                          found: !!labelMatchId,
+                          searchString: firstIssue.field || firstIssue.fieldLabel
+                        });
+                        if (labelMatchId) {
+                          console.log('[GO TO FIRST ISSUE] ✅ Found field by label mapping:', labelMatchId);
+                          
+                          // SPECIAL HANDLING for foreignWillNotRevoked: Find its section and navigate to it first
+                          if (labelMatchId === 'foreignWillNotRevoked') {
+                            console.log('[GO TO FIRST ISSUE] 🔍 SPECIAL HANDLING: foreignWillNotRevoked detected');
+                            
+                            // Find which section contains this field
+                            let targetSectionIndex = -1;
+                            for (let i = 0; i < formData.formSections.length; i++) {
+                              const section = formData.formSections[i];
+                              const hasField = section.fields?.some(f => {
+                                // Check field itself
+                                if (f.id === 'foreignWillNotRevoked') return true;
+                                // Check nested structures
+                                if (f.subFields?.some(sf => sf.id === 'foreignWillNotRevoked')) return true;
+                                if (f.options?.some(opt => opt.fields?.some(nf => nf.id === 'foreignWillNotRevoked'))) return true;
+                                return false;
+                              });
+                              if (hasField) {
+                                targetSectionIndex = i;
+                                console.log('[GO TO FIRST ISSUE] ✅ Found foreignWillNotRevoked in section:', {
+                                  index: i,
+                                  sectionName: section.formSection
+                                });
+                                break;
+                              }
                             }
-                            setValidationModalOpen(false);
-                          } else {
-                            console.error('[GO TO FIRST ISSUE] ❌ Could not find field:', firstIssue.field);
+                            
+                            // Ensure assetsAbroad is set to "Yes" to meet the condition
+                            if (formValues.assetsAbroad !== 'Yes') {
+                              console.log('[GO TO FIRST ISSUE] ⚠️ assetsAbroad is not "Yes", setting it to meet condition');
+                              setFormValues(prev => ({ ...prev, assetsAbroad: 'Yes' }));
+                            }
+                            
+                            // Navigate to the section first
+                            if (targetSectionIndex >= 0) {
+                              console.log('[GO TO FIRST ISSUE] 🔍 Navigating to section index:', targetSectionIndex);
+                              setCurrentIndex(targetSectionIndex);
+                              setValidationModalOpen(false);
+                              // Wait for section to render and condition to be evaluated
+                              setTimeout(() => {
+                                console.log('[GO TO FIRST ISSUE] 🔍 Section rendered, scrolling to field');
+                                scrollToField(labelMatchId);
+                              }, 500); // Longer timeout to ensure condition evaluation completes
+                              return;
+                            } else {
+                              console.error('[GO TO FIRST ISSUE] ❌ Could not find section containing foreignWillNotRevoked');
+                            }
+                          }
+                          
+                          console.log('[GO TO FIRST ISSUE] 🔍 Calling scrollToField with:', labelMatchId);
+                          scrollToField(labelMatchId);
+                          setValidationModalOpen(false);
+                          return;
+                        }
+                        console.error('[GO TO FIRST ISSUE] ❌ Strategy 2 failed - labelMatchId is null/undefined');
+                        console.error('[GO TO FIRST ISSUE] ❌ findFieldIdByLabel returned null for:', firstIssue.field || firstIssue.fieldLabel);
+                        
+                        // Strategy 3: Try to find field by section + partial label match
+                        if (firstIssue.section) {
+                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Trying section-based search for:', firstIssue.section);
+                          const section = formData.formSections.find(s => 
+                            s.formSection === firstIssue.section || 
+                            s.formSection?.toLowerCase() === firstIssue.section?.toLowerCase()
+                          );
+                          if (section) {
+                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Found section, searching fields...');
+                            // Try to find field by matching label substring
+                            const fieldLabelLower = (firstIssue.field || '').toLowerCase();
+                            for (const field of section.fields || []) {
+                              if (field.label && field.label.toLowerCase().includes(fieldLabelLower.substring(0, 30))) {
+                                DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found matching field by label substring:', field.id);
+                                scrollToField(field.id);
+                                setValidationModalOpen(false);
+                                return;
+                              }
+                            }
                           }
                         }
+                        
+                        // Strategy 4: Case-insensitive search on all fields
+                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Trying case-insensitive search...');
+                        const allFields = document.querySelectorAll('[data-field-id]');
+                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Total fields with data-field-id:', allFields.length);
+                        const foundField = Array.from(allFields).find(field => {
+                          const fieldId = field.getAttribute('data-field-id') || '';
+                          return fieldId.toLowerCase() === firstIssue.field.toLowerCase() || 
+                                 fieldId.toLowerCase().includes(firstIssue.field.toLowerCase());
+                        });
+                        if (foundField) {
+                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found field via case-insensitive search, scrolling...');
+                          foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          const input = foundField.querySelector('input, textarea, select');
+                          if (input) {
+                            setTimeout(() => input.focus(), 500);
+                          }
+                          setValidationModalOpen(false);
+                          return;
+                        }
+                        
+                        // Strategy 5: Last resort - try to navigate to the section
+                        if (firstIssue.section) {
+                          const sectionIndex = formData.formSections.findIndex(s => 
+                            s.formSection === firstIssue.section || 
+                            s.formSection?.toLowerCase() === firstIssue.section?.toLowerCase()
+                          );
+                          if (sectionIndex >= 0) {
+                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Navigating to section index:', sectionIndex);
+                            setCurrentIndex(sectionIndex);
+                            setValidationModalOpen(false);
+                            setTimeout(() => {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }, 100);
+                            return;
+                          }
+                        }
+                        
+                        console.error('[GO TO FIRST ISSUE] ❌ Could not find field after all strategies:', firstIssue.field);
+                        console.error('[GO TO FIRST ISSUE] Available sections:', formData.formSections.map(s => s.formSection));
                       } else {
                         console.error('[GO TO FIRST ISSUE] ❌ First issue has no fieldId, field, or is not a schedule');
                         console.error('[GO TO FIRST ISSUE] First issue object:', firstIssue);

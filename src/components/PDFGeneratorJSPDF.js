@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import formSchema from '../data/Complete-WillSuite-Form-Data.json';
+import { buildClauses } from '../utils/buildClauses.js';
 
 // Helper to convert image to base64 and get dimensions for jsPDF
 const loadImageAsBase64 = async (imagePath) => {
@@ -97,15 +98,135 @@ const drawSignatureInBox = (doc, dataUrl, boxX, boxY, boxW, boxH, padPoints = 6)
   }
 };
 
-// Sanitize punctuation in clause text (double periods, stray punctuation)
-const sanitizeClausePunctuation = (text) => {
+// Comprehensive text normalization function
+const normalizeClauseText = (text) => {
   if (!text || typeof text !== 'string') return text;
-  return text
-    .replace(/\.{2,}/g, '.')           // ".." or "..." -> "."
-    .replace(/\s{2,}/g, ' ')           // multiple spaces -> single space
-    .replace(/\s+\./g, '.')            // " ." -> "."
-    .replace(/\.\s*\./g, '.')          // ". ." -> "."
-    .trim();
+  
+  let normalized = text;
+  
+  // STEP 1: Fix double spaces FIRST (before other processing)
+  normalized = normalized.replace(/\s{2,}/g, ' ');
+  
+  // STEP 2: Fix all double/triple periods (most aggressive)
+  // Replace any sequence of 2+ periods with a single period
+  normalized = normalized.replace(/\.{2,}/g, '.');
+  
+  // STEP 3: Fix trailing periods/spaces (e.g., "text.." -> "text.")
+  normalized = normalized.replace(/([a-zA-Z0-9])\s*\.{2,}/g, '$1.');
+  
+  // STEP 4: Fix space before period
+  normalized = normalized.replace(/\s+\./g, '.');
+  
+  // STEP 5: Fix period-space-period
+  normalized = normalized.replace(/\.\s*\./g, '.');
+  
+  // STEP 6: Fix trailing triple dots at end of clause (e.g., "clause...")
+  normalized = normalized.replace(/\.{3,}\s*$/g, '.');
+  
+  // STEP 7: Fix "to my <Name>" grammar - more comprehensive pattern
+  // Pattern: "to my Emma Wilson" -> "to Emma Wilson" (when name doesn't need "my")
+  // But keep "to my wife Jane Smith" (relationship present)
+  // Match: "to my" followed by capitalized name (first name + last name)
+  normalized = normalized.replace(/\bto\s+my\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g, (match, name) => {
+    // Check if name already starts with a relationship word
+    const relationshipWords = ['wife', 'husband', 'son', 'daughter', 'brother', 'sister', 'mother', 'father', 'partner', 'spouse', 'child', 'children', 'nephew', 'niece', 'uncle', 'aunt', 'cousin', 'friend', 'executor', 'trustee'];
+    const nameParts = name.toLowerCase().split(/\s+/);
+    const hasRelationship = relationshipWords.some(rel => nameParts.includes(rel));
+    
+    // If name already contains relationship, keep "my"
+    if (hasRelationship) {
+      return match;
+    }
+    // Otherwise, remove "my" prefix
+    return `to ${name}`;
+  });
+  
+  // STEP 8: Fix "for my <Name>" grammar (same logic)
+  normalized = normalized.replace(/\bfor\s+my\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g, (match, name) => {
+    const relationshipWords = ['wife', 'husband', 'son', 'daughter', 'brother', 'sister', 'mother', 'father', 'partner', 'spouse', 'child', 'children', 'nephew', 'niece', 'uncle', 'aunt', 'cousin', 'friend', 'executor', 'trustee'];
+    const nameParts = name.toLowerCase().split(/\s+/);
+    const hasRelationship = relationshipWords.some(rel => nameParts.includes(rel));
+    if (hasRelationship) {
+      return match;
+    }
+    return `for ${name}`;
+  });
+  
+  // STEP 9: Fix clause 33 issue: "to any of my children I loaned..." -> "to any of my children. I loaned..."
+  // Insert period before standalone "I" after "children" if missing
+  normalized = normalized.replace(/\bchildren\s+(I\s+(?:loaned|gave|made|wish|direct|appoint))/gi, 'children. $1');
+  
+  // Also fix: "to any of my children" followed directly by "I" (more general)
+  normalized = normalized.replace(/\bchildren\s+(I\s+[a-z])/gi, 'children. I$1');
+  
+  // STEP 10: Fix clause 35 issue: "upon trust for I give..." -> "upon trust for the following: I give..."
+  // More comprehensive pattern matching
+  normalized = normalized.replace(/\bupon\s+trust\s+for\s+(I\s+give)/gi, 'upon trust for the following: $1');
+  // Also catch variations like "upon trust for" followed by percentage or number
+  normalized = normalized.replace(/\bupon\s+trust\s+for\s+(\d+%|50%|25%|I\s+give)/gi, 'upon trust for the following: $1');
+  
+  // STEP 11: Fix clause 36 duplication: Multiple patterns
+  // Pattern 1: "I give the failed share to If any gifts fail..."
+  normalized = normalized.replace(/\bI\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+gifts?\s+fail/gi, 'If any gifts fail');
+  
+  // Pattern 2: "should fail, I give the failed share to If any gifts fail..."
+  normalized = normalized.replace(/\bshould\s+fail,\s+I\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+gifts?\s+fail/gi, 'should fail. If any gifts fail');
+  
+  // Pattern 3: Remove duplicate "I give the failed share" if it appears twice
+  normalized = normalized.replace(/(I\s+give\s+the\s+failed\s+share\s+to[^.]*?)\s+I\s+give\s+the\s+failed\s+share\s+to/gi, '$1');
+  
+  // Pattern 4: Fix Clause 36 duplication - remove duplicated lead-in sentence
+  // Catch: "If any gift of my Residuary Estate should fail. If any gifts fail..." 
+  // Result: Keep only one lead-in
+  normalized = normalized.replace(/\bIf\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*If\s+any\s+gifts?\s+fail/gi, 'If any gift of my Residuary Estate should fail. If any gifts fail');
+  
+  // Pattern 5: Also catch when separated by period but still duplicated
+  normalized = normalized.replace(/\bIf\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail\.\s+If\s+any\s+gifts?\s+fail/gi, 'If any gift of my Residuary Estate should fail. If any gifts fail');
+  
+  // Pattern 6: Catch case where template lead-in appears twice
+  normalized = normalized.replace(/(If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]?\s*){2,}/gi, 'If any gift of my Residuary Estate should fail. ');
+  
+  // STEP 12: Fix grammar - "minimum amount of" -> "a minimum amount of"
+  // BUT: Only add "a" if it's not already there (prevent "a a a")
+  normalized = normalized.replace(/\bI\s+give\s+(?:a\s+){0,2}minimum\s+amount\s+of/gi, 'I give a minimum amount of');
+  normalized = normalized.replace(/\b(?:a\s+){0,2}minimum\s+amount\s+of\s+£/gi, 'a minimum amount of £');
+  
+  // STEP 12b: Remove duplicate "a" words (catch "a a a", "a a", etc.)
+  normalized = normalized.replace(/\b(a\s+){2,}/gi, 'a ');
+  
+  // STEP 13: Final cleanup - remove any remaining double periods that might have been introduced
+  // This must be VERY aggressive - catch ALL cases
+  normalized = normalized.replace(/\.{2,}/g, '.');
+  
+  // STEP 14: Fix trailing double periods after words (e.g., "at sea..", "21..")
+  normalized = normalized.replace(/([a-zA-Z0-9])\s*\.{2,}(?=\s|$|,|;)/g, '$1.');
+  
+  // STEP 15: Fix double periods in the middle of sentences
+  normalized = normalized.replace(/\s+\.{2,}\s+/g, '. ');
+  
+  // STEP 16: Trim trailing punctuation (but keep final period)
+  normalized = normalized.replace(/\s*\.{2,}\s*$/g, '.');
+  
+  // STEP 17: Final pass - catch any remaining double periods anywhere
+  normalized = normalized.replace(/\.{2,}/g, '.');
+  
+  // STEP 18: Remove duplicate words (catch "a a", "the the", "of of", etc.)
+  normalized = normalized.replace(/\b(a|an|the|of|to|for|in|on|at|by|with|from)\s+\1\b/gi, '$1');
+  
+  // STEP 19: Remove triple+ duplicate words (catch "a a a", etc.)
+  normalized = normalized.replace(/\b(a|an|the|of|to|for|in|on|at|by|with|from)(\s+\1){2,}\b/gi, '$1');
+  
+  // STEP 20: Final double space cleanup (after all other processing)
+  normalized = normalized.replace(/\s{2,}/g, ' ');
+  
+  // Trim and return
+  return normalized.trim();
+};
+
+// Sanitize punctuation in clause text (double periods, stray punctuation)
+// DEPRECATED: Use normalizeClauseText instead
+const sanitizeClausePunctuation = (text) => {
+  return normalizeClauseText(text);
 };
 
 const formatCurrencyValue = (value) => {
@@ -808,6 +929,64 @@ const interpolateText = (text, values) => {
       return '';
     }
 
+    // Handle pet carer sections - format more readably
+    if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection') && 
+        (subField === 'relationshipList' || subField === 'nameList' || subField === 'addressList')) {
+      const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
+      const sectionData = values[fallbackId] || values[sectionId];
+      
+      if (Array.isArray(sectionData) && sectionData.length > 0) {
+        const mappedValues = sectionData
+          .map((item) => {
+            if (!item || typeof item !== 'object') return '';
+            // Extract specific field based on subField type
+            let fieldValue = '';
+            if (subField === 'relationshipList') {
+              fieldValue = item.relationship || item.relationshipToTestator || '';
+            } else if (subField === 'nameList') {
+              // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
+              const parts = [
+                item.title,
+                item.firstName,
+                item.lastName
+              ].filter(Boolean);
+              fieldValue = parts.join(' ');
+            } else if (subField === 'addressList') {
+              // Format address nicely
+              const addressParts = [
+                item.address1,
+                item.address2,
+                item.address3,
+                item.city,
+                item.postcode
+              ].filter(Boolean);
+              fieldValue = addressParts.join(', ');
+            } else {
+              // Fallback to generic subField lookup
+              fieldValue = item[subField] || 
+                item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
+                item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
+                item[subField.toLowerCase()] ||
+                item[subField.toUpperCase()];
+            }
+            return fieldValue != null ? safeString(fieldValue) : '';
+          })
+          .filter(Boolean);
+        
+        if (mappedValues.length > 0) {
+          // Join with "and" for multiple items, or just return single value
+          if (mappedValues.length === 1) {
+            return mappedValues[0];
+          } else if (mappedValues.length === 2) {
+            return mappedValues.join(' and ');
+          } else {
+            return mappedValues.slice(0, -1).join(', ') + ', and ' + mappedValues[mappedValues.length - 1];
+          }
+        }
+      }
+      return '';
+    }
+    
     // Handle nested section fields
     const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
     const sectionData = values[fallbackId] || values[sectionId];
@@ -921,8 +1100,84 @@ const interpolateText = (text, values) => {
     processed = processed.replace(/\[he\/she\]/g, pronounHe);
   }
   
+  // Replace bracket placeholders with real values where possible
+  const loansGifts = values.specifyLoansGiftsText || '';
+  const residualList = values.residualGiftsDetails || values.residualBeneficiariesDetails || '';
+  const furtherResidualList = values.furtherResidualGiftsDetails || '';
+  const charityList = values.charityBenefitDetails || '';
+  const minCharityValue = values.minimumCharityAmountValue || '';
+  const charityAmount = values.minimumCharityAmount === 'Yes' && minCharityValue
+    ? `a minimum amount of £${parseInt(String(minCharityValue).replace(/[^0-9.]/g, ''), 10).toLocaleString('en-GB')} of my net estate`
+    : '10% of my net estate';
+  const charityCondition = values.charityGiftOnlyIfIHTDue === 'Yes'
+    ? 'if Inheritance Tax is due'
+    : '';
+
+  // Fix Clause 33: Insert loans/gifts text properly (add period if missing, ensure proper sentence structure)
+  let formattedLoansGifts = loansGifts.trim();
+  if (formattedLoansGifts && !formattedLoansGifts.endsWith('.')) {
+    formattedLoansGifts += '.';
+  }
+  // If the template has "[as specified: ...]", replace it properly
+  processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, (match) => {
+    if (formattedLoansGifts) {
+      return `as specified: ${formattedLoansGifts}`;
+    }
+    return '';
+  });
+  // CRITICAL FIX: Ensure proper sentence separation when inserting loans/gifts text
+  // If template ends with "children" and loans text starts with "I", add period separator
+  processed = processed.replace(/\bchildren\s+\[Specific Loans\/Gifts List\]/gi, (match) => {
+    if (formattedLoansGifts && formattedLoansGifts.match(/^I\s+/i)) {
+      return `children. ${formattedLoansGifts}`;
+    }
+    return match.replace('[Specific Loans/Gifts List]', formattedLoansGifts);
+  });
+  processed = processed.replace(/\[Specific Loans\/Gifts List\]/gi, formattedLoansGifts);
+  
+  // Fix Clause 35: Add proper lead-in for residual gifts if missing
+  let formattedResidualList = residualList.trim();
+  if (formattedResidualList && !formattedResidualList.match(/^(I\s+give|upon\s+trust|My\s+Trustees)/i)) {
+    // If it doesn't start with proper lead-in, it's likely raw text like "50% to my wife..."
+    // The template should handle this, but if it's being inserted into "upon trust for", fix it
+    if (processed.includes('upon trust for') && formattedResidualList) {
+      formattedResidualList = `the following: ${formattedResidualList}`;
+    }
+  }
+  processed = processed.replace(/\[Residual Beneficiary List and Shares\]/gi, formattedResidualList);
+  
+  // Fix Clause 36: Prevent duplication - if furtherResidualList already contains the lead-in, 
+  // remove the template's duplicate lead-in sentence
+  let formattedFurtherResidualList = furtherResidualList.trim();
+  if (formattedFurtherResidualList) {
+    // Check if user text already contains "If any gifts fail" or similar lead-in
+    const hasLeadIn = formattedFurtherResidualList.match(/^(If\s+any\s+gifts?\s+fail|I\s+give\s+the\s+failed\s+share)/i);
+    
+    if (hasLeadIn) {
+      // User text already has the full clause, so remove the template's lead-in entirely
+      // Template: "If any gift of my Residuary Estate should fail, I give the failed share to [Further Residual Beneficiary List and Shares]."
+      // Replace with just the user text (which already has the lead-in)
+      processed = processed.replace(/If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*I\s+give\s+the\s+failed\s+share\s+to\s*\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
+      // Also handle standalone bracket replacement
+      processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
+    } else {
+      // User text is just the beneficiary list, use the template's lead-in
+      processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
+    }
+  } else {
+    processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
+  }
+  
+  processed = processed.replace(/\[Charity\/Charities List\]/gi, charityList);
+  processed = processed.replace(/\[10% \/ minimum amount specified\]/gi, charityAmount);
+  processed = processed.replace(/\[conditionally if IHT due\]/gi, charityCondition);
+  processed = processed.replace(/\[\s*as specified:\s*([^\]]*)\]/gi, '$1');
+
   // Remove any remaining bracket placeholders to avoid incomplete text in final Will
   processed = processed.replace(/\[[^\]]*\]/g, '');
+  
+  // Apply text normalization (fix punctuation, grammar, etc.)
+  processed = normalizeClauseText(processed);
   
   // Clean up extra whitespace
   processed = processed.replace(/\s+/g, ' ').trim();
@@ -1297,12 +1552,20 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       doc.setTextColor(0, 0, 0); // Reset color
     };
 
-    // Collect all will clauses from form sections
-    const willClauses = [];
-    const seenClauses = new Set(); // Track seen clauses to prevent duplicates
+    // Collect all will clauses from form sections (shared builder for Preview + PDF)
     const scheduleReferences = new Set(); // Track schedule references throughout function
-    let hasPersonalPossessionsClause = false; // Only ONE "personal possessions" clause may render
-    const PERSONAL_POSSESSIONS_PATTERN = /I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it/i;
+    const willClauses = buildClauses({
+      formValues,
+      formData: formSchema,
+      interpolateText
+    }).map((clause) => ({
+      id: clause.id,
+      sectionLabel: clause.section,
+      fieldLabel: clause.title,
+      text: clause.text,
+      incomplete: clause.incomplete,
+      missingFields: clause.missingFields || []
+    }));
     
     // Explicit signing date fields - declared once for use throughout function
     const explicitSigningDateFields = [
@@ -1314,7 +1577,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       'signingDate'
     ];
     
-    if (formSchema && formSchema.formSections && Array.isArray(formSchema.formSections)) {
+    // Legacy clause builder disabled (shared builder used above)
+    if (false) {
       formSchema.formSections.forEach((section) => {
         if (!section || !section.fields) return;
 
@@ -1339,8 +1603,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
               // CRITICAL: Block clauses with missing subjects or empty critical interpolations
               if (interpolated && 
                   !/\{\{field:[^}]+\}\}/.test(interpolated) && 
-                  interpolated.trim() !== '' &&
-                  !isPlaceholderOrIncomplete(interpolated)) {
+                  interpolated.trim() !== '') {
                 
                 // CRITICAL: Check for pet care clauses with missing data
                 if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
@@ -1391,8 +1654,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                   (/\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated));
                 
                 if (hasMissingSubject) {
-                  console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
-                  return; // Skip this clause - don't add it to willClauses
+                  console.warn(`[PDF VALIDATION] ⚠️ Clause contains missing subject (will still render): "${interpolated.substring(0, 100)}"`);
                 }
                 
                 // Normalize clause for duplicate detection (ignore minor whitespace differences)
@@ -1433,8 +1695,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                   const interpolated = interpolateText(selectedOption.willClauseText, formValues);
                   if (interpolated && 
                       !/\{\{field:[^}]+\}\}/.test(interpolated) && 
-                      interpolated.trim() !== '' &&
-                      !isPlaceholderOrIncomplete(interpolated)) {
+                      interpolated.trim() !== '') {
                     
                     // DE-DUPLICATION: Only one "personal possessions" clause may render
                     if (PERSONAL_POSSESSIONS_PATTERN.test(interpolated) && hasPersonalPossessionsClause) {
@@ -1461,8 +1722,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated);
                     
                     if (hasMissingSubject) {
-                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
-                      return; // Skip this clause
+                      console.warn(`[PDF VALIDATION] ⚠️ Clause contains missing subject (will still render): "${interpolated.substring(0, 100)}"`);
                     }
                     
                     // Normalize clause for duplicate detection
@@ -1493,8 +1753,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                   const interpolated = interpolateText(subField.willClauseText, formValues);
                   if (interpolated && 
                       !/\{\{field:[^}]+\}\}/.test(interpolated) && 
-                      interpolated.trim() !== '' &&
-                      !isPlaceholderOrIncomplete(interpolated)) {
+                      interpolated.trim() !== '') {
                     
                     // CRITICAL: Check for pet care clauses with missing data
                     if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
@@ -1534,8 +1793,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       /\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated);
                     
                     if (hasMissingSubject) {
-                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING clause with missing subject: "${interpolated.substring(0, 100)}"`);
-                      return; // Skip this clause
+                      console.warn(`[PDF VALIDATION] ⚠️ Clause contains missing subject (will still render): "${interpolated.substring(0, 100)}"`);
                     }
                     
                     // Normalize clause for duplicate detection
@@ -1588,19 +1846,68 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       /\band\s+after\s+their\s+death\s+for\s*$/i // "and after their death for " (blank remainder)
     ];
     
+    // Ensure trust schedules are referenced when data exists (even if clause text is filtered)
+    if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
+      scheduleReferences.add(`Schedule ${String(formValues.propertyTrustScheduleNumber).trim()}`);
+    }
+    if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+      scheduleReferences.add(`Schedule ${String(formValues.bprTrustScheduleNumber).trim()}`);
+    }
+
     // Scan clauses for unresolved patterns (scheduleReferences already declared above)
     let validationClauseNumber = 0;
     willClauses.forEach((clause) => {
       validationClauseNumber++;
       if (!clause.text) {
         missing.push({
-          section: clause.sectionLabel,
-          field: clause.fieldLabel,
+          section: clause.sectionLabel || clause.section || 'Unknown',
+          field: clause.fieldLabel || clause.title || 'Unknown',
           clauseNumber: validationClauseNumber,
           issue: 'Empty clause',
           snippet: '(empty)'
         });
         return;
+      }
+      
+      // CRITICAL: Check for incomplete clauses (marked by buildClauses.js)
+      // These will be rendered as [Incomplete clause — requires user input: ...] or [MISSING: ...]
+      
+      // ALWAYS-ON Debug logging for problematic clauses (15, 17, 19, 28, 29)
+      const problematicClauseIds = ['failedMoneyGiftPassProportionately', 'failedSpecificGiftPassProportionately', 
+        'failedPropertyGiftPassProportionately', 'provisionsForPets', 'substitutePetCarer', 'petCarerSection'];
+      const isProblematicClause = problematicClauseIds.some(id => clause.id?.includes(id));
+      
+      if (isProblematicClause) {
+        console.log(`[PDF VALIDATION] 🔍 CHECKING PROBLEMATIC CLAUSE ${validationClauseNumber}:`, {
+          clauseId: clause.id,
+          clauseIncomplete: clause.incomplete,
+          clauseIncompleteType: typeof clause.incomplete,
+          clauseText: clause.text,
+          clauseTextLength: clause.text?.length,
+          missingFields: clause.missingFields,
+          sectionLabel: clause.sectionLabel,
+          fieldLabel: clause.fieldLabel
+        });
+      }
+      
+      if (clause.incomplete === true) {
+        const missingFields = Array.isArray(clause.missingFields) && clause.missingFields.length > 0
+          ? clause.missingFields.join(', ')
+          : 'required fields';
+        const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
+        const incompleteItem = {
+          section: clause.sectionLabel || clause.section || 'Unknown',
+          field: clause.fieldLabel || clause.title || 'Unknown',
+          clauseNumber: validationClauseNumber,
+          issue: `Incomplete clause — requires user input: ${missingFields}`,
+          snippet: snippet
+        };
+        console.log(`[PDF VALIDATION] Found incomplete clause ${validationClauseNumber}:`, {
+          section: incompleteItem.section,
+          field: incompleteItem.field,
+          issue: incompleteItem.issue.substring(0, 60)
+        });
+        missing.push(incompleteItem);
       }
       
       // Detect schedule references
@@ -1630,8 +1937,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         if (pattern.test(clause.text)) {
           const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
           missing.push({
-            section: clause.sectionLabel,
-            field: clause.fieldLabel,
+            section: clause.sectionLabel || clause.section || 'Unknown',
+            field: clause.fieldLabel || clause.title || 'Unknown',
             clauseNumber: validationClauseNumber,
             issue: 'CRITICAL: Missing subject/person/beneficiary in clause',
             snippet: snippet
@@ -1650,8 +1957,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         
         if (isIncompleteCondition) {
           missing.push({
-            section: clause.sectionLabel,
-            field: clause.fieldLabel,
+            section: clause.sectionLabel || clause.section || 'Unknown',
+            field: clause.fieldLabel || clause.title || 'Unknown',
             clauseNumber: 31,
             issue: 'CRITICAL: Clause 31 is incomplete - contains only a condition without an actual gift',
             snippet: clause31Text
@@ -1664,8 +1971,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         if (pattern.test(clause.text)) {
           const snippet = clause.text.substring(0, 80) + (clause.text.length > 80 ? '...' : '');
           missing.push({
-            section: clause.sectionLabel,
-            field: clause.fieldLabel,
+            section: clause.sectionLabel || clause.section || 'Unknown',
+            field: clause.fieldLabel || clause.title || 'Unknown',
             clauseNumber: validationClauseNumber,
             issue: 'Placeholder or incomplete content',
             snippet: snippet
@@ -1685,20 +1992,46 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       if (hasMissingSubjectInText) {
         const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
         missing.push({
-          section: clause.sectionLabel,
-          field: clause.fieldLabel,
+          section: clause.sectionLabel || clause.section || 'Unknown',
+          field: clause.fieldLabel || clause.title || 'Unknown',
           clauseNumber: validationClauseNumber,
           issue: 'CRITICAL: Missing subject/person/beneficiary in clause',
           snippet: snippet
         });
       }
       
-      // Check for incomplete patterns
-      if (isPlaceholderOrIncomplete(clause.text)) {
+      // Check for incomplete patterns (skip if already marked as incomplete above)
+      // CRITICAL FIX: If buildClauses.js explicitly marks a clause as complete (incomplete: false),
+      // we should trust that assessment and NOT double-check with isPlaceholderOrIncomplete.
+      // Only check isPlaceholderOrIncomplete if clause.incomplete is undefined/null (not explicitly set).
+      // This prevents false positives where buildClauses.js correctly identifies a clause as complete
+      // but isPlaceholderOrIncomplete incorrectly flags it due to pattern matching.
+      if (clause.incomplete === false) {
+        // Clause is explicitly marked as complete by buildClauses.js - trust it
+        if (isProblematicClause) {
+          console.log(`[PDF VALIDATION] ✅ PROBLEMATIC CLAUSE ${validationClauseNumber} MARKED COMPLETE BY buildClauses - TRUSTING IT:`, {
+            clauseId: clause.id,
+            clauseIncomplete: clause.incomplete,
+            clauseText: clause.text
+          });
+        }
+      } else if (clause.incomplete !== true && isPlaceholderOrIncomplete(clause.text)) {
+        // Only check isPlaceholderOrIncomplete if clause.incomplete is not explicitly false
         const snippet = clause.text.substring(0, 80) + (clause.text.length > 80 ? '...' : '');
+        
+        // ALWAYS-ON Debug logging for problematic clauses being flagged by isPlaceholderOrIncomplete
+        if (isProblematicClause) {
+          console.log(`[PDF VALIDATION] ⚠️ PROBLEMATIC CLAUSE ${validationClauseNumber} FLAGGED BY isPlaceholderOrIncomplete:`, {
+            clauseId: clause.id,
+            clauseIncomplete: clause.incomplete,
+            clauseText: clause.text,
+            snippet: snippet
+          });
+        }
+        
         missing.push({
-          section: clause.sectionLabel,
-          field: clause.fieldLabel,
+          section: clause.sectionLabel || clause.section || 'Unknown',
+          field: clause.fieldLabel || clause.title || 'Unknown',
           clauseNumber: validationClauseNumber,
           issue: 'Incomplete clause',
           snippet: snippet
@@ -1774,20 +2107,32 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     
     // Group missing items by category
     // CRITICAL: Separate critical issues from regular placeholders
-    const criticalBlanks = missing.filter(item => 
-      item.issue && (
+    const criticalBlanks = missing.filter(item => {
+      if (!item.issue) return false;
+      const matches = 
         item.issue.includes('CRITICAL: Missing subject') ||
         item.issue.includes('CRITICAL: Clause 31') ||
         item.issue.includes('CRITICAL:') ||
         item.issue.includes('blank') || 
         item.issue.includes('Empty') || 
-        item.issue.includes('incomplete')
-      )
-    );
+        item.issue.toLowerCase().includes('incomplete') ||
+        item.issue.includes('requires user input');
+      if (matches) {
+        console.log(`[PDF VALIDATION] Item added to criticalBlanks:`, {
+          section: item.section,
+          field: item.field,
+          clauseNumber: item.clauseNumber,
+          issue: item.issue.substring(0, 60)
+        });
+      }
+      return matches;
+    });
     const placeholders = missing.filter(item => 
-      !item.issue || (
-        !item.issue.includes('CRITICAL:') &&
-        (item.issue.includes('Placeholder') || item.snippet?.includes('test'))
+      !criticalBlanks.includes(item) && (
+        !item.issue || (
+          !item.issue.includes('CRITICAL:') &&
+          (item.issue.includes('Placeholder') || item.snippet?.includes('test'))
+        )
       )
     );
     const executionRequirements = missing.filter(item => item.section === 'Execution' || item.issue.includes('signing date'));
@@ -1871,10 +2216,37 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     console.log(`[PDF VALIDATION] Missing items: ${missing.length}, Schedules missing: ${schedulesMissing.length}`);
     console.log(`[PDF VALIDATION] Critical missing subjects: ${hasCriticalMissingSubjects}, Incomplete Clause 31: ${hasIncompleteClause31}`);
     console.log(`[PDF VALIDATION] Has placeholders: ${hasPlaceholders}, Has critical issues: ${hasCriticalIssues}`);
+    console.log(`[PDF VALIDATION] criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}`);
+    if (missing.length > 0) {
+      console.log(`[PDF VALIDATION] First 3 missing items:`, missing.slice(0, 3).map(m => ({
+        section: m.section,
+        field: m.field,
+        clauseNumber: m.clauseNumber,
+        issue: m.issue?.substring(0, 80)
+      })));
+    }
+    if (criticalBlanks.length > 0) {
+      console.log(`[PDF VALIDATION] First 3 criticalBlanks:`, criticalBlanks.slice(0, 3).map(m => ({
+        section: m.section,
+        field: m.field,
+        clauseNumber: m.clauseNumber,
+        issue: m.issue?.substring(0, 80)
+      })));
+    }
     
     // Helper function to render validation errors report (will be called at the END)
     const renderValidationErrorsReport = () => {
-      if (!hasPlaceholders && criticalBlanks.length === 0) return;
+      console.log(`[PDF VALIDATION REPORT] Rendering report - hasPlaceholders: ${hasPlaceholders}, criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}, missing.length: ${missing.length}`);
+      
+      // Fallback: if we have missing items but they weren't categorized, show them all
+      const itemsToShow = criticalBlanks.length > 0 ? criticalBlanks : 
+                         placeholders.length > 0 ? placeholders :
+                         missing.length > 0 ? missing : [];
+      
+      if (itemsToShow.length === 0 && schedulesMissing.length === 0) {
+        console.log(`[PDF VALIDATION REPORT] Skipping report - no items to show`);
+        return;
+      }
       
       // Add new page for validation report
       doc.addPage();
@@ -1889,7 +2261,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       yPos += 12; // Advance Y after title
       
       // Introduction
-      if (criticalBlanks.length > 0) {
+      if (criticalBlanks.length > 0 || (criticalBlanks.length === 0 && missing.length > 0)) {
         doc.setTextColor(200, 0, 0); // Red
         reportLine('⚠️ CRITICAL: This Will contains incomplete clauses and CANNOT be signed.', {
           fontSize: 13,
@@ -1908,7 +2280,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       }
       
       // Critical Blanks (show first and prominently)
-      if (criticalBlanks.length > 0) {
+      // Use criticalBlanks if available, otherwise fall back to all missing items
+      const itemsToDisplay = criticalBlanks.length > 0 ? criticalBlanks : (missing.length > 0 ? missing : []);
+      if (itemsToDisplay.length > 0) {
         yPos += 4; // Section spacing
         reportLine('Critical Blanks:', {
           fontSize: 12,
@@ -1917,7 +2291,13 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         });
         
         const availableWidth = pageWidth - (margin * 2) - 10;
-        criticalBlanks.forEach((item) => {
+        itemsToDisplay.forEach((item) => {
+          console.log(`[PDF VALIDATION REPORT] Rendering item:`, {
+            section: item.section,
+            field: item.field,
+            clauseNumber: item.clauseNumber,
+            issue: item.issue?.substring(0, 60)
+          });
           const itemText = `- ${item.section}: ${item.field}`;
           reportLine(itemText, {
             fontSize: 10,
@@ -1925,9 +2305,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
             spacingAfter: 2
           });
           
-          if (item.clauseNumber) {
+          if (item.clauseNumber && item.issue) {
             const clauseText = `  Clause ${item.clauseNumber}: ${item.issue}`;
             reportLine(clauseText, {
+              fontSize: 10,
+              indent: 10,
+              spacingAfter: 2
+            });
+          } else if (item.issue) {
+            // Display issue even if no clause number
+            const issueText = `  ${item.issue}`;
+            reportLine(issueText, {
               fontSize: 10,
               indent: 10,
               spacingAfter: 2
@@ -1964,9 +2352,24 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
             spacingAfter: 2
           });
           
-          if (item.clauseNumber) {
+          if (item.clauseNumber && item.issue) {
+            const clauseText = `  Clause ${item.clauseNumber}: ${item.issue}`;
+            reportLine(clauseText, {
+              fontSize: 10,
+              indent: 10,
+              spacingAfter: 2
+            });
+          } else if (item.clauseNumber) {
             const clauseText = `  Clause ${item.clauseNumber}`;
             reportLine(clauseText, {
+              fontSize: 10,
+              indent: 10,
+              spacingAfter: 2
+            });
+          } else if (item.issue) {
+            // Display issue even if no clause number
+            const issueText = `  ${item.issue}`;
+            reportLine(issueText, {
               fontSize: 10,
               indent: 10,
               spacingAfter: 2
@@ -2075,6 +2478,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     willClauses.forEach((clause) => {
       // DO NOT skip clauses - render everything, even if incomplete
       let processedClauseText = clause.text || '';
+      if (clause.incomplete) {
+        const fields = Array.isArray(clause.missingFields) && clause.missingFields.length > 0
+          ? clause.missingFields.join(', ')
+          : 'required fields';
+        processedClauseText = `[Incomplete clause — requires user input: ${fields}]`;
+      }
       
       // Replace placeholder patterns with [MISSING] markers
       if (processedClauseText) {
@@ -2140,6 +2549,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         });
       }
       
+      // Apply comprehensive text normalization FIRST (fixes punctuation, grammar, duplication)
+      processedClauseText = normalizeClauseText(processedClauseText);
+      
       // Apply final standardization and sanitization
       processedClauseText = sanitizeUnprofessionalContent(processedClauseText);
       processedClauseText = standardizeAristoneName(processedClauseText);
@@ -2173,17 +2585,14 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                                      !processedClauseText.toLowerCase().includes('i direct') &&
                                      !processedClauseText.toLowerCase().includes('i wish');
       
-      // Block clauses with missing subjects or incomplete conditions
+      // Do not block clauses with missing subjects; preview and PDF must align
       if (hasMissingSubject) {
-        console.error(`[PDF VALIDATION] ❌ BLOCKING Clause ${clauseNumber} - contains missing subject: "${processedClauseText.substring(0, 100)}"`);
-        // Don't render this clause - it's incomplete
-        return; // Skip this clause entirely
+        console.warn(`[PDF VALIDATION] ⚠️ Clause ${clauseNumber} contains missing subject (will still render): "${processedClauseText.substring(0, 100)}"`);
       }
       
       if (isIncompleteCondition && clauseNumber === 31) {
-        console.error(`[PDF VALIDATION] ❌ BLOCKING Clause 31 - incomplete condition without actual gift: "${processedClauseText}"`);
-        // Don't render incomplete Clause 31
-        return; // Skip this clause entirely
+        console.warn(`[PDF VALIDATION] ⚠️ Clause 31 incomplete condition (will render placeholder): "${processedClauseText}"`);
+        processedClauseText = '[Incomplete clause — requires user input: Clause 31 condition]';
       }
       
       // Render clause even if empty or incomplete (show [MISSING] markers)
@@ -2405,13 +2814,13 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
               
               // Combine details and terms if both exist
               if (details && terms) {
-                scheduleData = `${details}\n\n${terms}`;
+                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}\n\nBusiness Property Relief Trust Terms: ${terms}`;
                 console.log(`[PDF SCHEDULE] ✅ Combined BPR Trust details + terms, total length: ${scheduleData.length}`);
               } else if (details) {
-                scheduleData = details;
+                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}`;
                 console.log(`[PDF SCHEDULE] ✅ Using BPR Trust details only, length: ${scheduleData.length}`);
               } else if (terms) {
-                scheduleData = terms;
+                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Relief Trust Terms: ${terms}`;
                 console.log(`[PDF SCHEDULE] ✅ Using BPR Trust terms only, length: ${scheduleData.length}`);
               } else {
                 console.log(`[PDF SCHEDULE] ❌ BPR Trust schedule ${scheduleNumber} matched but no content found`);
