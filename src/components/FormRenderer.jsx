@@ -295,8 +295,57 @@ export default function FormRenderer() {
       charityBenefitSection: 'charityBenefitDetails'
     };
 
-    const interpolated = text.replace(/\{\{field:([^}]+)\}\}/g, (_, fullKey) => {
-      const [sectionId, subField] = fullKey.split(':');
+    // CRITICAL FIX: Handle bracket placeholders FIRST (before {{field:...}} replacement)
+    // Map bracket placeholders to their corresponding field references
+    let processedText = text;
+    
+    // Map bracket placeholders to field references
+    const bracketPlaceholderMap = {
+      '[Separate Trustee(s) List]': '{{field:separateTrusteesSection:fullDetails}}',
+      '[Separate Trustee List]': '{{field:separateTrusteesSection:fullDetails}}',
+      '[Pet Carer List]': '{{field:petCarerSection:fullDetails}}',
+      '[Substitute Pet Carer List]': '{{field:substitutePetCarerSection:fullDetails}}',
+    };
+    
+    Object.entries(bracketPlaceholderMap).forEach(([placeholder, fieldRef]) => {
+      if (processedText.includes(placeholder)) {
+        console.log(`[INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
+        processedText = processedText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), fieldRef);
+      }
+    });
+
+    const interpolated = processedText.replace(/\{\{field:([^}]+)\}\}/g, (_, fullKey) => {
+      let [sectionId, subField] = fullKey.split(':');
+      
+      // Allow templates to reference either "X" or "XSection" for :fullDetails / :fullList
+      const fullDetailsAliasMap = {
+        petCarer: 'petCarerSection',
+        substitutePetCarer: 'substitutePetCarerSection',
+        separateTrustees: 'separateTrusteesSection',
+        // safety: if someone used these ids without "Section" in JSON
+        petCarerSection: 'petCarerSection',
+        substitutePetCarerSection: 'substitutePetCarerSection',
+        separateTrusteesSection: 'separateTrusteesSection',
+      };
+      
+      // CRITICAL FIX: Alias mapping for fullDetails/fullList
+      // Handle cases where template uses shorter IDs (e.g., "separateTrustees") or when data is stored under different key
+      if ((subField === 'fullDetails' || subField === 'fullList') && fullDetailsAliasMap[sectionId]) {
+        const raw = values[sectionId];
+        // If it's a Yes/No, primitive, or missing (not the repeater data array), swap to the Section id
+        // This handles cases like: {{field:separateTrustees:fullDetails}} when separateTrustees = "Yes"
+        if (raw == null || typeof raw === 'string' || typeof raw === 'boolean' || typeof raw === 'number' || !Array.isArray(raw)) {
+          const mappedId = fullDetailsAliasMap[sectionId];
+          // Only swap if it's actually different (avoid no-op)
+          if (mappedId !== sectionId) {
+            sectionId = mappedId;
+            console.log(`[INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
+          } else {
+            // Even if same ID, ensure we're using the correct section ID for data lookup
+            console.log(`[INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
+          }
+        }
+      }
 
       if (subField === 'fullDetails' || subField === 'fullList') {
         // Special handling: chattelsGiftBeneficiarySection uses chattelsGiftBeneficiaryName when no array data
@@ -308,6 +357,280 @@ export default function FormRenderer() {
           }
           return `{{field:${fullKey}}}`;
         }
+        
+        // CRITICAL FIX: Special handling for executor sections - check for Aristone selection
+        if (sectionId === 'executorsSection') {
+          // Check if Aristone was selected via chooseAristoneExecutor
+          if (values.chooseAristoneExecutor === 'Aristone') {
+            return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+          }
+          // Fall through to normal array handling
+        }
+        
+        if (sectionId === 'substituteExecutorsSection') {
+          // Check if Aristone was selected via chooseAristoneSubstituteExecutor
+          if (values.chooseAristoneSubstituteExecutor === 'Aristone') {
+            return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+          }
+          // Fall through to normal array handling
+        }
+        
+        // CRITICAL FIX: Special handling for pet carer sections and separate trustees when using fullDetails
+        if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && subField === 'fullDetails') {
+          // CRITICAL: Use explicit data keys - DO NOT fall back to generic lookups
+          let sectionData = null;
+          if (sectionId === 'petCarerSection') {
+            sectionData = values.petCarerData || values.petCarerSectionData || null;
+          } else if (sectionId === 'substitutePetCarerSection') {
+            sectionData = values.substitutePetCarerData || values.substitutePetCarerSectionData || null;
+          } else if (sectionId === 'separateTrusteesSection') {
+            sectionData = values.separateTrusteeData || values.separateTrusteesData || values.separateTrusteesSectionData || null;
+          }
+          
+          // If still null, try fallbackMap as last resort
+          if (!sectionData) {
+            const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
+            sectionData = values[fallbackId] || null;
+          }
+          
+          // Debug logging for separate trustees
+          if (sectionId === 'separateTrusteesSection') {
+            console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - sectionData:`, {
+              sectionData,
+              sectionDataType: Array.isArray(sectionData) ? 'array' : typeof sectionData,
+              sectionDataLength: Array.isArray(sectionData) ? sectionData.length : 'N/A',
+              firstItem: Array.isArray(sectionData) && sectionData.length > 0 ? sectionData[0] : null,
+              firstItemType: Array.isArray(sectionData) && sectionData.length > 0 ? typeof sectionData[0] : 'N/A',
+              testatorFirstName: values.firstName,
+              testatorLastName: values.lastName,
+              testatorFullName: [values.title, values.firstName, values.middleName, values.lastName].filter(Boolean).join(' ')
+            });
+          }
+          
+              // CRITICAL: Only process if we have valid array data - never use testator name as fallback
+              // If sectionData is null, undefined, not an array, or empty, return unresolved marker immediately
+              if (!sectionData || !Array.isArray(sectionData) || sectionData.length === 0) {
+                if (sectionId === 'separateTrusteesSection') {
+                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
+                }
+                return `{{field:${sectionId}:${subField}}}`;
+              }
+              
+              if (sectionData.length > 0) {
+                // CRITICAL FIX: Get testator name for validation BEFORE processing items
+                const testatorFirstName = values.firstName || '';
+                const testatorLastName = values.lastName || '';
+                const testatorMiddleName = values.middleName || '';
+                const testatorTitle = values.title || '';
+                const testatorFullName = [testatorTitle, testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
+                const testatorNameWithoutTitle = [testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
+                
+                const formattedItems = sectionData
+                  .map((item) => {
+                    // Handle string items (fallback for simple data structures)
+                    if (typeof item === 'string') {
+                      // Check if it's an exact known placeholder string from autofill
+                      // Use exact matching to avoid false positives with legitimate user input
+                      const exactPlaceholders = {
+                        separateTrusteesSection: [
+                          'Testing the Trustees',
+                          'Testing the Separate Trustees',
+                          'test test test',
+                          'testing'
+                        ],
+                        petCarerSection: [
+                          'Testing the Per Carer works',
+                          'Testing the Pet Carer works',
+                          'test test test',
+                          'testing'
+                        ],
+                        substitutePetCarerSection: [
+                          'Testing the Per Carer works Sub',
+                          'Testing the Pet Carer works Sub',
+                          'Testing the Substitute Pet Carer works',
+                          'test test test',
+                          'testing'
+                        ]
+                      };
+                      
+                      const placeholders = exactPlaceholders[sectionId] || [];
+                      const trimmed = item.trim();
+                      const isPlaceholder = placeholders.some(placeholder =>
+                        trimmed.toLowerCase() === placeholder.toLowerCase()
+                      );
+                      
+                      if (isPlaceholder) {
+                        console.log(`[INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
+                        return ''; // Return empty to mark as incomplete
+                      }
+                      
+                      // CRITICAL FIX: Check if string contains testator name (multiple checks)
+                      const testatorFirstNameLastName = [testatorFirstName, testatorLastName].filter(Boolean).join(' ').trim();
+                      const containsTestatorNameInString = 
+                        (testatorFullName && trimmed.includes(testatorFullName)) ||
+                        (testatorNameWithoutTitle && trimmed.includes(testatorNameWithoutTitle)) ||
+                        (testatorFirstNameLastName && trimmed.includes(testatorFirstNameLastName)) ||
+                        (testatorFirstName && testatorLastName && trimmed.includes(testatorFirstName) && trimmed.includes(testatorLastName));
+                      
+                      if (containsTestatorNameInString) {
+                        console.error(`[INTERPOLATE] ❌ CRITICAL: String item contains testator name: "${item}"`);
+                        console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
+                        console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
+                        console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
+                        return ''; // Reject this item
+                      }
+                      
+                      return item; // Return as-is if it's a valid formatted string
+                    }
+                
+                if (!item || typeof item !== 'object') return '';
+                
+                // Format as: "relationship name of address" (e.g., "Friend Charlie Pet Carer of 789 Pet Street, Animal District, London, SW1A 2BB")
+                const relationship = item.relationship || item.relationshipToTestator || '';
+                const nameParts = [
+                  item.title,
+                  item.firstName,
+                  item.lastName
+                ].filter(Boolean);
+                const name = nameParts.join(' ');
+                const nameWithoutTitle = [item.firstName, item.middleName, item.lastName].filter(Boolean).join(' ');
+                const addressParts = [
+                  item.address1,
+                  item.address2,
+                  item.address3,
+                  item.city,
+                  item.postcode
+                ].filter(Boolean);
+                const address = addressParts.join(', ');
+                
+                // CRITICAL FIX: Validate name doesn't match testator name BEFORE other validation
+                if (testatorFullName && name === testatorFullName) {
+                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name "${name}" matches testator name "${testatorFullName}" for ${sectionId}:fullDetails! Rejecting item.`);
+                  if (sectionId === 'separateTrusteesSection') {
+                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  }
+                  return ''; // Reject this item - testator cannot be their own trustee/pet carer
+                }
+                if (testatorNameWithoutTitle && nameWithoutTitle === testatorNameWithoutTitle) {
+                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name (no title) "${nameWithoutTitle}" matches testator name "${testatorNameWithoutTitle}" for ${sectionId}:fullDetails! Rejecting item.`);
+                  if (sectionId === 'separateTrusteesSection') {
+                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  }
+                  return ''; // Reject this item
+                }
+                // Also check if firstName + lastName match (even if title differs)
+                if (testatorFirstName && testatorLastName && 
+                    item.firstName === testatorFirstName && item.lastName === testatorLastName) {
+                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item firstName "${item.firstName}" + lastName "${item.lastName}" matches testator for ${sectionId}:fullDetails! Rejecting item.`);
+                  if (sectionId === 'separateTrusteesSection') {
+                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  }
+                  return ''; // Reject this item
+                }
+                
+                // Validate we have at least name (firstName or lastName) and address1
+                if ((!name || name.trim() === '') || (!address || !item.address1)) {
+                  // Debug logging for separate trustees when validation fails
+                  if (sectionId === 'separateTrusteesSection') {
+                    console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
+                      item,
+                      hasName: !!(name && name.trim()),
+                      hasAddress: !!(address && item.address1),
+                      nameParts,
+                      addressParts
+                    });
+                  }
+                  return '';
+                }
+                
+                // Build formatted string: "relationship name of address"
+                const parts = [relationship, name, address].filter(Boolean);
+                if (parts.length === 0) return '';
+                
+                // Format: "relationship name of address" or "name of address" if no relationship
+                if (relationship) {
+                  return `${relationship} ${name} of ${address}`;
+                } else {
+                  return `${name} of ${address}`;
+                }
+              })
+              .filter(Boolean);
+            
+            // Debug logging for separate trustees
+            if (sectionId === 'separateTrusteesSection') {
+              console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
+                formattedItems,
+                length: formattedItems.length,
+                items: formattedItems.map(item => ({ value: item, type: typeof item }))
+              });
+            }
+            
+            if (formattedItems.length > 0) {
+              const result = formattedItems.length === 1 
+                ? formattedItems[0]
+                : formattedItems.length === 2
+                ? formattedItems.join(' and ')
+                : formattedItems.slice(0, -1).join(', ') + ', and ' + formattedItems[formattedItems.length - 1];
+              
+              // CRITICAL FIX: Validate result doesn't contain testator name
+              // Check if result matches testator name pattern (firstName + lastName)
+              const testatorFirstName = values.firstName || '';
+              const testatorLastName = values.lastName || '';
+              const testatorMiddleName = values.middleName || '';
+              const testatorTitle = values.title || '';
+              const testatorFullName = [testatorTitle, testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
+              const testatorNameWithoutTitle = [testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
+              const testatorFirstNameLastName = [testatorFirstName, testatorLastName].filter(Boolean).join(' ').trim();
+              
+              // CRITICAL: Multiple checks for testator name in result
+              const containsTestatorName = 
+                (testatorFullName && result.includes(testatorFullName)) ||
+                (testatorNameWithoutTitle && result.includes(testatorNameWithoutTitle)) ||
+                (testatorFirstNameLastName && result.includes(testatorFirstNameLastName)) ||
+                (testatorFirstName && testatorLastName && result.includes(testatorFirstName) && result.includes(testatorLastName));
+              
+              if (containsTestatorName) {
+                console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Result contains testator name for ${sectionId}:fullDetails!`);
+                console.error(`[INTERPOLATE] Result: "${result}"`);
+                console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
+                console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
+                console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
+                console.error(`[INTERPOLATE] ❌ BLOCKING - returning unresolved marker to prevent clause with testator name`);
+                return `{{field:${sectionId}:${subField}}}`;
+              }
+              
+              // Debug logging for separate trustees
+              if (sectionId === 'separateTrusteesSection') {
+                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
+                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Testator name check passed (fullName: "${testatorFullName}", result: "${result}")`);
+              }
+              
+              return result;
+            } else {
+              // No valid formatted items after filtering - return unresolved marker
+              if (sectionId === 'separateTrusteesSection') {
+                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
+              }
+              return `{{field:${sectionId}:${subField}}}`;
+            }
+          }
+          
+          // This should never be reached due to early return above, but add guard just in case
+          if (sectionId === 'separateTrusteesSection') {
+            console.warn(`[INTERPOLATE] separateTrusteesSection:fullDetails - ⚠️ Unexpected code path, returning unresolved marker`);
+          }
+          return `{{field:${sectionId}:${subField}}}`;
+        }
+        
+        // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections, 
+        // NEVER fall through to generic array handling - we already handled these above
+        // This prevents accidentally returning testator name or other wrong data
+        if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+            (subField === 'fullDetails' || subField === 'fullList')) {
+          console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
+          return `{{field:${sectionId}:${subField}}}`;
+        }
+        
         const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
         const array = values[fallbackId] || values[sectionId] || [];
         if (Array.isArray(array) && array.length > 0) {
@@ -399,14 +722,19 @@ export default function FormRenderer() {
                 fieldValue = item.relationship || item.relationshipToTestator || '';
               } else if (subField === 'nameList') {
                 // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
+                // CRITICAL FIX: Ensure we have at least firstName OR lastName
                 const parts = [
                   item.title,
                   item.firstName,
                   item.lastName
                 ].filter(Boolean);
                 fieldValue = parts.join(' ');
+                // If name is empty or just whitespace, return empty to mark clause incomplete
+                if (!fieldValue || fieldValue.trim() === '') {
+                  return '';
+                }
               } else if (subField === 'addressList') {
-                // Format address nicely
+                // Format address nicely - at minimum need address1
                 const addressParts = [
                   item.address1,
                   item.address2,
@@ -415,6 +743,10 @@ export default function FormRenderer() {
                   item.postcode
                 ].filter(Boolean);
                 fieldValue = addressParts.join(', ');
+                // If address is empty, return empty to mark clause incomplete
+                if (!fieldValue || fieldValue.trim() === '') {
+                  return '';
+                }
               } else {
                 // Fallback to generic subField lookup
                 fieldValue = item[subField] ||
@@ -423,7 +755,7 @@ export default function FormRenderer() {
                   item[subField.toLowerCase()] ||
                   item[subField.toUpperCase()];
               }
-              return fieldValue != null ? String(fieldValue) : '';
+              return fieldValue != null ? String(fieldValue).trim() : '';
             })
             .filter(Boolean);
           
@@ -438,7 +770,8 @@ export default function FormRenderer() {
             }
           }
         }
-        return '';
+        // CRITICAL FIX: Return placeholder to mark clause as incomplete if no data
+        return `{{field:${sectionId}:${subField}}}`;
       }
       
       // Handle nested section fields (e.g., partnerSection:relationship, partnerSection:fullName)
@@ -476,6 +809,24 @@ export default function FormRenderer() {
           }
           return result;
         }
+      }
+
+      // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections,
+      // NEVER use generic fallbacks that might return testator name
+      // These sections MUST have valid array data or return unresolved marker
+      // MUST CHECK THIS BEFORE any generic fallbacks to prevent testator name substitution
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+          (subField === 'fullDetails' || subField === 'fullList')) {
+        console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached generic fallback section, returning unresolved marker (preventing testator name fallback)`);
+        return `{{field:${sectionId}:${subField}}}`;
+      }
+
+      // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections,
+      // NEVER return empty string or use generic fallbacks - always return unresolved marker
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+          (subField === 'fullDetails' || subField === 'fullList')) {
+        console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached final fallback, returning unresolved marker (preventing empty string/testator name)`);
+        return `{{field:${sectionId}:${subField}}}`;
       }
 
       // Try other naming conventions
@@ -705,6 +1056,18 @@ export default function FormRenderer() {
     if (!field.conditions) return true;
     
     const evalClause = (clause) => {
+      if (!clause) return false;
+      
+      // CRITICAL FIX: Handle nested conditions with operator/clauses FIRST (before checking field)
+      // This handles structures like: { operator: "AND", clauses: [{ field: "...", ... }, ...] }
+      if ((clause.operator === 'AND' || clause.operator === 'OR') && clause.clauses) {
+        if (!Array.isArray(clause.clauses)) return false;
+        const results = clause.clauses.map(evalClause);
+        return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
+      }
+      
+      // Then handle simple field-based conditions
+      if (!clause.field) return false;
       const value = formValues[clause.field];
       
       // Debug logging for critical FLIT fields
@@ -730,10 +1093,6 @@ export default function FormRenderer() {
       
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
-      if (clause.operator === 'AND' || clause.operator === 'OR') {
-        const results = clause.clauses.map(evalClause);
-        return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
-      }
       return false;
     };
     
@@ -1043,14 +1402,53 @@ export default function FormRenderer() {
     const fieldLabel = field.label ? String(field.label).trim().toLowerCase() : '';
     if (fieldLabel === normalized) return field.id;
     
-    // Partial match on label
+    // Partial match on label - prioritize more specific matches
     if (allowPartial && fieldLabel) {
+      // CRITICAL FIX: If searching for separate trustees, exclude guardian, digital executor, and business trustee fields
+      const isSearchingForSeparateTrustees = normalized.includes('separate') && 
+        (normalized.includes('trustee') || normalized.includes('trustees'));
+      const isGuardianField = fieldLabel.includes('guardian') && !fieldLabel.includes('trustee');
+      const isDigitalExecutorField = fieldLabel.includes('digital') && (fieldLabel.includes('executor') || fieldLabel.includes('executors'));
+      const isBusinessTrusteeField = (fieldLabel.includes('business') && fieldLabel.includes('trustee')) || 
+        field.id === 'appointSeparateBusinessTrustee';
+      
+      if (isSearchingForSeparateTrustees) {
+        // Skip guardian fields when searching for separate trustees
+        if (isGuardianField) {
+          return null;
+        }
+        // Skip digital executor fields when searching for separate trustees
+        if (isDigitalExecutorField) {
+          return null;
+        }
+        // Skip business trustee fields when searching for FLIT separate trustees
+        if (isBusinessTrusteeField) {
+          return null;
+        }
+      }
+      
+      // First check: exact substring match (most specific)
       if (fieldLabel.includes(normalized.substring(0, 30)) || 
           normalized.includes(fieldLabel.substring(0, 30))) {
         return field.id;
       }
-      if (keyWords.length > 0 && keyWords.some(word => fieldLabel.includes(word))) {
-        return field.id;
+      // Second check: require multiple keywords to match (more specific than single keyword)
+      if (keyWords.length > 0) {
+        const matchingKeywords = keyWords.filter(word => fieldLabel.includes(word));
+        // Require at least 2 keywords to match for better accuracy
+        // Special case: if normalized contains "separate" and "trustees", prioritize fields with both
+        if (normalized.includes('separate') && (normalized.includes('trustee') || normalized.includes('trustees'))) {
+          if (fieldLabel.includes('separate') && (fieldLabel.includes('trustee') || fieldLabel.includes('trustees'))) {
+            // Double-check it's not a guardian, digital executor, or business trustee field
+            if (!isGuardianField && !isDigitalExecutorField && !isBusinessTrusteeField) {
+              return field.id;
+            }
+          }
+        }
+        // For other cases, require at least 2 keywords to match
+        if (matchingKeywords.length >= 2) {
+          return field.id;
+        }
       }
     }
     
@@ -1100,11 +1498,12 @@ export default function FormRenderer() {
     return collected;
   };
 
-  const scrollToField = (fieldId, targetFieldIds = []) => {
+  const scrollToField = (fieldId, targetFieldIds = [], retryCount = 0) => {
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ========== SCROLLING TO FIELD "${fieldId}" ==========`);
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field ID type:`, typeof fieldId);
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field ID value:`, fieldId);
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Target field IDs (fallback):`, targetFieldIds);
+    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Retry count:`, retryCount);
     
     if (!fieldId) {
       console.error(`[SCROLL TO FIELD] ❌ No fieldId provided!`);
@@ -1134,9 +1533,10 @@ export default function FormRenderer() {
             DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Removed animate-pulse class`);
           }, 2000);
           
-          // Focus on the first input in that field
+          // Focus on the first input in that field (or the button itself if it's a button)
           const input = fieldElement?.querySelector('input, textarea, select');
-          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Found input element:`, input);
+          const isButton = fieldElement.tagName === 'BUTTON' || fieldElement.querySelector('button');
+          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Found input element:`, input, 'isButton:', isButton);
           if (input) {
             DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Focusing on input element in field "${id}"`);
             setTimeout(() => {
@@ -1147,6 +1547,8 @@ export default function FormRenderer() {
                 console.error(`[SCROLL TO FIELD] ❌ Error focusing input:`, focusError);
               }
             }, 500);
+          } else if (isButton) {
+            DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field is a button, no input to focus`);
           } else {
             DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] No input element found in field`);
           }
@@ -1170,18 +1572,20 @@ export default function FormRenderer() {
     
     // Try targetFieldIds as fallback
     if (Array.isArray(targetFieldIds) && targetFieldIds.length > 0) {
-      DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Primary fieldId "${fieldId}" not found, trying ${targetFieldIds.length} fallback field IDs...`);
+      console.log(`[SCROLL TO FIELD] Primary fieldId "${fieldId}" not found, trying ${targetFieldIds.length} fallback field IDs...`);
       for (const fallbackId of targetFieldIds) {
-        if (fallbackId !== fieldId && tryField(fallbackId)) {
-          return;
+        if (fallbackId !== fieldId) {
+          console.log(`[SCROLL TO FIELD] Trying fallback field ID: "${fallbackId}"`);
+          if (tryField(fallbackId)) {
+            console.log(`[SCROLL TO FIELD] ✅ Found fallback field "${fallbackId}"`);
+            return;
+          }
         }
       }
+      console.log(`[SCROLL TO FIELD] ⚠️ None of the fallback field IDs worked:`, targetFieldIds);
     }
     
     // Try case-insensitive search
-    console.error(`[SCROLL TO FIELD] ❌ Could not find field element for "${fieldId}"`);
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Trying case-insensitive search...`);
-    
     const allFields = document.querySelectorAll('[data-field-id]');
     DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Total fields with data-field-id:`, allFields.length);
     
@@ -1195,23 +1599,38 @@ export default function FormRenderer() {
       DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ✅ Found field via case-insensitive search`);
       foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const input = foundField.querySelector('input, textarea, select');
+      const isButton = foundField.tagName === 'BUTTON' || foundField.querySelector('button');
       if (input) {
         setTimeout(() => input.focus(), 500);
       }
+      // Add highlight for buttons too
+      foundField.classList.add('animate-pulse');
+      setTimeout(() => foundField.classList.remove('animate-pulse'), 2000);
       setValidationModalOpen(false);
-    } else {
-      console.error(`[SCROLL TO FIELD] ❌ Field not found even with case-insensitive search`);
-      console.error(`[SCROLL TO FIELD] Searched for:`, searchIds);
-      console.error(`[SCROLL TO FIELD] Available field IDs (first 20):`, Array.from(allFields).slice(0, 20).map(f => f.getAttribute('data-field-id')));
-      
-      // Use collectAllFieldIds to show all available field IDs from formData structure
-      const allFieldIdsFromData = collectAllFieldIds(
-        formData?.formSections?.flatMap(s => s.fields || []) || []
-      );
-      console.error(`[SCROLL TO FIELD] All field IDs from formData structure (${allFieldIdsFromData.size} total):`, 
-        Array.from(allFieldIdsFromData).sort().slice(0, 50));
-      console.error(`[SCROLL TO FIELD] Is "${fieldId}" in formData?`, allFieldIdsFromData.has(fieldId));
+      return;
     }
+    
+    // If not found and retry count is less than 3, retry after a delay (for DOM updates)
+    if (retryCount < 3) {
+      console.log(`[SCROLL TO FIELD] ⏳ Field "${fieldId}" not found, retrying in ${(retryCount + 1) * 500}ms... (attempt ${retryCount + 1}/3)`);
+      setTimeout(() => {
+        scrollToField(fieldId, targetFieldIds, retryCount + 1);
+      }, (retryCount + 1) * 500);
+      return;
+    }
+    
+    // Final error logging
+    console.error(`[SCROLL TO FIELD] ❌ Could not find field element for "${fieldId}" after ${retryCount + 1} attempts`);
+    console.error(`[SCROLL TO FIELD] Searched for:`, searchIds);
+    console.error(`[SCROLL TO FIELD] Available field IDs (first 20):`, Array.from(allFields).slice(0, 20).map(f => f.getAttribute('data-field-id')));
+    
+    // Use collectAllFieldIds to show all available field IDs from formData structure
+    const allFieldIdsFromData = collectAllFieldIds(
+      formData?.formSections?.flatMap(s => s.fields || []) || []
+    );
+    console.error(`[SCROLL TO FIELD] All field IDs from formData structure (${allFieldIdsFromData.size} total):`, 
+      Array.from(allFieldIdsFromData).sort().slice(0, 50));
+    console.error(`[SCROLL TO FIELD] Is "${fieldId}" in formData?`, allFieldIdsFromData.has(fieldId));
   };
 
   const findFieldIdByLabel = (label, allowPartial = true) => {
@@ -1499,16 +1918,75 @@ export default function FormRenderer() {
 
   // Auto-fill form with dummy data
   const handleAutoFill = useCallback(() => {
+    console.log('[FORM AUTO-FILL] ========== AUTO-FILL BUTTON CLICKED ==========');
+    console.log('[FORM AUTO-FILL] 📋 Form data available:', {
+      hasFormData: !!formData,
+      sectionsCount: formData?.formSections?.length || 0,
+      currentFormValuesCount: Object.keys(formValues).length
+    });
+    
     try {
+      console.log('[FORM AUTO-FILL] 🔄 Calling generateDummyFormData...');
       const dummyData = generateDummyFormData(formData);
-      setFormValues(prev => ({ ...prev, ...dummyData }));
-      localStorage.setItem('willForm', JSON.stringify(dummyData));
-      setTimeout(() => setFormValues(current => ({ ...current })), 100);
+      
+      console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
+        totalFields: Object.keys(dummyData).length,
+        hasSeparateTrusteeData: !!dummyData.separateTrusteeData,
+        separateTrusteeDataLength: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 'N/A',
+        howResidueDistributed: dummyData.howResidueDistributed,
+        appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT,
+        sampleFields: Object.keys(dummyData).slice(0, 5)
+      });
+      
+      if (dummyData.separateTrusteeData) {
+        console.log('[FORM AUTO-FILL] 🔍 Separate trustee data details:', {
+          isArray: Array.isArray(dummyData.separateTrusteeData),
+          length: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 'N/A',
+          firstItem: Array.isArray(dummyData.separateTrusteeData) && dummyData.separateTrusteeData.length > 0 
+            ? dummyData.separateTrusteeData[0] 
+            : 'N/A',
+          allItems: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData : 'N/A'
+        });
+      }
+      
+      console.log('[FORM AUTO-FILL] 🔄 Updating form values state...');
+      setFormValues(prev => {
+        const merged = { ...prev, ...dummyData };
+        console.log('[FORM AUTO-FILL] ✅ Merged form values:', {
+          previousCount: Object.keys(prev).length,
+          newCount: Object.keys(merged).length,
+          hasSeparateTrusteeData: !!merged.separateTrusteeData
+        });
+        return merged;
+      });
+      
+      console.log('[FORM AUTO-FILL] 💾 Saving to localStorage...');
+      try {
+        localStorage.setItem('willForm', JSON.stringify(dummyData));
+        console.log('[FORM AUTO-FILL] ✅ Saved to localStorage successfully');
+      } catch (storageError) {
+        console.error('[FORM AUTO-FILL] ❌ Failed to save to localStorage:', storageError);
+      }
+      
+      console.log('[FORM AUTO-FILL] ⏱️ Scheduling form values refresh...');
+      setTimeout(() => {
+        console.log('[FORM AUTO-FILL] 🔄 Refreshing form values state...');
+        setFormValues(current => {
+          console.log('[FORM AUTO-FILL] ✅ Form values refreshed:', {
+            currentCount: Object.keys(current).length,
+            hasSeparateTrusteeData: !!current.separateTrusteeData
+          });
+          return { ...current };
+        });
+      }, 100);
+      
       toast.success('Form auto-filled ✓', {
         description: `Filled ${Object.keys(dummyData).length} fields from start to finish. Ready for PDF preview.`,
         duration: 4000
       });
+      
       if (import.meta.env.DEV) {
+        console.log('[FORM AUTO-FILL] 🔍 Building clause debug export...');
         const previewMaxIndex = formData.formSections.length - 1;
         const exportPayload = buildClauseDebugExport(dummyData, previewMaxIndex);
         window.lastClauseDebugExport = exportPayload;
@@ -1518,11 +1996,18 @@ export default function FormRenderer() {
         console.info('pdfClauses', exportPayload.pdfClauses);
         console.groupEnd();
       }
+      
+      console.log('[FORM AUTO-FILL] ========== AUTO-FILL COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
-      console.error('[FORM] Auto-fill error:', error);
+      console.error('[FORM AUTO-FILL] ❌ Auto-fill error:', error);
+      console.error('[FORM AUTO-FILL] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       toast.error('Auto-fill failed', { description: error.message });
     }
-  }, [formData, buildClauseDebugExport]);
+  }, [formData, buildClauseDebugExport, formValues]);
 
   // Expose auto-fill function to window for console access
   useEffect(() => {
@@ -1612,6 +2097,342 @@ export default function FormRenderer() {
 
     calculateCompletion();
   }, [formValues, evaluateFieldConditions]);
+
+  // Process modal fields and convert them to structured data arrays
+  // CRITICAL FIX: Separate useEffect to ALWAYS clean up string entries, independent of modal field processing
+  useEffect(() => {
+    const cleanupStringEntries = () => {
+      const updatedValues = { ...formValues };
+      let hasChanges = false;
+
+      // Clean up string entries in separateTrusteeData
+      // Only remove exact placeholder strings from autofill, not legitimate user entries
+      if (Array.isArray(formValues.separateTrusteeData) && formValues.separateTrusteeData.length > 0) {
+        // Only match exact known placeholder strings from autofill
+        const exactPlaceholders = [
+          'Testing the Trustees',
+          'Testing the Separate Trustees',
+          'test test test',
+          'testing'
+        ];
+        
+        const isPlaceholder = (item) => {
+          if (typeof item !== 'string') return false;
+          const trimmed = item.trim();
+          // Only remove if it's an exact match (case-insensitive) to known placeholders
+          return exactPlaceholders.some(placeholder => 
+            trimmed.toLowerCase() === placeholder.toLowerCase()
+          );
+        };
+        
+        const hasPlaceholderEntries = formValues.separateTrusteeData.some(isPlaceholder);
+        if (hasPlaceholderEntries) {
+          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in separateTrusteeData, cleaning up...');
+          const cleanedData = formValues.separateTrusteeData.filter(item => !isPlaceholder(item));
+          if (cleanedData.length !== formValues.separateTrusteeData.length) {
+            updatedValues.separateTrusteeData = cleanedData;
+            hasChanges = true;
+            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from separateTrusteeData:', {
+              before: formValues.separateTrusteeData.length,
+              after: cleanedData.length,
+              removed: formValues.separateTrusteeData.length - cleanedData.length
+            });
+          }
+        } else {
+          // Log when we have string entries but they're not placeholders (legitimate user input)
+          const stringEntries = formValues.separateTrusteeData.filter(item => typeof item === 'string');
+          if (stringEntries.length > 0) {
+            console.log('[CLEANUP] ℹ️ Found legitimate string entries in separateTrusteeData (keeping them):', stringEntries);
+          }
+        }
+      }
+
+      // Clean up string entries in petCarerData
+      // Only remove exact placeholder strings from autofill, not legitimate user entries
+      if (Array.isArray(formValues.petCarerData) && formValues.petCarerData.length > 0) {
+        // Only match exact known placeholder strings from autofill
+        const exactPlaceholders = [
+          'Testing the Per Carer works',
+          'Testing the Pet Carer works',
+          'test test test',
+          'testing'
+        ];
+        
+        const isPlaceholder = (item) => {
+          if (typeof item !== 'string') return false;
+          const trimmed = item.trim();
+          // Only remove if it's an exact match (case-insensitive) to known placeholders
+          return exactPlaceholders.some(placeholder => 
+            trimmed.toLowerCase() === placeholder.toLowerCase()
+          );
+        };
+        
+        const hasPlaceholderEntries = formValues.petCarerData.some(isPlaceholder);
+        if (hasPlaceholderEntries) {
+          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in petCarerData, cleaning up...');
+          const cleanedData = formValues.petCarerData.filter(item => !isPlaceholder(item));
+          if (cleanedData.length !== formValues.petCarerData.length) {
+            updatedValues.petCarerData = cleanedData;
+            hasChanges = true;
+            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from petCarerData:', {
+              before: formValues.petCarerData.length,
+              after: cleanedData.length,
+              removed: formValues.petCarerData.length - cleanedData.length
+            });
+          }
+        } else {
+          // Log when we have string entries but they're not placeholders (legitimate user input)
+          const stringEntries = formValues.petCarerData.filter(item => typeof item === 'string');
+          if (stringEntries.length > 0) {
+            console.log('[CLEANUP] ℹ️ Found legitimate string entries in petCarerData (keeping them):', stringEntries);
+          }
+        }
+      }
+
+      // Clean up string entries in substitutePetCarerData
+      // Only remove exact placeholder strings from autofill, not legitimate user entries
+      if (Array.isArray(formValues.substitutePetCarerData) && formValues.substitutePetCarerData.length > 0) {
+        // Only match exact known placeholder strings from autofill
+        const exactPlaceholders = [
+          'Testing the Per Carer works Sub',
+          'Testing the Pet Carer works Sub',
+          'Testing the Substitute Pet Carer works',
+          'test test test',
+          'testing'
+        ];
+        
+        const isPlaceholder = (item) => {
+          if (typeof item !== 'string') return false;
+          const trimmed = item.trim();
+          // Only remove if it's an exact match (case-insensitive) to known placeholders
+          return exactPlaceholders.some(placeholder => 
+            trimmed.toLowerCase() === placeholder.toLowerCase()
+          );
+        };
+        
+        const hasPlaceholderEntries = formValues.substitutePetCarerData.some(isPlaceholder);
+        if (hasPlaceholderEntries) {
+          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in substitutePetCarerData, cleaning up...');
+          const cleanedData = formValues.substitutePetCarerData.filter(item => !isPlaceholder(item));
+          if (cleanedData.length !== formValues.substitutePetCarerData.length) {
+            updatedValues.substitutePetCarerData = cleanedData;
+            hasChanges = true;
+            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from substitutePetCarerData:', {
+              before: formValues.substitutePetCarerData.length,
+              after: cleanedData.length,
+              removed: formValues.substitutePetCarerData.length - cleanedData.length
+            });
+          }
+        } else {
+          // Log when we have string entries but they're not placeholders (legitimate user input)
+          const stringEntries = formValues.substitutePetCarerData.filter(item => typeof item === 'string');
+          if (stringEntries.length > 0) {
+            console.log('[CLEANUP] ℹ️ Found legitimate string entries in substitutePetCarerData (keeping them):', stringEntries);
+          }
+        }
+      }
+
+      if (hasChanges) {
+        console.log('[CLEANUP] ✅ Applying cleanup changes to form values');
+        setFormValues(updatedValues);
+      }
+    };
+
+    // Run cleanup immediately and also debounced to catch any late additions
+    cleanupStringEntries();
+    const timer = setTimeout(cleanupStringEntries, 100);
+    return () => clearTimeout(timer);
+  }, [formValues.separateTrusteeData, formValues.petCarerData, formValues.substitutePetCarerData]);
+
+  useEffect(() => {
+    const processModalFields = () => {
+      const updatedValues = { ...formValues };
+      let hasChanges = false;
+
+      // Process separate trustee modal fields
+      const separateTrusteePrefix = 'addSeparateTrustee_';
+      const separateTrusteeFields = Object.keys(formValues).filter(key => key.startsWith(separateTrusteePrefix));
+      
+      if (separateTrusteeFields.length > 0) {
+        // Check if we have enough data to create a structured object
+        const hasRequiredFields = separateTrusteeFields.some(key => {
+          const fieldName = key.replace(separateTrusteePrefix, '');
+          return ['title', 'firstName', 'lastName', 'address1', 'postcode'].includes(fieldName) && formValues[key];
+        });
+
+        if (hasRequiredFields) {
+          // Collect all separate trustee modal fields into a structured object
+          const trusteeObject = {};
+          separateTrusteeFields.forEach(key => {
+            const fieldName = key.replace(separateTrusteePrefix, '');
+            const value = formValues[key];
+            if (value && value.trim() !== '') {
+              trusteeObject[fieldName] = value.trim();
+            }
+          });
+
+          // Only create object if we have essential fields
+          if (trusteeObject.title || trusteeObject.firstName || trusteeObject.lastName) {
+            const existingData = Array.isArray(updatedValues.separateTrusteeData) 
+              ? updatedValues.separateTrusteeData 
+              : [];
+            
+            // Filter out any remaining string entries
+            const cleanedExistingData = existingData.filter(item => typeof item !== 'string');
+            
+            // Check if this trustee already exists (by comparing key fields)
+            const existingIndex = cleanedExistingData.findIndex(item => {
+              if (typeof item === 'string') return false; // Skip string entries
+              return item.firstName === trusteeObject.firstName && 
+                     item.lastName === trusteeObject.lastName &&
+                     item.address1 === trusteeObject.address1;
+            });
+
+            if (existingIndex >= 0) {
+              // Update existing entry
+              cleanedExistingData[existingIndex] = { ...cleanedExistingData[existingIndex], ...trusteeObject };
+            } else {
+              // Add new entry
+              cleanedExistingData.push(trusteeObject);
+            }
+
+            updatedValues.separateTrusteeData = cleanedExistingData;
+            hasChanges = true;
+
+            console.log('[MODAL PROCESSOR] Processed separate trustee modal fields:', {
+              trusteeObject,
+              totalTrustees: cleanedExistingData.length
+            });
+          }
+        }
+      }
+
+
+      // Process pet carer modal fields
+      const petCarerPrefix = 'addPetCarer_';
+      const petCarerFields = Object.keys(formValues).filter(key => key.startsWith(petCarerPrefix));
+      
+      if (petCarerFields.length > 0) {
+        const hasRequiredFields = petCarerFields.some(key => {
+          const fieldName = key.replace(petCarerPrefix, '');
+          return ['title', 'firstName', 'lastName', 'address1', 'postcode'].includes(fieldName) && formValues[key];
+        });
+
+        if (hasRequiredFields) {
+          const carerObject = {};
+          petCarerFields.forEach(key => {
+            const fieldName = key.replace(petCarerPrefix, '');
+            const value = formValues[key];
+            if (value && value.trim() !== '') {
+              carerObject[fieldName] = value.trim();
+            }
+          });
+
+          if (carerObject.title || carerObject.firstName || carerObject.lastName) {
+            const existingData = Array.isArray(updatedValues.petCarerData) 
+              ? updatedValues.petCarerData 
+              : [];
+            
+            // Filter out any remaining string entries
+            const cleanedExistingData = existingData.filter(item => typeof item !== 'string');
+            
+            const existingIndex = cleanedExistingData.findIndex(item => {
+              if (typeof item === 'string') return false;
+              return item.firstName === carerObject.firstName && 
+                     item.lastName === carerObject.lastName &&
+                     item.address1 === carerObject.address1;
+            });
+
+            if (existingIndex >= 0) {
+              cleanedExistingData[existingIndex] = { ...cleanedExistingData[existingIndex], ...carerObject };
+            } else {
+              cleanedExistingData.push(carerObject);
+            }
+
+            updatedValues.petCarerData = cleanedExistingData;
+            hasChanges = true;
+
+            console.log('[MODAL PROCESSOR] Processed pet carer modal fields:', {
+              carerObject,
+              totalCarers: cleanedExistingData.length
+            });
+          }
+        }
+      }
+
+
+      // Process substitute pet carer modal fields
+      const substitutePetCarerPrefix = 'addSubstitutePetCarer_';
+      const substitutePetCarerFields = Object.keys(formValues).filter(key => key.startsWith(substitutePetCarerPrefix));
+      
+      if (substitutePetCarerFields.length > 0) {
+        const hasRequiredFields = substitutePetCarerFields.some(key => {
+          const fieldName = key.replace(substitutePetCarerPrefix, '');
+          return ['title', 'firstName', 'lastName', 'address1', 'postcode'].includes(fieldName) && formValues[key];
+        });
+
+        if (hasRequiredFields) {
+          const carerObject = {};
+          substitutePetCarerFields.forEach(key => {
+            const fieldName = key.replace(substitutePetCarerPrefix, '');
+            const value = formValues[key];
+            if (value && value.trim() !== '') {
+              carerObject[fieldName] = value.trim();
+            }
+          });
+
+          if (carerObject.title || carerObject.firstName || carerObject.lastName) {
+            const existingData = Array.isArray(updatedValues.substitutePetCarerData) 
+              ? updatedValues.substitutePetCarerData 
+              : [];
+            
+            // Filter out any remaining string entries
+            const cleanedExistingData = existingData.filter(item => typeof item !== 'string');
+            
+            const existingIndex = cleanedExistingData.findIndex(item => {
+              if (typeof item === 'string') return false;
+              return item.firstName === carerObject.firstName && 
+                     item.lastName === carerObject.lastName &&
+                     item.address1 === carerObject.address1;
+            });
+
+            if (existingIndex >= 0) {
+              cleanedExistingData[existingIndex] = { ...cleanedExistingData[existingIndex], ...carerObject };
+            } else {
+              cleanedExistingData.push(carerObject);
+            }
+
+            updatedValues.substitutePetCarerData = cleanedExistingData;
+            hasChanges = true;
+
+            console.log('[MODAL PROCESSOR] Processed substitute pet carer modal fields:', {
+              carerObject,
+              totalCarers: cleanedExistingData.length
+            });
+          }
+        }
+      }
+
+      if (hasChanges) {
+        // Check if the data actually changed to prevent infinite loops
+        const dataChanged = 
+          JSON.stringify(updatedValues.separateTrusteeData || []) !== JSON.stringify(formValues.separateTrusteeData || []) ||
+          JSON.stringify(updatedValues.petCarerData || []) !== JSON.stringify(formValues.petCarerData || []) ||
+          JSON.stringify(updatedValues.substitutePetCarerData || []) !== JSON.stringify(formValues.substitutePetCarerData || []);
+        
+        if (dataChanged) {
+          console.log('[MODAL PROCESSOR] Updating form values with structured modal data');
+          setFormValues(updatedValues);
+        } else {
+          console.log('[MODAL PROCESSOR] No data changes detected, skipping update');
+        }
+      }
+    };
+
+    // Debounce the processing to avoid excessive updates
+    const timer = setTimeout(processModalFields, 500);
+    return () => clearTimeout(timer);
+  }, [formValues]);
 
   // Autosave (debounced) — with visual feedback
   useEffect(() => {
@@ -1904,10 +2725,31 @@ export default function FormRenderer() {
   };
 
   const handleDownloadPDF = async () => {
+    // CRITICAL FIX: Prevent PDF generation spam - guard against multiple simultaneous calls
+    if (isGeneratingPDF) {
+      console.warn('[PDF] ⚠️ PDF generation already in progress, ignoring duplicate call');
+      return;
+    }
+    
     setIsGeneratingPDF(true);
+    setBanner(null);
+    
+    let timeoutId;
+    let toastId;
+    
+    // Set a timeout to prevent hanging forever (30 seconds max)
+    timeoutId = setTimeout(() => {
+      console.error('[PDF] ⚠️ PDF generation timeout after 30 seconds');
+      setIsGeneratingPDF(false);
+      if (toastId) toast.dismiss(toastId);
+      toast.error('PDF generation timed out', {
+        description: 'The PDF generation took too long. Please try again or refresh the page.',
+        duration: 8000
+      });
+    }, 30000);
+    
     try {
-      setBanner(null);
-      const toastId = toast.loading('Generating PDF…', { description: 'This can take a few seconds on mobile.' });
+      toastId = toast.loading('Generating PDF…', { description: 'This can take a few seconds on mobile.' });
 
       const preValidationIssues = [
         ...validatePropertyTrustSchedules(formValues),
@@ -1915,6 +2757,7 @@ export default function FormRenderer() {
       ];
 
       if (preValidationIssues.length > 0) {
+        clearTimeout(timeoutId);
         setIsGeneratingPDF(false);
         toast.dismiss(toastId);
         setValidationIssues(preValidationIssues);
@@ -2067,6 +2910,9 @@ export default function FormRenderer() {
         } catch (error) {
           importAttempts++;
           if (importAttempts > maxRetries) {
+            clearTimeout(timeoutId);
+            setIsGeneratingPDF(false);
+            if (toastId) toast.dismiss(toastId);
             toast.error('Failed to load PDF generator', {
               description: 'There was a network error loading the PDF generator. Please check your connection and try again. Your data has been saved.',
               duration: 10000
@@ -2081,6 +2927,9 @@ export default function FormRenderer() {
       }
       
       if (!generatePDFWithJSPDF) {
+        clearTimeout(timeoutId);
+        setIsGeneratingPDF(false);
+        toast.dismiss(toastId);
         toast.error('PDF generator not available', {
           description: 'Unable to load PDF generator. Please refresh the page and try again. Your data has been saved.',
           duration: 10000
@@ -2088,10 +2937,42 @@ export default function FormRenderer() {
         return;
       }
       
+      console.log('[PDF GENERATION] 🔄 Calling generatePDFWithJSPDF with sanitized values...');
+      console.log('[PDF GENERATION] 📊 Sanitized values summary:', {
+        totalFields: Object.keys(sanitizedValues).length,
+        hasSeparateTrusteeData: !!sanitizedValues.separateTrusteeData,
+        separateTrusteeDataType: Array.isArray(sanitizedValues.separateTrusteeData) ? 'array' : typeof sanitizedValues.separateTrusteeData,
+        separateTrusteeDataLength: Array.isArray(sanitizedValues.separateTrusteeData) ? sanitizedValues.separateTrusteeData.length : 'N/A',
+        howResidueDistributed: sanitizedValues.howResidueDistributed,
+        appointSeparateTrusteesFLIT: sanitizedValues.appointSeparateTrusteesFLIT,
+        hasTestatorSignature: !!testatorSignature,
+        hasConsultantSignature: !!consultantSignature,
+        hasClientSignature: !!clientSignature
+      });
+      
+      if (sanitizedValues.separateTrusteeData) {
+        console.log('[PDF GENERATION] 🔍 Separate trustee data in sanitized values:', {
+          isArray: Array.isArray(sanitizedValues.separateTrusteeData),
+          length: Array.isArray(sanitizedValues.separateTrusteeData) ? sanitizedValues.separateTrusteeData.length : 'N/A',
+          firstItem: Array.isArray(sanitizedValues.separateTrusteeData) && sanitizedValues.separateTrusteeData.length > 0 
+            ? sanitizedValues.separateTrusteeData[0] 
+            : 'N/A'
+        });
+      }
+      
       const pdfResult = await generatePDFWithJSPDF(sanitizedValues, {
         testatorSignature,
         consultantSignature,
         clientSignature
+      });
+      
+      console.log('[PDF GENERATION] ✅ PDF generation completed:', {
+        hasDoc: !!pdfResult.doc,
+        hasMissingItems: !!pdfResult.missingItems,
+        missingItemsCount: pdfResult.missingItems?.length || 0,
+        hasPlaceholders: pdfResult.hasPlaceholders,
+        hasCriticalIssues: pdfResult.hasCriticalIssues,
+        criticalIssuesCount: pdfResult.criticalIssues?.length || 0
       });
       
       // Handle new return format: { doc, missingItems, schedulesMissing, hasPlaceholders, criticalIssues, hasCriticalIssues }
@@ -2126,9 +3007,11 @@ export default function FormRenderer() {
             clauseNumber: null
           }))
         ];
+        clearTimeout(timeoutId);
         setValidationIssues(allIssues);
         setValidationModalOpen(true);
         setIsGeneratingPDF(false);
+        toast.dismiss(toastId);
         return;
       }
       
@@ -2296,17 +3179,50 @@ export default function FormRenderer() {
         }
       }, 500);
 
+      if (timeoutId) clearTimeout(timeoutId);
       setIsGeneratingPDF(false);
+      if (toastId) toast.dismiss(toastId);
     } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
       const msg = error?.message || 'Unknown error';
+      setIsGeneratingPDF(false);
+      if (toastId) toast.dismiss(toastId);
       setBanner({ type: 'error', message: `Error generating PDF: ${msg}` });
       toast.error('Error generating PDF', { description: msg });
-      setIsGeneratingPDF(false);
     }
   };
 
   return (
     <div className="flex flex-col lg:flex-row min-h-dvh bg-gray-50">
+      {/* Full-screen PDF Generation Loading Overlay */}
+      {isGeneratingPDF && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pdf-loading-title"
+          aria-busy="true"
+          onClick={(e) => e.preventDefault()} // Prevent any clicks
+          onMouseDown={(e) => e.preventDefault()} // Prevent any mouse interactions
+          style={{ pointerEvents: 'all', userSelect: 'none' }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <h2 id="pdf-loading-title" className="text-2xl font-bold text-gray-900">
+                Generating PDF...
+              </h2>
+              <p className="text-gray-600">
+                This can take a few seconds. Please wait...
+              </p>
+              <div className="mt-2 text-sm text-gray-500">
+                Do not close this window
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <Sidebar currentIndex={currentIndex} setCurrentIndex={setCurrentIndex} />
 
@@ -3218,6 +4134,10 @@ export default function FormRenderer() {
                     e.stopPropagation();
                     
                     try {
+                      // CRITICAL FIX: Prevent multiple clicks and PDF generation spam
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
                       console.log('[GO TO FIRST ISSUE] 🔍 ========== BUTTON CLICKED ==========');
                       console.log('[GO TO FIRST ISSUE] 🔍 Validation issues count:', validationIssues?.length);
                       console.log('[GO TO FIRST ISSUE] 🔍 Validation issues:', validationIssues);
@@ -3240,6 +4160,115 @@ export default function FormRenderer() {
                       if (!firstIssue) {
                         console.error('[GO TO FIRST ISSUE] ❌ No first issue found!');
                         return;
+                      }
+                      
+                      // EARLY CHECK: Handle missing data issues for separate trustees and pet carers
+                      const issueField = (firstIssue.field || '').toLowerCase();
+                      const issueSection = (firstIssue.section || '').toLowerCase();
+                      const isSeparateTrusteeIssue = (issueField.includes('separate') && issueField.includes('trustee')) ||
+                        (issueSection.includes('estate') && issueField.includes('trustee'));
+                      const isPetCarerIssue = (issueField.includes('pet') && (issueField.includes('carer') || issueField.includes('care'))) ||
+                        (issueSection.includes('provision') && issueField.includes('pet'));
+                      
+                      // Check for separate trustees: if "Yes" selected but no data
+                      if (isSeparateTrusteeIssue && formValues.appointSeparateTrusteesFLIT === 'Yes') {
+                        const hasSeparateTrusteeData = Array.isArray(formValues.separateTrusteeData) && 
+                          formValues.separateTrusteeData.length > 0 &&
+                          formValues.separateTrusteeData.some(item => 
+                            item && typeof item === 'object' && 
+                            (item.firstName || item.lastName || item.address1)
+                          );
+                        
+                        if (!hasSeparateTrusteeData) {
+                          console.log('[GO TO FIRST ISSUE] ✅ Early check: Separate trustee issue with missing data');
+                          // Search recursively through fields and subFields to find the section containing addSeparateTrusteeButton or appointSeparateTrusteesFLIT
+                          let containingSection = null;
+                          let containingSectionIndex = -1;
+                          
+                          for (let i = 0; i < formData.formSections.length; i++) {
+                            const section = formData.formSections[i];
+                            const hasField = section.fields?.some(f => {
+                              if (f.id === 'addSeparateTrusteeButton' || f.id === 'appointSeparateTrusteesFLIT') {
+                                return true;
+                              }
+                              // Check subFields if it's a section field
+                              if (f.type === 'section' && f.subFields) {
+                                return f.subFields.some(sf => sf.id === 'addSeparateTrusteeButton' || sf.id === 'appointSeparateTrusteesFLIT');
+                              }
+                              return false;
+                            });
+                            
+                            if (hasField) {
+                              containingSection = section;
+                              containingSectionIndex = i;
+                              break;
+                            }
+                          }
+                          
+                          if (containingSection && containingSectionIndex >= 0) {
+                            console.log('[GO TO FIRST ISSUE] Found section containing separate trustee fields:', containingSection.formSection);
+                            setCurrentIndex(containingSectionIndex);
+                            setValidationModalOpen(false);
+                            toast.info('Please click "Add Separate Trustee" to add trustee details.', { duration: 5000 });
+                            // Wait longer for section to render, then try multiple field IDs
+                            setTimeout(() => {
+                              // Try addSeparateTrusteeButton first, then appointSeparateTrusteesFLIT as fallback
+                              scrollToField('addSeparateTrusteeButton', ['appointSeparateTrusteesFLIT'], 0);
+                            }, 1000);
+                            return;
+                          } else {
+                            console.warn('[GO TO FIRST ISSUE] Could not find section containing addSeparateTrusteeButton');
+                          }
+                        }
+                      }
+                      
+                      // Check for pet carers: if "Yes" selected but no data
+                      if (isPetCarerIssue && formValues.provisionsForPets === 'Yes') {
+                        const hasPetCarerData = Array.isArray(formValues.petCarerData) && 
+                          formValues.petCarerData.length > 0 &&
+                          formValues.petCarerData.some(item => 
+                            item && typeof item === 'object' && 
+                            (item.firstName || item.lastName || item.address1)
+                          );
+                        
+                        if (!hasPetCarerData) {
+                          console.log('[GO TO FIRST ISSUE] ✅ Early check: Pet carer issue with missing data');
+                          // Search recursively through fields and subFields to find the section containing addPetCarerButton or provisionsForPets
+                          let containingSection = null;
+                          let containingSectionIndex = -1;
+                          
+                          for (let i = 0; i < formData.formSections.length; i++) {
+                            const section = formData.formSections[i];
+                            const hasField = section.fields?.some(f => {
+                              if (f.id === 'addPetCarerButton' || f.id === 'provisionsForPets') {
+                                return true;
+                              }
+                              // Check subFields if it's a section field
+                              if (f.type === 'section' && f.subFields) {
+                                return f.subFields.some(sf => sf.id === 'addPetCarerButton' || sf.id === 'provisionsForPets');
+                              }
+                              return false;
+                            });
+                            
+                            if (hasField) {
+                              containingSection = section;
+                              containingSectionIndex = i;
+                              break;
+                            }
+                          }
+                          
+                          if (containingSection && containingSectionIndex >= 0) {
+                            console.log('[GO TO FIRST ISSUE] Found section containing pet carer fields:', containingSection.formSection);
+                            setCurrentIndex(containingSectionIndex);
+                            setValidationModalOpen(false);
+                            toast.info('Please click "Add Pet Carer" to add pet carer details.', { duration: 5000 });
+                            // Wait longer for section to render, then scroll
+                            setTimeout(() => scrollToField('addPetCarerButton'), 800);
+                            return;
+                          } else {
+                            console.warn('[GO TO FIRST ISSUE] Could not find section containing addPetCarerButton');
+                          }
+                        }
                       }
                       
                       // PRIORITY 1: Use fieldId if available (most reliable) - check this FIRST
@@ -3455,7 +4484,101 @@ export default function FormRenderer() {
                           fieldLabelAlt: firstIssue.fieldLabel,
                           searchString: firstIssue.field || firstIssue.fieldLabel
                         });
-                        const labelMatchId = findFieldIdByLabel(firstIssue.field || firstIssue.fieldLabel);
+                        
+                        // CRITICAL FIX: Direct mapping for "Do you wish to appoint separate Trustees?"
+                        let labelMatchId = null;
+                        
+                        // Extract field label - remove section prefix if present (format: "Section: Field Label")
+                        let fieldLabelOriginal = firstIssue.field || firstIssue.fieldLabel || '';
+                        // If field contains colon, extract the part after the colon (the actual field label)
+                        if (fieldLabelOriginal.includes(':')) {
+                          const colonIndex = fieldLabelOriginal.indexOf(':');
+                          fieldLabelOriginal = fieldLabelOriginal.substring(colonIndex + 1).trim();
+                        }
+                        const fieldLabelLower = fieldLabelOriginal.toLowerCase();
+                        const issueSectionLower = (firstIssue.section || '').toLowerCase();
+                        
+                        console.log('[GO TO FIRST ISSUE] 🔍 Extracted field label:', {
+                          original: firstIssue.field || firstIssue.fieldLabel,
+                          extracted: fieldLabelOriginal,
+                          fieldId: firstIssue.fieldId,
+                          section: firstIssue.section
+                        });
+                        
+                        // PRIORITY 1: Check if this is explicitly a separate trustee field by ID
+                        if (firstIssue.fieldId === 'appointSeparateTrusteesFLIT' || 
+                            firstIssue.fieldId === 'separateTrusteesSection') {
+                          labelMatchId = 'appointSeparateTrusteesFLIT';
+                          console.log('[GO TO FIRST ISSUE] ✅ Matched by fieldId:', firstIssue.fieldId);
+                        }
+                        // PRIORITY 2: Check section name + field text combination (most reliable)
+                        else if ((issueSectionLower.includes('estate') && issueSectionLower.includes('residue')) ||
+                                 issueSectionLower === 'estate administration/residue') {
+                          // If section is "Estate Administration/Residue" and field mentions trustee/separate
+                          // Exclude digital executor fields
+                          const isDigitalExecutorField = fieldLabelLower.includes('digital') && (fieldLabelLower.includes('executor') || fieldLabelLower.includes('executors'));
+                          if (!isDigitalExecutorField && 
+                              (fieldLabelLower.includes('separate') || 
+                               fieldLabelLower.includes('trustee') || 
+                               fieldLabelLower.includes('trustees') ||
+                               fieldLabelLower.includes('appoint'))) {
+                            labelMatchId = 'appointSeparateTrusteesFLIT';
+                            console.log('[GO TO FIRST ISSUE] ✅ Matched by section + field text:', {
+                              section: firstIssue.section,
+                              field: fieldLabelOriginal
+                            });
+                          }
+                        }
+                        // PRIORITY 3: Direct exact match for "Do you wish to appoint separate Trustees?"
+                        else if (fieldLabelOriginal === 'Do you wish to appoint separate Trustees?' || 
+                                 fieldLabelLower === 'do you wish to appoint separate trustees?') {
+                          labelMatchId = 'appointSeparateTrusteesFLIT';
+                          console.log('[GO TO FIRST ISSUE] ✅ Matched by exact label:', fieldLabelOriginal);
+                        }
+                        // PRIORITY 3b: Check field text patterns (exclude digital executor fields)
+                        else if (!fieldLabelLower.includes('digital') && 
+                                 ((fieldLabelLower.includes('separate') && fieldLabelLower.includes('trustee')) ||
+                                  (fieldLabelLower.includes('separate') && fieldLabelLower.includes('trustees')) ||
+                                  (fieldLabelLower.includes('appoint') && fieldLabelLower.includes('separate') && fieldLabelLower.includes('trustee')) ||
+                                  (fieldLabelLower.includes('wish') && fieldLabelLower.includes('appoint') && fieldLabelLower.includes('separate')))) {
+                          labelMatchId = 'appointSeparateTrusteesFLIT';
+                          console.log('[GO TO FIRST ISSUE] ✅ Matched by field text pattern:', fieldLabelOriginal);
+                        }
+                        // PRIORITY 4: Try findFieldIdByLabel as fallback
+                        else {
+                          // Before calling findFieldIdByLabel, check if it's NOT a guardian, digital executor, or business trustee field
+                          const isGuardianField = fieldLabelLower.includes('guardian') && !fieldLabelLower.includes('trustee');
+                          const isDigitalExecutorField = fieldLabelLower.includes('digital') && (fieldLabelLower.includes('executor') || fieldLabelLower.includes('executors'));
+                          const isBusinessTrusteeField = (fieldLabelLower.includes('business') && fieldLabelLower.includes('trustee')) || 
+                            firstIssue.fieldId === 'appointSeparateBusinessTrustee';
+                          
+                          // If searching for separate trustees, exclude digital executor and business trustee fields
+                          const isSearchingForSeparateTrustees = fieldLabelLower.includes('separate') && 
+                            (fieldLabelLower.includes('trustee') || fieldLabelLower.includes('trustees'));
+                          
+                          if (isGuardianField) {
+                            console.log('[GO TO FIRST ISSUE] ⚠️ Detected as guardian field, skipping separate trustee search');
+                          } else if (isSearchingForSeparateTrustees && (isDigitalExecutorField || isBusinessTrusteeField)) {
+                            console.log('[GO TO FIRST ISSUE] ⚠️ Detected as digital executor or business trustee field, skipping separate trustee search');
+                            // For separate trustees, directly map to appointSeparateTrusteesFLIT
+                            labelMatchId = 'appointSeparateTrusteesFLIT';
+                            console.log('[GO TO FIRST ISSUE] ✅ Directly mapped to appointSeparateTrusteesFLIT (excluded digital executor/business trustee)');
+                          } else {
+                            labelMatchId = findFieldIdByLabel(fieldLabelOriginal);
+                            console.log('[GO TO FIRST ISSUE] 🔍 Tried findFieldIdByLabel, result:', labelMatchId);
+                            
+                            // CRITICAL FIX: If findFieldIdByLabel returned a digital executor, business trustee, or separateTrusteesSection field but we're looking for FLIT trustees, override it
+                            if (isSearchingForSeparateTrustees && (
+                              labelMatchId === 'appointSeparateDigitalExecutor' || 
+                              labelMatchId === 'appointSeparateBusinessTrustee' ||
+                              labelMatchId === 'separateTrusteesSection'
+                            )) {
+                              console.log('[GO TO FIRST ISSUE] ⚠️ findFieldIdByLabel returned wrong field (' + labelMatchId + '), overriding to appointSeparateTrusteesFLIT');
+                              labelMatchId = 'appointSeparateTrusteesFLIT';
+                            }
+                          }
+                        }
+                        
                         console.log('[GO TO FIRST ISSUE] 🔍 Strategy 2 result:', {
                           labelMatchId,
                           found: !!labelMatchId,
@@ -3463,6 +4586,175 @@ export default function FormRenderer() {
                         });
                         if (labelMatchId) {
                           console.log('[GO TO FIRST ISSUE] ✅ Found field by label mapping:', labelMatchId);
+                          
+                          // CRITICAL FIX: Handle conditionally rendered fields (like appointSeparateTrusteesFLIT)
+                          if (labelMatchId === 'appointSeparateTrusteesFLIT') {
+                            console.log('[GO TO FIRST ISSUE] 🎯 Handling separate trustees field navigation');
+                            
+                            // Check if field conditions are met (field requires howResidueDistributed === 'IntoFLIT')
+                            const fieldDef = formData.formSections
+                              .flatMap(s => s.fields || [])
+                              .find(f => f.id === labelMatchId);
+                            
+                            const needsFLITCondition = fieldDef?.conditions?.some(c => 
+                              c.field === 'howResidueDistributed' && c.value === 'IntoFLIT'
+                            );
+                            const hasFLITCondition = formValues.howResidueDistributed === 'IntoFLIT';
+                            
+                            console.log('[GO TO FIRST ISSUE] Field condition check:', {
+                              needsFLITCondition,
+                              hasFLITCondition,
+                              howResidueDistributed: formValues.howResidueDistributed
+                            });
+                            
+                            // Find the section containing this field - use section from issue or search
+                            let targetSection = null;
+                            let targetSectionIndex = -1;
+                            
+                            // First, try to find section by name from the issue
+                            if (firstIssue.section) {
+                              targetSectionIndex = formData.formSections.findIndex(s => 
+                                s.formSection.toLowerCase() === firstIssue.section.toLowerCase() ||
+                                (s.formSection.toLowerCase().includes('estate') && s.formSection.toLowerCase().includes('residue'))
+                              );
+                              if (targetSectionIndex >= 0) {
+                                targetSection = formData.formSections[targetSectionIndex];
+                                console.log('[GO TO FIRST ISSUE] ✅ Found section by issue.section:', targetSection.formSection);
+                              }
+                            }
+                            
+                            // If not found, search for section containing the field
+                            if (!targetSection) {
+                              targetSection = formData.formSections.find(section =>
+                                section.fields?.some(f => f.id === labelMatchId)
+                              );
+                              if (targetSection) {
+                                targetSectionIndex = formData.formSections.findIndex(s =>
+                                  s.formSection === targetSection.formSection
+                                );
+                                console.log('[GO TO FIRST ISSUE] ✅ Found section by field search:', targetSection.formSection);
+                              }
+                            }
+                            
+                            // If still not found, try "Estate Administration/Residue" directly
+                            if (!targetSection) {
+                              targetSectionIndex = formData.formSections.findIndex(s =>
+                                s.formSection.toLowerCase().includes('estate') && 
+                                s.formSection.toLowerCase().includes('residue')
+                              );
+                              if (targetSectionIndex >= 0) {
+                                targetSection = formData.formSections[targetSectionIndex];
+                                console.log('[GO TO FIRST ISSUE] ✅ Found section by name search:', targetSection.formSection);
+                              }
+                            }
+                            
+                            if (targetSection && targetSectionIndex >= 0) {
+                              console.log('[GO TO FIRST ISSUE] 🚀 Navigating to section:', targetSection.formSection, 'at index:', targetSectionIndex);
+                              
+                              // CRITICAL: Ensure FLIT condition is met BEFORE navigating
+                              if (needsFLITCondition && !hasFLITCondition) {
+                                console.log('[GO TO FIRST ISSUE] ⚠️ FLIT condition not met, setting howResidueDistributed to "IntoFLIT"');
+                                setFormValues(prev => ({ ...prev, howResidueDistributed: 'IntoFLIT' }));
+                                // Wait for condition evaluation, then navigate and scroll
+                                setTimeout(() => {
+                                  setCurrentIndex(targetSectionIndex);
+                                  setValidationModalOpen(false);
+                                  // Use longer timeout to ensure field is rendered after condition evaluation
+                                  setTimeout(() => {
+                                    console.log('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field after condition set:', labelMatchId);
+                                    scrollToField(labelMatchId);
+                                  }, 1000);
+                                }, 300);
+                                return;
+                              }
+                              
+                              setCurrentIndex(targetSectionIndex);
+                              setValidationModalOpen(false);
+                              
+                              // Wait for section to render and condition to be evaluated, then scroll to field
+                              // Increased timeout to ensure condition evaluation completes and field is visible
+                              setTimeout(() => {
+                                console.log('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field:', labelMatchId);
+                                // Try multiple times with increasing delays to account for conditional rendering
+                                const tryScroll = (attempt = 0) => {
+                                  const fieldElement = document.querySelector(`[data-field-id="${labelMatchId}"]`);
+                                  if (fieldElement) {
+                                    console.log('[GO TO FIRST ISSUE] ✅ Found field element, scrolling');
+                                    fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    const input = fieldElement.querySelector('input, textarea, select, button');
+                                    if (input) {
+                                      setTimeout(() => input.focus(), 300);
+                                    }
+                                    fieldElement.classList.add('animate-pulse');
+                                    setTimeout(() => fieldElement.classList.remove('animate-pulse'), 2000);
+                                  } else if (attempt < 3) {
+                                    console.log(`[GO TO FIRST ISSUE] ⏳ Field not found, retrying in ${(attempt + 1) * 500}ms (attempt ${attempt + 1}/3)`);
+                                    setTimeout(() => tryScroll(attempt + 1), (attempt + 1) * 500);
+                                  } else {
+                                    console.error('[GO TO FIRST ISSUE] ❌ Field not found after retries, using scrollToField function');
+                                    scrollToField(labelMatchId);
+                                  }
+                                };
+                                tryScroll();
+                              }, 800); // Initial delay to ensure section renders
+                              return;
+                            } else {
+                              console.error('[GO TO FIRST ISSUE] ❌ Could not find section containing appointSeparateTrusteesFLIT');
+                              // Fallback: try direct scroll anyway
+                              setValidationModalOpen(false);
+                              setTimeout(() => {
+                                scrollToField(labelMatchId);
+                              }, 100);
+                              return;
+                            }
+                          }
+                          
+                          // CRITICAL FIX: Handle pet carer issues - if user selected "Yes" but hasn't added pet carer data
+                          const fieldLabelLower = (firstIssue.field || firstIssue.fieldLabel || '').toLowerCase();
+                          const isPetCarerIssue = fieldLabelLower.includes('pet') && 
+                            (fieldLabelLower.includes('carer') || fieldLabelLower.includes('care'));
+                          
+                          if (isPetCarerIssue) {
+                            const hasPetProvisions = formValues.provisionsForPets === 'Yes';
+                            const hasPetCarerData = Array.isArray(formValues.petCarerData) && 
+                              formValues.petCarerData.length > 0 &&
+                              formValues.petCarerData.some(item => 
+                                item && typeof item === 'object' && 
+                                (item.firstName || item.lastName || item.address1)
+                              );
+                            
+                            if (hasPetProvisions && !hasPetCarerData) {
+                              console.log('[GO TO FIRST ISSUE] ✅ User selected "Yes" for pet provisions but no pet carer data - scrolling to Add button');
+                              
+                              // Find the section containing provisionsForPets field
+                              const containingSection = formData.formSections.find(section =>
+                                section.fields?.some(f => f.id === 'provisionsForPets' || f.id === 'addPetCarerButton')
+                              );
+                              
+                              if (containingSection) {
+                                const sectionIndex = formData.formSections.findIndex(s => 
+                                  s.formSection === containingSection.formSection
+                                );
+                                if (sectionIndex >= 0) {
+                                  console.log('[GO TO FIRST ISSUE] Navigating to section:', containingSection.formSection);
+                                  setCurrentIndex(sectionIndex);
+                                  setValidationModalOpen(false);
+                                  
+                                  // Show helpful message
+                                  toast.info(
+                                    'Please click "Add Pet Carer" to add pet carer details.',
+                                    { duration: 5000 }
+                                  );
+                                  
+                                  // Wait for section to render, then scroll to Add button
+                                  setTimeout(() => {
+                                    scrollToField('addPetCarerButton');
+                                  }, 500);
+                                  return;
+                                }
+                              }
+                            }
+                          }
                           
                           // SPECIAL HANDLING for foreignWillNotRevoked: Find its section and navigate to it first
                           if (labelMatchId === 'foreignWillNotRevoked') {

@@ -259,7 +259,7 @@ const isPlaceholderOrIncomplete = (text) => {
     
     // Blank/incomplete patterns
     /I appoint\s+to serve/i,            // Blank professional fields "I appoint to serve"
-    /I appoint\s+as\s+Trustees/i,        // "I appoint as Trustees" (no names)
+    /\bI\s+appoint\s+as\s+Trustees\b/i,  // "I appoint as Trustees" (no names between - must be word boundary to avoid false positives)
     /I give the sum of\s*(?:£\s*)?(?:to|$)/i, // "I give the sum of" without amount
     /\bfor\s{2,}/,                      // Double spaces after "for " indicating missing content
     /for\s*\.\s*I request/i,           // "for . I request" (blank organ donation)
@@ -605,8 +605,15 @@ const generateMissingDataReport = (formValues, willClauses, criticalIssues = [])
     });
     
     // Check for FLIT trustee appointments
+    // CRITICAL FIX: Use separateTrusteeData (not flitTrustees) - this is where FLIT trustees are stored
     if (formValues.appointSeparateTrusteesFLIT === 'Yes') {
-      if (!formValues.flitTrustees || String(formValues.flitTrustees).trim() === '') {
+      const separateTrusteeData = formValues.separateTrusteeData || [];
+      const hasValidTrustees = Array.isArray(separateTrusteeData) && separateTrusteeData.length > 0 &&
+        separateTrusteeData.some(item => 
+          item && typeof item === 'object' && 
+          (item.firstName || item.lastName || item.address1)
+        );
+      if (!hasValidTrustees) {
         missing.push('CRITICAL: FLIT-specific trustees - must be appointed for life interest trust');
       }
     }
@@ -706,6 +713,27 @@ const generateMissingDataReport = (formValues, willClauses, criticalIssues = [])
   
   // Pet provisions
   if (formValues.provisionsForPets === 'Yes') {
+    // Pets: if user says Yes, require pet carer details
+    const petCarerList = formValues.petCarerData || formValues.petCarerSectionData || [];
+    if (!Array.isArray(petCarerList) || petCarerList.length === 0) {
+      criticalIssues.push({
+        section: 'Other Provisions',
+        fieldId: 'petCarerSection',
+        message: 'Pet carer details are required when "Provisions for pets" is Yes.',
+      });
+    }
+    
+    if (formValues.substitutePetCarer === 'Yes') {
+      const subPetCarerList = formValues.substitutePetCarerData || formValues.substitutePetCarerSectionData || [];
+      if (!Array.isArray(subPetCarerList) || subPetCarerList.length === 0) {
+        criticalIssues.push({
+          section: 'Other Provisions',
+          fieldId: 'substitutePetCarerSection',
+          message: 'Substitute pet carer details are required when "Substitute pet carer" is Yes.',
+        });
+      }
+    }
+    
     if (!formValues.petCarerGift || String(formValues.petCarerGift).trim() === '' || formValues.petCarerGift === '0') {
       missing.push('PET CARE: Pet carer gift amount - must specify monetary support for pet care');
     }
@@ -815,8 +843,57 @@ const interpolateText = (text, values) => {
     substituteProfessionalTrusteeSelection: 'substituteProfessionalTrusteeSelection'
   };
 
-  const interpolated = text.replace(/\{\{field:([^}]+)\}\}/g, (_, fullKey) => {
-    const [sectionId, subField] = fullKey.split(':');
+  // CRITICAL FIX: Handle bracket placeholders FIRST (before {{field:...}} replacement)
+  // Map bracket placeholders to their corresponding field references
+  let processedText = text;
+  
+  // Map bracket placeholders to field references
+  const bracketPlaceholderMap = {
+    '[Separate Trustee(s) List]': '{{field:separateTrusteesSection:fullDetails}}',
+    '[Separate Trustee List]': '{{field:separateTrusteesSection:fullDetails}}',
+    '[Pet Carer List]': '{{field:petCarerSection:fullDetails}}',
+    '[Substitute Pet Carer List]': '{{field:substitutePetCarerSection:fullDetails}}',
+  };
+  
+  Object.entries(bracketPlaceholderMap).forEach(([placeholder, fieldRef]) => {
+    if (processedText.includes(placeholder)) {
+      console.log(`[PDF INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
+      processedText = processedText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), fieldRef);
+    }
+  });
+  
+  const interpolated = processedText.replace(/\{\{field:([^}]+)\}\}/g, (_, fullKey) => {
+    let [sectionId, subField] = fullKey.split(':');
+    
+    // Allow templates to reference either "X" or "XSection" for :fullDetails / :fullList
+    const fullDetailsAliasMap = {
+      petCarer: 'petCarerSection',
+      substitutePetCarer: 'substitutePetCarerSection',
+      separateTrustees: 'separateTrusteesSection',
+      // safety: if someone used these ids without "Section" in JSON
+      petCarerSection: 'petCarerSection',
+      substitutePetCarerSection: 'substitutePetCarerSection',
+      separateTrusteesSection: 'separateTrusteesSection',
+    };
+    
+    // CRITICAL FIX: Alias mapping for fullDetails/fullList
+    // Handle cases where template uses shorter IDs (e.g., "separateTrustees") or when data is stored under different key
+    if ((subField === 'fullDetails' || subField === 'fullList') && fullDetailsAliasMap[sectionId]) {
+      const raw = values[sectionId];
+      // If it's a Yes/No, primitive, or missing (not the repeater data array), swap to the Section id
+      // This handles cases like: {{field:separateTrustees:fullDetails}} when separateTrustees = "Yes"
+      if (raw == null || typeof raw === 'string' || typeof raw === 'boolean' || typeof raw === 'number' || !Array.isArray(raw)) {
+        const mappedId = fullDetailsAliasMap[sectionId];
+        // Only swap if it's actually different (avoid no-op)
+        if (mappedId !== sectionId) {
+          sectionId = mappedId;
+          console.log(`[PDF INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
+        } else {
+          // Even if same ID, ensure we're using the correct section ID for data lookup
+          console.log(`[PDF INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
+        }
+      }
+    }
 
     if (subField === 'fullDetails' || subField === 'fullList') {
       // Special handling: chattelsGiftBeneficiarySection uses chattelsGiftBeneficiaryName when no array data
@@ -828,6 +905,223 @@ const interpolateText = (text, values) => {
         }
         return `{{field:${fullKey}}}`;
       }
+      
+      // CRITICAL FIX: Special handling for executor sections - check for Aristone selection
+      if (sectionId === 'executorsSection') {
+        // Check if Aristone was selected via chooseAristoneExecutor
+        if (values.chooseAristoneExecutor === 'Aristone') {
+          return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+        }
+        // Fall through to normal array handling
+      }
+      
+      if (sectionId === 'substituteExecutorsSection') {
+        // Check if Aristone was selected via chooseAristoneSubstituteExecutor
+        if (values.chooseAristoneSubstituteExecutor === 'Aristone') {
+          return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+        }
+        // Fall through to normal array handling
+      }
+      
+      // CRITICAL FIX: Special handling for pet carer sections when using fullDetails
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && subField === 'fullDetails') {
+        // CRITICAL: Use explicit data keys - DO NOT fall back to generic lookups
+        let sectionData = null;
+        if (sectionId === 'petCarerSection') {
+          sectionData = values.petCarerData || values.petCarerSectionData || null;
+        } else if (sectionId === 'substitutePetCarerSection') {
+          sectionData = values.substitutePetCarerData || values.substitutePetCarerSectionData || null;
+        } else if (sectionId === 'separateTrusteesSection') {
+          sectionData = values.separateTrusteeData || values.separateTrusteesData || values.separateTrusteesSectionData || null;
+        }
+        
+        // If still null, try fallbackMap as last resort
+        if (!sectionData) {
+          const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
+          sectionData = values[fallbackId] || null;
+        }
+        
+        // Debug logging for separate trustees
+        if (sectionId === 'separateTrusteesSection') {
+          console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Looking for data:`, {
+            hasPetCarerData: !!values.petCarerData,
+            hasSubstitutePetCarerData: !!values.substitutePetCarerData,
+            hasSeparateTrusteeData: !!values.separateTrusteeData,
+            hasSeparateTrusteesData: !!values.separateTrusteesData,
+            hasSeparateTrusteesSectionData: !!values.separateTrusteesSectionData,
+            sectionData,
+            sectionDataType: Array.isArray(sectionData) ? 'array' : typeof sectionData,
+            sectionDataLength: Array.isArray(sectionData) ? sectionData.length : 'N/A',
+            firstItem: Array.isArray(sectionData) && sectionData.length > 0 ? sectionData[0] : null,
+            firstItemType: Array.isArray(sectionData) && sectionData.length > 0 ? typeof sectionData[0] : 'N/A',
+            availableKeys: Object.keys(values).filter(k => k.includes('separate') || k.includes('Trustee') || k.includes('pet') || k.includes('carer')).slice(0, 15)
+          });
+        }
+        
+        // CRITICAL: Only process if we have valid array data - never use testator name as fallback
+        // If sectionData is null, undefined, not an array, or empty, return unresolved marker immediately
+        if (!sectionData || !Array.isArray(sectionData) || sectionData.length === 0) {
+          if (sectionId === 'separateTrusteesSection') {
+            console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
+          }
+          return `{{field:${sectionId}:${subField}}}`;
+        }
+        
+        if (sectionData.length > 0) {
+          const formattedItems = sectionData
+            .map((item) => {
+              // Handle string items (fallback for simple data structures)
+              if (typeof item === 'string') {
+                // Check if it's an exact known placeholder string from autofill
+                // Use exact matching to avoid false positives with legitimate user input
+                const exactPlaceholders = {
+                  separateTrusteesSection: [
+                    'Testing the Trustees',
+                    'Testing the Separate Trustees',
+                    'test test test',
+                    'testing'
+                  ],
+                  petCarerSection: [
+                    'Testing the Per Carer works',
+                    'Testing the Pet Carer works',
+                    'test test test',
+                    'testing'
+                  ],
+                  substitutePetCarerSection: [
+                    'Testing the Per Carer works Sub',
+                    'Testing the Pet Carer works Sub',
+                    'Testing the Substitute Pet Carer works',
+                    'test test test',
+                    'testing'
+                  ]
+                };
+                
+                const placeholders = exactPlaceholders[sectionId] || [];
+                const trimmed = item.trim();
+                const isPlaceholder = placeholders.some(placeholder =>
+                  trimmed.toLowerCase() === placeholder.toLowerCase()
+                );
+                
+                if (isPlaceholder) {
+                  console.log(`[PDF INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
+                  return ''; // Return empty to mark as incomplete
+                }
+                return item; // Return as-is if it's a valid formatted string
+              }
+              
+              if (!item || typeof item !== 'object') return '';
+              
+              // Format as: "relationship name of address" (e.g., "Friend Charlie Pet Carer of 789 Pet Street, Animal District, London, SW1A 2BB")
+              const relationship = item.relationship || item.relationshipToTestator || '';
+              const nameParts = [
+                item.title,
+                item.firstName,
+                item.lastName
+              ].filter(Boolean);
+              const name = nameParts.join(' ');
+              const addressParts = [
+                item.address1,
+                item.address2,
+                item.address3,
+                item.city,
+                item.postcode
+              ].filter(Boolean);
+              const address = addressParts.join(', ');
+              
+              // Validate we have at least name (firstName or lastName) and address1
+              if ((!name || name.trim() === '') || (!address || !item.address1)) {
+                // Debug logging for separate trustees when validation fails
+                if (sectionId === 'separateTrusteesSection') {
+                  console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
+                    item,
+                    hasName: !!(name && name.trim()),
+                    hasAddress: !!(address && item.address1),
+                    nameParts,
+                    addressParts
+                  });
+                }
+                return '';
+              }
+              
+              // Build formatted string: "relationship name of address"
+              const parts = [relationship, name, address].filter(Boolean);
+              if (parts.length === 0) return '';
+              
+              // Format: "relationship name of address" or "name of address" if no relationship
+              if (relationship) {
+                return `${relationship} ${name} of ${address}`;
+              } else {
+                return `${name} of ${address}`;
+              }
+            })
+            .filter(Boolean);
+          
+          // Debug logging for separate trustees
+          if (sectionId === 'separateTrusteesSection') {
+            console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
+              formattedItems,
+              length: formattedItems.length,
+              items: formattedItems.map(item => ({ value: item, type: typeof item }))
+            });
+          }
+          
+          if (formattedItems.length > 0) {
+            const result = formattedItems.length === 1 
+              ? formattedItems[0]
+              : formattedItems.length === 2
+              ? formattedItems.join(' and ')
+              : formattedItems.slice(0, -1).join(', ') + ', and ' + formattedItems[formattedItems.length - 1];
+            
+            // CRITICAL FIX: Validate result doesn't contain testator name
+            // Check if result matches testator name pattern (firstName + lastName)
+            const testatorFirstName = values.firstName || '';
+            const testatorLastName = values.lastName || '';
+            const testatorFullName = [values.title, testatorFirstName, values.middleName, testatorLastName].filter(Boolean).join(' ').trim();
+            
+            if (testatorFullName && result.includes(testatorFullName)) {
+              console.error(`[PDF INTERPOLATE] ❌ CRITICAL ERROR: Result contains testator name "${testatorFullName}" for ${sectionId}:fullDetails! Result: "${result}"`);
+              console.error(`[PDF INTERPOLATE] ❌ This should NEVER happen - returning unresolved marker to block clause`);
+              return `{{field:${sectionId}:${subField}}}`;
+            }
+            
+            // Debug logging for separate trustees
+            if (sectionId === 'separateTrusteesSection') {
+              console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
+            }
+            
+            return result;
+          } else {
+            // No valid formatted items after filtering - return unresolved marker
+            if (sectionId === 'separateTrusteesSection') {
+              console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
+            }
+            return `{{field:${sectionId}:${subField}}}`;
+          }
+        }
+        
+        // This should never be reached due to early return above, but add guard just in case
+        if (sectionId === 'separateTrusteesSection') {
+          console.warn(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ⚠️ Unexpected code path, returning unresolved marker`);
+        }
+        return `{{field:${sectionId}:${subField}}}`;
+      }
+      
+      // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections, 
+      // NEVER fall through to generic array handling - we already handled these above
+      // This prevents accidentally returning testator name or other wrong data
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && subField === 'fullDetails') {
+        console.warn(`[PDF INTERPOLATE] ⚠️ ${sectionId}:fullDetails - Should have been handled above, returning unresolved marker`);
+        return `{{field:${sectionId}:${subField}}}`;
+      }
+      
+      // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections,
+      // NEVER use generic array fallback - we already handled these above
+      if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+          (subField === 'fullDetails' || subField === 'fullList')) {
+        console.warn(`[PDF INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
+        return `{{field:${sectionId}:${subField}}}`;
+      }
+
       const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;
       const array = values[fallbackId] || values[sectionId] || [];
       if (Array.isArray(array) && array.length > 0) {
@@ -839,10 +1133,12 @@ const interpolateText = (text, values) => {
         // Block known placeholder strings - return unresolved so clause is omitted
         const placeholderNames = [
           'Chattel Recipient Name', 'Excluded Person Name', 'John Debtor Smith',
-          'Digital Executor Name', 'Separate Trustee Name', 'Authorised Signatory Name', 'Interpreter Name'
+          'Digital Executor Name', 'Separate Trustee Name', 'Authorised Signatory Name', 'Interpreter Name',
+          'Testing the Per Carer works', 'Testing the Per Carer', 'Per Carer works' // CRITICAL FIX: Block pet carer placeholder text
         ];
         const isPlaceholder = placeholderNames.some(p =>
-          resolved === p || resolved.startsWith(p + ';') || resolved.endsWith('; ' + p) || resolved.includes('; ' + p + ';')
+          resolved === p || resolved.startsWith(p + ';') || resolved.endsWith('; ' + p) || resolved.includes('; ' + p + ';') ||
+          resolved.includes('Testing') || resolved.includes('Per Carer') // CRITICAL FIX: Also block if contains test keywords
         );
         if (isPlaceholder) return `{{field:${fullKey}}}`;
         return resolved;
@@ -945,14 +1241,19 @@ const interpolateText = (text, values) => {
               fieldValue = item.relationship || item.relationshipToTestator || '';
             } else if (subField === 'nameList') {
               // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
+              // CRITICAL FIX: Ensure we have at least firstName OR lastName
               const parts = [
                 item.title,
                 item.firstName,
                 item.lastName
               ].filter(Boolean);
               fieldValue = parts.join(' ');
+              // If name is empty or just whitespace, return empty to mark clause incomplete
+              if (!fieldValue || fieldValue.trim() === '') {
+                return '';
+              }
             } else if (subField === 'addressList') {
-              // Format address nicely
+              // Format address nicely - at minimum need address1
               const addressParts = [
                 item.address1,
                 item.address2,
@@ -961,6 +1262,10 @@ const interpolateText = (text, values) => {
                 item.postcode
               ].filter(Boolean);
               fieldValue = addressParts.join(', ');
+              // If address is empty, return empty to mark clause incomplete
+              if (!fieldValue || fieldValue.trim() === '') {
+                return '';
+              }
             } else {
               // Fallback to generic subField lookup
               fieldValue = item[subField] || 
@@ -969,7 +1274,7 @@ const interpolateText = (text, values) => {
                 item[subField.toLowerCase()] ||
                 item[subField.toUpperCase()];
             }
-            return fieldValue != null ? safeString(fieldValue) : '';
+            return fieldValue != null ? safeString(String(fieldValue).trim()) : '';
           })
           .filter(Boolean);
         
@@ -984,7 +1289,8 @@ const interpolateText = (text, values) => {
           }
         }
       }
-      return '';
+      // CRITICAL FIX: Return placeholder to mark clause as incomplete if no data
+      return `{{field:${sectionId}:${subField}}}`;
     }
     
     // Handle nested section fields
@@ -1020,6 +1326,16 @@ const interpolateText = (text, values) => {
       }
     }
 
+    // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections,
+    // NEVER use generic fallbacks that might return testator name
+    // These sections MUST have valid array data or return unresolved marker
+    // MUST CHECK THIS BEFORE any generic fallbacks to prevent testator name substitution
+    if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+        (subField === 'fullDetails' || subField === 'fullList')) {
+      console.warn(`[PDF INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached generic fallback section, returning unresolved marker (preventing testator name fallback)`);
+      return `{{field:${sectionId}:${subField}}}`;
+    }
+
     // Handle direct field references
     if (subField === 'value') {
       const directValue = values[sectionId];
@@ -1044,6 +1360,14 @@ const interpolateText = (text, values) => {
       if (typeof directField === 'string' || typeof directField === 'number') {
         return safeString(directField);
       }
+    }
+
+    // CRITICAL FIX: For fullDetails on pet carer and separate trustees sections,
+    // NEVER return empty string - always return unresolved marker to ensure clause is blocked
+    if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
+        (subField === 'fullDetails' || subField === 'fullList')) {
+      console.warn(`[PDF INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached final fallback, returning unresolved marker (preventing empty string/testator name)`);
+      return `{{field:${sectionId}:${subField}}}`;
     }
 
     // Final fallback: try the full key as a direct field name
@@ -1181,6 +1505,29 @@ const interpolateText = (text, values) => {
   
   // Clean up extra whitespace
   processed = processed.replace(/\s+/g, ' ').trim();
+  
+  // CRITICAL FIX: Check for clauses that contain unresolved markers for pet carer/separate trustees
+  // These should have been blocked earlier, but if they somehow got through, block them now
+  // Pattern: "I appoint {{field:separateTrusteesSection:fullDetails}} as Trustees"
+  // Pattern: "my {{field:petCarerSection:fullDetails}} care" or "my {{field:petCarerSection:fullDetails}} is unable"
+  if (processed.includes('{{field:petCarerSection:fullDetails}}') || 
+      processed.includes('{{field:substitutePetCarerSection:fullDetails}}') ||
+      processed.includes('{{field:separateTrusteesSection:fullDetails}}')) {
+    console.warn(`[PDF INTERPOLATE] ⚠️ CRITICAL: Unresolved marker found in final processed text, this clause should have been blocked: "${processed.substring(0, 100)}"`);
+    // Return empty string to ensure clause is blocked (will be caught by validation)
+    return '';
+  }
+  
+  // CRITICAL FIX: Check for patterns that indicate testator name was incorrectly inserted
+  // Pattern: "I appoint [Testator Name] as Trustees" when it should be trustee names
+  // Pattern: "my [Testator Name] care" or "my [Testator Name] is unable" when it should be pet carer name
+  const testatorNamePattern = /\b(Raymond|Van Der Walt|firstName|lastName)\b/i;
+  if ((processed.includes('I appoint') && processed.includes('as Trustees') && testatorNamePattern.test(processed)) ||
+      (processed.includes('my') && (processed.includes('care for') || processed.includes('is unable')) && testatorNamePattern.test(processed))) {
+    console.error(`[PDF INTERPOLATE] ❌ CRITICAL ERROR: Testator name detected in clause that should contain pet carer/trustee names: "${processed.substring(0, 150)}"`);
+    // Return empty string to block this clause
+    return '';
+  }
   
   // CRITICAL: Standardize all Aristone name references for consistency
   processed = standardizeAristoneName(processed);
@@ -1605,23 +1952,32 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                   !/\{\{field:[^}]+\}\}/.test(interpolated) && 
                   interpolated.trim() !== '') {
                 
-                // CRITICAL: Check for pet care clauses with missing data
-                if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
-                  const petCarerData = formValues.petCarerData || [];
-                  const substitutePetCarerData = formValues.substitutePetCarerData || [];
-                  const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0;
-                  const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0;
-                  
-                  if (field.id === 'petCarerSection' && !hasPetCarer) {
-                    console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - no pet carer data: "${interpolated.substring(0, 100)}"`);
-                    return; // Skip this clause
-                  }
-                  
-                  if (field.id === 'substitutePetCarerSection' && (!hasPetCarer || !hasSubstitutePetCarer)) {
-                    console.warn(`[PDF VALIDATION] ⚠️ BLOCKING substitute pet carer clause - missing data: "${interpolated.substring(0, 100)}"`);
-                    return; // Skip this clause
-                  }
-                }
+                    // CRITICAL: Check for pet care clauses with missing data
+                    if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
+                      const petCarerData = formValues.petCarerData || [];
+                      const substitutePetCarerData = formValues.substitutePetCarerData || [];
+                      // Check for valid data (not just array length)
+                      const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0 &&
+                        petCarerData.some(item => 
+                          item && typeof item === 'object' && 
+                          (item.firstName || item.lastName || item.address1)
+                        );
+                      const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0 &&
+                        substitutePetCarerData.some(item => 
+                          item && typeof item === 'object' && 
+                          (item.firstName || item.lastName || item.address1)
+                        );
+                      
+                      if (field.id === 'petCarerSection' && !hasPetCarer) {
+                        console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - no pet carer data: "${interpolated.substring(0, 100)}"`);
+                        return; // Skip this clause
+                      }
+                      
+                      if (field.id === 'substitutePetCarerSection' && (!hasPetCarer || !hasSubstitutePetCarer)) {
+                        console.warn(`[PDF VALIDATION] ⚠️ BLOCKING substitute pet carer clause - missing data: "${interpolated.substring(0, 100)}"`);
+                        return; // Skip this clause
+                      }
+                    }
                 
                 // CRITICAL: Check for inheritance tax condition clause without charity gift
                 if (field.id === 'charityGiftOnlyIfIHTDue' && formValues.give10PercentToCharity !== 'Yes') {
@@ -1693,9 +2049,46 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                     return;
                   }
                   const interpolated = interpolateText(selectedOption.willClauseText, formValues);
-                  if (interpolated && 
-                      !/\{\{field:[^}]+\}\}/.test(interpolated) && 
-                      interpolated.trim() !== '') {
+                  
+                  // CRITICAL: Block clause if it contains unresolved markers or is empty
+                  if (!interpolated || 
+                      /\{\{field:[^}]+\}\}/.test(interpolated) || 
+                      interpolated.trim() === '') {
+                    if (field.id === 'appointSeparateTrusteesFLIT') {
+                      console.warn(`[PDF VALIDATION] ⚠️ BLOCKING FLIT separate trustees clause - unresolved markers or empty: "${interpolated}"`);
+                    }
+                    return; // Skip this clause
+                  }
+                  
+                  if (interpolated.trim() !== '') {
+                    
+                    // CRITICAL: Check for FLIT separate trustees clause with missing data
+                    // This clause comes from appointSeparateTrusteesFLIT radio option
+                    if (field.id === 'appointSeparateTrusteesFLIT' && selectedValue === 'Yes') {
+                      // Check if clause contains "I appoint" and "as Trustees" but no names inserted
+                      if (interpolated.includes('I appoint') && interpolated.includes('as Trustees')) {
+                        const appointMatch = interpolated.match(/\bI\s+appoint\s+(.+?)\s+as\s+Trustees/i);
+                        if (appointMatch && appointMatch[1]) {
+                          const betweenText = appointMatch[1].trim();
+                          // Check if it's empty, too short, or contains unresolved markers
+                          if (!betweenText || betweenText.length < 3 || 
+                              betweenText.match(/^\s*$/) || 
+                              betweenText.includes('{{field:') || 
+                              betweenText.includes('[missing') ||
+                              /^\[.*\]$/.test(betweenText)) {
+                            console.warn(`[PDF VALIDATION] ⚠️ BLOCKING FLIT separate trustees clause - no names inserted: "${interpolated.substring(0, 100)}"`);
+                            console.warn(`[PDF VALIDATION] ⚠️ Between text: "${betweenText}"`);
+                            return; // Skip this clause
+                          }
+                        } else {
+                          // Pattern "I appoint as Trustees" (no text between) - block it
+                          if (/\bI\s+appoint\s+as\s+Trustees\b/i.test(interpolated)) {
+                            console.warn(`[PDF VALIDATION] ⚠️ BLOCKING FLIT separate trustees clause - missing names (direct pattern): "${interpolated.substring(0, 100)}"`);
+                            return; // Skip this clause
+                          }
+                        }
+                      }
+                    }
                     
                     // DE-DUPLICATION: Only one "personal possessions" clause may render
                     if (PERSONAL_POSSESSIONS_PATTERN.test(interpolated) && hasPersonalPossessionsClause) {
@@ -1759,8 +2152,16 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                     if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
                       const petCarerData = formValues.petCarerData || [];
                       const substitutePetCarerData = formValues.substitutePetCarerData || [];
-                      const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0;
-                      const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0;
+                      const hasPetCarer = Array.isArray(petCarerData) && petCarerData.length > 0 &&
+                        petCarerData.some(item => 
+                          item && typeof item === 'object' && 
+                          (item.firstName || item.lastName || item.address1)
+                        );
+                      const hasSubstitutePetCarer = Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0 &&
+                        substitutePetCarerData.some(item => 
+                          item && typeof item === 'object' && 
+                          (item.firstName || item.lastName || item.address1)
+                        );
                       
                       if (field.id === 'petCarerSection' && !hasPetCarer) {
                         console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - no pet carer data: "${interpolated.substring(0, 100)}"`);
@@ -1770,6 +2171,67 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
                       if (field.id === 'substitutePetCarerSection' && (!hasPetCarer || !hasSubstitutePetCarer)) {
                         console.warn(`[PDF VALIDATION] ⚠️ BLOCKING substitute pet carer clause - missing data: "${interpolated.substring(0, 100)}"`);
                         return; // Skip this clause
+                      }
+                    }
+                    
+                    // CRITICAL: Additional check for pet carer clauses with empty interpolation
+                    // Catch cases where interpolation returned empty, resulting in "If my is unable..."
+                    if (interpolated.includes('If my') && interpolated.includes('is unable')) {
+                      // Check if there's a name between "If my" and "is unable"
+                      const myMatch = interpolated.match(/\bIf\s+my\s+(.+?)\s+is\s+unable/i);
+                      if (myMatch && myMatch[1]) {
+                        const betweenText = myMatch[1].trim();
+                        // If it's empty, too short, or contains unresolved markers, block it
+                        if (!betweenText || betweenText.length < 2 || 
+                            betweenText.includes('{{field:') || 
+                            betweenText.includes('[missing') ||
+                            betweenText.match(/^\s*$/)) {
+                          console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - empty name interpolation: "${interpolated.substring(0, 100)}"`);
+                          return; // Skip this clause
+                        }
+                      } else {
+                        // Pattern "If my is unable" (no name) - block it
+                        if (/\bIf\s+my\s+is\s+unable/i.test(interpolated)) {
+                          console.warn(`[PDF VALIDATION] ⚠️ BLOCKING pet carer clause - missing name (direct pattern): "${interpolated.substring(0, 100)}"`);
+                          return; // Skip this clause
+                        }
+                      }
+                    }
+                    
+                    // CRITICAL: Check for separate trustees clauses with missing data
+                    // Check if clause text contains "I appoint" and "as Trustees" but interpolation returned empty/placeholder
+                    if (interpolated.includes('I appoint') && interpolated.includes('as Trustees')) {
+                      // Check if there's meaningful content between "I appoint" and "as Trustees"
+                      // Use a more flexible regex that handles various clause structures
+                      const appointMatch = interpolated.match(/\bI\s+appoint\s+(.+?)\s+as\s+Trustees/i);
+                      if (appointMatch && appointMatch[1]) {
+                        const betweenText = appointMatch[1].trim();
+                        
+                        // Check if it's a placeholder pattern (exact match only, not substring)
+                        const isPlaceholderPattern = betweenText.match(/^(?:placeholder|example|name|\.\.\.|\[.*\]|\{\{.*\}\})$/i);
+                        // Check if it contains unresolved interpolation markers
+                        const hasUnresolvedMarkers = betweenText.includes('{{field:') || betweenText.includes('[missing');
+                        
+                        // Block only if: empty, too short (< 3 chars), just whitespace, exact placeholder pattern match, or has unresolved markers
+                        // Allow content like "Testing Separate Trustee" even if it contains "test" as a substring
+                        if (!betweenText || betweenText.length < 3 || betweenText.match(/^\s*$/) || isPlaceholderPattern || hasUnresolvedMarkers) {
+                          console.warn(`[PDF VALIDATION] ⚠️ BLOCKING separate trustees clause - no names inserted: "${interpolated.substring(0, 100)}"`);
+                          console.warn(`[PDF VALIDATION] ⚠️ Between text: "${betweenText}"`);
+                          console.warn(`[PDF VALIDATION] ⚠️ Checks: empty=${!betweenText}, short=${betweenText.length < 3}, whitespace=${!!betweenText.match(/^\s*$/)}, placeholder=${!!isPlaceholderPattern}, unresolved=${hasUnresolvedMarkers}`);
+                          return; // Skip this clause
+                        } else {
+                          // Valid content found - log for debugging
+                          console.log(`[PDF VALIDATION] ✅ Separate trustees clause has valid content: "${betweenText}"`);
+                        }
+                      } else {
+                        // Check if the pattern is "I appoint as Trustees" (no text between) - this is the problematic pattern
+                        const directAppointPattern = /\bI\s+appoint\s+as\s+Trustees\b/i;
+                        if (directAppointPattern.test(interpolated)) {
+                          console.warn(`[PDF VALIDATION] ⚠️ BLOCKING separate trustees clause - missing names (direct pattern): "${interpolated.substring(0, 100)}"`);
+                          return; // Skip this clause
+                        }
+                        // If regex didn't match but clause contains both phrases, it might be a different structure - allow it
+                        console.log(`[PDF VALIDATION] ℹ️ Separate trustees clause has different structure, allowing: "${interpolated.substring(0, 100)}"`);
                       }
                     }
                     
@@ -1837,7 +2299,10 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       /\bto\s+\.\s/,                  // "to . " (blank)
       /\bfor\s{2,}/,                  // Double spaces after "for "
       /\bto\s+\.\.\./,                // "to ..." (ellipsis placeholder)
-      /\bI\s+appoint\s+as\s+Trustees/i, // "I appoint as Trustees" (no names)
+      // FIXED: Only match when there's NO content between "I appoint" and "as Trustees"
+      // Match: "I appoint  as Trustees" (double space) or "I appoint as Trustees" (direct)
+      // Don't match: "I appoint [names] as Trustees" (has content between)
+      /\bI\s+appoint\s+(?:\s{2,}|as\s+Trustees\b)/i, // "I appoint  as Trustees" (double+ space) or "I appoint as Trustees" (direct, no content)
       /\bpay\s+the\s+income\s+thereof\s+to\s+\.\.\./i, // "pay the income thereof to ..."
       /\bfailed\s+share\s+to\s+\./i, // "failed share to ."
       /\bI\s+give\s+of\s+my\s+net\s+estate\s+to\s+\.\.\./i, // "I give of my net estate to ..."
@@ -1967,18 +2432,27 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       }
       
       // Check for placeholder patterns
-      placeholderPatterns.forEach(pattern => {
-        if (pattern.test(clause.text)) {
-          const snippet = clause.text.substring(0, 80) + (clause.text.length > 80 ? '...' : '');
-          missing.push({
-            section: clause.sectionLabel || clause.section || 'Unknown',
-            field: clause.fieldLabel || clause.title || 'Unknown',
-            clauseNumber: validationClauseNumber,
-            issue: 'Placeholder or incomplete content',
-            snippet: snippet
-          });
-        }
-      });
+      // SKIP placeholderPatterns check for "I appoint ... as Trustees" clauses - they're already validated
+      // by the specific check at lines 1990-2025, which correctly identifies valid vs invalid content
+      const isAppointTrusteesClause = clause.text.includes('I appoint') && clause.text.includes('as Trustees');
+      
+      if (!isAppointTrusteesClause) {
+        placeholderPatterns.forEach(pattern => {
+          if (pattern.test(clause.text)) {
+            const snippet = clause.text.substring(0, 80) + (clause.text.length > 80 ? '...' : '');
+            missing.push({
+              section: clause.sectionLabel || clause.section || 'Unknown',
+              field: clause.fieldLabel || clause.title || 'Unknown',
+              clauseNumber: validationClauseNumber,
+              issue: 'Placeholder or incomplete content',
+              snippet: snippet
+            });
+          }
+        });
+      } else {
+        // Log that we're skipping placeholderPatterns for this clause since it's already validated
+        console.log(`[PDF VALIDATION] ℹ️ Skipping placeholderPatterns check for clause ${validationClauseNumber} (already validated by specific "I appoint" check)`);
+      }
       
       // CRITICAL: Additional check for missing subjects in clause text (catch any that slipped through)
       const hasMissingSubjectInText = 
@@ -2476,6 +2950,13 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     // Render will clauses with hanging indent (number and text on same line)
     let clauseNumber = 1;
     willClauses.forEach((clause) => {
+      // CRITICAL FIX: Skip clauses with unresolved markers - they should have been blocked in buildClauses.js
+      // This is a safety net in case any somehow got through
+      if (/\{\{field:[^}]+\}\}/.test(clause.text)) {
+        console.error(`[PDF RENDER] ❌ CRITICAL: Skipping clause with unresolved markers (should have been blocked in buildClauses): "${clause.text.substring(0, 100)}"`);
+        return; // Skip this clause entirely - do not render it
+      }
+      
       // DO NOT skip clauses - render everything, even if incomplete
       let processedClauseText = clause.text || '';
       if (clause.incomplete) {

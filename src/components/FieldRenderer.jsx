@@ -86,6 +86,17 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   const textInputRef = useRef(null);
   const sigContainerRef = useRef(null);
   const isSignatureField = field?.type === 'signature';
+  const renderCountRef = useRef(0);
+  
+  // Track renders for add button fields
+  useEffect(() => {
+    if (field?.type === 'button' && field?.action === 'openAddForm') {
+      renderCountRef.current += 1;
+      console.log(`[FIELD RENDER] 🔴 FieldRenderer render #${renderCountRef.current} for "${field.id}"`);
+      console.log(`[FIELD RENDER] 🔴 showInputs state:`, showInputs);
+      console.log(`[FIELD RENDER] 🔴 inputValues state:`, inputValues);
+    }
+  });
 
   useEffect(() => {
     if (field?.type !== 'date') return;
@@ -103,6 +114,18 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       }
     }
   }, [formValues, field?.id, field?.type]);
+
+  // Track showInputs changes for debugging add button issues
+  useEffect(() => {
+    if (field?.type === 'button' && field?.action === 'openAddForm') {
+      const rawTarget = field.id.replace(/^add/i, '').replace(/Button$/i, 'Data');
+      const targetFieldId = rawTarget.charAt(0).toLowerCase() + rawTarget.slice(1);
+      console.log(`[SHOW INPUTS EFFECT] 🟣 showInputs changed for field "${field.id}"`);
+      console.log(`[SHOW INPUTS EFFECT] 🟣 Target field: "${targetFieldId}"`);
+      console.log(`[SHOW INPUTS EFFECT] 🟣 showInputs[${targetFieldId}]:`, showInputs[targetFieldId]);
+      console.log(`[SHOW INPUTS EFFECT] 🟣 Full showInputs state:`, showInputs);
+    }
+  }, [showInputs, field?.id, field?.type, field?.action]);
   
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
@@ -191,30 +214,67 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       ? formValues[targetFieldId] 
       : (formValues[targetFieldId] ? [formValues[targetFieldId]] : []);
     
-    DEBUG_LOGS&&console.log(`[ADD BUTTON FIELD] Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}", Existing items: ${existingItems.length}`);
+    console.log(`[ADD BUTTON FIELD] 🔍 Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}"`);
+    console.log(`[ADD BUTTON FIELD] 🔍 Current inputValue: "${currentInputValue}"`);
+    console.log(`[ADD BUTTON FIELD] 🔍 showInputs[${targetFieldId}]:`, showInputs[targetFieldId]);
+    console.log(`[ADD BUTTON FIELD] 🔍 Existing items:`, existingItems);
+    console.log(`[ADD BUTTON FIELD] 🔍 inputValues state:`, inputValues);
+    console.log(`[ADD BUTTON FIELD] 🔍 formValues[${targetFieldId}]:`, formValues[targetFieldId]);
 
     const handleAddItem = () => {
-      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" (${field.label}) - Current input: "${currentInputValue}"`);
+      console.log(`[ADD ITEM BUTTON] 🟢 ========== CLICKED ==========`);
+      console.log(`[ADD ITEM BUTTON] 🟢 Field "${field.id}" (${field.label})`);
+      console.log(`[ADD ITEM BUTTON] 🟢 Target field: "${targetFieldId}"`);
+      console.log(`[ADD ITEM BUTTON] 🟢 Current inputValue from state: "${inputValues[targetFieldId] || ''}"`);
+      console.log(`[ADD ITEM BUTTON] 🟢 currentInputValue variable: "${currentInputValue}"`);
+      console.log(`[ADD ITEM BUTTON] 🟢 showInputs[${targetFieldId}] BEFORE:`, showInputs[targetFieldId]);
+      console.log(`[ADD ITEM BUTTON] 🟢 existingItems BEFORE:`, existingItems);
       
-      if (!currentInputValue.trim()) {
-        DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Aborted: empty input`);
+      // Get the current value directly from state, not the captured variable
+      const actualCurrentValue = inputValues[targetFieldId] || '';
+      console.log(`[ADD ITEM BUTTON] 🟢 Actual current value from state: "${actualCurrentValue}"`);
+      
+      if (!actualCurrentValue.trim()) {
+        console.log(`[ADD ITEM BUTTON] ⚠️ Aborted: empty input`);
+        console.log(`[ADD ITEM BUTTON] ⚠️ Trimmed value: "${actualCurrentValue.trim()}"`);
         return;
       }
 
-      const newItem = currentInputValue.trim();
+      const newItem = actualCurrentValue.trim();
       const updatedItems = [...existingItems, newItem];
       
-      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - Added item: "${newItem}". Total items now: ${updatedItems.length}`);
-      DEBUG_LOGS&&console.log(`[ADD ITEM BUTTON] Field "${field.id}" - All items:`, updatedItems);
+      console.log(`[ADD ITEM BUTTON] ✅ Adding item: "${newItem}"`);
+      console.log(`[ADD ITEM BUTTON] ✅ Updated items array:`, updatedItems);
+      console.log(`[ADD ITEM BUTTON] ✅ Total items now: ${updatedItems.length}`);
       
-      setFormValues((prev) => ({
-        ...prev,
-        [targetFieldId]: updatedItems,
-      }));
+      console.log(`[ADD ITEM BUTTON] 🔄 Calling setFormValues...`);
+      setFormValues((prev) => {
+        const newValues = {
+          ...prev,
+          [targetFieldId]: updatedItems,
+        };
+        console.log(`[ADD ITEM BUTTON] 🔄 setFormValues callback - new formValues[${targetFieldId}]:`, newValues[targetFieldId]);
+        return newValues;
+      });
 
+      console.log(`[ADD ITEM BUTTON] 🔄 Clearing input and closing form...`);
+      console.log(`[ADD ITEM BUTTON] 🔄 showInputs[${targetFieldId}] BEFORE clear:`, showInputs[targetFieldId]);
+      
       // Clear input and close it
-      setInputValues((prev) => ({ ...prev, [targetFieldId]: '' }));
-      setShowInputs((prev) => ({ ...prev, [targetFieldId]: false }));
+      setInputValues((prev) => {
+        const newInputs = { ...prev, [targetFieldId]: '' };
+        console.log(`[ADD ITEM BUTTON] 🔄 setInputValues callback - new inputValues[${targetFieldId}]:`, newInputs[targetFieldId]);
+        return newInputs;
+      });
+      
+      setShowInputs((prev) => {
+        const newShowInputs = { ...prev, [targetFieldId]: false };
+        console.log(`[ADD ITEM BUTTON] 🔄 setShowInputs callback - new showInputs[${targetFieldId}]:`, newShowInputs[targetFieldId]);
+        console.log(`[ADD ITEM BUTTON] 🔄 setShowInputs callback - full showInputs:`, newShowInputs);
+        return newShowInputs;
+      });
+      
+      console.log(`[ADD ITEM BUTTON] ✅ State updates queued`);
     };
 
     const handleRemoveItem = (indexToRemove) => {
@@ -238,15 +298,36 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     };
 
     return (
-      <div className="mb-4 animate-slideIn">
+      <div className="mb-4 animate-slideIn" data-field-id={field.id}>
         {/* Enhanced Add Button */}
         <button
           type="button"
-          onClick={() => {
-            DEBUG_LOGS&&console.log(`[ADD BUTTON CLICK] Field "${field.id}" - Opening input form for "${targetFieldId}"`);
-            setShowInputs((prev) => ({ ...prev, [targetFieldId]: true }));
+          data-field-id={field.id}
+          onClick={(e) => {
+            console.log(`[ADD BUTTON CLICK] 🔵 ========== BUTTON CLICKED ==========`);
+            console.log(`[ADD BUTTON CLICK] 🔵 Field "${field.id}" (${field.label})`);
+            console.log(`[ADD BUTTON CLICK] 🔵 Target field: "${targetFieldId}"`);
+            console.log(`[ADD BUTTON CLICK] 🔵 showInputs[${targetFieldId}] BEFORE:`, showInputs[targetFieldId]);
+            console.log(`[ADD BUTTON CLICK] 🔵 Current showInputs state:`, showInputs);
+            e.preventDefault();
+            e.stopPropagation();
+            setShowInputs((prev) => {
+              const newShowInputs = { ...prev, [targetFieldId]: true };
+              console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - setting ${targetFieldId} to true`);
+              console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - new showInputs[${targetFieldId}]:`, newShowInputs[targetFieldId]);
+              console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - full showInputs:`, newShowInputs);
+              return newShowInputs;
+            });
             setTimeout(() => {
-              inputRefs.current[targetFieldId]?.focus();
+              console.log(`[ADD BUTTON CLICK] 🔵 Focusing input after 100ms...`);
+              const inputElement = inputRefs.current[targetFieldId];
+              console.log(`[ADD BUTTON CLICK] 🔵 Input ref exists:`, !!inputElement);
+              if (inputElement) {
+                inputElement.focus();
+                console.log(`[ADD BUTTON CLICK] 🔵 Input focused`);
+              } else {
+                console.warn(`[ADD BUTTON CLICK] ⚠️ Input ref not found for ${targetFieldId}`);
+              }
             }, 100);
           }}
           className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-105 active:scale-95"
@@ -256,7 +337,14 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         </button>
 
         {/* Enhanced Input Form with Animation */}
-        {showInputs[targetFieldId] && (
+        {(() => {
+          const shouldShow = showInputs[targetFieldId];
+          console.log(`[INPUT FORM RENDER] 🟡 Rendering check for "${targetFieldId}"`);
+          console.log(`[INPUT FORM RENDER] 🟡 showInputs[${targetFieldId}]:`, shouldShow);
+          console.log(`[INPUT FORM RENDER] 🟡 Full showInputs:`, showInputs);
+          console.log(`[INPUT FORM RENDER] 🟡 Will render form:`, shouldShow);
+          return shouldShow;
+        })() && (
           <div className="mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
             <div className="flex gap-2">
               <div className="flex-1 relative">
@@ -269,9 +357,16 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
                   placeholder={`Enter ${targetFieldId.replace(/([A-Z])/g, ' $1').replace('Data', '')} (press Enter to add)`}
                   value={currentInputValue}
-                  onChange={(e) =>
-                    setInputValues((prev) => ({ ...prev, [targetFieldId]: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    console.log(`[INPUT CHANGE] 🟠 Input changed for "${targetFieldId}": "${newValue}"`);
+                    console.log(`[INPUT CHANGE] 🟠 Previous value: "${currentInputValue}"`);
+                    setInputValues((prev) => {
+                      const newInputs = { ...prev, [targetFieldId]: newValue };
+                      console.log(`[INPUT CHANGE] 🟠 setInputValues callback - new inputValues[${targetFieldId}]:`, newInputs[targetFieldId]);
+                      return newInputs;
+                    });
+                  }}
                   onKeyPress={handleKeyPress}
                   disabled={false}
                   readOnly={false}

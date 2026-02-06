@@ -33,6 +33,61 @@ export const buildClauses = ({
     if (!fieldId) return false;
     if (hasValue(formValues[fieldId])) return true;
     
+    // CRITICAL FIX: Special handling for executor sections - check for Aristone selection
+    if (fieldId === 'executorsSection') {
+      // Check if Aristone was selected via chooseAristoneExecutor
+      if (formValues.chooseAristoneExecutor === 'Aristone') {
+        console.log(`[BUILD CLAUSES] ✅ hasFieldValue found executorsSection via chooseAristoneExecutor`);
+        return true;
+      }
+    }
+    
+    if (fieldId === 'substituteExecutorsSection') {
+      // Check if Aristone was selected via chooseAristoneSubstituteExecutor
+      if (formValues.chooseAristoneSubstituteExecutor === 'Aristone') {
+        console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substituteExecutorsSection via chooseAristoneSubstituteExecutor`);
+        return true;
+      }
+    }
+    
+    // CRITICAL FIX: Special handling for pet carer sections - check if provisionsForPets is "Yes"
+    // and if petCarerData/substitutePetCarerData exists and contains valid entries
+    if (fieldId === 'petCarerSection') {
+      // Only check if provisionsForPets is "Yes"
+      if (formValues.provisionsForPets === 'Yes') {
+        const petCarerData = formValues.petCarerData;
+        // Check if petCarerData exists and contains valid entries (objects with firstName/lastName/address1)
+        if (Array.isArray(petCarerData) && petCarerData.length > 0) {
+          const hasValidEntries = petCarerData.some(item => 
+            item && typeof item === 'object' && 
+            (item.firstName || item.lastName || item.address1)
+          );
+          if (hasValidEntries) {
+            console.log(`[BUILD CLAUSES] ✅ hasFieldValue found petCarerSection via petCarerData with valid entries`);
+            return true;
+          }
+        }
+      }
+    }
+    
+    if (fieldId === 'substitutePetCarerSection') {
+      // Only check if provisionsForPets is "Yes"
+      if (formValues.provisionsForPets === 'Yes') {
+        const substitutePetCarerData = formValues.substitutePetCarerData;
+        // Check if substitutePetCarerData exists and contains valid entries
+        if (Array.isArray(substitutePetCarerData) && substitutePetCarerData.length > 0) {
+          const hasValidEntries = substitutePetCarerData.some(item => 
+            item && typeof item === 'object' && 
+            (item.firstName || item.lastName || item.address1)
+          );
+          if (hasValidEntries) {
+            console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substitutePetCarerSection via substitutePetCarerData with valid entries`);
+            return true;
+          }
+        }
+      }
+    }
+    
     // Fallback map for section fields (matches interpolateText logic)
     const fallbackMap = {
       guardiansSection: 'guardianData',
@@ -54,18 +109,25 @@ export const buildClauses = ({
       propertyGiftsSection: 'propertyGiftsDetails',
       debtsReleasedSection: 'debtorData',
       digitalExecutorSection: 'digitalExecutorData',
+      digitalExecutorsSection: 'digitalExecutorData', // CRITICAL FIX: Added missing mapping
+      executorsSection: 'executorData', // CRITICAL FIX: Added missing mapping
+      substituteExecutorsSection: 'substituteExecutorData', // CRITICAL FIX: Added missing mapping
+      professionalExecutorSection: 'professionalExecutorData',
+      substituteProfessionalExecutorSection: 'substituteProfessionalExecutorData',
       separateBusinessTrusteeSection: 'separateTrusteeData'
     };
     
     // Check fallback map first
     const fallbackId = fallbackMap[fieldId] || `${fieldId}Data`;
     if (hasValue(formValues[fallbackId])) {
-      // Debug logging for pet carer fields
-      if (fieldId === 'petCarerSection' || fieldId === 'substitutePetCarerSection') {
-        console.log(`[BUILD CLAUSES] hasFieldValue found ${fieldId} via fallback:`, {
+      // Debug logging for executor and pet carer fields
+      if (fieldId === 'executorsSection' || fieldId === 'substituteExecutorsSection' || 
+          fieldId === 'petCarerSection' || fieldId === 'substitutePetCarerSection') {
+        console.log(`[BUILD CLAUSES] ✅ hasFieldValue found ${fieldId} via fallback:`, {
           fieldId,
           fallbackId,
-          value: formValues[fallbackId]
+          value: formValues[fallbackId],
+          arrayLength: Array.isArray(formValues[fallbackId]) ? formValues[fallbackId].length : 'N/A'
         });
       }
       return true;
@@ -82,12 +144,16 @@ export const buildClauses = ({
     ];
     const found = candidates.some((key) => hasValue(formValues[key]));
     
-    // Debug logging if not found
-    if (!found && (fieldId === 'petCarerSection' || fieldId === 'substitutePetCarerSection')) {
-      console.log(`[BUILD CLAUSES] hasFieldValue NOT found for ${fieldId}:`, {
+    // Debug logging for executor sections if not found
+    if (!found && (fieldId === 'executorsSection' || fieldId === 'substituteExecutorsSection' || 
+                   fieldId === 'digitalExecutorsSection' || fieldId === 'petCarerSection' || 
+                   fieldId === 'substitutePetCarerSection')) {
+      console.log(`[BUILD CLAUSES] ⚠️ hasFieldValue NOT found for ${fieldId}:`, {
         fieldId,
         fallbackId,
         fallbackValue: formValues[fallbackId],
+        chooseAristoneExecutor: formValues.chooseAristoneExecutor,
+        chooseAristoneSubstituteExecutor: formValues.chooseAristoneSubstituteExecutor,
         candidates: candidates.map(c => ({ key: c, value: formValues[c] }))
       });
     }
@@ -96,17 +162,23 @@ export const buildClauses = ({
   };
 
   const evalClause = (clause) => {
-    if (!clause || !clause.field) return false;
+    if (!clause) return false;
+    
+    // CRITICAL FIX: Handle nested conditions with operator/clauses FIRST (before checking field)
+    // This handles structures like: { operator: "AND", clauses: [{ field: "...", ... }, ...] }
+    if ((clause.operator === 'AND' || clause.operator === 'OR') && clause.clauses) {
+      if (!Array.isArray(clause.clauses)) return false;
+      const results = clause.clauses.map(evalClause);
+      return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
+    }
+    
+    // Then handle simple field-based conditions
+    if (!clause.field) return false;
     const value = formValues[clause.field];
     if (clause.operator === 'eq') return value === clause.value;
     if (clause.operator === 'in') {
       if (!Array.isArray(clause.value)) return value === clause.value;
       return clause.value.includes(value);
-    }
-    if (clause.operator === 'AND' || clause.operator === 'OR') {
-      if (!clause.clauses || !Array.isArray(clause.clauses)) return false;
-      const results = clause.clauses.map(evalClause);
-      return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
     }
     return false;
   };
@@ -124,17 +196,43 @@ export const buildClauses = ({
     const fieldIds = extractFieldIds(template);
     const missingFields = fieldIds.filter((fid) => !hasFieldValue(fid));
     const trimmed = String(text || '').trim();
-    if (!trimmed && missingFields.length === 0) return;
+    
+    // CRITICAL FIX: Check for unresolved markers in interpolated text
+    // If interpolation returned unresolved markers like {{field:...}}, the clause is incomplete
+    const hasUnresolvedMarkers = /\{\{field:[^}]+\}\}/.test(text);
+    
+    // CRITICAL FIX: Check for missing subjects (patterns that indicate incomplete interpolation)
     const hasMissingSubject =
       /\bmy\s+\.\b/i.test(text) ||
       /\bfor\s+\.\b/i.test(text) ||
       /\bupon\s+trust\s+for\s+\.\b/i.test(text) ||
       /\bI appoint\s+to serve/i.test(text) ||
-      /\bI appoint\s+as\s+Trustees/i.test(text);
+      /\bI appoint\s+as\s+Trustees/i.test(text) ||
+      // CRITICAL: Also check for "I appoint [name] as Trustees" where name is testator (illegal substitution)
+      (/\bI appoint\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\s+as\s+Trustees/i.test(text) && 
+       text.includes(formValues.firstName) && text.includes(formValues.lastName) && 
+       !fieldIds.some(fid => fid.includes('Trustee') || fid.includes('trustee'))) ||
+      // CRITICAL: Check for "my [testator name]" in pet carer clauses (illegal substitution)
+      (/\bmy\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+/i.test(text) && 
+       (text.includes('care for') || text.includes('is unable')) &&
+       text.includes(formValues.firstName) && text.includes(formValues.lastName) &&
+       !fieldIds.some(fid => fid.includes('pet') || fid.includes('carer')));
     
     // CRITICAL: If clause has no field references, it cannot be incomplete (it's a complete sentence)
     const hasNoFieldRefs = fieldIds.length === 0;
-    const incomplete = hasNoFieldRefs ? false : (missingFields.length > 0 || hasMissingSubject || trimmed === '');
+    
+    // CRITICAL FIX: Mark as incomplete if:
+    // 1. Has unresolved markers (interpolation failed)
+    // 2. Has missing fields
+    // 3. Has missing subject patterns
+    // 4. Is empty
+    // BUT: Only if it has field references (otherwise it's a static complete sentence)
+    const incomplete = hasNoFieldRefs ? false : (
+      hasUnresolvedMarkers || 
+      missingFields.length > 0 || 
+      hasMissingSubject || 
+      trimmed === ''
+    );
     
     // ALWAYS-ON Debug logging for problematic clauses (15, 17, 19, 28, 29)
     if (id.includes('failedMoneyGiftPassProportionately') || 
@@ -142,7 +240,9 @@ export const buildClauses = ({
         id.includes('failedPropertyGiftPassProportionately') ||
         id.includes('provisionsForPets') ||
         id.includes('substitutePetCarer') ||
-        id.includes('petCarerSection')) {
+        id.includes('petCarerSection') ||
+        id.includes('separateTrustees') ||
+        id.includes('appointSeparateTrusteesFLIT')) {
       console.log(`[BUILD CLAUSES] 🔍 ANALYZING CLAUSE: ${id}`, {
         id,
         template: template,
@@ -155,25 +255,35 @@ export const buildClauses = ({
         hasNoFieldRefs,
         missingFields,
         missingFieldsLength: missingFields.length,
+        hasUnresolvedMarkers,
         hasMissingSubject,
         hasMissingSubjectMatch: hasMissingSubject ? text.match(/\bmy\s+\.\b|\bfor\s+\.\b|\bupon\s+trust\s+for\s+\.\b|\bI appoint\s+to serve|\bI appoint\s+as\s+Trustees/i) : null,
         incomplete,
         incompleteReason: incomplete ? (
           hasNoFieldRefs ? 'SHOULD NOT BE INCOMPLETE (hasNoFieldRefs=true)' :
+          hasUnresolvedMarkers ? 'HAS UNRESOLVED MARKERS ({{field:...}})' :
           missingFields.length > 0 ? `MISSING FIELDS: ${missingFields.join(', ')}` :
           hasMissingSubject ? 'HAS MISSING SUBJECT (regex match)' :
           trimmed === '' ? 'TRIMMED TEXT IS EMPTY' :
           'UNKNOWN REASON'
         ) : 'COMPLETE',
         isConditional,
-        willBeSkipped: isConditional && incomplete
+        willBeSkipped: incomplete // CRITICAL FIX: Block ALL incomplete clauses, not just conditional ones
       });
     }
     
-    // If clause is conditional (has conditions) AND incomplete, skip it entirely
-    // This prevents incomplete conditional clauses from appearing in the PDF
-    if (isConditional && incomplete) {
-      return;
+    // CRITICAL FIX: Block ALL incomplete clauses, not just conditional ones
+    // Incomplete clauses must NEVER be rendered - they would contain unresolved markers or testator name substitutions
+    if (incomplete) {
+      console.warn(`[BUILD CLAUSES] ⚠️ BLOCKING incomplete clause "${id}" - will not be added to clauses array`);
+      return; // Skip this clause entirely - do not add to clauses array
+    }
+    
+    // CRITICAL FIX: Double-check for unresolved markers even if incomplete check passed
+    // This is a safety net in case the incomplete check missed something
+    if (hasUnresolvedMarkers) {
+      console.error(`[BUILD CLAUSES] ❌ CRITICAL ERROR: Clause "${id}" has unresolved markers but was not marked incomplete! Blocking anyway.`);
+      return; // Block it
     }
     
     const normalized = String(text).replace(/\s+/g, ' ').trim().toLowerCase();
@@ -185,7 +295,7 @@ export const buildClauses = ({
       section: section?.formSection || '',
       text,
       missingFields,
-      incomplete
+      incomplete: false // Only complete clauses reach this point
     });
   };
 
@@ -193,7 +303,71 @@ export const buildClauses = ({
     if (!section || !section.fields) return;
     section.fields.forEach((field) => {
       if (!field) return;
-      if (field.conditions && !evaluateConditions(field.conditions, field.conditionLogic)) return;
+      if (field.conditions && !evaluateConditions(field.conditions, field.conditionLogic)) {
+        // Debug logging for executor-related sections and separate trustees
+        if (field.id === 'executorsSection' || field.id === 'substituteExecutorsSection' || 
+            field.id === 'digitalExecutorsSection' || field.id === 'separateTrusteesSection') {
+          // Enhanced logging for separate trustees - show condition evaluation results
+          let conditionResults = null;
+          if (field.id === 'separateTrusteesSection' && Array.isArray(field.conditions)) {
+            // Handle nested condition structure: [{ operator: "AND", clauses: [...] }]
+            conditionResults = field.conditions.map(cond => {
+              if (cond.operator === 'AND' || cond.operator === 'OR') {
+                // Nested structure - evaluate each clause
+                if (Array.isArray(cond.clauses)) {
+                  return {
+                    operator: cond.operator,
+                    clauses: cond.clauses.map(subClause => {
+                      const actualValue = formValues[subClause.field];
+                      const expectedValue = subClause.value;
+                      const matches = actualValue === expectedValue;
+                      return {
+                        field: subClause.field,
+                        operator: subClause.operator,
+                        expected: expectedValue,
+                        actual: actualValue,
+                        matches
+                      };
+                    })
+                  };
+                }
+              }
+              // Flat structure
+              const actualValue = formValues[cond.field];
+              const expectedValue = cond.value;
+              const matches = actualValue === expectedValue;
+              return {
+                field: cond.field,
+                operator: cond.operator,
+                expected: expectedValue,
+                actual: actualValue,
+                matches
+              };
+            });
+          }
+          
+          console.log(`[BUILD CLAUSES] ⚠️ Skipping ${field.id} - conditions not met:`, {
+            fieldId: field.id,
+            conditions: field.conditions,
+            conditionLogic: field.conditionLogic,
+            conditionResults,
+            formValues: {
+              chooseAristoneExecutor: formValues.chooseAristoneExecutor,
+              chooseAristoneSubstituteExecutor: formValues.chooseAristoneSubstituteExecutor,
+              appointDigitalAssetsExecutor: formValues.appointDigitalAssetsExecutor,
+              appointSeparateDigitalExecutor: formValues.appointSeparateDigitalExecutor,
+              executorData: formValues.executorData,
+              substituteExecutorData: formValues.substituteExecutorData,
+              digitalExecutorData: formValues.digitalExecutorData,
+              hasBusinessInterests: formValues.hasBusinessInterests,
+              trusteePowerCarryOnBusiness: formValues.trusteePowerCarryOnBusiness,
+              appointSeparateBusinessTrustee: formValues.appointSeparateBusinessTrustee,
+              separateTrusteeData: formValues.separateTrusteeData
+            }
+          });
+        }
+        return;
+      }
       if (['button', 'hidden', 'display'].includes(field.type)) return;
 
       if (field.willClauseText) {
@@ -201,11 +375,14 @@ export const buildClauses = ({
         // Check if this field has conditions (making it conditional)
         const isConditional = !!(field.conditions && field.conditions.length > 0);
         
-        // Debug logging for pet carer sections
-        if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection') {
+        // Debug logging for pet carer sections and separate trustees
+        if (field.id === 'petCarerSection' || field.id === 'substitutePetCarerSection' || 
+            field.id === 'separateTrusteesSection') {
           const fieldIds = extractFieldIds(field.willClauseText);
           const missingFields = fieldIds.filter((fid) => !hasFieldValue(fid));
-          console.log(`[BUILD CLAUSES] Processing section field clause for ${field.id}:`, {
+          
+          // Enhanced logging for separate trustees - show full data structure
+          const debugData = {
             template: field.willClauseText, // Full template, no truncation
             interpolated: interpolated, // Full interpolated text, no truncation
             fieldIds,
@@ -213,8 +390,39 @@ export const buildClauses = ({
             isConditional,
             petCarerData: formValues.petCarerData,
             substitutePetCarerData: formValues.substitutePetCarerData,
-            provisionsForPets: formValues.provisionsForPets
-          });
+            provisionsForPets: formValues.provisionsForPets,
+            separateTrusteeData: formValues.separateTrusteeData,
+            hasBusinessInterests: formValues.hasBusinessInterests,
+            trusteePowerCarryOnBusiness: formValues.trusteePowerCarryOnBusiness,
+            appointSeparateBusinessTrustee: formValues.appointSeparateBusinessTrustee
+          };
+          
+          // For separate trustees, also check for modal field data
+          if (field.id === 'separateTrusteesSection') {
+            debugData.separateTrusteeDataStructure = {
+              type: Array.isArray(formValues.separateTrusteeData) ? 'array' : typeof formValues.separateTrusteeData,
+              length: Array.isArray(formValues.separateTrusteeData) ? formValues.separateTrusteeData.length : 'N/A',
+              firstItem: Array.isArray(formValues.separateTrusteeData) && formValues.separateTrusteeData.length > 0 
+                ? formValues.separateTrusteeData[0] 
+                : formValues.separateTrusteeData,
+              firstItemType: Array.isArray(formValues.separateTrusteeData) && formValues.separateTrusteeData.length > 0
+                ? typeof formValues.separateTrusteeData[0]
+                : 'N/A',
+              hasFieldValue: hasFieldValue('separateTrusteesSection')
+            };
+            
+            // Check for modal field prefixes
+            const modalFields = Object.keys(formValues).filter(key => key.startsWith('addSeparateTrustee_'));
+            if (modalFields.length > 0) {
+              debugData.modalFieldsFound = modalFields;
+              debugData.modalFieldValues = {};
+              modalFields.forEach(key => {
+                debugData.modalFieldValues[key] = formValues[key];
+              });
+            }
+          }
+          
+          console.log(`[BUILD CLAUSES] Processing section field clause for ${field.id}:`, debugData);
         }
         
         addClause({

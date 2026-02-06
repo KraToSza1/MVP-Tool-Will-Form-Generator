@@ -2979,7 +2979,8 @@
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes",
+              "willClauseText": "Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests."
             }
           ],
           "value": null,
@@ -3005,25 +3006,44 @@
           "id": "separateTrusteesSection",
           "type": "section",
           "label": "Who are the separate Trustees?",
-          "willClauseText": "Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests.",
           "conditions": [
             {
-              "operator": "AND",
+              "operator": "OR",
               "clauses": [
                 {
-                  "field": "hasBusinessInterests",
-                  "operator": "eq",
-                  "value": "Yes"
+                  "operator": "AND",
+                  "clauses": [
+                    {
+                      "field": "hasBusinessInterests",
+                      "operator": "eq",
+                      "value": "Yes"
+                    },
+                    {
+                      "field": "trusteePowerCarryOnBusiness",
+                      "operator": "eq",
+                      "value": "Yes"
+                    },
+                    {
+                      "field": "appointSeparateBusinessTrustee",
+                      "operator": "eq",
+                      "value": "Yes"
+                    }
+                  ]
                 },
                 {
-                  "field": "trusteePowerCarryOnBusiness",
-                  "operator": "eq",
-                  "value": "Yes"
-                },
-                {
-                  "field": "appointSeparateBusinessTrustee",
-                  "operator": "eq",
-                  "value": "Yes"
+                  "operator": "AND",
+                  "clauses": [
+                    {
+                      "field": "howResidueDistributed",
+                      "operator": "eq",
+                      "value": "IntoFLIT"
+                    },
+                    {
+                      "field": "appointSeparateTrusteesFLIT",
+                      "operator": "eq",
+                      "value": "Yes"
+                    }
+                  ]
                 }
               ]
             }
@@ -5115,7 +5135,8 @@
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes",
+              "willClauseText": "I appoint {{field:separateTrusteesSection:fullDetails}} as Trustees specifically for the Flexible Life Interest Trust."
             }
           ],
           "value": null,
