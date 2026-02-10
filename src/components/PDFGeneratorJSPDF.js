@@ -802,6 +802,18 @@ const evaluateConditions = (conditions, formValues, conditionLogic) => {
   return evalClause(conditions);
 };
 
+// Bold markers for client-entered values in PDF (Unicode private use, minimal width)
+const BOLD_START = '\uE001';
+const BOLD_END = '\uE002';
+
+// Wraps resolved client values with bold markers for PDF rendering. Exclusions: unresolved placeholders, empty strings.
+const wrapClientValue = (val) => {
+  if (val == null || val === '') return '';
+  const s = String(val);
+  if (s.trim() === '') return s;
+  return BOLD_START + s + BOLD_END;
+};
+
 // Text interpolation function (matching FormRenderer logic)
 const interpolateText = (text, values) => {
   
@@ -901,7 +913,7 @@ const interpolateText = (text, values) => {
       if (sectionId === 'chattelsGiftBeneficiarySection') {
         const name = values.chattelsGiftBeneficiaryName;
         if (name && String(name).trim() !== '') {
-          return String(name).trim();
+          return wrapClientValue(String(name).trim());
         }
         return `{{field:${fullKey}}}`;
       }
@@ -910,7 +922,7 @@ const interpolateText = (text, values) => {
       if (sectionId === 'executorsSection') {
         // Check if Aristone was selected via chooseAristoneExecutor
         if (values.chooseAristoneExecutor === 'Aristone') {
-          return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+          return wrapClientValue("Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG");
         }
         // Fall through to normal array handling
       }
@@ -918,7 +930,7 @@ const interpolateText = (text, values) => {
       if (sectionId === 'substituteExecutorsSection') {
         // Check if Aristone was selected via chooseAristoneSubstituteExecutor
         if (values.chooseAristoneSubstituteExecutor === 'Aristone') {
-          return "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG";
+          return wrapClientValue("Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG");
         }
         // Fall through to normal array handling
       }
@@ -1089,7 +1101,7 @@ const interpolateText = (text, values) => {
               console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
             }
             
-            return result;
+            return wrapClientValue(result);
           } else {
             // No valid formatted items after filtering - return unresolved marker
             if (sectionId === 'separateTrusteesSection') {
@@ -1141,14 +1153,14 @@ const interpolateText = (text, values) => {
           resolved.includes('Testing') || resolved.includes('Per Carer') // CRITICAL FIX: Also block if contains test keywords
         );
         if (isPlaceholder) return `{{field:${fullKey}}}`;
-        return resolved;
+        return wrapClientValue(resolved);
       }
       return '';
     }
 
     if (subField === 'formattedAmount') {
       const rawValue = values[sectionId] || values[fullKey];
-      return formatCurrencyValue(rawValue);
+      return wrapClientValue(formatCurrencyValue(rawValue));
     }
 
     // Handle 'value' subField - special handling for organ donation fields
@@ -1157,17 +1169,16 @@ const interpolateText = (text, values) => {
       if (sectionId === 'specificOrgansToDonate' || sectionId === 'specificOrgansToExclude') {
         const organValue = values[sectionId] || values[fullKey] || '';
         if (organValue && String(organValue).trim() !== '') {
-          return String(organValue).trim();
+          return wrapClientValue(String(organValue).trim());
         }
-        // If organs are empty but purposes are selected, use generic phrase
-        // This prevents broken clauses like "I wish to donate only the following parts of my body:  for..."
+        // If organs are empty but purposes are selected, use generic phrase (not client-entered, no bold)
         return 'organs as appropriate';
       }
       
       // Try direct field lookup
       const directValue = values[sectionId] || values[fullKey];
       if (directValue != null && directValue !== '') {
-        return String(directValue);
+        return wrapClientValue(String(directValue));
       }
       return '';
     }
@@ -1198,11 +1209,11 @@ const interpolateText = (text, values) => {
             .filter(Boolean);
           if (selectedFragments.length > 0) {
             // Concatenate with "and/or" for legally correct multi-purpose wording
-            return selectedFragments.join(' and/or ');
+            return wrapClientValue(selectedFragments.join(' and/or '));
           }
         }
       }
-      // Default to "any lawful purpose" when no purposes are selected (as per UI hint)
+      // Default when no purposes selected (not client-entered, no bold)
       return 'any lawful purpose';
     }
 
@@ -1213,12 +1224,12 @@ const interpolateText = (text, values) => {
       const selectionValue = values[sectionId];
       
       if (selectionValue === 'Aristone') {
-        return `${getCanonicalFirmName()}, SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG`;
+        return wrapClientValue(`${getCanonicalFirmName()}, SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG`);
       } else if (selectionValue === 'Other') {
         const otherDetailsField = sectionId.replace('Selection', 'OtherDetails');
         const otherDetails = values[otherDetailsField];
         if (otherDetails && otherDetails.trim()) {
-          return otherDetails.trim();
+          return wrapClientValue(otherDetails.trim());
         }
       }
       
@@ -1280,13 +1291,12 @@ const interpolateText = (text, values) => {
         
         if (mappedValues.length > 0) {
           // Join with "and" for multiple items, or just return single value
-          if (mappedValues.length === 1) {
-            return mappedValues[0];
-          } else if (mappedValues.length === 2) {
-            return mappedValues.join(' and ');
-          } else {
-            return mappedValues.slice(0, -1).join(', ') + ', and ' + mappedValues[mappedValues.length - 1];
-          }
+          const joined = mappedValues.length === 1
+            ? mappedValues[0]
+            : mappedValues.length === 2
+            ? mappedValues.join(' and ')
+            : mappedValues.slice(0, -1).join(', ') + ', and ' + mappedValues[mappedValues.length - 1];
+          return wrapClientValue(joined);
         }
       }
       // CRITICAL FIX: Return placeholder to mark clause as incomplete if no data
@@ -1299,7 +1309,7 @@ const interpolateText = (text, values) => {
     
     if (Array.isArray(sectionData) && sectionData.length > 0) {
       if (typeof sectionData[0] !== 'object') {
-        return sectionData.map(safeString).join(', ');
+        return wrapClientValue(sectionData.map(safeString).join(', '));
       }
       const mappedValues = sectionData
         .map((item) => {
@@ -1313,7 +1323,7 @@ const interpolateText = (text, values) => {
         })
         .filter(Boolean);
       if (mappedValues.length > 0) {
-        return mappedValues.join(', ');
+        return wrapClientValue(mappedValues.join(', '));
       }
     } else if (typeof sectionData === 'object' && sectionData !== null) {
       const fieldValue = sectionData[subField] || 
@@ -1322,7 +1332,7 @@ const interpolateText = (text, values) => {
                        sectionData[subField.toLowerCase()] ||
                        sectionData[subField.toUpperCase()];
       if (fieldValue && (typeof fieldValue === 'string' || typeof fieldValue === 'number')) {
-        return safeString(fieldValue);
+        return wrapClientValue(safeString(fieldValue));
       }
     }
 
@@ -1340,7 +1350,7 @@ const interpolateText = (text, values) => {
     if (subField === 'value') {
       const directValue = values[sectionId];
       if (directValue != null) {
-        return safeString(directValue);
+        return wrapClientValue(safeString(directValue));
       }
     }
 
@@ -1349,16 +1359,16 @@ const interpolateText = (text, values) => {
                        values[`${sectionId}${subField}`] || 
                        values[`${sectionId}_${subField}`] ||
                        values[`${sectionId}.${subField}`];
-    if (customValue) return safeString(customValue);
+    if (customValue) return wrapClientValue(safeString(customValue));
 
     // Try direct field lookup
     const directField = values[sectionId];
     if (directField != null) {
       if (Array.isArray(directField)) {
-        return directField.map(safeString).filter(Boolean).join(', ');
+        return wrapClientValue(directField.map(safeString).filter(Boolean).join(', '));
       }
       if (typeof directField === 'string' || typeof directField === 'number') {
-        return safeString(directField);
+        return wrapClientValue(safeString(directField));
       }
     }
 
@@ -1374,9 +1384,9 @@ const interpolateText = (text, values) => {
     const fullKeyValue = values[fullKey];
     if (fullKeyValue != null) {
       if (Array.isArray(fullKeyValue)) {
-        return fullKeyValue.map(safeString).filter(Boolean).join(', ');
+        return wrapClientValue(fullKeyValue.map(safeString).filter(Boolean).join(', '));
       }
-      return safeString(fullKeyValue);
+      return wrapClientValue(safeString(fullKeyValue));
     }
 
     return '';
@@ -1395,9 +1405,10 @@ const interpolateText = (text, values) => {
                         values.lifeTenantName || 
                         getFullName(values) || '';
       
-      processed = processed.replace(/\[Life Tenant Name\]/g, lifeTenant);
-      processed = processed.replace(/to __ during/g, `to ${lifeTenant} during`);
-      processed = processed.replace(/to __/g, `to ${lifeTenant}`);
+      const lifeTenantBold = lifeTenant ? wrapClientValue(lifeTenant) : lifeTenant;
+      processed = processed.replace(/\[Life Tenant Name\]/g, lifeTenantBold);
+      processed = processed.replace(/to __ during/g, lifeTenant ? `to ${lifeTenantBold} during` : 'to __ during');
+      processed = processed.replace(/to __/g, lifeTenant ? `to ${lifeTenantBold}` : 'to __');
     }
     
     // FLIT Final beneficiaries placeholders
@@ -1408,11 +1419,14 @@ const interpolateText = (text, values) => {
                                values.finalBeneficiaries || 
                                values.finalBeneficiaryDetails || 
                                'my children who survive me';
-      
-      processed = processed.replace(/\[Final Beneficiaries[^\]]*\]/g, finalBeneficiaries);
-      processed = processed.replace(/for __ /g, `for ${finalBeneficiaries} `);
-      processed = processed.replace(/for __$/g, `for ${finalBeneficiaries}`);
-      processed = processed.replace(/and after their death for $/g, `and after their death for ${finalBeneficiaries}`);
+      const isClientValue = !!(values.beneficiariesDetails || values.trustEndDistributionDetails ||
+        values.flitFinalBeneficiaries || values.finalBeneficiaries || values.finalBeneficiaryDetails);
+      const finalBeneficiariesBold = isClientValue ? wrapClientValue(finalBeneficiaries) : finalBeneficiaries;
+
+      processed = processed.replace(/\[Final Beneficiaries[^\]]*\]/g, finalBeneficiariesBold);
+      processed = processed.replace(/for __ /g, `for ${finalBeneficiariesBold} `);
+      processed = processed.replace(/for __$/g, `for ${finalBeneficiariesBold}`);
+      processed = processed.replace(/and after their death for $/g, `and after their death for ${finalBeneficiariesBold}`);
     }
     
     // Gender pronouns
@@ -1420,8 +1434,8 @@ const interpolateText = (text, values) => {
     const pronounHis = gender === 'Female' ? 'her' : gender === 'Male' ? 'his' : 'their';
     const pronounHe = gender === 'Female' ? 'she' : gender === 'Male' ? 'he' : 'they';
     
-    processed = processed.replace(/\[his\/her\]/g, pronounHis);
-    processed = processed.replace(/\[he\/she\]/g, pronounHe);
+    processed = processed.replace(/\[his\/her\]/g, wrapClientValue(pronounHis));
+    processed = processed.replace(/\[he\/she\]/g, wrapClientValue(pronounHe));
   }
   
   // Replace bracket placeholders with real values where possible
@@ -1445,7 +1459,7 @@ const interpolateText = (text, values) => {
   // If the template has "[as specified: ...]", replace it properly
   processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, (match) => {
     if (formattedLoansGifts) {
-      return `as specified: ${formattedLoansGifts}`;
+      return `as specified: ${wrapClientValue(formattedLoansGifts)}`;
     }
     return '';
   });
@@ -1453,11 +1467,11 @@ const interpolateText = (text, values) => {
   // If template ends with "children" and loans text starts with "I", add period separator
   processed = processed.replace(/\bchildren\s+\[Specific Loans\/Gifts List\]/gi, (match) => {
     if (formattedLoansGifts && formattedLoansGifts.match(/^I\s+/i)) {
-      return `children. ${formattedLoansGifts}`;
+      return `children. ${wrapClientValue(formattedLoansGifts)}`;
     }
-    return match.replace('[Specific Loans/Gifts List]', formattedLoansGifts);
+    return match.replace('[Specific Loans/Gifts List]', formattedLoansGifts ? wrapClientValue(formattedLoansGifts) : formattedLoansGifts);
   });
-  processed = processed.replace(/\[Specific Loans\/Gifts List\]/gi, formattedLoansGifts);
+  processed = processed.replace(/\[Specific Loans\/Gifts List\]/gi, formattedLoansGifts ? wrapClientValue(formattedLoansGifts) : formattedLoansGifts);
   
   // Fix Clause 35: Add proper lead-in for residual gifts if missing
   let formattedResidualList = residualList.trim();
@@ -1468,7 +1482,7 @@ const interpolateText = (text, values) => {
       formattedResidualList = `the following: ${formattedResidualList}`;
     }
   }
-  processed = processed.replace(/\[Residual Beneficiary List and Shares\]/gi, formattedResidualList);
+  processed = processed.replace(/\[Residual Beneficiary List and Shares\]/gi, formattedResidualList ? wrapClientValue(formattedResidualList) : formattedResidualList);
   
   // Fix Clause 36: Prevent duplication - if furtherResidualList already contains the lead-in, 
   // remove the template's duplicate lead-in sentence
@@ -1481,20 +1495,18 @@ const interpolateText = (text, values) => {
       // User text already has the full clause, so remove the template's lead-in entirely
       // Template: "If any gift of my Residuary Estate should fail, I give the failed share to [Further Residual Beneficiary List and Shares]."
       // Replace with just the user text (which already has the lead-in)
-      processed = processed.replace(/If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*I\s+give\s+the\s+failed\s+share\s+to\s*\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
-      // Also handle standalone bracket replacement
+      processed = processed.replace(/If\s+any\s+gift\s+of\s+my\s+Residuary\s+Estate\s+should\s+fail[.,]\s*I\s+give\s+the\s+failed\s+share\s+to\s*\[Further Residual Beneficiary List and Shares\]/gi, wrapClientValue(formattedFurtherResidualList));
       processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
     } else {
-      // User text is just the beneficiary list, use the template's lead-in
-      processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, formattedFurtherResidualList);
+      processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, wrapClientValue(formattedFurtherResidualList));
     }
   } else {
     processed = processed.replace(/\[Further Residual Beneficiary List and Shares\]/gi, '');
   }
   
-  processed = processed.replace(/\[Charity\/Charities List\]/gi, charityList);
-  processed = processed.replace(/\[10% \/ minimum amount specified\]/gi, charityAmount);
-  processed = processed.replace(/\[conditionally if IHT due\]/gi, charityCondition);
+  processed = processed.replace(/\[Charity\/Charities List\]/gi, charityList ? wrapClientValue(charityList) : charityList);
+  processed = processed.replace(/\[10% \/ minimum amount specified\]/gi, charityAmount ? wrapClientValue(charityAmount) : charityAmount);
+  processed = processed.replace(/\[conditionally if IHT due\]/gi, charityCondition ? wrapClientValue(charityCondition) : charityCondition);
   processed = processed.replace(/\[\s*as specified:\s*([^\]]*)\]/gi, '$1');
 
   // Remove any remaining bracket placeholders to avoid incomplete text in final Will
@@ -1535,9 +1547,10 @@ const interpolateText = (text, values) => {
   return processed;
 };
 
-export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
+export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
   try {
-    
+    const { isClientPDF = false } = options;
+
     const {
       testatorSignature = null,
       consultantSignature = null,
@@ -1832,13 +1845,59 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       cleanName = nameParts.join(' ');
     }
     
-    // Header text - use direct rendering for consistent Y tracking
+    // Header text - testator name is client-entered (bold)
     doc.setFontSize(11.5);
     doc.setFont('times', 'normal');
-    doc.text(`This is the Will of ${cleanName}.`, margin, yPos);
+    doc.text('This is the Will of ', margin, yPos);
+    doc.setFont('times', 'bold');
+    doc.text(cleanName, margin + doc.getTextWidth('This is the Will of '), yPos);
+    doc.setFont('times', 'normal');
+    doc.text('.', margin + doc.getTextWidth('This is the Will of ' + cleanName), yPos);
     yPos += 8;
 
-    // Helper function for hanging indent clause rendering
+    // Helper: render text with bold segments (BOLD_START...BOLD_END = client-entered values)
+    const renderTextWithBoldSegments = (doc, text, x, y, availableWidth, lineHeight, fontSize) => {
+      const re = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
+      const displayText = text.replace(re, '');
+      const lines = doc.splitTextToSize(displayText, availableWidth);
+      let displayOffset = 0;
+      let lineY = y;
+      doc.setFontSize(fontSize);
+      let boldDepth = 0;
+      for (const line of lines) {
+        const lineDisplayEnd = displayOffset + line.length;
+        let displayPos = 0;
+        let lineOrig = '';
+        let lineStartBoldDepth = boldDepth;
+        for (let i = 0; i < text.length; i++) {
+          const c = text[i];
+          if (c === BOLD_START || c === BOLD_END) {
+            if (displayOffset <= displayPos && displayPos < lineDisplayEnd) lineOrig += c;
+            if (c === BOLD_START) boldDepth++; else if (c === BOLD_END) boldDepth--;
+          } else {
+            if (displayOffset <= displayPos && displayPos < lineDisplayEnd) lineOrig += c;
+            displayPos++;
+          }
+        }
+        displayOffset = lineDisplayEnd;
+        const splitRe = new RegExp(BOLD_START + '|' + BOLD_END);
+        const parts = lineOrig.split(splitRe);
+        let segX = x;
+        const startBold = lineStartBoldDepth % 2 === 1;
+        for (let j = 0; j < parts.length; j++) {
+          const seg = parts[j];
+          if (!seg) continue;
+          const isBold = startBold ? (j % 2 === 0) : (j % 2 === 1);
+          doc.setFont('times', isBold ? 'bold' : 'normal');
+          doc.text(seg, segX, lineY);
+          segX += doc.getTextWidth(seg);
+        }
+        lineY += lineHeight;
+      }
+      return lineY;
+    };
+
+    // Helper function for hanging indent clause rendering (supports bold client-entered values)
     const renderNumberedClause = (doc, {
       number,
       text,
@@ -1854,34 +1913,24 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
       const textX = margin + numColW;
       const availableWidth = pageWidth - margin - textX;
 
-      // Wrap text to the text column width
       doc.setFont('times', 'normal');
       doc.setFontSize(fontSize);
-      const lines = doc.splitTextToSize(text, availableWidth);
+      const re = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
+      const displayText = text.replace(re, '');
+      const lines = doc.splitTextToSize(displayText, availableWidth);
 
-      // Page break check (handle multi-line clauses properly)
       const neededHeight = Math.max(lines.length, 1) * lineHeight + spacingAfter;
       if (currentYPos + neededHeight > pageHeight - margin) {
         doc.addPage();
         currentYPos = margin;
       }
 
-      // Number (bold) - on same baseline as first line of text
       doc.setFont('times', 'bold');
       doc.setFontSize(fontSize);
       doc.text(`${number}.`, margin, currentYPos);
 
-      // Text (normal) - first line same baseline as number, wrapped lines align under text
-      doc.setFont('times', 'normal');
-      doc.setFontSize(fontSize);
-      let lineY = currentYPos;
-      for (let i = 0; i < lines.length; i++) {
-        doc.text(lines[i], textX, lineY);
-        lineY += lineHeight; // Increment Y for each line
-      }
-
-      // Return the final Y position after all lines
-      return lineY + spacingAfter;
+      const finalY = renderTextWithBoldSegments(doc, text, textX, currentYPos, availableWidth, lineHeight, fontSize);
+      return finalY + spacingAfter;
     };
 
     // Helper to add DRAFT watermark to a page
@@ -2947,9 +2996,25 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     
     console.log(`[PDF SCHEDULE MAP] Total schedule mappings:`, Array.from(scheduleNumberMap.entries()));
     
+    // 1. SECTION HEADERS: Render section header when section changes (numbered, bold, visually distinct)
+    let lastSection = null;
+    let sectionNumber = 0;
+
     // Render will clauses with hanging indent (number and text on same line)
     let clauseNumber = 1;
     willClauses.forEach((clause) => {
+      // Emit section header before first clause of each new section
+      if (clause.sectionLabel && clause.sectionLabel !== lastSection) {
+        lastSection = clause.sectionLabel;
+        sectionNumber++;
+        checkPageBreak(lineHeight * 3);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text(`${sectionNumber}. ${clause.sectionLabel}`, margin, yPos);
+        yPos += 8;
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11.5);
+      }
       // CRITICAL FIX: Skip clauses with unresolved markers - they should have been blocked in buildClauses.js
       // This is a safety net in case any somehow got through
       if (/\{\{field:[^}]+\}\}/.test(clause.text)) {
@@ -3102,22 +3167,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         doc.setFont('times', 'normal');
         doc.setFontSize(11.5);
         const availableWidth = pageWidth - (margin * 2);
-        const lines = doc.splitTextToSize(processedClauseText, availableWidth);
-        
-        // Check page break before rendering
+        const displayRe = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
+        const displayText = processedClauseText.replace(displayRe, '');
+        const lines = doc.splitTextToSize(displayText, availableWidth);
+
         const neededHeight = lines.length * 5.5 + 6;
         if (yPos + neededHeight > pageHeight - margin) {
           doc.addPage();
           yPos = margin;
         }
-        
-        // Render each line with proper Y tracking
-        let lineY = yPos;
-        lines.forEach((line, index) => {
-          doc.text(line, margin, lineY);
-          lineY += 5.5; // Increment for each line
-        });
-        yPos = lineY + 6; // Final Y position after spacing
+
+        yPos = renderTextWithBoldSegments(doc, processedClauseText, margin, yPos, availableWidth, 5.5, 11.5) + 6;
       }
     });
     
@@ -3334,12 +3394,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         if (scheduleData && typeof scheduleData === 'string' && scheduleData.trim()) {
           console.log(`[PDF SCHEDULE] ✅ Schedule content found, length: ${scheduleData.length} characters`);
           console.log(`[PDF SCHEDULE] Rendering schedule content starting at yPos: ${yPos.toFixed(1)}`);
+          doc.setFont('times', 'bold'); // Schedule content is client-entered
           const scheduleLines = doc.splitTextToSize(scheduleData, availableWidth);
           console.log(`[PDF SCHEDULE] Schedule content split into ${scheduleLines.length} lines`);
           let lineY = yPos;
           let pageBreaksAdded = 0;
           scheduleLines.forEach((line, lineIndex) => {
-            // Check for page break before each line
             if (lineY + 5.5 > pageHeight - margin) {
               console.log(`[PDF SCHEDULE] Page break needed at line ${lineIndex + 1}/${scheduleLines.length} (lineY: ${lineY.toFixed(1)})`);
               doc.addPage();
@@ -3349,6 +3409,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
             doc.text(line, margin, lineY);
             lineY += 5.5;
           });
+          doc.setFont('times', 'normal');
           yPos = lineY;
           console.log(`[PDF SCHEDULE] Schedule content rendered, pageBreaks added: ${pageBreaksAdded}, final yPos: ${yPos.toFixed(1)}`);
         } else {
@@ -3484,25 +3545,36 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     doc.setFont('times', 'normal');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Signed by ${cleanName}, to give effect to this Will, on`, margin, y);
-    y += 14;
+    if (isClientPDF) {
+      // Client PDF: no "signed" wording, no sign-ready assertions. Intake only.
+      doc.setFont('times', 'bold');
+      doc.setFontSize(10);
+      doc.text('INTAKE ONLY — This is not a final Will. Sign in person with witnesses at your solicitor appointment.', margin, y);
+      y += 8;
+      doc.setFont('times', 'normal');
+      doc.setFontSize(11);
+      doc.text(`To be signed by ${cleanName} at your solicitor appointment.`, margin, y);
+      y += 10;
+    } else {
+      // Solicitor/internal PDF: execution wording
+      doc.text(`Signed by ${cleanName}, to give effect to this Will, on`, margin, y);
+      y += 14;
+    }
 
-    // Date line + value - MUST use execution/signing date, NOT DOB
-    // Explicitly exclude DOB fields and validate date is reasonable
+    // Date line + value - Client PDF: blank (not yet signed). Solicitor PDF: use execution date.
     let executionDate = null;
-    
-    // DOB-related field names to EXCLUDE (never use these)
-    const dobFieldPatterns = [
-      /dateOfBirth/i,
-      /dob/i,
-      /birthDate/i,
-      /birthday/i,
-      /dateOfBirth/i,
-      /birth/i
-    ];
-    
-    // Check ONLY explicit signing date fields - no fallbacks (explicitSigningDateFields already declared above)
-    for (const field of explicitSigningDateFields) {
+    if (!isClientPDF) {
+      // DOB-related field names to EXCLUDE (never use these)
+      const dobFieldPatterns = [
+        /dateOfBirth/i,
+        /dob/i,
+        /birthDate/i,
+        /birthday/i,
+        /dateOfBirth/i,
+        /birth/i
+      ];
+      // Check ONLY explicit signing date fields - no fallbacks (explicitSigningDateFields already declared above)
+      for (const field of explicitSigningDateFields) {
       // Extra safety: Skip if field name contains DOB patterns
       if (dobFieldPatterns.some(pattern => pattern.test(field))) {
         continue;
@@ -3543,11 +3615,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
         }
       }
     }
+    }
     
     // CRITICAL: If no valid execution date found, leave it BLANK (do not use DOB or current date)
     // This ensures the date field is never auto-filled with incorrect data
 
-    doc.text('Date', margin, y);
+    doc.text(isClientPDF ? 'Date of signing' : 'Date', margin, y);
     doc.setLineWidth(0.35);
     doc.setDrawColor(0, 0, 0);
     doc.line(margin + 18, y + 1, margin + 90, y + 1);
@@ -3570,36 +3643,40 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}) => {
     doc.setLineWidth(0.2);
     doc.setDrawColor(0, 0, 0);
     doc.rect(margin, y, TESTATOR_BOX_W, TESTATOR_BOX_H);
-    if (testatorSignature && typeof testatorSignature === 'string' && testatorSignature.startsWith('data:image') &&
+    // Client PDF: leave signature box empty (sign in person at appointment). Solicitor PDF: show if available.
+    if (!isClientPDF && testatorSignature && typeof testatorSignature === 'string' && testatorSignature.startsWith('data:image') &&
         testatorSignature.length > 100 && testatorSignature.length < 3000000) {
       drawSignatureInBox(doc, testatorSignature, margin, y, TESTATOR_BOX_W, TESTATOR_BOX_H);
     }
     y += TESTATOR_BOX_H + 6;
 
-    // Attestation sentence
-    doc.setFont('times', 'normal');
-    doc.setFontSize(11.5);
-    doc.text(
-      `We confirm this Will was signed first by ${cleanName} in our presence and then by`,
-      margin,
-      y
-    );
-    y += 6;
-    doc.text(`both of us in the presence of ${cleanName}.`, margin, y);
-    y += 18;
+    // #5 Client PDF: testator signature only. Internal/solicitor PDF: include attestation + witnesses
+    if (!isClientPDF) {
+      // Attestation sentence
+      doc.setFont('times', 'normal');
+      doc.setFontSize(11.5);
+      doc.text(
+        `We confirm this Will was signed first by ${cleanName} in our presence and then by`,
+        margin,
+        y
+      );
+      y += 6;
+      doc.text(`both of us in the presence of ${cleanName}.`, margin, y);
+      y += 18;
 
-    // --- Witness boxes (2 columns) ---
-    const gap = 10;
-    const colW = (contentW - gap) / 2;
-    const boxH = 105; // Fixed height for witness blocks - signature box + name/address/phone/occupation
+      // --- Witness boxes (2 columns) ---
+      const gap = 10;
+      const colW = (contentW - gap) / 2;
+      const boxH = 105;
 
-    const w1x = margin;
-    const w2x = margin + colW + gap;
+      const w1x = margin;
+      const w2x = margin + colW + gap;
 
-    const witness1Details = getWitnessDetails(1);
-    const witness2Details = getWitnessDetails(2);
-    drawWitnessBox(doc, w1x, y, colW, boxH, 'Witness 1', consultantSignature, witness1Details);
-    drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2', clientSignature, witness2Details);
+      const witness1Details = getWitnessDetails(1);
+      const witness2Details = getWitnessDetails(2);
+      drawWitnessBox(doc, w1x, y, colW, boxH, 'Witness 1', consultantSignature, witness1Details);
+      drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2', clientSignature, witness2Details);
+    }
 
     // ===== VALIDATION ERRORS APPENDIX (AT THE END) =====
     // Render validation errors report at the end of the document

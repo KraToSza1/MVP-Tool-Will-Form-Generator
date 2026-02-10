@@ -60,6 +60,8 @@ import { autoFillForm, generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
 import { toast } from 'sonner';
+import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS } from '../constants/clientMode.js';
+import IdentityVerification from './IdentityVerification.jsx';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 
@@ -2724,7 +2726,7 @@ export default function FormRenderer() {
     return sanitized;
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (clientCopy = false) => {
     // CRITICAL FIX: Prevent PDF generation spam - guard against multiple simultaneous calls
     if (isGeneratingPDF) {
       console.warn('[PDF] ⚠️ PDF generation already in progress, ignoring duplicate call');
@@ -2960,11 +2962,13 @@ export default function FormRenderer() {
         });
       }
       
+      // clientCopy: client-safe PDF (no witnesses, not sign-ready) for sending to client. Otherwise: full execution PDF.
+      const isClientPDF = clientCopy || !isSolicitorMode();
       const pdfResult = await generatePDFWithJSPDF(sanitizedValues, {
         testatorSignature,
         consultantSignature,
         clientSignature
-      });
+      }, { isClientPDF });
       
       console.log('[PDF GENERATION] ✅ PDF generation completed:', {
         hasDoc: !!pdfResult.doc,
@@ -3347,12 +3351,12 @@ export default function FormRenderer() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Download PDF button ONLY shows on the FINAL step (last section) AND when form is fully completed */}
+                  {/* Client mode: Client copy only. Solicitor mode: Execution PDF + Client copy */}
                   {currentIndex === formData.formSections.length - 1 && isFormFullyCompleted() ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                    {isSolicitorMode() && (
                     <button
-                      onClick={() => {
-                        handleDownloadPDF();
-                      }}
+                      onClick={() => handleDownloadPDF(false)}
                       disabled={isGeneratingPDF}
                       className={`flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 active:from-indigo-800 active:to-indigo-900 text-white px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-lg transition-all duration-300 font-medium z-10 relative min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto ${
                         isGeneratingPDF 
@@ -3360,7 +3364,7 @@ export default function FormRenderer() {
                           : 'cursor-pointer animate-pulse-subtle'
                       }`}
                       type="button"
-                      aria-label={isGeneratingPDF ? "Generating PDF, please wait" : "Download PDF document"}
+                      aria-label={isGeneratingPDF ? "Generating PDF, please wait" : "Download full PDF (execution copy)"}
                       aria-busy={isGeneratingPDF}
                     >
                       {isGeneratingPDF ? (
@@ -3371,19 +3375,37 @@ export default function FormRenderer() {
                       ) : (
                         <>
                           <Download size={20} className="animate-bounce-subtle" />
-                          <span>Download PDF</span>
+                          <span>Execution PDF (for file)</span>
                         </>
                       )}
                     </button>
+                    )}
+                    <button
+                      onClick={() => handleDownloadPDF(true)}
+                      disabled={isGeneratingPDF}
+                      className="flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl shadow transition-all font-medium min-h-[44px] touch-manipulation text-sm border border-amber-500"
+                      type="button"
+                      aria-label="Download client copy (intake-only, not a final Will)"
+                    >
+                      <Download size={18} />
+                      <span>Download Client copy (Intake-only – not a final Will)</span>
+                    </button>
+                    {!isSolicitorMode() && (
+                    <div className="flex flex-col gap-1 text-sm text-gray-700 bg-amber-50 border border-amber-300 px-4 py-3 rounded-xl max-w-lg">
+                      <p className="font-semibold text-amber-900">Questionnaire complete — this is not your final Will</p>
+                      <p>Solicitor review and identity verification happen next. Your documents will be emailed to you. An appointment will be scheduled for legal signing (wet signature) with witnesses.</p>
+                    </div>
+                    )}
+                    </div>
                   ) : currentIndex === formData.formSections.length - 1 ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
-                      <span className="italic">Complete all required fields to enable download</span>
+                      <span className="italic">{isSolicitorMode() ? 'Complete all required fields to enable download' : 'Complete all required fields'}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
-                      <span className="italic">Complete all steps to enable download</span>
+                      <span className="italic">{isSolicitorMode() ? 'Complete all steps to enable download' : 'Complete all steps'}</span>
                     </div>
                   )}
                 </div>
@@ -3400,6 +3422,10 @@ export default function FormRenderer() {
 
               <div className="space-y-3">
                 {currentSection.fields.map((field, idx) => {
+                  // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
+                  if (!isSolicitorMode() && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+                    return null;
+                  }
                   // Skip fields that shouldn't be shown (conditions not met)
                   if (field.conditions && !evaluateFieldConditions(field)) {
                     // ALWAYS-ON Debug logging for foreignWillNotRevoked
@@ -3482,7 +3508,10 @@ export default function FormRenderer() {
                     </div>
                   );
                 }).filter(Boolean)}
-                {null}
+                {/* #8 Identity verification - client mode, post-completion section on last step */}
+                {!isSolicitorMode() && currentIndex === formData.formSections.length - 1 && (
+                  <IdentityVerification formValues={formValues} setFormValues={setFormValues} />
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row justify-between mt-6 gap-3">
@@ -4955,48 +4984,67 @@ export default function FormRenderer() {
               </button>
             </div>
 
-            {/* Content */}
+            {/* Content - #7 different for client (intake only) vs solicitor (full flow) */}
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
+                {isSolicitorMode() ? (
                 <div className="space-y-3 text-gray-700">
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">
-                      1
-                    </div>
+                    <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Download Your Will PDF</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Click the button below to generate and download your completed Will document.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Download Execution PDF (for file)</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Full execution copy with witnesses for your records.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-blue-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">
-                      2
-                    </div>
+                    <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">2</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Review Your Will</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Carefully review the downloaded PDF to ensure all information is correct.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Download Client copy (intake-only)</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Intake-only PDF for sending to client before appointment.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-purple-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">
-                      3
-                    </div>
+                    <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">3</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Sign Your Will</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Print and sign in the presence of two independent witnesses.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Review with client</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Client reviews before appointment. Client signs in person with witnesses.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-amber-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-amber-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">
-                      4
-                    </div>
+                    <div className="flex-shrink-0 w-9 h-9 bg-amber-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">4</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Store Safely</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Keep your signed Will in a safe location and inform your Executors.</p>
+                      <p className="font-semibold text-gray-900 mb-1">File and store</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Keep signed Will on file and inform Executors.</p>
                     </div>
                   </div>
                 </div>
+                ) : (
+                <div className="space-y-3 text-gray-700">
+                  <p className="font-medium text-amber-900 mb-3">Questionnaire complete — this is intake only. Legal signing happens in person later.</p>
+                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
+                    <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 mb-1">Solicitor review</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Your completed questionnaire will be reviewed by our team.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-blue-100">
+                    <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">2</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 mb-1">Identity verification</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Upload Photo ID and proofs of address if you haven&apos;t already.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-purple-100">
+                    <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">3</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 mb-1">Sign in person</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">An appointment will be scheduled. Sign your Will in person with witnesses present.</p>
+                    </div>
+                  </div>
+                </div>
+                )}
               </div>
 
               <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-xl">
@@ -5012,7 +5060,7 @@ export default function FormRenderer() {
               </div>
             </div>
 
-            {/* Footer - Download PDF is the primary action */}
+            {/* Footer - Client mode: Client copy only. Solicitor mode: Execution + Client copy */}
             <div className="px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
               <button
                 onClick={() => setSubmitted(false)}
@@ -5020,17 +5068,26 @@ export default function FormRenderer() {
               >
                 Close
               </button>
-              <button
-                onClick={() => {
-                  setSubmitted(false);
-                  handleDownloadPDF();
-                }}
-                disabled={isGeneratingPDF}
-                className="flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200 font-semibold order-1 sm:order-2"
-              >
-                <Download size={20} />
-                Download PDF
-              </button>
+              <div className="flex flex-wrap gap-2 order-1 sm:order-2">
+                {isSolicitorMode() && (
+                <button
+                  onClick={() => { setSubmitted(false); handleDownloadPDF(false); }}
+                  disabled={isGeneratingPDF}
+                  className="flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-xl shadow-lg shadow-indigo-500/25 font-semibold"
+                >
+                  <Download size={20} />
+                  Execution PDF (for file)
+                </button>
+                )}
+                <button
+                  onClick={() => { setSubmitted(false); handleDownloadPDF(true); }}
+                  disabled={isGeneratingPDF}
+                  className="flex items-center justify-center gap-2 px-6 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow font-semibold border border-amber-500"
+                >
+                  <Download size={18} />
+                  Download Client copy (Intake-only – not a final Will)
+                </button>
+              </div>
             </div>
           </div>
         </div>
