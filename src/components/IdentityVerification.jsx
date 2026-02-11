@@ -53,7 +53,7 @@ export default function IdentityVerification({ formValues, setFormValues }) {
       <div className="flex items-center gap-3">
         <input
           type="file"
-          accept="image/*"
+          accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.heic"
           capture="environment"
           onChange={(e) => handleFile(id, e)}
           className="sr-only"

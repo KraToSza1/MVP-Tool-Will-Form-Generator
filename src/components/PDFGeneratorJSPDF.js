@@ -1898,6 +1898,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     };
 
     // Helper function for hanging indent clause rendering (supports bold client-entered values)
+    // number: use "1.1", "2.3" etc for sub-paragraphs; null = render unnumbered (single-paragraph section)
     const renderNumberedClause = (doc, {
       number,
       text,
@@ -1910,8 +1911,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       fontSize = 11.5,
       numColW = 12
     }) => {
-      const textX = margin + numColW;
-      const availableWidth = pageWidth - margin - textX;
+      const hasNumber = number != null && number !== '';
+      const textX = hasNumber ? margin + numColW : margin;
+      const availableWidth = pageWidth - margin - (hasNumber ? numColW : 0);
 
       doc.setFont('times', 'normal');
       doc.setFontSize(fontSize);
@@ -1925,9 +1927,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         currentYPos = margin;
       }
 
-      doc.setFont('times', 'bold');
-      doc.setFontSize(fontSize);
-      doc.text(`${number}.`, margin, currentYPos);
+      if (hasNumber) {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(fontSize);
+        doc.text(`${number}.`, margin, currentYPos);
+      }
 
       const finalY = renderTextWithBoldSegments(doc, text, textX, currentYPos, availableWidth, lineHeight, fontSize);
       return finalY + spacingAfter;
@@ -2995,10 +2999,20 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     }
     
     console.log(`[PDF SCHEDULE MAP] Total schedule mappings:`, Array.from(scheduleNumberMap.entries()));
+
+    // Pre-compute paragraph count per section for Mariyam's numbering rules:
+    // Single-paragraph section: no sub-number (1. Header, then body text)
+    // Multi-paragraph section: 1.1, 1.2, 1.3 etc.
+    const sectionParaCount = new Map();
+    willClauses.forEach((clause) => {
+      const label = clause.sectionLabel || '';
+      sectionParaCount.set(label, (sectionParaCount.get(label) || 0) + 1);
+    });
     
     // 1. SECTION HEADERS: Render section header when section changes (numbered, bold, visually distinct)
     let lastSection = null;
     let sectionNumber = 0;
+    const sectionParaIndex = new Map(); // paraIndex per section (1-based)
 
     // Render will clauses with hanging indent (number and text on same line)
     let clauseNumber = 1;
@@ -3007,6 +3021,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       if (clause.sectionLabel && clause.sectionLabel !== lastSection) {
         lastSection = clause.sectionLabel;
         sectionNumber++;
+        sectionParaIndex.set(lastSection, 0); // reset para index for new section
         checkPageBreak(lineHeight * 3);
         doc.setFont('times', 'bold');
         doc.setFontSize(12);
@@ -3147,9 +3162,14 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       }
       
       // Only number substantive clauses (length > 20 characters or contains content)
+      // Mariyam's numbering: sub-number (1.1, 1.2) only if section has >1 paragraph; else no sub-number
       if (processedClauseText.length > 20 || processedClauseText.includes('[MISSING')) {
+        const paraCount = sectionParaCount.get(lastSection || '') || 1;
+        const idx = (sectionParaIndex.get(lastSection || '') || 0) + 1;
+        sectionParaIndex.set(lastSection || '', idx);
+        const displayNumber = paraCount > 1 ? `${sectionNumber}.${idx}` : null;
         yPos = renderNumberedClause(doc, {
-          number: clauseNumber,
+          number: displayNumber,
           text: processedClauseText,
           margin,
           yPos,

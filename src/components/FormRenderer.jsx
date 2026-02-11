@@ -3351,10 +3351,11 @@ export default function FormRenderer() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Client mode: Client copy only. Solicitor mode: Execution PDF + Client copy */}
+                  {/* Client mode: no downloads. Solicitor mode: Execution PDF + Client copy */}
                   {currentIndex === formData.formSections.length - 1 && isFormFullyCompleted() ? (
                     <div className="flex flex-wrap items-center gap-2">
                     {isSolicitorMode() && (
+                    <>
                     <button
                       onClick={() => handleDownloadPDF(false)}
                       disabled={isGeneratingPDF}
@@ -3379,7 +3380,6 @@ export default function FormRenderer() {
                         </>
                       )}
                     </button>
-                    )}
                     <button
                       onClick={() => handleDownloadPDF(true)}
                       disabled={isGeneratingPDF}
@@ -3390,6 +3390,8 @@ export default function FormRenderer() {
                       <Download size={18} />
                       <span>Download Client copy (Intake-only – not a final Will)</span>
                     </button>
+                    </>
+                    )}
                     {!isSolicitorMode() && (
                     <div className="flex flex-col gap-1 text-sm text-gray-700 bg-amber-50 border border-amber-300 px-4 py-3 rounded-xl max-w-lg">
                       <p className="font-semibold text-amber-900">Questionnaire complete — this is not your final Will</p>
@@ -5060,7 +5062,7 @@ export default function FormRenderer() {
               </div>
             </div>
 
-            {/* Footer - Client mode: Client copy only. Solicitor mode: Execution + Client copy */}
+            {/* Footer - Client mode: no downloads. Solicitor mode: Execution + Client copy */}
             <div className="px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
               <button
                 onClick={() => setSubmitted(false)}
@@ -5068,8 +5070,8 @@ export default function FormRenderer() {
               >
                 Close
               </button>
+              {isSolicitorMode() && (
               <div className="flex flex-wrap gap-2 order-1 sm:order-2">
-                {isSolicitorMode() && (
                 <button
                   onClick={() => { setSubmitted(false); handleDownloadPDF(false); }}
                   disabled={isGeneratingPDF}
@@ -5078,7 +5080,6 @@ export default function FormRenderer() {
                   <Download size={20} />
                   Execution PDF (for file)
                 </button>
-                )}
                 <button
                   onClick={() => { setSubmitted(false); handleDownloadPDF(true); }}
                   disabled={isGeneratingPDF}
@@ -5088,6 +5089,7 @@ export default function FormRenderer() {
                   Download Client copy (Intake-only – not a final Will)
                 </button>
               </div>
+              )}
             </div>
           </div>
         </div>
