@@ -38,7 +38,7 @@
 
 const DEBUG_LOGS = false;
 
-import React, { Suspense, useEffect, useState, useRef } from 'react';
+import React, { Suspense, useEffect, useState, useRef, useMemo } from 'react';
 import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react';
 import {
   validateUKPostcode,
@@ -80,6 +80,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   const [inputValues, setInputValues] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [dateInputValue, setDateInputValue] = useState('');
+  const [datePickerOpen, setDatePickerOpen] = useState({});
+  const [datePickerManualValue, setDatePickerManualValue] = useState({});
   const sigPadRef = useRef({});
   const signatureToastShownRef = useRef({});
   const inputRefs = useRef({});
@@ -1296,6 +1298,29 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const isValidDate = dateValue && !isNaN(dateValue.getTime());
     DEBUG_LOGS&&console.log(`[DATE FIELD] Field "${field.id}" (${field.label}) - Current value: "${formValues[field.id] || 'empty'}", Valid date: ${isValidDate}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
+    
+    // Initialize and sync dateInputValue with form value
+    const currentDisplayValue = useMemo(() => {
+      if (!formValues[field.id]) return '';
+      if (formValues[field.id].match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // ISO format - convert to UK format for display
+        return formatUKDate(formValues[field.id]);
+      }
+      // Check if it's a valid UK date format
+      const isoDate = ukDateToISO(formValues[field.id]);
+      if (isoDate) {
+        return formatUKDate(isoDate);
+      }
+      // Raw typed value - keep as is for display while typing
+      return formValues[field.id];
+    }, [formValues[field.id]]);
+    
+    // Sync state with computed value
+    useEffect(() => {
+      if (dateInputValue !== currentDisplayValue) {
+        setDateInputValue(currentDisplayValue);
+      }
+    }, [currentDisplayValue]);
 
     return (
       <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
@@ -1312,130 +1337,164 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             <span>{field.infoText}</span>
           </p>
         )}
+        <p className="text-xs text-gray-500 mb-1.5">Click to open — then type the date (DD/MM/YYYY) or pick from the calendar.</p>
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
             {FieldIcon}
           </div>
-          <Suspense
-            fallback={
-              <div className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-gray-500 bg-gray-50">
-                Loading calendar…
-              </div>
-            }
+          {/* Clickable trigger: shows current value and opens modal */}
+          <button
+            type="button"
+            onClick={() => {
+              setDatePickerManualValue(prev => ({ ...prev, [field.id]: currentDisplayValue }));
+              setDatePickerOpen(prev => ({ ...prev, [field.id]: true }));
+            }}
+            className={`w-full text-left border rounded-xl pl-10 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-pointer ${
+              validationErrors[field.id] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
+            }`}
+            title="Click to type or pick a date"
+            aria-label={`${field.label}, click to open date picker`}
           >
-            <LazyDatePicker
-              selected={isValidDate ? dateValue : null}
-              onChange={(date) => {
-                DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" (${field.label}) - Date selected:`, date);
-                
-                if (date) {
-                  const isoDate = date.toISOString().split('T')[0];
-                  DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" converted to ISO:`, isoDate);
-                  logFormChange(field.id, isoDate);
-                  
-                  // Clear errors if valid
-                  setValidationErrors((prev) => {
-                    const newErrors = { ...prev };
-                    delete newErrors[field.id];
-                    return newErrors;
-                  });
-                  
-                  setDateInputValue(formatUKDate(isoDate));
-                  setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
-                } else {
-                  DEBUG_LOGS&&console.log(`[DATE PICKER] Field "${field.id}" - Date cleared`);
-                  if (field.required) {
-                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please select a date.' }));
-                  }
-                  setDateInputValue('');
-                  setFormValues((prev) => ({ ...prev, [field.id]: '' }));
-                }
-              }}
-              onChangeRaw={(e) => {
-                const rawValue = e.target.value;
-                setDateInputValue(rawValue);
-                if (!rawValue) {
-                  setFormValues((prev) => ({ ...prev, [field.id]: '' }));
-                  if (field.required) {
-                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a date.' }));
-                  } else {
-                    setValidationErrors((prev) => {
-                      const newErrors = { ...prev };
-                      delete newErrors[field.id];
-                      return newErrors;
-                    });
-                  }
-                  return;
-                }
-                setFormValues((prev) => ({ ...prev, [field.id]: rawValue }));
-              }}
-              onBlur={() => {
-                const rawValue = dateInputValue;
-                if (!rawValue) {
-                  if (field.required) {
-                    setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a date.' }));
-                  }
-                  return;
-                }
-                const isoCandidate = rawValue.match(/^\d{4}-\d{2}-\d{2}$/) ? rawValue : ukDateToISO(rawValue);
-                const parsed = isoCandidate ? new Date(isoCandidate) : null;
-                if (!parsed || Number.isNaN(parsed.getTime())) {
-                  setValidationErrors((prev) => ({ ...prev, [field.id]: 'Please enter a valid date (DD/MM/YYYY).' }));
-                  return;
-                }
-                const isoDate = parsed.toISOString().split('T')[0];
-                setDateInputValue(formatUKDate(isoDate));
-                setValidationErrors((prev) => {
-                  const newErrors = { ...prev };
-                  delete newErrors[field.id];
-                  return newErrors;
-                });
-                setFormValues((prev) => ({ ...prev, [field.id]: isoDate }));
-              }}
-              dateFormat="dd/MM/yyyy"
-              placeholderText="DD/MM/YYYY"
-              locale="en-GB"
-              showYearDropdown
-              showMonthDropdown
-              dropdownMode="select"
-              maxDate={new Date()}
-              withPortal
-              portalId="root-portal"
-              popperPlacement="bottom-start"
-              popperModifiers={[
-                {
-                  name: 'offset',
-                  options: {
-                    offset: [0, 8],
-                  },
-                },
-                {
-                  name: 'preventOverflow',
-                  options: {
-                    rootBoundary: 'viewport',
-                    boundary: 'viewport',
-                    padding: 8,
-                  },
-                },
-                {
-                  name: 'flip',
-                  options: {
-                    fallbackPlacements: ['top-start', 'bottom-start'],
-                    boundary: 'viewport',
-                  },
-                },
-              ]}
-              customInput={
-                <input
-                  readOnly={false}
-                  className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md cursor-text ${
-                    validationErrors[field.id] ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300'
-                  }`}
-                />
-              }
-            />
-          </Suspense>
+            <span className={currentDisplayValue ? 'text-gray-800' : 'text-gray-400'}>
+              {currentDisplayValue || 'DD/MM/YYYY'}
+            </span>
+          </button>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10">
+            <Calendar size={18} />
+          </div>
         </div>
+
+        {/* Custom date modal: type manually OR pick from calendar */}
+        {datePickerOpen[field.id] && (
+          <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`date-modal-title-${field.id}`}
+            onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
+          >
+            <div
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 sm:p-5">
+                <h3 id={`date-modal-title-${field.id}`} className="text-lg font-semibold text-gray-800 mb-4">
+                  {field.label}
+                </h3>
+
+                {/* Manual type-in */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type date (DD/MM/YYYY)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={datePickerManualValue[field.id] ?? ''}
+                      onChange={(e) => setDatePickerManualValue(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      placeholder="e.g. 22/03/1975"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const raw = (datePickerManualValue[field.id] ?? '').trim();
+                          if (!raw) return;
+                          const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : ukDateToISO(raw);
+                          if (!iso) {
+                            setValidationErrors(prev => ({ ...prev, [field.id]: 'Use format DD/MM/YYYY (e.g. 22/03/1975).' }));
+                            return;
+                          }
+                          const parsed = new Date(iso);
+                          if (Number.isNaN(parsed.getTime())) {
+                            setValidationErrors(prev => ({ ...prev, [field.id]: 'Invalid date.' }));
+                            return;
+                          }
+                          if (field.id === 'dateOfBirth' && parsed > new Date()) {
+                            setValidationErrors(prev => ({ ...prev, [field.id]: 'Date of birth cannot be in the future.' }));
+                            return;
+                          }
+                          const isoDate = parsed.toISOString().split('T')[0];
+                          setDateInputValue(formatUKDate(isoDate));
+                          setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
+                          setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
+                          setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const raw = (datePickerManualValue[field.id] ?? '').trim();
+                        if (!raw) {
+                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Enter a date first.' }));
+                          return;
+                        }
+                        const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : ukDateToISO(raw);
+                        if (!iso) {
+                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Use format DD/MM/YYYY (e.g. 22/03/1975).' }));
+                          return;
+                        }
+                        const parsed = new Date(iso);
+                        if (Number.isNaN(parsed.getTime())) {
+                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Invalid date.' }));
+                          return;
+                        }
+                        if (field.id === 'dateOfBirth' && parsed > new Date()) {
+                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Date of birth cannot be in the future.' }));
+                          return;
+                        }
+                        const isoDate = parsed.toISOString().split('T')[0];
+                        setDateInputValue(formatUKDate(isoDate));
+                        setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
+                        setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
+                        setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
+                      }}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      Use this date
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Enter date then press Enter or click &quot;Use this date&quot;</p>
+                </div>
+
+                {/* Or pick from calendar */}
+                <p className="text-sm font-medium text-gray-700 mb-2">Or pick from calendar</p>
+                <Suspense fallback={<div className="h-[280px] flex items-center justify-center text-gray-500">Loading calendar…</div>}>
+                  <LazyDatePicker
+                    selected={isValidDate ? dateValue : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const isoDate = date.toISOString().split('T')[0];
+                        logFormChange(field.id, isoDate);
+                        setDateInputValue(formatUKDate(isoDate));
+                        setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
+                        setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
+                        setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
+                      }
+                    }}
+                    inline
+                    dateFormat="dd/MM/yyyy"
+                    locale="en-GB"
+                    showYearDropdown
+                    showMonthDropdown
+                    dropdownMode="select"
+                    maxDate={new Date()}
+                  />
+                </Suspense>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {validationErrors[field.id] && (
           <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
             <AlertCircle size={14} aria-hidden="true" />

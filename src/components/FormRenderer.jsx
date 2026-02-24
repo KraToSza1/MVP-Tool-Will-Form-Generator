@@ -56,16 +56,47 @@ import formData from '../data/Complete-WillSuite-Form-Data.json';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
 import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
-import { autoFillForm, generateDummyFormData } from '../utils/autoFillForm.js';
+import { generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
 import { toast } from 'sonner';
-import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS } from '../constants/clientMode.js';
+import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS, TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 
+// Generate or retrieve unique reference number for cross-device access
+const getOrCreateReferenceNumber = () => {
+  // Check URL parameter first (for shared links)
+  const urlParams = new URLSearchParams(window.location.search);
+  const refFromUrl = urlParams.get('ref');
+  if (refFromUrl && /^[A-Z0-9]{8,12}$/.test(refFromUrl)) {
+    localStorage.setItem('willFormRef', refFromUrl);
+    return refFromUrl;
+  }
+  
+  // Check localStorage
+  const savedRef = localStorage.getItem('willFormRef');
+  if (savedRef && /^[A-Z0-9]{8,12}$/.test(savedRef)) {
+    return savedRef;
+  }
+  
+  // Generate new reference number (8-12 alphanumeric characters)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars (0, O, I, 1)
+  const length = 10;
+  const newRef = Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  localStorage.setItem('willFormRef', newRef);
+  
+  // Update URL without reloading page
+  const newUrl = new URL(window.location);
+  newUrl.searchParams.set('ref', newRef);
+  window.history.replaceState({}, '', newUrl);
+  
+  return newRef;
+};
+
 export default function FormRenderer() {
+  const [referenceNumber] = useState(() => getOrCreateReferenceNumber());
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = localStorage.getItem('willFormStep');
     const idx = saved != null ? Number(saved) : 0;
@@ -134,7 +165,26 @@ export default function FormRenderer() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
-  const currentSection = formData.formSections[currentIndex];
+  
+  // Filter sections: hide Testamentary Capacity section from clients (solicitor-only)
+  const visibleSections = useMemo(() => {
+    if (isSolicitorMode()) {
+      return formData.formSections;
+    }
+    // Client mode: exclude Testamentary Capacity section (index 18)
+    return formData.formSections.filter((_, idx) => idx !== TESTAMENTARY_CAPACITY_SECTION_INDEX);
+  }, []);
+  
+  // Map currentIndex to actual section index (accounting for filtered sections)
+  const actualSectionIndex = useMemo(() => {
+    if (isSolicitorMode()) {
+      return currentIndex;
+    }
+    // In client mode, if currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX, add 1 to skip it
+    return currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX ? currentIndex + 1 : currentIndex;
+  }, [currentIndex]);
+  
+  const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
   
   const isDev = import.meta.env.DEV;
 
@@ -242,7 +292,7 @@ export default function FormRenderer() {
 
   // Prefetch the PDF generator chunk when users reach the final step.
   useEffect(() => {
-    if (currentIndex === formData.formSections.length - 1) {
+    if (currentIndex === visibleSections.length - 1) {
       import('./PDFGeneratorJSPDF.js').catch(() => {});
     }
   }, [currentIndex]);
@@ -1321,7 +1371,7 @@ export default function FormRenderer() {
     }
     
     if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] All fields valid - proceeding to next step');
-    if (currentIndex < formData.formSections.length - 1) {
+    if (currentIndex < visibleSections.length - 1) {
       const nextIndex = currentIndex + 1;
       if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Moving from step', currentIndex + 1, 'to step', nextIndex + 1);
       setCurrentIndex(nextIndex);
@@ -1918,18 +1968,36 @@ export default function FormRenderer() {
     };
   }, [formData, interpolateText, getClauseDisplayText]);
 
-  // Auto-fill form with dummy data
+  // Auto-fill form with dummy data - respects client mode (filters solicitor-only fields)
   const handleAutoFill = useCallback(() => {
     console.log('[FORM AUTO-FILL] ========== AUTO-FILL BUTTON CLICKED ==========');
+    const isClient = !isSolicitorMode();
     console.log('[FORM AUTO-FILL] 📋 Form data available:', {
       hasFormData: !!formData,
-      sectionsCount: formData?.formSections?.length || 0,
+      totalSections: formData?.formSections?.length || 0,
+      visibleSections: visibleSections.length,
+      isClientMode: isClient,
       currentFormValuesCount: Object.keys(formValues).length
     });
     
     try {
       console.log('[FORM AUTO-FILL] 🔄 Calling generateDummyFormData...');
+      // Generate dummy data using ALL sections (needed for proper field mapping)
       const dummyData = generateDummyFormData(formData);
+      
+      // Filter out solicitor-only fields if in client mode
+      if (isClient) {
+        console.log('[FORM AUTO-FILL] 🔒 Client mode detected - filtering solicitor-only fields...');
+        let removedCount = 0;
+        SOLICITOR_ONLY_FIELD_IDS.forEach(fieldId => {
+          if (dummyData[fieldId] !== undefined) {
+            delete dummyData[fieldId];
+            removedCount++;
+            console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
+          }
+        });
+        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields`);
+      }
       
       console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
         totalFields: Object.keys(dummyData).length,
@@ -1982,14 +2050,15 @@ export default function FormRenderer() {
         });
       }, 100);
       
+      const modeText = isClient ? 'client' : 'solicitor';
       toast.success('Form auto-filled ✓', {
-        description: `Filled ${Object.keys(dummyData).length} fields from start to finish. Ready for PDF preview.`,
+        description: `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 4000
       });
       
       if (import.meta.env.DEV) {
         console.log('[FORM AUTO-FILL] 🔍 Building clause debug export...');
-        const previewMaxIndex = formData.formSections.length - 1;
+        const previewMaxIndex = visibleSections.length - 1;
         const exportPayload = buildClauseDebugExport(dummyData, previewMaxIndex);
         window.lastClauseDebugExport = exportPayload;
         console.group('[CLAUSE DEBUG][AUTO-FILL]');
@@ -2009,7 +2078,7 @@ export default function FormRenderer() {
       });
       toast.error('Auto-fill failed', { description: error.message });
     }
-  }, [formData, buildClauseDebugExport, formValues]);
+  }, [buildClauseDebugExport, formValues, visibleSections]);
 
   // Expose auto-fill function to window for console access
   useEffect(() => {
@@ -3228,7 +3297,7 @@ export default function FormRenderer() {
       )}
 
       {/* Sidebar */}
-      <Sidebar currentIndex={currentIndex} setCurrentIndex={setCurrentIndex} />
+      <Sidebar currentIndex={currentIndex} setCurrentIndex={setCurrentIndex} visibleSections={visibleSections} />
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex justify-center py-4 px-3 sm:py-6 sm:px-6 lg:px-8 animate-fadeIn">
@@ -3280,6 +3349,48 @@ export default function FormRenderer() {
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 leading-tight">
                   {formData.formTitle || 'Legacy Last Will & Testament Questionnaire'}
                 </h1>
+                {/* Reference Number Display */}
+                <div className="flex items-center gap-2 text-xs sm:text-sm">
+                  <span className="text-gray-600">Ref:</span>
+                  <code className="px-2 py-1 bg-gray-100 rounded font-mono font-semibold text-indigo-700">
+                    {referenceNumber}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const shareUrl = new URL(window.location.href);
+                      shareUrl.searchParams.set('ref', referenceNumber);
+                      const urlToShare = shareUrl.toString();
+                      
+                      if (navigator.share) {
+                        navigator.share({
+                          title: 'Will Form - Continue Editing',
+                          text: 'Use this link to continue editing your Will form from any device.',
+                          url: urlToShare,
+                        }).catch(() => {
+                          // Fallback to copy if share fails
+                          navigator.clipboard.writeText(urlToShare);
+                          toast.success('Link copied', { description: 'Share link copied to clipboard. Anyone with this link can access and edit your Will form.' });
+                        });
+                      } else {
+                        navigator.clipboard.writeText(urlToShare);
+                        toast.success('Link copied', { description: 'Share link copied to clipboard. Anyone with this link can access and edit your Will form.' });
+                      }
+                    }}
+                    className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors font-medium"
+                    title="Share link to continue editing from any device"
+                  >
+                    Share
+                  </button>
+                </div>
+              </div>
+              
+              {/* Share Link Warning */}
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-800">
+                  <strong>Important:</strong> Your reference number allows you to access and edit your Will form from any device. 
+                  If you share the link, anyone with it can view and edit your form. Keep it secure and only share with trusted parties.
+                </p>
               </div>
 
               <div className="mb-3">
@@ -3293,14 +3404,14 @@ export default function FormRenderer() {
                       {formCompletionPercent}% Complete
                     </span>
                     <span className="text-sm font-semibold text-indigo-600">
-                      Step {currentIndex + 1} of {formData.formSections.length}
+                      Step {currentIndex + 1} of {visibleSections.length}
                     </span>
                   </div>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner mb-2">
                   <div
                     className="bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 h-3 rounded-full transition-all duration-500 ease-out shadow-lg relative overflow-hidden"
-                    style={{ width: `${((currentIndex + 1) / formData.formSections.length) * 100}%` }}
+                    style={{ width: `${((currentIndex + 1) / visibleSections.length) * 100}%` }}
                   >
                     <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
                   </div>
@@ -3352,7 +3463,7 @@ export default function FormRenderer() {
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Client mode: no downloads. Solicitor mode: Execution PDF + Client copy */}
-                  {currentIndex === formData.formSections.length - 1 && isFormFullyCompleted() ? (
+                  {currentIndex === visibleSections.length - 1 && isFormFullyCompleted() ? (
                     <div className="flex flex-wrap items-center gap-2">
                     {isSolicitorMode() && (
                     <>
@@ -3399,7 +3510,7 @@ export default function FormRenderer() {
                     </div>
                     )}
                     </div>
-                  ) : currentIndex === formData.formSections.length - 1 ? (
+                  ) : currentIndex === visibleSections.length - 1 ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
                       <span className="italic">{isSolicitorMode() ? 'Complete all required fields to enable download' : 'Complete all required fields'}</span>
@@ -3511,7 +3622,7 @@ export default function FormRenderer() {
                   );
                 }).filter(Boolean)}
                 {/* #8 Identity verification - client mode, post-completion section on last step */}
-                {!isSolicitorMode() && currentIndex === formData.formSections.length - 1 && (
+                {!isSolicitorMode() && currentIndex === visibleSections.length - 1 && (
                   <IdentityVerification formValues={formValues} setFormValues={setFormValues} />
                 )}
               </div>
@@ -3558,7 +3669,7 @@ export default function FormRenderer() {
                   type="button"
                   title={!allRequiredFilled ? 'Click to see what needs to be completed' : ''}
                 >
-                  <span>{currentIndex === formData.formSections.length - 1 ? 'Submit' : 'Next'}</span>
+                  <span>{currentIndex === visibleSections.length - 1 ? 'Submit' : 'Next'}</span>
                   <ChevronRight size={18} className="sm:w-5 sm:h-5" />
                 </button>
               </div>

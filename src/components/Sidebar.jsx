@@ -11,13 +11,12 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import formData from '../data/Complete-WillSuite-Form-Data.json';
 import { CheckCircle2, Circle, Menu, X } from 'lucide-react';
 
 
-export default function Sidebar({ currentIndex, setCurrentIndex }) {
+export default function Sidebar({ currentIndex, setCurrentIndex, visibleSections }) {
   const [isOpen, setIsOpen] = useState(false);
-  const sections = useMemo(() => formData?.formSections || [], []);
+  const sections = useMemo(() => visibleSections || [], [visibleSections]);
   const currentLabel = useMemo(
     () => sections?.[currentIndex]?.formSection || 'Sections',
     [sections, currentIndex]
