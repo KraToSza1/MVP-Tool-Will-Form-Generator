@@ -65,7 +65,7 @@ import IdentityVerification from './IdentityVerification.jsx';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 
-// Generate or retrieve unique reference number for cross-device access
+// Generate or retrieve unique reference number for sharing (data is local-only until backend persistence)
 const getOrCreateReferenceNumber = () => {
   // Check URL parameter first (for shared links)
   const urlParams = new URLSearchParams(window.location.search);
@@ -3364,21 +3364,21 @@ export default function FormRenderer() {
                       
                       if (navigator.share) {
                         navigator.share({
-                          title: 'Will Form - Continue Editing',
-                          text: 'Use this link to continue editing your Will form from any device.',
+                          title: 'Will Form - Share Link',
+                          text: 'Use this link to share your Will form. Your reference number is included. Note: form data is stored on this device only.',
                           url: urlToShare,
                         }).catch(() => {
                           // Fallback to copy if share fails
                           navigator.clipboard.writeText(urlToShare);
-                          toast.success('Link copied', { description: 'Share link copied to clipboard. Anyone with this link can access and edit your Will form.' });
+                          toast.success('Link copied', { description: 'Share link copied. The link includes your reference number. Form data is stored on this device only—opening on another device will not yet restore your form.' });
                         });
                       } else {
                         navigator.clipboard.writeText(urlToShare);
-                        toast.success('Link copied', { description: 'Share link copied to clipboard. Anyone with this link can access and edit your Will form.' });
+                        toast.success('Link copied', { description: 'Share link copied. The link includes your reference number. Form data is stored on this device only—opening on another device will not yet restore your form.' });
                       }
                     }}
                     className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors font-medium"
-                    title="Share link to continue editing from any device"
+                    title="Share link (includes reference number)"
                   >
                     Share
                   </button>
@@ -3388,8 +3388,7 @@ export default function FormRenderer() {
               {/* Share Link Warning */}
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-xs text-amber-800">
-                  <strong>Important:</strong> Your reference number allows you to access and edit your Will form from any device. 
-                  If you share the link, anyone with it can view and edit your form. Keep it secure and only share with trusted parties.
+                  <strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not yet restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure and only share with trusted parties.
                 </p>
               </div>
 
