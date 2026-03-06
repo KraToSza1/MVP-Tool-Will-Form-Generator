@@ -98,6 +98,28 @@ html.dark-theme aside nav h2 {
   color: #94a3b8 !important;
 }
 
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 p,
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 div {
+  color: #e2e8f0;
+}
+
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+html.dark-theme .lg\:hidden.sticky.top-0.z-40 .text-indigo-600 {
+  color: #c4b5fd !important;
+}
+
 html.dark-theme aside button {
   color: #e2e8f0 !important;
   background: transparent;

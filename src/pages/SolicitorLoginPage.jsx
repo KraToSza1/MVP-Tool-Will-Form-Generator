@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LockKeyhole, Mail } from 'lucide-react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, LockKeyhole, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
@@ -9,7 +9,7 @@ export default function SolicitorLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, isStaff, loading, signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('Raymondvdw@gmail.com');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -43,6 +43,15 @@ export default function SolicitorLoginPage() {
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl p-8 relative">
         <div className="absolute right-4 top-4">
           <ThemeToggleButton compact />
+        </div>
+        <div className="mb-6">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg px-1"
+          >
+            <ArrowLeft size={16} />
+            Back to Will Tool
+          </Link>
         </div>
         <div className="text-center mb-8">
           <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-950 text-white flex items-center justify-center mb-4">
