@@ -62,41 +62,61 @@ import { buildClauses } from '../utils/buildClauses.js';
 import { toast } from 'sonner';
 import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS, TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
+import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 
-// Generate or retrieve unique reference number for sharing (data is local-only until backend persistence)
-const getOrCreateReferenceNumber = () => {
-  // Check URL parameter first (for shared links)
+const REF_REGEX = /^[A-Z0-9]{8,12}$/;
+
+// Build payload for cloud save: same filter as autosave (no signatures, no raw data URLs), plus _step
+function buildPayloadForCloud(formValues, currentIndex) {
+  const dataToSave = { _step: currentIndex };
+  const skipCorruption = (v) => v != null && typeof v === 'string' && (v.includes('e+22') || /[eE][+-]?2\d+/.test(v));
+  for (const [key, value] of Object.entries(formValues || {})) {
+    if (key === '_step') continue;
+    if (key.toLowerCase().includes('signature')) continue;
+    if (typeof value === 'string' && value.startsWith('data:image')) continue;
+    if (skipCorruption(value)) continue;
+    dataToSave[key] = value;
+  }
+  return dataToSave;
+}
+
+// Local-only ref when Supabase not configured (existing behavior)
+function getOrCreateReferenceNumberLocal() {
   const urlParams = new URLSearchParams(window.location.search);
   const refFromUrl = urlParams.get('ref');
-  if (refFromUrl && /^[A-Z0-9]{8,12}$/.test(refFromUrl)) {
+  if (refFromUrl && REF_REGEX.test(refFromUrl)) {
     localStorage.setItem('willFormRef', refFromUrl);
     return refFromUrl;
   }
-  
-  // Check localStorage
   const savedRef = localStorage.getItem('willFormRef');
-  if (savedRef && /^[A-Z0-9]{8,12}$/.test(savedRef)) {
-    return savedRef;
-  }
-  
-  // Generate new reference number (8-12 alphanumeric characters)
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars (0, O, I, 1)
-  const length = 10;
-  const newRef = Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  if (savedRef && REF_REGEX.test(savedRef)) return savedRef;
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const newRef = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   localStorage.setItem('willFormRef', newRef);
-  
-  // Update URL without reloading page
   const newUrl = new URL(window.location);
   newUrl.searchParams.set('ref', newRef);
   window.history.replaceState({}, '', newUrl);
-  
   return newRef;
-};
+}
 
 export default function FormRenderer() {
-  const [referenceNumber] = useState(() => getOrCreateReferenceNumber());
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const refFromUrl = urlParams?.get('ref') ?? '';
+  const secretFromUrl = urlParams?.get('s') ?? '';
+  const hasCloudRefAndSecret = REF_REGEX.test(refFromUrl) && secretFromUrl.length >= 8;
+  const useCloud = typeof window !== 'undefined' && isSupabaseConfigured();
+
+  const [referenceNumber, setReferenceNumber] = useState(() => {
+    if (!useCloud) return getOrCreateReferenceNumberLocal();
+    if (hasCloudRefAndSecret) return refFromUrl;
+    return '';
+  });
+  const [sessionSecret, setSessionSecret] = useState(() => (useCloud && hasCloudRefAndSecret ? secretFromUrl : ''));
+  const [sessionInitialized, setSessionInitialized] = useState(!useCloud);
+  const sessionLoadAttemptedRef = useRef(false);
+
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = localStorage.getItem('willFormStep');
     const idx = saved != null ? Number(saved) : 0;
@@ -131,13 +151,74 @@ export default function FormRenderer() {
       delete window.showSignatureSuccess;
     };
   }, []);
+
+  // Phase 2: Supabase load or create session (once on mount when cloud configured)
+  useEffect(() => {
+    if (!useCloud || sessionLoadAttemptedRef.current) return;
+    sessionLoadAttemptedRef.current = true;
+
+    if (hasCloudRefAndSecret) {
+      loadSession(refFromUrl, secretFromUrl).then((result) => {
+        if (result.error) {
+          toast.error('Could not load session', { description: result.error });
+          setSessionInitialized(true);
+          return;
+        }
+        const payload = result.payload ?? {};
+        const step = typeof payload._step === 'number' ? Math.max(0, payload._step) : 0;
+        const { _step: _, ...rest } = payload;
+        setFormValues(rest);
+        setCurrentIndex(step);
+        setReferenceNumber(refFromUrl);
+        setSessionSecret(secretFromUrl);
+        setSessionInitialized(true);
+      });
+      return;
+    }
+
+    const initialFromStorage = (() => {
+      const saved = localStorage.getItem('willForm');
+      if (!saved) return {};
+      try {
+        const parsed = JSON.parse(saved);
+        if (JSON.stringify(parsed).includes('e+22') || /[eE][+-]?2\d+/.test(JSON.stringify(parsed))) return {};
+        return parsed;
+      } catch {
+        return {};
+      }
+    })();
+    const step = (() => {
+      const s = localStorage.getItem('willFormStep');
+      const idx = s != null ? Number(s) : 0;
+      return Number.isFinite(idx) && idx >= 0 ? idx : 0;
+    })();
+    const initialPayload = buildPayloadForCloud(initialFromStorage, step);
+
+    createSession(initialPayload).then((result) => {
+      if (result.error) {
+        toast.error('Could not create session', { description: result.error });
+        setReferenceNumber(getOrCreateReferenceNumberLocal());
+        setSessionInitialized(true);
+        return;
+      }
+      const { ref, secret } = result;
+      setReferenceNumber(ref);
+      setSessionSecret(secret);
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('ref', ref);
+      newUrl.searchParams.set('s', secret);
+      window.history.replaceState({}, '', newUrl);
+      setSessionInitialized(true);
+    });
+  }, [useCloud, hasCloudRefAndSecret, refFromUrl, secretFromUrl]);
+
   const [formValues, setFormValues] = useState(() => {
+    if (useCloud && hasCloudRefAndSecret) return {};
     const saved = localStorage.getItem('willForm');
     if (!saved) return {};
     try {
       const parsed = JSON.parse(saved);
-      // Quick check for corrupted data on load
-      const hasCorruption = JSON.stringify(parsed).includes('-1.8e+22') || 
+      const hasCorruption = JSON.stringify(parsed).includes('-1.8e+22') ||
                            JSON.stringify(parsed).includes('1.8e+22') ||
                            JSON.stringify(parsed).match(/-?\d+\.?\d*[eE][+-]?2\d+/);
       if (hasCorruption) {
@@ -1891,7 +1972,15 @@ export default function FormRenderer() {
       
       localStorage.setItem('willForm', testStr);
       DEBUG_LOGS&&console.log(`[SAVE DRAFT] Successfully saved draft with ${Object.keys(dataToSave).length} fields`);
-      toast.success('Draft saved', { description: 'Your progress has been saved to this device.' });
+      if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
+        const cloudPayload = buildPayloadForCloud(formValues, currentIndex);
+        saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
+          if (res.error) toast.error('Cloud save failed', { description: res.error });
+          else toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
+        });
+      } else {
+        toast.success('Draft saved', { description: 'Your progress has been saved to this device.' });
+      }
     } catch (error) {
       console.error('[SAVE DRAFT] Error saving draft:', error);
       if (error.name === 'QuotaExceededError') {
@@ -2545,6 +2634,12 @@ export default function FormRenderer() {
           setLastSaved(new Date());
           setIsSaving(false);
           DEBUG_LOGS&&console.log(`[AUTOSAVE] Successfully saved ${Object.keys(dataToSave).length} fields to localStorage`);
+          if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
+            const cloudPayload = buildPayloadForCloud(formValues, currentIndex);
+            saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
+              if (res.error) console.warn('[AUTOSAVE] Cloud save failed:', res.error);
+            });
+          }
         } else {
           DEBUG_LOGS&&console.warn(`[AUTOSAVE] Data too large to save: ${testStr.length} bytes`);
           setIsSaving(false);
@@ -2553,12 +2648,12 @@ export default function FormRenderer() {
         console.error('[AUTOSAVE] Error during autosave:', error);
         setIsSaving(false);
       }
-    }, 600);
+    }, 1000);
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [formValues]);
+  }, [formValues, useCloud, sessionInitialized, referenceNumber, sessionSecret, currentIndex]);
 
 
   // Calculate clause preview - moved outside JSX to fix React Hooks error
@@ -3360,27 +3455,29 @@ export default function FormRenderer() {
                     onClick={() => {
                       const shareUrl = new URL(window.location.href);
                       shareUrl.searchParams.set('ref', referenceNumber);
+                      if (sessionSecret) shareUrl.searchParams.set('s', sessionSecret);
                       const urlToShare = shareUrl.toString();
                       
                       if (navigator.share) {
                         navigator.share({
                           title: 'Will Form - Share Link',
-                          text: 'Use this link to share your Will form. Your reference number is included. Note: form data is stored on this device only.',
+                          text: useCloud && sessionSecret
+                            ? 'Use this link to open your Will form on another device. Your progress is saved to the cloud.'
+                            : 'Use this link to share your Will form. Your reference number is included. Form data is stored on this device only.',
                           url: urlToShare,
                         }).catch(() => {
-                          // Fallback to copy if share fails
                           navigator.clipboard.writeText(urlToShare);
-                          toast.success('Link copied', { description: 'Share link copied. The link includes your reference number. Form data is stored on this device only—opening on another device will not yet restore your form.' });
+                          toast.success('Link copied', { description: useCloud && sessionSecret ? 'Share link copied. Open it on another device to continue. Anyone with the link can view or edit—keep it secure.' : 'Share link copied. The link includes your reference number. Form data is stored on this device only.' });
                         });
                       } else {
                         navigator.clipboard.writeText(urlToShare);
-                        toast.success('Link copied', { description: 'Share link copied. The link includes your reference number. Form data is stored on this device only—opening on another device will not yet restore your form.' });
+                        toast.success('Link copied', { description: useCloud && sessionSecret ? 'Share link copied. Open it on another device to continue. Anyone with the link can view or edit—keep it secure.' : 'Share link copied. The link includes your reference number. Form data is stored on this device only.' });
                       }
                     }}
                     className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors font-medium"
-                    title="Share link (includes reference number)"
+                    title={sessionSecret ? 'Copy link (opens your saved form on another device)' : 'Share link (includes reference number)'}
                   >
-                    Share
+                    {sessionSecret ? 'Copy link' : 'Share'}
                   </button>
                 </div>
               </div>
@@ -3388,7 +3485,11 @@ export default function FormRenderer() {
               {/* Share Link Warning */}
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-xs text-amber-800">
-                  <strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not yet restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure and only share with trusted parties.
+                  {useCloud && sessionSecret ? (
+                    <><strong>Cross-device:</strong> Your link saves and loads your form from the cloud. Anyone with the link can view or edit—share only with trusted parties and keep it secure.</>
+                  ) : (
+                    <><strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure.</>
+                  )}
                 </p>
               </div>
 
