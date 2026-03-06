@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import formSchema from '../data/Complete-WillSuite-Form-Data.json';
 import { buildClauses } from '../utils/buildClauses.js';
+import { CLIENT_VISIBLE_MAX_SECTION_INDEX } from '../constants/clientMode.js';
 
 // Helper to convert image to base64 and get dimensions for jsPDF
 const loadImageAsBase64 = async (imagePath) => {
@@ -1957,7 +1958,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     const willClauses = buildClauses({
       formValues,
       formData: formSchema,
-      interpolateText
+      interpolateText,
+      maxSectionIndex: isClientPDF ? CLIENT_VISIBLE_MAX_SECTION_INDEX : null,
     }).map((clause) => ({
       id: clause.id,
       sectionLabel: clause.section,

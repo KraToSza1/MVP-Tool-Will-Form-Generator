@@ -6,6 +6,7 @@
 
 // Section index for "Testamentary Capacity" (0-based) - everything after this is solicitor-only
 export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 18;
+export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_INDEX - 1;
 
 // Field IDs within Testamentary Capacity that are solicitor-only (hidden in client mode)
 export const SOLICITOR_ONLY_FIELD_IDS = new Set([
@@ -20,6 +21,8 @@ export const SOLICITOR_ONLY_FIELD_IDS = new Set([
 
 export const isSolicitorMode = () => {
   if (typeof window === 'undefined') return false;
+  if ((window.location.pathname || '').startsWith('/solicitor')) return true;
+  if (!import.meta.env.DEV) return false;
   const params = new URLSearchParams(window.location.search);
   const val = params.get('solicitor');
   if (val === '1' || val === 'true' || val === 'yes') return true;

@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* Global layout + dark mode support */
 html, body, #root {
   height: 100%;
@@ -13,6 +9,280 @@ html, body, #root {
 /* Apply background colors */
 body {
   @apply bg-gray-50;
+}
+
+html.dark-theme,
+body.dark-theme {
+  background: #0b1120;
+  color: #e5e7eb;
+  color-scheme: dark;
+}
+
+html.dark-theme body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+html.dark-theme .bg-white,
+html.dark-theme .bg-gray-50,
+html.dark-theme .bg-gray-50\/50,
+html.dark-theme .bg-slate-50,
+html.dark-theme .bg-slate-100 {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+}
+
+html.dark-theme .bg-gray-100,
+html.dark-theme .bg-slate-200 {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+html.dark-theme .bg-gray-200 {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+}
+
+html.dark-theme .bg-indigo-50,
+html.dark-theme .bg-blue-50,
+html.dark-theme .bg-amber-50,
+html.dark-theme .bg-emerald-50 {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+}
+
+html.dark-theme .bg-indigo-100,
+html.dark-theme .bg-blue-100,
+html.dark-theme .bg-amber-100,
+html.dark-theme .bg-emerald-100 {
+  background-color: rgba(49, 46, 129, 0.28) !important;
+}
+
+html.dark-theme .text-gray-500,
+html.dark-theme .text-gray-600,
+html.dark-theme .text-slate-500,
+html.dark-theme .text-slate-600,
+html.dark-theme .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark-theme .text-gray-400 {
+  color: #f8fafc !important;
+}
+
+html.dark-theme .text-gray-700,
+html.dark-theme .text-gray-800,
+html.dark-theme .text-gray-900,
+html.dark-theme .text-slate-700,
+html.dark-theme .text-slate-800,
+html.dark-theme .text-slate-900 {
+  color: #e2e8f0 !important;
+}
+
+html.dark-theme .text-indigo-600,
+html.dark-theme .text-indigo-700,
+html.dark-theme .text-indigo-800,
+html.dark-theme .text-indigo-900,
+html.dark-theme .text-violet-600,
+html.dark-theme .text-violet-700,
+html.dark-theme .text-violet-800,
+html.dark-theme .text-violet-900,
+html.dark-theme .text-purple-600,
+html.dark-theme .text-purple-700,
+html.dark-theme .text-purple-800,
+html.dark-theme .text-purple-900 {
+  color: #c4b5fd !important;
+}
+
+html.dark-theme button[aria-current="page"].text-indigo-800,
+html.dark-theme button[aria-current="page"].text-indigo-900 {
+  color: #eef2ff !important;
+}
+
+html.dark-theme aside nav h2 {
+  color: #94a3b8 !important;
+}
+
+html.dark-theme aside button {
+  color: #e2e8f0 !important;
+  background: transparent;
+  border-color: transparent !important;
+}
+
+html.dark-theme aside button span {
+  color: inherit !important;
+}
+
+html.dark-theme aside button:hover {
+  background: rgba(30, 41, 59, 0.8) !important;
+  color: #f8fafc !important;
+}
+
+html.dark-theme aside button:hover span {
+  color: #f8fafc !important;
+}
+
+html.dark-theme aside button svg {
+  color: #cbd5e1 !important;
+}
+
+html.dark-theme aside button .text-green-500 {
+  color: #86efac !important;
+}
+
+html.dark-theme aside button .text-indigo-600 {
+  color: #ddd6fe !important;
+  fill: currentColor;
+}
+
+html.dark-theme aside button[aria-current="page"] {
+  background: linear-gradient(90deg, rgba(55, 48, 163, 0.92), rgba(67, 56, 202, 0.78)) !important;
+  color: #f8fafc !important;
+  border-color: rgba(165, 180, 252, 0.7) !important;
+  box-shadow: 0 10px 30px rgba(30, 27, 75, 0.45) !important;
+}
+
+html.dark-theme aside button[aria-current="page"] span,
+html.dark-theme aside button[aria-current="page"] .text-indigo-800,
+html.dark-theme aside button[aria-current="page"] .text-indigo-900 {
+  color: #f8fafc !important;
+}
+
+html.dark-theme aside button[aria-current="page"] svg {
+  color: #e9d5ff !important;
+  fill: currentColor;
+}
+
+html.dark-theme .text-blue-700,
+html.dark-theme .text-blue-800,
+html.dark-theme .text-blue-900 {
+  color: #93c5fd !important;
+}
+
+html.dark-theme .text-amber-700,
+html.dark-theme .text-amber-800,
+html.dark-theme .text-amber-900 {
+  color: #fcd34d !important;
+}
+
+html.dark-theme .text-emerald-700,
+html.dark-theme .text-emerald-800,
+html.dark-theme .text-emerald-900 {
+  color: #86efac !important;
+}
+
+html.dark-theme .border-gray-100,
+html.dark-theme .border-gray-200,
+html.dark-theme .border-gray-300,
+html.dark-theme .border-slate-200,
+html.dark-theme .border-slate-300,
+html.dark-theme .border-indigo-100,
+html.dark-theme .border-blue-100,
+html.dark-theme .border-amber-100,
+html.dark-theme .border-emerald-100,
+html.dark-theme .divide-slate-100,
+html.dark-theme .divide-slate-200,
+html.dark-theme .divide-gray-200 {
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+
+html.dark-theme .shadow-md,
+html.dark-theme .shadow-sm,
+html.dark-theme .shadow-xl,
+html.dark-theme .shadow-2xl,
+html.dark-theme .shadow-lg {
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.45) !important;
+}
+
+html.dark-theme input,
+html.dark-theme textarea,
+html.dark-theme select {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+
+html.dark-theme input::placeholder,
+html.dark-theme textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.dark-theme table thead,
+html.dark-theme .bg-slate-50 {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+}
+
+html.dark-theme tr:hover {
+  background-color: rgba(30, 41, 59, 0.65) !important;
+}
+
+html.dark-theme .hover\:bg-indigo-50:hover {
+  background-color: rgba(49, 46, 129, 0.45) !important;
+}
+
+html.dark-theme .hover\:bg-gray-50:hover {
+  background-color: rgba(51, 65, 85, 0.78) !important;
+}
+
+html.dark-theme .hover\:bg-gray-300:hover {
+  background-color: rgba(71, 85, 105, 0.95) !important;
+}
+
+html.dark-theme .active\:bg-gray-400:active {
+  background-color: rgba(100, 116, 139, 0.95) !important;
+}
+
+html.dark-theme .hover\:border-indigo-200:hover {
+  border-color: rgba(129, 140, 248, 0.55) !important;
+}
+
+html.dark-theme label,
+html.dark-theme .cursor-pointer {
+  color: #e2e8f0;
+}
+
+html.dark-theme .group label:hover,
+html.dark-theme label.cursor-pointer:hover {
+  color: #f8fafc !important;
+}
+
+html.dark-theme .group .absolute.text-gray-400,
+html.dark-theme .relative .absolute.text-gray-400 {
+  color: #f8fafc !important;
+}
+
+html.dark-theme button.bg-gray-200,
+html.dark-theme button.bg-gray-200 span,
+html.dark-theme button.bg-gray-200 svg {
+  color: #f8fafc !important;
+}
+
+html.dark-theme .custom-scrollbar::-webkit-scrollbar-track {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+
+html.dark-theme .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #7c3aed !important;
+}
+
+html.dark-theme .react-datepicker {
+  background-color: #0f172a !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+
+html.dark-theme .react-datepicker__header {
+  background-color: #1e1b4b !important;
+  border-bottom-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+html.dark-theme .react-datepicker__current-month,
+html.dark-theme .react-datepicker-time__header,
+html.dark-theme .react-datepicker-year-header,
+html.dark-theme .react-datepicker__day-name,
+html.dark-theme .react-datepicker__day,
+html.dark-theme .react-datepicker__time-name {
+  color: #e2e8f0 !important;
+}
+
+html.dark-theme .react-datepicker__day:hover,
+html.dark-theme .react-datepicker__day--keyboard-selected {
+  background-color: rgba(79, 70, 229, 0.55) !important;
 }
 
 /* Custom Animations */

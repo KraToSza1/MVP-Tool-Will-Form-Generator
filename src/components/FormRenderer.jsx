@@ -63,24 +63,12 @@ import { toast } from 'sonner';
 import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS, TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
+import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
+import { submitMatterFromDraft } from '../lib/matters.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 
 const REF_REGEX = /^[A-Z0-9]{8,12}$/;
-
-// Build payload for cloud save: same filter as autosave (no signatures, no raw data URLs), plus _step
-function buildPayloadForCloud(formValues, currentIndex) {
-  const dataToSave = { _step: currentIndex };
-  const skipCorruption = (v) => v != null && typeof v === 'string' && (v.includes('e+22') || /[eE][+-]?2\d+/.test(v));
-  for (const [key, value] of Object.entries(formValues || {})) {
-    if (key === '_step') continue;
-    if (key.toLowerCase().includes('signature')) continue;
-    if (typeof value === 'string' && value.startsWith('data:image')) continue;
-    if (skipCorruption(value)) continue;
-    dataToSave[key] = value;
-  }
-  return dataToSave;
-}
 
 // Local-only ref when Supabase not configured (existing behavior)
 function getOrCreateReferenceNumberLocal() {
@@ -101,23 +89,32 @@ function getOrCreateReferenceNumberLocal() {
   return newRef;
 }
 
-export default function FormRenderer() {
+export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const refFromUrl = urlParams?.get('ref') ?? '';
   const secretFromUrl = urlParams?.get('s') ?? '';
   const hasCloudRefAndSecret = REF_REGEX.test(refFromUrl) && secretFromUrl.length >= 8;
-  const useCloud = typeof window !== 'undefined' && isSupabaseConfigured();
+  const useExternalPersistence = !!externalPersistence;
+  const solicitorMode = isSolicitorMode();
+  const useCloud = !useExternalPersistence && typeof window !== 'undefined' && isSupabaseConfigured();
 
   const [referenceNumber, setReferenceNumber] = useState(() => {
+    if (initialFormState?.referenceNumber) return initialFormState.referenceNumber;
     if (!useCloud) return getOrCreateReferenceNumberLocal();
     if (hasCloudRefAndSecret) return refFromUrl;
     return '';
   });
-  const [sessionSecret, setSessionSecret] = useState(() => (useCloud && hasCloudRefAndSecret ? secretFromUrl : ''));
+  const [sessionSecret, setSessionSecret] = useState(() => {
+    if (useExternalPersistence) return '';
+    return useCloud && hasCloudRefAndSecret ? secretFromUrl : '';
+  });
   const [sessionInitialized, setSessionInitialized] = useState(!useCloud);
   const sessionLoadAttemptedRef = useRef(false);
 
   const [currentIndex, setCurrentIndex] = useState(() => {
+    if (typeof initialFormState?.currentIndex === 'number') {
+      return Math.max(0, initialFormState.currentIndex);
+    }
     const saved = localStorage.getItem('willFormStep');
     const idx = saved != null ? Number(saved) : 0;
     return Number.isFinite(idx) && idx >= 0 ? idx : 0;
@@ -154,7 +151,7 @@ export default function FormRenderer() {
 
   // Phase 2: Supabase load or create session (once on mount when cloud configured)
   useEffect(() => {
-    if (!useCloud || sessionLoadAttemptedRef.current) return;
+    if (!useCloud || sessionLoadAttemptedRef.current || useExternalPersistence) return;
     sessionLoadAttemptedRef.current = true;
 
     if (hasCloudRefAndSecret) {
@@ -192,7 +189,7 @@ export default function FormRenderer() {
       const idx = s != null ? Number(s) : 0;
       return Number.isFinite(idx) && idx >= 0 ? idx : 0;
     })();
-    const initialPayload = buildPayloadForCloud(initialFromStorage, step);
+    const initialPayload = buildCloudPayload(initialFromStorage, step);
 
     createSession(initialPayload).then((result) => {
       if (result.error) {
@@ -210,9 +207,10 @@ export default function FormRenderer() {
       window.history.replaceState({}, '', newUrl);
       setSessionInitialized(true);
     });
-  }, [useCloud, hasCloudRefAndSecret, refFromUrl, secretFromUrl]);
+  }, [useCloud, hasCloudRefAndSecret, refFromUrl, secretFromUrl, useExternalPersistence]);
 
   const [formValues, setFormValues] = useState(() => {
+    if (initialFormState?.formValues) return initialFormState.formValues;
     if (useCloud && hasCloudRefAndSecret) return {};
     const saved = localStorage.getItem('willForm');
     if (!saved) return {};
@@ -244,36 +242,57 @@ export default function FormRenderer() {
   const [lastSaved, setLastSaved] = useState(null);
   const [formCompletionPercent, setFormCompletionPercent] = useState(0);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isSubmittingMatter, setIsSubmittingMatter] = useState(false);
+  const [submittedMatterId, setSubmittedMatterId] = useState(null);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   
   // Filter sections: hide Testamentary Capacity section from clients (solicitor-only)
   const visibleSections = useMemo(() => {
-    if (isSolicitorMode()) {
+    if (solicitorMode) {
       return formData.formSections;
     }
     // Client mode: exclude Testamentary Capacity section (index 18)
     return formData.formSections.filter((_, idx) => idx !== TESTAMENTARY_CAPACITY_SECTION_INDEX);
-  }, []);
+  }, [solicitorMode]);
   
   // Map currentIndex to actual section index (accounting for filtered sections)
   const actualSectionIndex = useMemo(() => {
-    if (isSolicitorMode()) {
+    if (solicitorMode) {
       return currentIndex;
     }
     // In client mode, if currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX, add 1 to skip it
     return currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX ? currentIndex + 1 : currentIndex;
-  }, [currentIndex]);
+  }, [currentIndex, solicitorMode]);
   
   const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
   
   const isDev = import.meta.env.DEV;
 
+  const submitCurrentMatter = useCallback(async () => {
+    if (externalPersistence?.submit) {
+      return externalPersistence.submit({ formValues, currentIndex, referenceNumber, sessionSecret });
+    }
+
+    if (!referenceNumber || !sessionSecret) {
+      return { ok: true };
+    }
+
+    return submitMatterFromDraft({
+      ref: referenceNumber,
+      secret: sessionSecret,
+      formValues,
+      currentIndex,
+    });
+  }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret]);
+
 
 
   useEffect(() => {
-    localStorage.setItem('willFormStep', String(currentIndex));
-  }, [currentIndex]);
+    if (!useExternalPersistence) {
+      localStorage.setItem('willFormStep', String(currentIndex));
+    }
+  }, [currentIndex, useExternalPersistence]);
 
   // Handle scroll to show/hide back to top button
   useEffect(() => {
@@ -1469,10 +1488,25 @@ export default function FormRenderer() {
         }
       }, 300);
     } else {
-      if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - showing completion modal');
-      // Don't clear localStorage here - let user download PDF first
-      // Only clear after they close the completion modal or download
-      setSubmitted(true);
+      const finishSubmission = async () => {
+        if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
+        setIsSubmittingMatter(true);
+        const result = await submitCurrentMatter();
+        setIsSubmittingMatter(false);
+
+        if (result?.error) {
+          toast.error('Could not complete submission', { description: result.error });
+          return;
+        }
+
+        if (result?.matterId) {
+          setSubmittedMatterId(result.matterId);
+        }
+
+        setSubmitted(true);
+      };
+
+      void finishSubmission();
     }
   };
 
@@ -1935,33 +1969,8 @@ export default function FormRenderer() {
     DEBUG_LOGS&&console.log('[SAVE DRAFT] Current form values count:', Object.keys(formValues).length);
     
     try {
-      // Remove signature data URLs before saving (they're too large and cause issues)
-      const dataToSave = {};
-      let skippedCount = 0;
-      
-      for (const [key, value] of Object.entries(formValues)) {
-        // Skip signature fields (they'll be re-added if needed)
-        if (key.toLowerCase().includes('signature')) {
-          skippedCount++;
-          DEBUG_LOGS&&console.log(`[SAVE DRAFT] Skipping signature field: "${key}"`);
-          continue;
-        }
-        // Skip data URLs
-        if (typeof value === 'string' && value.startsWith('data:image')) {
-          skippedCount++;
-          DEBUG_LOGS&&console.log(`[SAVE DRAFT] Skipping data URL field: "${key}"`);
-          continue;
-        }
-        // Skip corrupted data
-        if (isInvalidNumber(value)) {
-          skippedCount++;
-          DEBUG_LOGS&&console.log(`[SAVE DRAFT] Skipping corrupted data field: "${key}"`);
-          continue;
-        }
-        dataToSave[key] = value;
-      }
-      
-      DEBUG_LOGS&&console.log(`[SAVE DRAFT] Prepared ${Object.keys(dataToSave).length} fields for saving (skipped ${skippedCount})`);
+      const dataToSave = buildLocalDraftPayload(formValues);
+      DEBUG_LOGS&&console.log(`[SAVE DRAFT] Prepared ${Object.keys(dataToSave).length} fields for saving`);
       
       // Check localStorage quota
       const testStr = JSON.stringify(dataToSave);
@@ -1970,10 +1979,15 @@ export default function FormRenderer() {
         return;
       }
       
-      localStorage.setItem('willForm', testStr);
+      if (!useExternalPersistence) {
+        localStorage.setItem('willForm', testStr);
+      }
       DEBUG_LOGS&&console.log(`[SAVE DRAFT] Successfully saved draft with ${Object.keys(dataToSave).length} fields`);
-      if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
-        const cloudPayload = buildPayloadForCloud(formValues, currentIndex);
+
+      if (externalPersistence?.save) {
+        externalPersistence.save({ formValues, currentIndex, saveType: 'manual' });
+      } else if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
+        const cloudPayload = buildCloudPayload(formValues, currentIndex);
         saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
           if (res.error) toast.error('Cloud save failed', { description: res.error });
           else toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
@@ -1995,8 +2009,10 @@ export default function FormRenderer() {
   const resetForm = () => setClearConfirmOpen(true);
 
   const confirmReset = () => {
-    localStorage.removeItem('willForm');
-    localStorage.removeItem('willFormStep');
+    if (!useExternalPersistence) {
+      localStorage.removeItem('willForm');
+      localStorage.removeItem('willFormStep');
+    }
     setFormValues({});
     setCurrentIndex(0);
     setBanner(null);
@@ -2060,7 +2076,7 @@ export default function FormRenderer() {
   // Auto-fill form with dummy data - respects client mode (filters solicitor-only fields)
   const handleAutoFill = useCallback(() => {
     console.log('[FORM AUTO-FILL] ========== AUTO-FILL BUTTON CLICKED ==========');
-    const isClient = !isSolicitorMode();
+      const isClient = !solicitorMode;
     console.log('[FORM AUTO-FILL] 📋 Form data available:', {
       hasFormData: !!formData,
       totalSections: formData?.formSections?.length || 0,
@@ -2608,34 +2624,23 @@ export default function FormRenderer() {
     autosaveTimerRef.current = setTimeout(() => {
       DEBUG_LOGS&&console.log('[AUTOSAVE] Executing autosave...');
       try {
-        const dataToSave = {};
-        let filteredCount = 0;
-        for (const [key, value] of Object.entries(formValues || {})) {
-          if (key.toLowerCase().includes('signature')) {
-            filteredCount++;
-            continue;
-          }
-          if (typeof value === 'string' && value.startsWith('data:image')) {
-            filteredCount++;
-            continue;
-          }
-          if (isInvalidNumber(value)) {
-            filteredCount++;
-            continue;
-          }
-          dataToSave[key] = value;
-        }
-
-        DEBUG_LOGS&&console.log(`[AUTOSAVE] Prepared ${Object.keys(dataToSave).length} fields for saving (filtered out ${filteredCount})`);
+        const dataToSave = buildLocalDraftPayload(formValues);
+        DEBUG_LOGS&&console.log(`[AUTOSAVE] Prepared ${Object.keys(dataToSave).length} fields for saving`);
         
         const testStr = JSON.stringify(dataToSave);
         if (testStr.length <= 5 * 1024 * 1024) {
-          localStorage.setItem('willForm', testStr);
+          if (!useExternalPersistence) {
+            localStorage.setItem('willForm', testStr);
+          }
           setLastSaved(new Date());
           setIsSaving(false);
           DEBUG_LOGS&&console.log(`[AUTOSAVE] Successfully saved ${Object.keys(dataToSave).length} fields to localStorage`);
-          if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
-            const cloudPayload = buildPayloadForCloud(formValues, currentIndex);
+          if (externalPersistence?.save) {
+            externalPersistence.save({ formValues, currentIndex, saveType: 'auto' }).then((res) => {
+              if (res?.error) console.warn('[AUTOSAVE] External save failed:', res.error);
+            });
+          } else if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
+            const cloudPayload = buildCloudPayload(formValues, currentIndex);
             saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
               if (res.error) console.warn('[AUTOSAVE] Cloud save failed:', res.error);
             });
@@ -2653,7 +2658,7 @@ export default function FormRenderer() {
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [formValues, useCloud, sessionInitialized, referenceNumber, sessionSecret, currentIndex]);
+  }, [formValues, useCloud, sessionInitialized, referenceNumber, sessionSecret, currentIndex, externalPersistence, useExternalPersistence]);
 
 
   // Calculate clause preview - moved outside JSX to fix React Hooks error
@@ -3017,7 +3022,9 @@ export default function FormRenderer() {
         const testSerialization = JSON.stringify(sanitizedValues);
         if (isInvalidNumber(testSerialization) || testSerialization.includes('-1.8e+') || testSerialization.includes('1.8e+22')) {
           DEBUG_LOGS&&console.warn('[PDF] Corrupted data detected in formValues, clearing localStorage...');
-          localStorage.removeItem('willForm');
+          if (!useExternalPersistence) {
+            localStorage.removeItem('willForm');
+          }
           // Create minimal safe fallback
           sanitizedValues = {
             firstName: sanitizeText(String(formValues.firstName || '')),
@@ -3127,7 +3134,7 @@ export default function FormRenderer() {
       }
       
       // clientCopy: client-safe PDF (no witnesses, not sign-ready) for sending to client. Otherwise: full execution PDF.
-      const isClientPDF = clientCopy || !isSolicitorMode();
+      const isClientPDF = clientCopy || !solicitorMode;
       const pdfResult = await generatePDFWithJSPDF(sanitizedValues, {
         testatorSignature,
         consultantSignature,
@@ -3450,48 +3457,52 @@ export default function FormRenderer() {
                   <code className="px-2 py-1 bg-gray-100 rounded font-mono font-semibold text-indigo-700">
                     {referenceNumber}
                   </code>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const shareUrl = new URL(window.location.href);
-                      shareUrl.searchParams.set('ref', referenceNumber);
-                      if (sessionSecret) shareUrl.searchParams.set('s', sessionSecret);
-                      const urlToShare = shareUrl.toString();
-                      
-                      if (navigator.share) {
-                        navigator.share({
-                          title: 'Will Form - Share Link',
-                          text: useCloud && sessionSecret
-                            ? 'Use this link to open your Will form on another device. Your progress is saved to the cloud.'
-                            : 'Use this link to share your Will form. Your reference number is included. Form data is stored on this device only.',
-                          url: urlToShare,
-                        }).catch(() => {
+                  {!useExternalPersistence && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const shareUrl = new URL(window.location.href);
+                        shareUrl.searchParams.set('ref', referenceNumber);
+                        if (sessionSecret) shareUrl.searchParams.set('s', sessionSecret);
+                        const urlToShare = shareUrl.toString();
+                        
+                        if (navigator.share) {
+                          navigator.share({
+                            title: 'Will Form - Share Link',
+                            text: useCloud && sessionSecret
+                              ? 'Use this link to open your Will form on another device. Your progress is saved to the cloud.'
+                              : 'Use this link to share your Will form. Your reference number is included. Form data is stored on this device only.',
+                            url: urlToShare,
+                          }).catch(() => {
+                            navigator.clipboard.writeText(urlToShare);
+                            toast.success('Link copied', { description: useCloud && sessionSecret ? 'Share link copied. Open it on another device to continue. Anyone with the link can view or edit—keep it secure.' : 'Share link copied. The link includes your reference number. Form data is stored on this device only.' });
+                          });
+                        } else {
                           navigator.clipboard.writeText(urlToShare);
                           toast.success('Link copied', { description: useCloud && sessionSecret ? 'Share link copied. Open it on another device to continue. Anyone with the link can view or edit—keep it secure.' : 'Share link copied. The link includes your reference number. Form data is stored on this device only.' });
-                        });
-                      } else {
-                        navigator.clipboard.writeText(urlToShare);
-                        toast.success('Link copied', { description: useCloud && sessionSecret ? 'Share link copied. Open it on another device to continue. Anyone with the link can view or edit—keep it secure.' : 'Share link copied. The link includes your reference number. Form data is stored on this device only.' });
-                      }
-                    }}
-                    className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors font-medium"
-                    title={sessionSecret ? 'Copy link (opens your saved form on another device)' : 'Share link (includes reference number)'}
-                  >
-                    {sessionSecret ? 'Copy link' : 'Share'}
-                  </button>
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors font-medium"
+                      title={sessionSecret ? 'Copy link (opens your saved form on another device)' : 'Share link (includes reference number)'}
+                    >
+                      {sessionSecret ? 'Copy link' : 'Share'}
+                    </button>
+                  )}
                 </div>
               </div>
               
               {/* Share Link Warning */}
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-800">
-                  {useCloud && sessionSecret ? (
-                    <><strong>Cross-device:</strong> Your link saves and loads your form from the cloud. Anyone with the link can view or edit—share only with trusted parties and keep it secure.</>
-                  ) : (
-                    <><strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure.</>
-                  )}
-                </p>
-              </div>
+              {!useExternalPersistence && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-800">
+                    {useCloud && sessionSecret ? (
+                      <><strong>Cross-device:</strong> Your link saves and loads your form from the cloud. Anyone with the link can view or edit—share only with trusted parties and keep it secure.</>
+                    ) : (
+                      <><strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure.</>
+                    )}
+                  </p>
+                </div>
+              )}
 
               <div className="mb-3">
                 <div className="flex justify-between items-center mb-1.5">
@@ -3565,7 +3576,7 @@ export default function FormRenderer() {
                   {/* Client mode: no downloads. Solicitor mode: Execution PDF + Client copy */}
                   {currentIndex === visibleSections.length - 1 && isFormFullyCompleted() ? (
                     <div className="flex flex-wrap items-center gap-2">
-                    {isSolicitorMode() && (
+                    {solicitorMode && (
                     <>
                     <button
                       onClick={() => handleDownloadPDF(false)}
@@ -3603,7 +3614,7 @@ export default function FormRenderer() {
                     </button>
                     </>
                     )}
-                    {!isSolicitorMode() && (
+                    {!solicitorMode && (
                     <div className="flex flex-col gap-1 text-sm text-gray-700 bg-amber-50 border border-amber-300 px-4 py-3 rounded-xl max-w-lg">
                       <p className="font-semibold text-amber-900">Questionnaire complete — this is not your final Will</p>
                       <p>Solicitor review and identity verification happen next. Your documents will be emailed to you. An appointment will be scheduled for legal signing (wet signature) with witnesses.</p>
@@ -3613,12 +3624,12 @@ export default function FormRenderer() {
                   ) : currentIndex === visibleSections.length - 1 ? (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
-                      <span className="italic">{isSolicitorMode() ? 'Complete all required fields to enable download' : 'Complete all required fields'}</span>
+                      <span className="italic">{solicitorMode ? 'Complete all required fields to enable download' : 'Complete all required fields'}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-lg">
                       <AlertCircle size={16} />
-                      <span className="italic">{isSolicitorMode() ? 'Complete all steps to enable download' : 'Complete all steps'}</span>
+                      <span className="italic">{solicitorMode ? 'Complete all steps to enable download' : 'Complete all steps'}</span>
                     </div>
                   )}
                 </div>
@@ -3636,7 +3647,7 @@ export default function FormRenderer() {
               <div className="space-y-3">
                 {currentSection.fields.map((field, idx) => {
                   // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
-                  if (!isSolicitorMode() && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+                  if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;
                   }
                   // Skip fields that shouldn't be shown (conditions not met)
@@ -3722,7 +3733,7 @@ export default function FormRenderer() {
                   );
                 }).filter(Boolean)}
                 {/* #8 Identity verification - client mode, post-completion section on last step */}
-                {!isSolicitorMode() && currentIndex === visibleSections.length - 1 && (
+                {!solicitorMode && currentIndex === visibleSections.length - 1 && (
                   <IdentityVerification formValues={formValues} setFormValues={setFormValues} />
                 )}
               </div>
@@ -3761,15 +3772,16 @@ export default function FormRenderer() {
                 </button>
                 <button
                   onClick={handleNextButtonClick}
+                  disabled={isSubmittingMatter}
                   className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-lg transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base ${
-                    allRequiredFilled
+                    allRequiredFilled && !isSubmittingMatter
                       ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 active:from-indigo-800 active:to-indigo-900 text-white'
                       : 'bg-gradient-to-r from-indigo-400 to-indigo-500 text-white opacity-75 cursor-pointer hover:opacity-90 active:opacity-100'
                   }`}
                   type="button"
                   title={!allRequiredFilled ? 'Click to see what needs to be completed' : ''}
                 >
-                  <span>{currentIndex === visibleSections.length - 1 ? 'Submit' : 'Next'}</span>
+                  <span>{currentIndex === visibleSections.length - 1 ? (isSubmittingMatter ? 'Submitting...' : 'Submit') : 'Next'}</span>
                   <ChevronRight size={18} className="sm:w-5 sm:h-5" />
                 </button>
               </div>
@@ -5201,7 +5213,13 @@ export default function FormRenderer() {
             <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
-                {isSolicitorMode() ? (
+                  {!solicitorMode && submittedMatterId ? (
+                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                      <p className="text-sm font-medium text-emerald-900">Matter submitted successfully.</p>
+                      <p className="text-sm text-emerald-800 mt-1">Your questionnaire is now stored for solicitor review under secure reference <strong>{referenceNumber}</strong>.</p>
+                    </div>
+                  ) : null}
+                {solicitorMode ? (
                 <div className="space-y-3 text-gray-700">
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
                     <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
@@ -5281,7 +5299,7 @@ export default function FormRenderer() {
               >
                 Close
               </button>
-              {isSolicitorMode() && (
+              {solicitorMode && (
               <div className="flex flex-wrap gap-2 order-1 sm:order-2">
                 <button
                   onClick={() => { setSubmitted(false); handleDownloadPDF(false); }}
