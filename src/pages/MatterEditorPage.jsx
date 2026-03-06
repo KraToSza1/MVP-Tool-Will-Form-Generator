@@ -91,9 +91,9 @@ export default function MatterEditorPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
-          <h1 className="text-xl font-bold text-slate-900">Solicitor mode editor</h1>
+          <h1 className="text-xl font-bold text-slate-900">Edit questionnaire</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Client-submitted data is merged with solicitor updates. Autosave writes back to the matter record, not the public draft table.
+            You can change any client answers, complete Testamentary Capacity, and add or correct information. Use the steps on the left to move between sections. Save often; your changes are stored on the matter.
           </p>
         </div>
 

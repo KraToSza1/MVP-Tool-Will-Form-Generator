@@ -1189,7 +1189,7 @@ const interpolateText = (text, values) => {
       const selectedPurposes = values[sectionId] || [];
       if (Array.isArray(selectedPurposes) && selectedPurposes.length > 0) {
         // Get the field definition to access willClauseTextFragment
-        const purposeField = formSchema.formSections
+        const purposeField = schema.formSections
           .flatMap(s => s.fields)
           .find(f => f.id === 'organPurposeGroup');
         if (purposeField && purposeField.options) {
@@ -1550,7 +1550,8 @@ const interpolateText = (text, values) => {
 
 export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
   try {
-    const { isClientPDF = false } = options;
+    const { isClientPDF = false, formSchema: customSchema } = options;
+    const schema = customSchema && customSchema.formSections ? customSchema : formSchema;
 
     const {
       testatorSignature = null,
@@ -1957,7 +1958,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     const scheduleReferences = new Set(); // Track schedule references throughout function
     const willClauses = buildClauses({
       formValues,
-      formData: formSchema,
+      formData: schema,
       interpolateText,
       maxSectionIndex: isClientPDF ? CLIENT_VISIBLE_MAX_SECTION_INDEX : null,
     }).map((clause) => ({
@@ -1981,7 +1982,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     
     // Legacy clause builder disabled (shared builder used above)
     if (false) {
-      formSchema.formSections.forEach((section) => {
+      schema.formSections.forEach((section) => {
         if (!section || !section.fields) return;
 
         const processFields = (fields) => {

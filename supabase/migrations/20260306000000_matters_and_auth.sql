@@ -155,6 +155,7 @@ CREATE POLICY "Staff can insert matter activity" ON public.matter_activity
   FOR INSERT TO authenticated
   WITH CHECK (public.is_staff());
 
+-- search_path includes extensions so pgcrypto crypt() is found when enabled in extensions schema
 CREATE OR REPLACE FUNCTION public.submit_will_matter(
   p_ref text,
   p_secret text,
@@ -165,7 +166,7 @@ CREATE OR REPLACE FUNCTION public.submit_will_matter(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_matter_id uuid;

@@ -25,7 +25,12 @@ export default function SolicitorLoginPage() {
     setSubmitting(false);
 
     if (result?.error) {
-      toast.error('Sign-in failed', { description: result.error });
+      const isNotConfigured = result.error === 'Supabase not configured';
+      toast.error('Sign-in failed', {
+        description: isNotConfigured
+          ? 'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env in the project root, then restart the dev server (npm run dev).'
+          : result.error,
+      });
       return;
     }
 

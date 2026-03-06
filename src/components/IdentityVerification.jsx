@@ -33,7 +33,7 @@ const MAX_CAPTURE_WIDTH = 1920;
 
 function UploadSlot({ id, label, hasValue, error, onTakePhoto, onUpload }) {
   return (
-    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
+    <div className="upload-slot border border-gray-200 rounded-xl p-4 bg-gray-50/50">
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -235,7 +235,7 @@ export default function IdentityVerification({ formValues, setFormValues }) {
 
   return (
     <>
-      <div className="mt-8 border-t-2 border-amber-300 pt-8 bg-amber-50/50 -mx-4 px-4 py-4 rounded-xl">
+      <div className="id-verification-block mt-8 border-t-2 border-amber-300 pt-8 bg-amber-50/50 -mx-4 px-4 py-4 rounded-xl">
         <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Verification stage — before solicitor meeting</p>
         <h3 className="text-lg font-semibold text-gray-800 mb-1">Identity verification</h3>
         <p className="text-sm text-gray-600 mb-4">

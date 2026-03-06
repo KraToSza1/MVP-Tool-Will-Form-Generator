@@ -34,15 +34,17 @@ CREATE TRIGGER will_sessions_updated_at
 ALTER TABLE public.will_sessions ENABLE ROW LEVEL SECURITY;
 
 -- No direct table access for anon (RPCs use SECURITY DEFINER to read/write)
+DROP POLICY IF EXISTS "No direct anon access" ON public.will_sessions;
 CREATE POLICY "No direct anon access" ON public.will_sessions
   FOR ALL TO anon USING (false) WITH CHECK (false);
 
 -- RPC: create session (ref, plain secret, payload). Stores secret_hash.
+-- search_path includes extensions so pgcrypto's gen_salt/crypt are found when extension is in extensions schema
 CREATE OR REPLACE FUNCTION public.create_will_session(p_ref text, p_secret text, p_payload jsonb DEFAULT '{}')
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   INSERT INTO public.will_sessions (ref, secret_hash, payload)
@@ -59,7 +61,7 @@ CREATE OR REPLACE FUNCTION public.get_will_session(p_ref text, p_secret text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_payload jsonb;
@@ -76,7 +78,7 @@ CREATE OR REPLACE FUNCTION public.update_will_session(p_ref text, p_secret text,
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   UPDATE public.will_sessions

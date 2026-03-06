@@ -25,15 +25,21 @@
  * - message: Full error message
  */
 
-import formData from '../data/Complete-WillSuite-Form-Data.json';
+import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
+
+function getFormData(formDataParam) {
+  return formDataParam && Array.isArray(formDataParam.formSections) ? formDataParam : defaultFormData;
+}
 
 /**
  * Normalize a validation issue to ensure it has all required fields for navigation
  * @param {Object} issue - Raw validation issue
  * @param {Object} formValues - Current form values
+ * @param {Object} [formData] - Optional form definition (uses default if not provided)
  * @returns {Object} Normalized validation issue with navigation fields
  */
-export const normalizeValidationIssue = (issue, formValues = {}) => {
+export const normalizeValidationIssue = (issue, formValues = {}, formDataParam) => {
+  const formData = getFormData(formDataParam);
   // If already normalized, return as-is
   if (issue.targetSectionIndex !== undefined && issue.sectionId) {
     return issue;
@@ -89,8 +95,10 @@ export const collectAllMissingItems = (
   pdfMissingItems = [],
   scheduleIssues = [],
   preValidationIssues = [],
-  formValues = {}
+  formValues = {},
+  formDataParam
 ) => {
+  const formData = getFormData(formDataParam);
   const allIssues = [
     ...preValidationIssues,
     ...scheduleIssues,
@@ -139,15 +147,17 @@ export const collectAllMissingItems = (
   ];
 
   // Normalize all issues
-  return allIssues.map(issue => normalizeValidationIssue(issue, formValues));
+  return allIssues.map(issue => normalizeValidationIssue(issue, formValues, formData));
 };
 
 /**
  * Validate Property Trust Schedule content
  * @param {Object} formValues - Current form values
+ * @param {Object} [formDataParam] - Optional form definition (uses default if not provided)
  * @returns {Array} Validation issues for Property Trust schedules
  */
-export const validatePropertyTrustSchedules = (formValues) => {
+export const validatePropertyTrustSchedules = (formValues, formDataParam) => {
+  const formData = getFormData(formDataParam);
   const issues = [];
 
   console.log('[VALIDATE PROPERTY TRUST] Checking validation...');
@@ -218,9 +228,11 @@ export const validatePropertyTrustSchedules = (formValues) => {
 /**
  * Validate Business Property Relief Trust Schedule content
  * @param {Object} formValues - Current form values
+ * @param {Object} [formDataParam] - Optional form definition (uses default if not provided)
  * @returns {Array} Validation issues for BPR Trust schedules
  */
-export const validateBPRTrustSchedules = (formValues) => {
+export const validateBPRTrustSchedules = (formValues, formDataParam) => {
+  const formData = getFormData(formDataParam);
   const issues = [];
 
   console.log('[VALIDATE BPR TRUST] Checking validation...');

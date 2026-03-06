@@ -196,11 +196,123 @@ html.dark-theme .border-slate-300,
 html.dark-theme .border-indigo-100,
 html.dark-theme .border-blue-100,
 html.dark-theme .border-amber-100,
+html.dark-theme .border-amber-300,
 html.dark-theme .border-emerald-100,
 html.dark-theme .divide-slate-100,
 html.dark-theme .divide-slate-200,
 html.dark-theme .divide-gray-200 {
   border-color: rgba(99, 102, 241, 0.28) !important;
+}
+
+/* Questionnaire editor: stick to dark theme (no yellow/amber on dark) */
+html.dark-theme .questionnaire-editor-section {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .questionnaire-editor-section .questionnaire-section-title,
+html.dark-theme .questionnaire-editor-section .questionnaire-section-icon {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-edit-section-btn {
+  color: #c4b5fd !important;
+}
+html.dark-theme .questionnaire-edit-section-btn:hover {
+  background-color: rgba(49, 46, 129, 0.4) !important;
+  color: #eef2ff !important;
+}
+html.dark-theme .questionnaire-editor-section-content {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .questionnaire-field-item {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+html.dark-theme .questionnaire-field-text,
+html.dark-theme .questionnaire-field-text .font-mono {
+  color: #94a3b8 !important;
+}
+
+/* Identity verification block: readable in dark theme */
+html.dark-theme .id-verification-block,
+html.dark-theme .bg-amber-50\/50 {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+html.dark-theme .id-verification-block .text-amber-800 {
+  color: #fcd34d !important;
+}
+html.dark-theme .upload-slot {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .upload-slot .text-gray-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .upload-slot .text-green-600 {
+  color: #86efac !important;
+}
+html.dark-theme .upload-slot .text-red-600 {
+  color: #fca5a5 !important;
+}
+
+/* Client ID documents card (Matter detail): stick to dark theme */
+html.dark-theme .client-id-docs-card {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+html.dark-theme .client-id-docs-card .client-id-docs-card-title {
+  color: #c4b5fd !important;
+}
+
+/* Completion modal (Congratulations): readable in dark theme */
+html.dark-theme .completion-modal {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .completion-modal-body {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+}
+html.dark-theme .completion-modal-body .text-gray-900,
+html.dark-theme .completion-modal-body .text-gray-700,
+html.dark-theme .completion-modal-body .text-gray-600 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .completion-modal-body .text-amber-900 {
+  color: #fcd34d !important;
+}
+html.dark-theme .completion-modal-body .bg-white {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .completion-modal-body .bg-emerald-50 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+html.dark-theme .completion-modal-body .text-emerald-900,
+html.dark-theme .completion-modal-body .text-emerald-800 {
+  color: #a7f3d0 !important;
+}
+html.dark-theme .completion-modal-info {
+  background-color: rgba(30, 58, 138, 0.35) !important;
+  border-color: rgba(96, 165, 250, 0.45) !important;
+}
+html.dark-theme .completion-modal-info .text-blue-900,
+html.dark-theme .completion-modal-info .text-blue-800 {
+  color: #e0f2fe !important;
+}
+html.dark-theme .completion-modal-info .text-blue-600 {
+  color: #93c5fd !important;
+}
+html.dark-theme .completion-modal-footer {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .completion-modal-footer .text-gray-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .completion-modal-footer .text-gray-500:hover {
+  color: #e2e8f0 !important;
 }
 
 html.dark-theme .shadow-md,

@@ -3,11 +3,13 @@ import { Buffer } from "buffer";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { LockKeyhole } from "lucide-react";
 import logo from "./assets/aristone-logo.svg";
+import { FormDefinitionProvider } from "./context/FormDefinitionContext.jsx";
 import PublicIntakePage from "./pages/PublicIntakePage.jsx";
 import SolicitorLoginPage from "./pages/SolicitorLoginPage.jsx";
 import SolicitorDashboardPage from "./pages/SolicitorDashboardPage.jsx";
 import MatterDetailPage from "./pages/MatterDetailPage.jsx";
 import MatterEditorPage from "./pages/MatterEditorPage.jsx";
+import QuestionnaireEditorPage from "./pages/QuestionnaireEditorPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
@@ -65,17 +67,20 @@ export default function App() {
   }, []);
 
   return (
-    <Routes>
-      <Route path="/" element={<PublicShell />} />
-      <Route path="/solicitor/login" element={<SolicitorLoginPage />} />
-      <Route element={<ProtectedRoute />}>
-        <Route path="/solicitor" element={<SolicitorLayout />}>
-          <Route index element={<SolicitorDashboardPage />} />
+    <FormDefinitionProvider>
+      <Routes>
+        <Route path="/" element={<PublicShell />} />
+        <Route path="/solicitor/login" element={<SolicitorLoginPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/solicitor" element={<SolicitorLayout />}>
+            <Route index element={<SolicitorDashboardPage />} />
           <Route path="matters/:matterId" element={<MatterDetailPage />} />
           <Route path="matters/:matterId/form" element={<MatterEditorPage />} />
+          <Route path="questionnaire" element={<QuestionnaireEditorPage />} />
+          </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </FormDefinitionProvider>
   );
 }

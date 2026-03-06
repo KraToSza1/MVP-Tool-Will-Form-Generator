@@ -52,7 +52,7 @@
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import formData from '../data/Complete-WillSuite-Form-Data.json';
+import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
 import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
@@ -90,6 +90,7 @@ function getOrCreateReferenceNumberLocal() {
 }
 
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
+  const { formData } = useFormDefinition();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const refFromUrl = urlParams?.get('ref') ?? '';
   const secretFromUrl = urlParams?.get('s') ?? '';
@@ -1489,18 +1490,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }, 300);
     } else {
       const finishSubmission = async () => {
+        console.log('[Will Tool] submit: last step reached, calling submitCurrentMatter');
         if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
         setIsSubmittingMatter(true);
         const result = await submitCurrentMatter();
         setIsSubmittingMatter(false);
 
         if (result?.error) {
+          console.error('[Will Tool] submit: failed', result.error);
           toast.error('Could not complete submission', { description: result.error });
           return;
         }
 
         if (result?.matterId) {
+          console.log('[Will Tool] submit: success, matterId=', result.matterId);
           setSubmittedMatterId(result.matterId);
+        } else {
+          console.log('[Will Tool] submit: completed (no matterId)', result);
         }
 
         setSubmitted(true);
@@ -2923,8 +2929,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toastId = toast.loading('Generating PDF…', { description: 'This can take a few seconds on mobile.' });
 
       const preValidationIssues = [
-        ...validatePropertyTrustSchedules(formValues),
-        ...validateBPRTrustSchedules(formValues)
+        ...validatePropertyTrustSchedules(formValues, formData),
+        ...validateBPRTrustSchedules(formValues, formData)
       ];
 
       if (preValidationIssues.length > 0) {
@@ -3139,7 +3145,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         testatorSignature,
         consultantSignature,
         clientSignature
-      }, { isClientPDF });
+      }, { isClientPDF, formSchema: formData });
       
       console.log('[PDF GENERATION] ✅ PDF generation completed:', {
         hasDoc: !!pdfResult.doc,
@@ -5186,7 +5192,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           aria-labelledby="completion-modal-title"
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn ring-1 ring-black/5"
+            className="completion-modal bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn ring-1 ring-black/5"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -5210,7 +5216,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             </div>
 
             {/* Content - #7 different for client (intake only) vs solicitor (full flow) */}
-            <div className="p-6 overflow-y-auto flex-1 bg-gray-50/50">
+            <div className="completion-modal-body p-6 overflow-y-auto flex-1 bg-gray-50/50">
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
                   {!solicitorMode && submittedMatterId ? (
@@ -5278,7 +5284,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 )}
               </div>
 
-              <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-xl">
+              <div className="completion-modal-info bg-blue-50/80 border border-blue-200 p-4 rounded-xl">
                 <div className="flex items-start gap-3">
                   <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
@@ -5292,7 +5298,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             </div>
 
             {/* Footer - Client mode: no downloads. Solicitor mode: Execution + Client copy */}
-            <div className="px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+            <div className="completion-modal-footer px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
               <button
                 onClick={() => setSubmitted(false)}
                 className="text-sm text-gray-500 hover:text-gray-700 transition-colors order-2 sm:order-1"

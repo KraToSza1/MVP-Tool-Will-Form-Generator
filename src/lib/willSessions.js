@@ -37,12 +37,14 @@ export async function createSession(payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[willSessions] createSession error:', error);
+    console.error('[Will Tool] create_session: error', error.message, error);
     return { error: error.message };
   }
   if (data !== true) {
+    console.warn('[Will Tool] create_session: unexpected response', data);
     return { error: data?.message ?? 'Create failed' };
   }
+  console.log('[Will Tool] create_session: success', { ref });
   return { ref, secret };
 }
 
@@ -64,15 +66,17 @@ export async function loadSession(ref, secret) {
     p_secret: secret,
   });
   if (error) {
-    console.error('[willSessions] loadSession error:', error);
+    console.error('[Will Tool] load_session: error', error.message, error);
     return { error: error.message };
   }
   if (data == null) {
+    console.warn('[Will Tool] load_session: not found or invalid secret', { ref });
     return { error: 'Session not found or invalid secret' };
   }
   const payload = typeof data === 'object' && data !== null && 'payload' in data
     ? data.payload
     : data;
+  console.log('[Will Tool] load_session: success', { ref });
   return { payload: payload ?? {} };
 }
 
@@ -96,9 +100,10 @@ export async function saveSession(ref, secret, payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[willSessions] saveSession error:', error);
+    console.error('[Will Tool] save_session: error', error.message, error);
     return { error: error.message };
   }
+  console.log('[Will Tool] save_session: success', { ref });
   if (data !== true) {
     return { error: data?.message ?? 'Update failed' };
   }

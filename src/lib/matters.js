@@ -30,11 +30,16 @@ const STAFF_MATTER_COLUMNS = `
 
 export async function submitMatterFromDraft({ ref, secret, formValues, currentIndex }) {
   if (!isSupabaseConfigured()) {
+    console.warn('[Will Tool] submit_matter: Supabase not configured');
     return { error: 'Supabase not configured' };
   }
 
   const payload = buildMatterPayload(formValues, currentIndex);
+  if (formValues?.identityVerification && typeof formValues.identityVerification === 'object') {
+    payload.identityVerification = formValues.identityVerification;
+  }
   const snapshot = buildClientSnapshot(formValues);
+  console.log('[Will Tool] submit_matter: calling RPC submit_will_matter', { ref, currentIndex, snapshotKeys: Object.keys(snapshot || {}), hasIdDocs: !!payload.identityVerification });
 
   const { data, error } = await supabase.rpc('submit_will_matter', {
     p_ref: ref,
@@ -45,16 +50,21 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
   });
 
   if (error) {
-    console.error('[matters] submitMatterFromDraft error:', error);
+    console.error('[Will Tool] submit_matter: error', error.message, error);
     return { error: error.message };
   }
 
+  console.log('[Will Tool] submit_matter: success', { matterId: data });
   return { matterId: data };
 }
 
 export async function listMatters({ search = '', status = 'all', assignedOnly = false, userId = null } = {}) {
-  if (!supabase) return { data: [], error: 'Supabase not configured' };
+  if (!supabase) {
+    console.warn('[Will Tool] listMatters: Supabase not configured');
+    return { data: [], error: 'Supabase not configured' };
+  }
 
+  console.log('[Will Tool] listMatters: fetching', { status, search: search || '(none)', assignedOnly });
   let query = supabase
     .from('matters')
     .select(STAFF_MATTER_COLUMNS)
@@ -79,11 +89,13 @@ export async function listMatters({ search = '', status = 'all', assignedOnly = 
 
   const { data, error } = await query;
   if (error) {
-    console.error('[matters] listMatters error:', error);
+    console.error('[Will Tool] listMatters: error', error.message, error);
     return { data: [], error: error.message };
   }
 
-  return { data: data ?? [] };
+  const list = data ?? [];
+  console.log('[Will Tool] listMatters: got', list.length, 'matter(s)', list.length ? list.map(m => ({ id: m.id, ref: m.client_reference, status: m.status })) : '');
+  return { data: list };
 }
 
 export async function listStaffProfiles() {
