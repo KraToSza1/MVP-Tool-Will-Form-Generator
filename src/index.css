@@ -310,7 +310,34 @@ html.dark-theme .document-checklist {
   background-color: rgba(30, 41, 59, 0.92) !important;
   border-color: rgba(99, 102, 241, 0.35) !important;
 }
+html.dark-theme .document-checklist .border-slate-200 {
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+html.dark-theme .document-checklist .divide-slate-200 > * {
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+html.dark-theme .document-checklist .bg-slate-100\/80 {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+html.dark-theme .document-checklist .document-checklist-item.bg-amber-50\/70 {
+  background-color: rgba(120, 53, 15, 0.2) !important;
+}
+html.dark-theme .document-checklist .document-checklist-item .bg-emerald-100 {
+  background-color: rgba(6, 78, 59, 0.4) !important;
+}
+html.dark-theme .document-checklist .document-checklist-item .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.4) !important;
+}
+html.dark-theme .document-checklist .document-checklist-item .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+html.dark-theme .document-checklist .document-checklist-item .text-amber-700 {
+  color: #fcd34d !important;
+}
 html.dark-theme .document-checklist .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .document-checklist .text-slate-600 {
   color: #94a3b8 !important;
 }
 html.dark-theme .document-checklist .text-slate-700 {
@@ -325,11 +352,13 @@ html.dark-theme .document-checklist .text-amber-600 {
 html.dark-theme .document-checklist .text-emerald-600 {
   color: #34d399 !important;
 }
-html.dark-theme .document-checklist a.text-indigo-700 {
+html.dark-theme .document-checklist a.text-indigo-700,
+html.dark-theme .document-checklist button.text-indigo-700 {
   color: #a5b4fc !important;
 }
 html.dark-theme .document-checklist a:hover.text-indigo-900,
-html.dark-theme .document-checklist a.text-indigo-700:hover {
+html.dark-theme .document-checklist a.text-indigo-700:hover,
+html.dark-theme .document-checklist button.text-indigo-700:hover {
   color: #c7d2fe !important;
 }
 
@@ -436,6 +465,72 @@ html.dark-theme .solicitor-matter-delete-btn:hover {
 }
 html.dark-theme .solicitor-matter-delete-btn svg {
   color: inherit !important;
+}
+
+/* Add-item form (guardians, debtors, etc.) — dark theme */
+html.dark-theme .add-item-form {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.92) 100%) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .add-item-form .text-gray-400 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .add-item-form-input {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .add-item-form-input::placeholder {
+  color: #64748b !important;
+}
+html.dark-theme .add-item-form-input:focus {
+  border-color: rgba(99, 102, 241, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+html.dark-theme .add-item-form-cancel {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #cbd5e1 !important;
+}
+html.dark-theme .add-item-form-cancel:hover {
+  background-color: rgba(71, 85, 105, 0.95) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .add-item-form-cancel svg {
+  color: inherit !important;
+}
+html.dark-theme .add-item-form-hint {
+  color: #94a3b8 !important;
+}
+html.dark-theme .add-item-form-hint svg {
+  color: #94a3b8 !important;
+}
+/* Add-item list ("Added" items) — dark theme */
+html.dark-theme .add-item-list .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .add-item-list .text-green-500 {
+  color: #86efac !important;
+}
+html.dark-theme .add-item-list-item {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .add-item-list-item .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .add-item-list-item .bg-indigo-100 {
+  background-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .add-item-list-item .text-indigo-700 {
+  color: #c4b5fd !important;
+}
+html.dark-theme .add-item-list-remove {
+  color: #fca5a5 !important;
+}
+html.dark-theme .add-item-list-remove:hover {
+  color: #fecaca !important;
+  background-color: rgba(127, 29, 29, 0.4) !important;
 }
 
 /* Outstanding Items section — dark theme */

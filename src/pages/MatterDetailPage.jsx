@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
-import { isMatterTestamentaryCapacityOutstanding } from '../lib/matterOutstanding.js';
+import { isMatterTestamentaryCapacityOutstanding, getMissingIdVerificationDocs, getMissingTestamentaryCapacityFields, ID_VERIFICATION_DOC_LABELS } from '../lib/matterOutstanding.js';
+import { TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
@@ -582,40 +583,95 @@ export default function MatterDetailPage() {
             <MatterStatusBadge status={matter.status} />
           </div>
 
-          <div className="document-checklist mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Document checklist</p>
-            <ul className="mt-3 space-y-2 text-sm">
-              <li className="flex items-center gap-2">
-                {matter.outstanding_verification ? (
-                  <XCircle size={16} className="shrink-0 text-amber-600" aria-hidden />
-                ) : (
-                  <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
-                )}
-                <span className={matter.outstanding_verification ? 'text-slate-700' : 'text-slate-900'}>
-                  ID received {matter.outstanding_verification ? '— outstanding' : ''}
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
-                <span className="text-slate-900">Instructions complete (client submitted)</span>
-              </li>
-              <li className="flex items-center gap-2">
-                {testamentaryCapacityComplete ? (
-                  <>
-                    <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
-                    <span className="text-slate-900">Testamentary Capacity complete</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle size={16} className="shrink-0 text-amber-600" aria-hidden />
-                    <span className="text-slate-700">Testamentary Capacity — </span>
-                    <Link to={`/solicitor/matters/${matter.id}/form`} className="font-medium text-indigo-700 hover:text-indigo-900">
-                      Complete in Edit questionnaire
-                    </Link>
-                  </>
-                )}
-              </li>
-            </ul>
+          <div className="document-checklist mt-6 rounded-2xl border border-slate-200 bg-slate-50/90 shadow-sm overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-100/80 px-5 py-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600">Document checklist</h2>
+              <p className="mt-0.5 text-xs text-slate-500">What’s done and what’s still needed for this matter</p>
+            </div>
+            <div className="divide-y divide-slate-200">
+              {/* 1. ID received */}
+              <div className={`document-checklist-item flex flex-col gap-2 px-5 py-4 ${matter.outstanding_verification ? 'bg-amber-50/70' : 'bg-white'}`}>
+                <div className="flex items-start gap-3">
+                  {matter.outstanding_verification ? (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100" aria-hidden>
+                      <XCircle size={18} className="text-amber-700" />
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100" aria-hidden>
+                      <Check size={18} className="text-emerald-700" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900">ID received</p>
+                    {matter.outstanding_verification ? (
+                      <>
+                        <p className="mt-1 text-sm text-slate-600">The following documents are missing or not yet received:</p>
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-700">
+                          {getMissingIdVerificationDocs(mergedPayload).map((key) => (
+                            <li key={key}>{ID_VERIFICATION_DOC_LABELS[key] || key}</li>
+                          ))}
+                        </ul>
+                        <button type="button" onClick={scrollToClientId} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded">
+                          <IdCard size={16} />
+                          View ID documents section
+                        </button>
+                      </>
+                    ) : (
+                      <p className="mt-0.5 text-sm text-slate-600">All required ID documents have been received.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* 2. Instructions complete */}
+              <div className="document-checklist-item flex flex-col gap-2 px-5 py-4 bg-white">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100" aria-hidden>
+                    <Check size={18} className="text-emerald-700" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900">Instructions complete (client submitted)</p>
+                    <p className="mt-0.5 text-sm text-slate-600">Client has completed and submitted the questionnaire.</p>
+                  </div>
+                </div>
+              </div>
+              {/* 3. Testamentary Capacity */}
+              <div className={`document-checklist-item flex flex-col gap-2 px-5 py-4 ${!testamentaryCapacityComplete ? 'bg-amber-50/70' : 'bg-white'}`}>
+                <div className="flex items-start gap-3">
+                  {testamentaryCapacityComplete ? (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100" aria-hidden>
+                      <Check size={18} className="text-emerald-700" />
+                    </div>
+                  ) : (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100" aria-hidden>
+                      <XCircle size={18} className="text-amber-700" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900">Testamentary Capacity</p>
+                    {testamentaryCapacityComplete ? (
+                      <p className="mt-0.5 text-sm text-slate-600">All required capacity questions have been completed.</p>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-sm text-slate-600">The following questions are still unanswered:</p>
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-700">
+                          {getMissingTestamentaryCapacityFields(matter).map(({ fieldId, label }) => (
+                            <li key={fieldId}>{label}</li>
+                          ))}
+                        </ul>
+                        <Link
+                          to={`/solicitor/matters/${matter.id}/form`}
+                          state={{ openAtSection: TESTAMENTARY_CAPACITY_SECTION_INDEX }}
+                          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+                        >
+                          <FilePenLine size={16} />
+                          Open form at Testamentary Capacity
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">

@@ -39,6 +39,7 @@
 const DEBUG_LOGS = false;
 
 import React, { Suspense, useEffect, useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, X, Check, User, Mail, Phone, MapPin, Calendar, FileText, Edit, Trash2, PenTool, Info, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react';
 import {
   validateUKPostcode,
@@ -105,6 +106,15 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const currentValue = formValues[field.id] || '';
     setDateInputValue(currentValue ? formatUKDate(currentValue) : '');
   }, [field?.type, field?.id, formValues]);
+
+  // When any date picker modal is open, lock body scroll so the overlay covers the viewport
+  useEffect(() => {
+    const isOpen = Object.values(datePickerOpen).some(Boolean);
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [datePickerOpen]);
 
   // Sync text input values when formValues change (for uncontrolled inputs)
   useEffect(() => {
@@ -347,7 +357,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           console.log(`[INPUT FORM RENDER] 🟡 Will render form:`, shouldShow);
           return shouldShow;
         })() && (
-          <div className="mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
+          <div className="add-item-form mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
             <div className="flex gap-2">
               <div className="flex-1 relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-0">
@@ -356,7 +366,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                 <input
                   ref={(ref) => (inputRefs.current[targetFieldId] = ref)}
                   type="text"
-                  className="w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
+                  className="add-item-form-input w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
                   placeholder={`Enter ${targetFieldId.replace(/([A-Z])/g, ' $1').replace('Data', '')} (press Enter to add)`}
                   value={currentInputValue}
                   onChange={(e) => {
@@ -389,13 +399,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   setShowInputs((prev) => ({ ...prev, [targetFieldId]: false }));
                   setInputValues((prev) => ({ ...prev, [targetFieldId]: '' }));
                 }}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-5 py-3 rounded-xl transition-all duration-300 font-medium flex items-center gap-2 transform hover:scale-105 active:scale-95"
+                className="add-item-form-cancel bg-gray-300 hover:bg-gray-400 text-gray-700 px-5 py-3 rounded-xl transition-all duration-300 font-medium flex items-center gap-2 transform hover:scale-105 active:scale-95"
               >
                 <X className="w-5 h-5" />
                 <span>Cancel</span>
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-2 flex items-center gap-2">
+            <p className="add-item-form-hint text-xs text-gray-600 mt-2 flex items-center gap-2">
               <Info size={14} />
               <span>Press Enter or click Add to save. You can add multiple items.</span>
             </p>
@@ -404,7 +414,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
         {/* Enhanced List of Added Items — item may be string or object (e.g. petCarerData) */}
         {existingItems.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="add-item-list mt-3 space-y-2">
             <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
               <CheckCircle2 size={16} className="text-green-500" />
               <span>Added ({existingItems.length}):</span>
@@ -418,7 +428,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               return (
               <div
                 key={index}
-                className="flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] group"
+                className="add-item-list-item flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] group"
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
                 <span className="text-gray-800 flex-1 flex items-center gap-2">
@@ -430,7 +440,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                 <button
                   type="button"
                   onClick={() => handleRemoveItem(index)}
-                  className="ml-3 text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-2 transform hover:scale-110 active:scale-95"
+                  className="add-item-list-remove ml-3 text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-2 transform hover:scale-110 active:scale-95"
                   title="Remove"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -1371,41 +1381,72 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           </div>
         </div>
 
-        {/* Custom date modal: type manually OR pick from calendar */}
-        {datePickerOpen[field.id] && (
-          <div
-            className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`date-modal-title-${field.id}`}
-            onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
-          >
+        {/* Custom date modal: rendered in a portal so it sits above all content (e.g. Testator's Signature) */}
+        {datePickerOpen[field.id] &&
+          createPortal(
             <div
-              className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={`date-modal-title-${field.id}`}
+              onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
             >
-              <div className="p-4 sm:p-5">
-                <h3 id={`date-modal-title-${field.id}`} className="text-lg font-semibold text-gray-800 mb-4">
-                  {field.label}
-                </h3>
+              <div
+                className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 sm:p-5">
+                  <h3 id={`date-modal-title-${field.id}`} className="text-lg font-semibold text-gray-800 mb-4">
+                    {field.label}
+                  </h3>
 
-                {/* Manual type-in */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type date (DD/MM/YYYY)
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={datePickerManualValue[field.id] ?? ''}
-                      onChange={(e) => setDatePickerManualValue(prev => ({ ...prev, [field.id]: e.target.value }))}
-                      placeholder="e.g. 22/03/1975"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
+                  {/* Manual type-in */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Type date (DD/MM/YYYY)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={datePickerManualValue[field.id] ?? ''}
+                        onChange={(e) => setDatePickerManualValue(prev => ({ ...prev, [field.id]: e.target.value }))}
+                        placeholder="e.g. 22/03/1975"
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const raw = (datePickerManualValue[field.id] ?? '').trim();
+                            if (!raw) return;
+                            const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : ukDateToISO(raw);
+                            if (!iso) {
+                              setValidationErrors(prev => ({ ...prev, [field.id]: 'Use format DD/MM/YYYY (e.g. 22/03/1975).' }));
+                              return;
+                            }
+                            const parsed = new Date(iso);
+                            if (Number.isNaN(parsed.getTime())) {
+                              setValidationErrors(prev => ({ ...prev, [field.id]: 'Invalid date.' }));
+                              return;
+                            }
+                            if (field.id === 'dateOfBirth' && parsed > new Date()) {
+                              setValidationErrors(prev => ({ ...prev, [field.id]: 'Date of birth cannot be in the future.' }));
+                              return;
+                            }
+                            const isoDate = parsed.toISOString().split('T')[0];
+                            setDateInputValue(formatUKDate(isoDate));
+                            setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
+                            setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
+                            setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
                           const raw = (datePickerManualValue[field.id] ?? '').trim();
-                          if (!raw) return;
+                          if (!raw) {
+                            setValidationErrors(prev => ({ ...prev, [field.id]: 'Enter a date first.' }));
+                            return;
+                          }
                           const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : ukDateToISO(raw);
                           if (!iso) {
                             setValidationErrors(prev => ({ ...prev, [field.id]: 'Use format DD/MM/YYYY (e.g. 22/03/1975).' }));
@@ -1425,83 +1466,54 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                           setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
                           setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
                           setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      >
+                        Use this date
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Enter date then press Enter or click &quot;Use this date&quot;</p>
+                  </div>
+
+                  {/* Or pick from calendar */}
+                  <p className="text-sm font-medium text-gray-700 mb-2">Or pick from calendar</p>
+                  <Suspense fallback={<div className="h-[280px] flex items-center justify-center text-gray-500">Loading calendar…</div>}>
+                    <LazyDatePicker
+                      selected={isValidDate ? dateValue : null}
+                      onChange={(date) => {
+                        if (date) {
+                          const isoDate = date.toISOString().split('T')[0];
+                          logFormChange(field.id, isoDate);
+                          setDateInputValue(formatUKDate(isoDate));
+                          setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
+                          setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
+                          setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
                         }
                       }}
+                      inline
+                      dateFormat="dd/MM/yyyy"
+                      locale="en-GB"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      maxDate={new Date()}
                     />
+                  </Suspense>
+
+                  <div className="mt-4 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => {
-                        const raw = (datePickerManualValue[field.id] ?? '').trim();
-                        if (!raw) {
-                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Enter a date first.' }));
-                          return;
-                        }
-                        const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : ukDateToISO(raw);
-                        if (!iso) {
-                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Use format DD/MM/YYYY (e.g. 22/03/1975).' }));
-                          return;
-                        }
-                        const parsed = new Date(iso);
-                        if (Number.isNaN(parsed.getTime())) {
-                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Invalid date.' }));
-                          return;
-                        }
-                        if (field.id === 'dateOfBirth' && parsed > new Date()) {
-                          setValidationErrors(prev => ({ ...prev, [field.id]: 'Date of birth cannot be in the future.' }));
-                          return;
-                        }
-                        const isoDate = parsed.toISOString().split('T')[0];
-                        setDateInputValue(formatUKDate(isoDate));
-                        setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
-                        setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
-                        setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
-                      }}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
+                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                     >
-                      Use this date
+                      Cancel
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Enter date then press Enter or click &quot;Use this date&quot;</p>
-                </div>
-
-                {/* Or pick from calendar */}
-                <p className="text-sm font-medium text-gray-700 mb-2">Or pick from calendar</p>
-                <Suspense fallback={<div className="h-[280px] flex items-center justify-center text-gray-500">Loading calendar…</div>}>
-                  <LazyDatePicker
-                    selected={isValidDate ? dateValue : null}
-                    onChange={(date) => {
-                      if (date) {
-                        const isoDate = date.toISOString().split('T')[0];
-                        logFormChange(field.id, isoDate);
-                        setDateInputValue(formatUKDate(isoDate));
-                        setFormValues(prev => ({ ...prev, [field.id]: isoDate }));
-                        setValidationErrors(prev => { const n = { ...prev }; delete n[field.id]; return n; });
-                        setDatePickerOpen(prev => ({ ...prev, [field.id]: false }));
-                      }
-                    }}
-                    inline
-                    dateFormat="dd/MM/yyyy"
-                    locale="en-GB"
-                    showYearDropdown
-                    showMonthDropdown
-                    dropdownMode="select"
-                    maxDate={new Date()}
-                  />
-                </Suspense>
-
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setDatePickerOpen(prev => ({ ...prev, [field.id]: false }))}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  >
-                    Cancel
-                  </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
         {validationErrors[field.id] && (
           <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
             <AlertCircle size={14} aria-hidden="true" />

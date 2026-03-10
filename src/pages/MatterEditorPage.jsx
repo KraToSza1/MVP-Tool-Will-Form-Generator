@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import FormRenderer from '../components/FormRenderer.jsx';
@@ -7,13 +7,15 @@ import { getMatterDetail, saveSolicitorMatter, updateMatterStatus, MATTER_STATUS
 
 export default function MatterEditorPage() {
   const { matterId } = useParams();
+  const location = useLocation();
   const [matter, setMatter] = useState(null);
   const [initialValues, setInitialValues] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    console.log('[WillTool Flow] Solicitor opening matter editor', { matterId, phase: 'solicitor_editor_open_start' });
+    const openAtSection = location.state?.openAtSection;
+    console.log('[WillTool Flow] Solicitor opening matter editor', { matterId, openAtSection, phase: 'solicitor_editor_open_start' });
 
     getMatterDetail(matterId).then((result) => {
       if (!active) return;
@@ -22,12 +24,14 @@ export default function MatterEditorPage() {
         toast.error('Could not open matter', { description: result.error });
       } else {
         setMatter(result.matter || null);
+        const stepFromMatter = result.matter?.current_step ?? 0;
+        const initialStep = typeof openAtSection === 'number' && openAtSection >= 0 ? openAtSection : stepFromMatter;
         setInitialValues({
           formValues: result.mergedPayload || {},
-          currentIndex: result.matter?.current_step || 0,
+          currentIndex: initialStep,
           referenceNumber: result.matter?.client_reference || result.matter?.session_ref || 'SOLICITOR',
         });
-        console.log('[WillTool Flow] Matter editor loaded; form ready for solicitor', { matterId, clientRef: result.matter?.client_reference, currentStep: result.matter?.current_step });
+        console.log('[WillTool Flow] Matter editor loaded; form ready for solicitor', { matterId, clientRef: result.matter?.client_reference, currentStep: initialStep, openAtSection: openAtSection ?? '(none)' });
       }
       setLoading(false);
     });
@@ -35,7 +39,7 @@ export default function MatterEditorPage() {
     return () => {
       active = false;
     };
-  }, [matterId]);
+  }, [matterId, location.state]);
 
   const persistenceAdapter = useMemo(() => {
     if (!matter) return null;

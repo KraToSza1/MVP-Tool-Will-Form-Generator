@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 import { buildClientSnapshot, buildMatterPayload, mergeMatterPayloads } from './formPayload.js';
+import { compressIdentityVerification } from './compressIdImages.js';
 
 export const MATTER_STATUS = {
   SUBMITTED: 'submitted',
@@ -40,18 +41,35 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
 
   const payload = buildMatterPayload(formValues, currentIndex);
   if (formValues?.identityVerification && typeof formValues.identityVerification === 'object') {
-    payload.identityVerification = formValues.identityVerification;
+    payload.identityVerification = await compressIdentityVerification(formValues.identityVerification);
   }
   const snapshot = buildClientSnapshot(formValues);
-  console.log('[WillTool Flow] Client submitting to matter (RPC submit_will_matter)', { ref, currentIndex, snapshotKeys: Object.keys(snapshot || {}), hasIdDocs: !!payload.identityVerification, phase: 'client_submit' });
+  const payloadSize = typeof payload?.identityVerification === 'object'
+    ? JSON.stringify(payload).length
+    : 0;
+  console.log('[WillTool Flow] Client submitting to matter (RPC submit_will_matter)', { ref, currentIndex, snapshotKeys: Object.keys(snapshot || {}), hasIdDocs: !!payload.identityVerification, payloadBytes: payloadSize, phase: 'client_submit' });
 
-  const { data, error } = await supabase.rpc('submit_will_matter', {
+  const RPC_TIMEOUT_MS = 90_000; // 90s for large ID doc uploads
+  const rpcPromise = supabase.rpc('submit_will_matter', {
     p_ref: ref,
     p_secret: secret,
     p_payload: payload,
     p_current_step: currentIndex,
     p_client_snapshot: snapshot,
   });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Submission timed out. Your draft is saved—try again or use a smaller file for ID documents.')), RPC_TIMEOUT_MS);
+  });
+
+  let result;
+  try {
+    result = await Promise.race([rpcPromise, timeoutPromise]);
+  } catch (err) {
+    console.error('[WillTool Flow] submit_matter: threw or timed out', { ref, err });
+    return { error: err?.message || 'Submission failed. Try again.' };
+  }
+
+  const { data, error } = result;
 
   if (error) {
     console.error('[WillTool Flow] submit_matter: error', error.message, error);

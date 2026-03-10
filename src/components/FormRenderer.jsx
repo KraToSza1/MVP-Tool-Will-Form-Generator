@@ -303,6 +303,48 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     }
   }, [currentIndex, useExternalPersistence]);
 
+  /** After client submission: clear form and session so they can start a new questionnaire. */
+  const startOverAfterSubmit = useCallback(() => {
+    setSubmitted(false);
+    setSubmittedMatterId(null);
+    setFormValues({});
+    setCurrentIndex(0);
+    setBanner(null);
+    if (!useExternalPersistence) {
+      localStorage.removeItem('willForm');
+      localStorage.removeItem('willFormStep');
+      localStorage.removeItem('willFormRef');
+    }
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete('ref');
+    newUrl.searchParams.delete('s');
+    window.history.replaceState({}, '', newUrl);
+    if (useCloud) {
+      setSessionInitialized(false);
+      createSession(buildCloudPayload({}, 0)).then((result) => {
+        if (result.error) {
+          toast.error('Could not start new session', { description: result.error });
+          setReferenceNumber(getOrCreateReferenceNumberLocal());
+          setSessionInitialized(true);
+          return;
+        }
+        const { ref, secret } = result;
+        setReferenceNumber(ref);
+        setSessionSecret(secret);
+        const u = new URL(window.location.href);
+        u.searchParams.set('ref', ref);
+        u.searchParams.set('s', secret);
+        window.history.replaceState({}, '', u);
+        setSessionInitialized(true);
+        toast.success('Form cleared', { description: 'You can start a new questionnaire.' });
+      });
+    } else {
+      setReferenceNumber(getOrCreateReferenceNumberLocal());
+      setSessionInitialized(true);
+      toast.success('Form cleared', { description: 'You can start a new questionnaire.' });
+    }
+  }, [useCloud, useExternalPersistence]);
+
   // Handle scroll to show/hide back to top button
   useEffect(() => {
     const handleScroll = () => {
@@ -330,7 +372,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
         if (submitted) {
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing completion modal with Escape key');
-          setSubmitted(false);
+          if (!solicitorMode) startOverAfterSubmit();
+          else setSubmitted(false);
         }
       }
       
@@ -377,7 +420,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [validationModalOpen, clauseModalOpen, submitted, formValues]);
+  }, [validationModalOpen, clauseModalOpen, submitted, formValues, solicitorMode, startOverAfterSubmit]);
 
   const scrollToTop = () => {
     DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
@@ -1504,24 +1547,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         console.log('[WillTool Flow] Client reached last step; submitting matter', { ref: referenceNumber, step: currentIndex, phase: 'client_submit_start' });
         if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
         setIsSubmittingMatter(true);
-        const result = await submitCurrentMatter();
-        setIsSubmittingMatter(false);
+        try {
+          const result = await submitCurrentMatter();
 
-        if (result?.error) {
-          console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
-          console.error('[Will Tool] submit: failed', result.error);
-          toast.error('Could not complete submission', { description: result.error });
-          return;
+          if (result?.error) {
+            console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
+            toast.error('Could not complete submission', { description: result.error });
+            return;
+          }
+
+          if (result?.matterId) {
+            console.log('[WillTool Flow] Client submission complete; matter in DB', { matterId: result.matterId, ref: referenceNumber, phase: 'client_submit_success' });
+            setSubmittedMatterId(result.matterId);
+          } else {
+            console.log('[WillTool Flow] Client submission completed (no matterId)', { ref: referenceNumber, result });
+          }
+
+          setSubmitted(true);
+        } catch (err) {
+          console.error('[WillTool Flow] Client submit threw', { ref: referenceNumber, err });
+          toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
+        } finally {
+          setIsSubmittingMatter(false);
         }
-
-        if (result?.matterId) {
-          console.log('[WillTool Flow] Client submission complete; matter in DB', { matterId: result.matterId, ref: referenceNumber, phase: 'client_submit_success' });
-          setSubmittedMatterId(result.matterId);
-        } else {
-          console.log('[WillTool Flow] Client submission completed (no matterId)', { ref: referenceNumber, result });
-        }
-
-        setSubmitted(true);
       };
 
       void finishSubmission();
@@ -5228,7 +5276,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
               </div>
               <button
-                onClick={() => setSubmitted(false)}
+                onClick={() => (!solicitorMode ? startOverAfterSubmit() : setSubmitted(false))}
                 className="p-2.5 hover:bg-white/20 rounded-xl transition-colors"
                 aria-label="Close"
               >
@@ -5309,9 +5357,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <div className="flex items-start gap-3">
                   <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-900 mb-1">Want to start over?</p>
+                    <p className="text-sm font-semibold text-blue-900 mb-1">Close to start a new questionnaire</p>
                     <p className="text-sm text-blue-800 leading-relaxed">
-                      Use <strong>"Clear Data / Start Fresh"</strong> at the bottom of the form to create a new Will.
+                      {solicitorMode ? 'Close this message to return to the form.' : 'When you close this message, the form will clear and you can start a new questionnaire.'}
                     </p>
                   </div>
                 </div>
