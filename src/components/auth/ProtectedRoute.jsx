@@ -1,10 +1,19 @@
-import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+
+const FALLBACK_DELAY_MS = 6000;
 
 export default function ProtectedRoute() {
   const { loading, isAuthenticated, isStaff } = useAuth();
   const location = useLocation();
+  const [showFallback, setShowFallback] = useState(false);
+
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => setShowFallback(true), FALLBACK_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   if (loading) {
     return (
@@ -12,6 +21,14 @@ export default function ProtectedRoute() {
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm px-6 py-5 text-center max-w-md w-full">
           <p className="text-sm font-semibold text-gray-900">Loading solicitor workspace...</p>
           <p className="text-sm text-gray-600 mt-2">Checking your secure session and permissions.</p>
+          {showFallback && (
+            <p className="mt-4 text-sm text-slate-600">
+              Taking too long?{' '}
+              <Link to="/solicitor/login" state={{ from: location }} className="font-medium text-indigo-600 hover:text-indigo-700">
+                Sign in again
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     );

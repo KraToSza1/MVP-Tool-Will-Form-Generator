@@ -13,10 +13,12 @@ export default function MatterEditorPage() {
 
   useEffect(() => {
     let active = true;
+    console.log('[WillTool Flow] Solicitor opening matter editor', { matterId, phase: 'solicitor_editor_open_start' });
 
     getMatterDetail(matterId).then((result) => {
       if (!active) return;
       if (result.error) {
+        console.warn('[WillTool Flow] Matter editor load failed', { matterId, error: result.error });
         toast.error('Could not open matter', { description: result.error });
       } else {
         setMatter(result.matter || null);
@@ -25,6 +27,7 @@ export default function MatterEditorPage() {
           currentIndex: result.matter?.current_step || 0,
           referenceNumber: result.matter?.client_reference || result.matter?.session_ref || 'SOLICITOR',
         });
+        console.log('[WillTool Flow] Matter editor loaded; form ready for solicitor', { matterId, clientRef: result.matter?.client_reference, currentStep: result.matter?.current_step });
       }
       setLoading(false);
     });

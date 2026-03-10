@@ -816,8 +816,10 @@ const wrapClientValue = (val) => {
 };
 
 // Text interpolation function (matching FormRenderer logic)
-const interpolateText = (text, values) => {
-  
+// Optional third arg: { schema } so organPurposeGroup can resolve field options (used when called from generatePDFWithJSPDF).
+const interpolateText = (text, values, options = {}) => {
+  const schema = options.schema || options.formSchema;
+
   if (typeof text !== 'string') return text;
 
   const fallbackMap = {
@@ -1187,7 +1189,7 @@ const interpolateText = (text, values) => {
     // Handle special case: selectedPurposes for organPurposeGroup
     if (subField === 'selectedPurposes' && sectionId === 'organPurposeGroup') {
       const selectedPurposes = values[sectionId] || [];
-      if (Array.isArray(selectedPurposes) && selectedPurposes.length > 0) {
+      if (Array.isArray(selectedPurposes) && selectedPurposes.length > 0 && schema?.formSections) {
         // Get the field definition to access willClauseTextFragment
         const purposeField = schema.formSections
           .flatMap(s => s.fields)
@@ -1549,8 +1551,9 @@ const interpolateText = (text, values) => {
 };
 
 export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
+  const { isClientPDF = false, formSchema: customSchema } = options || {};
+  console.log('[WillTool Flow] PDF generator started', { isClientPDF, hasFormValues: !!formValues, valueKeys: formValues ? Object.keys(formValues).length : 0 });
   try {
-    const { isClientPDF = false, formSchema: customSchema } = options;
     const schema = customSchema && customSchema.formSections ? customSchema : formSchema;
 
     const {
@@ -1956,10 +1959,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
 
     // Collect all will clauses from form sections (shared builder for Preview + PDF)
     const scheduleReferences = new Set(); // Track schedule references throughout function
+    const interpolateTextWithSchema = (text, values) => interpolateText(text, values, { schema });
     const willClauses = buildClauses({
       formValues,
       formData: schema,
-      interpolateText,
+      interpolateText: interpolateTextWithSchema,
       maxSectionIndex: isClientPDF ? CLIENT_VISIBLE_MAX_SECTION_INDEX : null,
     }).map((clause) => ({
       id: clause.id,
@@ -2600,41 +2604,10 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       }
     });
     
-    // Check for missing signing date (explicitSigningDateFields already declared above)
-    const hasSigningDate = explicitSigningDateFields.some(field => {
-      const value = formValues[field];
-      if (!value || typeof value !== 'string' || !value.trim()) return false;
-      try {
-        const date = new Date(value);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const currentYear = new Date().getFullYear();
-          return year >= 2000 && year <= currentYear;
-        }
-      } catch (e) {
-        // Check if it's in DD/MM/YYYY format
-        if (value.match(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/)) {
-          const yearMatch = value.match(/\d{4}/);
-          if (yearMatch) {
-            const year = parseInt(yearMatch[0]);
-            const currentYear = new Date().getFullYear();
-            return year >= 2000 && year <= currentYear;
-          }
-        }
-      }
-      return false;
-    });
-    
-    if (!hasSigningDate) {
-      missing.push({
-        section: 'Execution',
-        field: 'Signing Date',
-        clauseNumber: null,
-        issue: 'Missing signing date (leave blank for manual fill OR require user input)',
-        snippet: 'Date field will be left blank'
-      });
-    }
-    
+    // Signing date is intentionally not required for draft PDF: it is filled by the
+    // solicitor at the client's execution appointment, so we do not add it to missing
+    // or block PDF generation when it is blank.
+
     // Group missing items by category
     // CRITICAL: Separate critical issues from regular placeholders
     const criticalBlanks = missing.filter(item => {
@@ -3739,6 +3712,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     }
     
     // Return doc and validation results for UI display
+    console.log('[WillTool Flow] PDF generator finished', { hasDoc: true, hasPlaceholders: hasPlaceholders, criticalCount: criticalBlanks.length });
     return {
       doc,
       missingItems: missing,
@@ -3748,7 +3722,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       hasCriticalIssues: criticalBlanks.length > 0
     };
   } catch (error) {
-    console.error('Error generating PDF:', error);
+    console.error('[WillTool Flow] PDF generator error', error);
     throw error;
   }
 };

@@ -1,15 +1,36 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Download, ExternalLink, FilePenLine, FileText, IdCard, Save } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, XCircle, Trash2 } from 'lucide-react';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
-import { assignMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
+import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
+import { isMatterTestamentaryCapacityOutstanding } from '../lib/matterOutstanding.js';
+
+/** Public URL for the client Will Tool (for sharing with clients). */
+function getClientWillToolUrl() {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}/`;
+}
 
 function formatDate(value) {
   if (!value) return 'Not yet';
   return new Date(value).toLocaleString();
+}
+
+/** Format ISO date for datetime-local input (local time). */
+function toLocalDatetime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day}T${h}:${min}`;
 }
 
 /** Map activity action + metadata to plain English for lawyers. */
@@ -127,6 +148,8 @@ function IdDocPreview({ label, dataUrl }) {
 
 export default function MatterDetailPage() {
   const { matterId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [matter, setMatter] = useState(null);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -134,27 +157,73 @@ export default function MatterDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [staffProfiles, setStaffProfiles] = useState([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [reminderDate, setReminderDate] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const clientIdSectionRef = useRef(null);
+
+  const handleConfirmDelete = async () => {
+    if (!matter) return;
+    const ref = matter.client_reference || matter.id;
+    setDeleteConfirmOpen(false);
+    setDeleting(true);
+    const result = await deleteMatter(matter.id);
+    setDeleting(false);
+    if (result.error) {
+      toast.error('Could not delete matter', { description: result.error });
+      return;
+    }
+    toast.success('Matter deleted', { description: `"${ref}" has been removed.` });
+    navigate('/solicitor');
+  };
+
+  const notesDirty = matter != null && solicitorNotes !== (matter.solicitor_notes ?? '');
+  useEffect(() => {
+    if (!notesDirty) return;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [notesDirty]);
 
   useEffect(() => {
     let active = true;
+    setMatter(null);
+    setActivity([]);
+    setSolicitorNotes('');
+    setReminderDate('');
     setLoading(true);
+    setDeleteConfirmOpen(false);
+    console.log('[WillTool Flow] Solicitor opening matter', { matterId, phase: 'solicitor_matter_open_start' });
     Promise.all([getMatterDetail(matterId), listStaffProfiles()]).then(([detailResult, staffResult]) => {
       if (!active) return;
       if (detailResult.error) {
+        console.warn('[WillTool Flow] Matter load failed', { matterId, error: detailResult.error });
         toast.error('Could not load matter', { description: detailResult.error });
+        setMatter(null);
       } else {
         setMatter(detailResult.matter || null);
         setActivity(detailResult.activity || []);
         setSolicitorNotes(detailResult.matter?.solicitor_notes || '');
+        const rd = detailResult.matter?.reminder_date;
+        setReminderDate(toLocalDatetime(rd));
+        console.log('[WillTool Flow] Matter and activity loaded for solicitor', { matterId, clientRef: detailResult.matter?.client_reference, status: detailResult.matter?.status, activityCount: (detailResult.activity || []).length });
       }
 
       if (staffResult.error) {
+        console.warn('[WillTool Flow] Staff list load failed', { error: staffResult.error });
         toast.error('Could not load staff list', { description: staffResult.error });
       } else {
         setStaffProfiles(staffResult.data || []);
       }
 
+      setLoading(false);
+    }).catch((err) => {
+      if (!active) return;
+      console.warn('[WillTool Flow] Matter load error', { matterId, err });
+      toast.error('Could not load matter', { description: err?.message || 'Network or server error.' });
+      setMatter(null);
       setLoading(false);
     });
 
@@ -168,6 +237,7 @@ export default function MatterDetailPage() {
     () => mergeMatterPayloads(matter?.client_payload, matter?.solicitor_payload),
     [matter?.client_payload, matter?.solicitor_payload]
   );
+  const testamentaryCapacityComplete = useMemo(() => !isMatterTestamentaryCapacityOutstanding(matter), [matter]);
   const { formData } = useFormDefinition();
 
   const idDocs = useMemo(() => {
@@ -185,34 +255,66 @@ export default function MatterDetailPage() {
   };
 
   const handleDownloadPDF = async () => {
+    console.log('[WillTool Flow] Solicitor generating PDF for matter', { matterId, phase: 'solicitor_pdf_start' });
+    console.log('[MatterDetailPage PDF] handleDownloadPDF called', {
+      matterId,
+      hasMatter: !!matter,
+      matterClientPayloadKeys: matter?.client_payload ? Object.keys(matter.client_payload) : [],
+      matterSolicitorPayloadKeys: matter?.solicitor_payload ? Object.keys(matter.solicitor_payload) : [],
+      mergedPayloadKeys: mergedPayload ? Object.keys(mergedPayload) : [],
+      mergedPayloadKeyCount: mergedPayload ? Object.keys(mergedPayload).length : 0,
+      hasFormData: !!formData,
+      formDataSectionsCount: formData?.formSections?.length ?? 0,
+    });
+
     if (!matter || !mergedPayload || Object.keys(mergedPayload).length === 0) {
+      console.warn('[MatterDetailPage PDF] Aborting: no form data', { matter: !!matter, mergedPayloadKeys: mergedPayload ? Object.keys(mergedPayload).length : 0 });
       toast.error('No form data', { description: 'This matter has no saved form data yet. Open the form and save, or wait for the client to submit.' });
       return;
     }
     setIsGeneratingPDF(true);
     const toastId = toast.loading('Generating PDF...');
     try {
+      console.log('[MatterDetailPage PDF] Loading PDF module...');
       const pdfModule = await import('../components/PDFGeneratorJSPDF.js');
       const generatePDFWithJSPDF = pdfModule.generatePDFWithJSPDF;
+      console.log('[MatterDetailPage PDF] PDF module loaded', { hasGeneratePDFWithJSPDF: !!generatePDFWithJSPDF });
       if (!generatePDFWithJSPDF) {
         toast.error('PDF generator not available', { id: toastId, description: 'Could not load PDF generator. Try refreshing the page.' });
         return;
       }
+      console.log('[MatterDetailPage PDF] Calling generatePDFWithJSPDF with mergedPayload keys:', Object.keys(mergedPayload), 'formSchema:', !!formData);
       const pdfResult = await generatePDFWithJSPDF(mergedPayload, {}, { isClientPDF: false, formSchema: formData });
+      console.log('[MatterDetailPage PDF] generatePDFWithJSPDF returned', {
+        resultKeys: pdfResult ? Object.keys(pdfResult) : [],
+        hasDoc: !!(pdfResult?.doc || pdfResult),
+        docOutputType: typeof (pdfResult?.doc || pdfResult)?.output,
+        hasCriticalIssues: pdfResult?.hasCriticalIssues,
+        criticalIssuesLength: (pdfResult?.criticalIssues || []).length,
+      });
+
       const doc = pdfResult?.doc || pdfResult;
       const criticalIssues = pdfResult?.criticalIssues || [];
       const hasCriticalIssues = pdfResult?.hasCriticalIssues || false;
 
       if (hasCriticalIssues && criticalIssues.length > 0) {
+        console.warn('[MatterDetailPage PDF] PDF blocked by critical issues', { criticalIssues });
+        const firstIssue = criticalIssues[0];
+        const issueText = (firstIssue?.issue || 'incomplete').replace(/^CRITICAL:\s*/i, '').substring(0, 120) + ((firstIssue?.issue && firstIssue.issue.length > 120) ? '…' : '');
+        const location = [firstIssue?.section, firstIssue?.field].filter(Boolean).join(' – ');
+        const issueDetail = location ? `${location}: ${issueText}` : (firstIssue?.issue || 'Complete required fields in the form first.').substring(0, 200);
         toast.error('PDF blocked', {
           id: toastId,
-          description: `${criticalIssues.length} critical issue(s). Complete required fields in the form first.`,
-          duration: 8000,
+          description: criticalIssues.length === 1
+            ? issueDetail
+            : `${criticalIssues.length} critical issue(s). First: ${issueDetail}`,
+          duration: 10000,
         });
         return;
       }
 
       if (!doc || typeof doc.output !== 'function') {
+        console.error('[MatterDetailPage PDF] No valid doc produced', { doc: !!doc, outputType: typeof doc?.output });
         toast.error('PDF generation failed', { id: toastId, description: 'No document was produced.' });
         return;
       }
@@ -223,6 +325,7 @@ export default function MatterDetailPage() {
       const date = new Date().toISOString().split('T')[0];
       const filename = `${testatorName}-Last-Will-${date}.pdf`;
 
+      console.log('[MatterDetailPage PDF] Creating blob and triggering download', { filename });
       const pdfArrayBuffer = doc.output('arraybuffer');
       const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -238,11 +341,20 @@ export default function MatterDetailPage() {
         URL.revokeObjectURL(url);
       }, 100);
 
+      console.log('[WillTool Flow] Solicitor PDF downloaded', { matterId, filename, phase: 'solicitor_pdf_download' });
+      console.log('[MatterDetailPage PDF] Download complete', { filename });
       toast.success('PDF downloaded', {
         id: toastId,
         description: `Saved as ${filename}. Review for completeness before execution.`,
       });
     } catch (err) {
+      console.error('[MatterDetailPage PDF] Error during PDF generation or download', {
+        message: err?.message,
+        name: err?.name,
+        stack: err?.stack,
+        cause: err?.cause,
+        fullError: String(err),
+      });
       const msg = err?.message || 'Unknown error';
       toast.error('PDF failed', { id: toastId, description: msg });
     } finally {
@@ -264,6 +376,7 @@ export default function MatterDetailPage() {
       last_activity_at: new Date().toISOString(),
     };
 
+    console.log('[WillTool Flow] Solicitor changing matter status', { matterId: matter.id, nextStatus });
     const result = await updateMatterStatus(matter.id, nextStatus, changes);
     if (result.error) {
       toast.error('Status update failed', { description: result.error });
@@ -277,6 +390,7 @@ export default function MatterDetailPage() {
   const handleSaveNotes = async () => {
     if (!matter) return;
     setSavingNotes(true);
+    console.log('[WillTool Flow] Solicitor saving notes', { matterId: matter.id });
     const result = await updateSolicitorNotes(matter.id, solicitorNotes);
     setSavingNotes(false);
     if (result.error) {
@@ -290,6 +404,7 @@ export default function MatterDetailPage() {
   const handleAssignmentChange = async (event) => {
     if (!matter) return;
     const assignedSolicitorId = event.target.value || null;
+    console.log('[WillTool Flow] Solicitor assigning matter', { matterId: matter.id, assignedSolicitorId });
     const result = await assignMatter(matter.id, assignedSolicitorId);
     if (result.error) {
       toast.error('Could not assign matter', { description: result.error });
@@ -297,6 +412,67 @@ export default function MatterDetailPage() {
     }
     setMatter((prev) => prev ? { ...prev, assigned_solicitor_id: result.data?.assigned_solicitor_id || null } : prev);
     toast.success('Assignment updated', { description: assignedSolicitorId ? 'Matter reassigned successfully.' : 'Matter unassigned.' });
+  };
+
+  const handleAssignToMe = async () => {
+    if (!matter || !user?.id) return;
+    console.log('[WillTool Flow] Solicitor assigning matter to self', { matterId: matter.id });
+    const result = await assignMatter(matter.id, user.id);
+    if (result.error) {
+      toast.error('Could not assign matter', { description: result.error });
+      return;
+    }
+    setMatter((prev) => prev ? { ...prev, assigned_solicitor_id: user.id } : prev);
+    toast.success('Assigned to you', { description: 'This matter is now assigned to you.' });
+  };
+
+  const handleCopyClientLink = async () => {
+    const url = getClientWillToolUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied', { description: 'Will Tool client link copied to clipboard. Paste into an email to send to the client.' });
+    } catch {
+      toast.error('Copy failed', { description: 'Could not copy to clipboard.' });
+    }
+  };
+
+  const handleCopyReference = async () => {
+    if (!matter?.client_reference) return;
+    try {
+      await navigator.clipboard.writeText(matter.client_reference);
+      toast.success('Reference copied', { description: 'Client reference copied to clipboard.' });
+    } catch {
+      toast.error('Copy failed', { description: 'Could not copy to clipboard.' });
+    }
+  };
+
+  const clientEmail = matter?.client_email || clientSnapshot?.email || '';
+  const clientName = matter?.client_name || clientSnapshot?.fullName || 'Client';
+  const emailClientHref = useMemo(() => {
+    if (!clientEmail) return null;
+    const subject = encodeURIComponent(`Your Will – ${matter?.client_reference || 'next steps'}`);
+    const body = encodeURIComponent(
+      `Dear ${clientName},\n\nThank you for submitting your Will instructions.\n\n` +
+      `You can complete or review your form here: ${getClientWillToolUrl()}\n\n` +
+      `If you have any questions, please contact us.\n\nKind regards`
+    );
+    return `mailto:${clientEmail}?subject=${subject}&body=${body}`;
+  }, [clientEmail, clientName, matter?.client_reference]);
+
+  const handleReminderDateChange = async (e) => {
+    const value = e.target.value;
+    setReminderDate(value);
+    if (!matter) return;
+    const iso = value ? new Date(value).toISOString() : null;
+    console.log('[WillTool Flow] Solicitor saving reminder date', { matterId: matter.id, reminderDate: iso || null });
+    const result = await updateMatterReminderDate(matter.id, iso);
+    if (result.error) {
+      toast.error('Could not save reminder date', { description: result.error });
+      return;
+    }
+    setMatter((prev) => prev ? { ...prev, reminder_date: result.data?.reminder_date ?? iso } : prev);
+    if (value) toast.success('Reminder set', { description: 'Reminder date saved.' });
+    else toast.success('Reminder cleared', { description: 'Reminder date removed.' });
   };
 
   if (loading) {
@@ -310,10 +486,31 @@ export default function MatterDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link to="/solicitor" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
-          <ArrowLeft size={16} />
-          Back to dashboard
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/solicitor" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+            <ArrowLeft size={16} />
+            Back to dashboard
+          </Link>
+          <button
+            type="button"
+            onClick={handleCopyClientLink}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="Copy Will Tool link to send to client"
+          >
+            <Copy size={14} />
+            Copy client link
+          </button>
+          {emailClientHref && (
+            <a
+              href={emailClientHref}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              title="Open email to client with pre-filled template"
+            >
+              <Mail size={14} />
+              Email client
+            </a>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -343,6 +540,20 @@ export default function MatterDetailPage() {
             <FilePenLine size={16} />
             Edit questionnaire
           </Link>
+          <button
+            type="button"
+            onClick={() => setDeleteConfirmOpen(true)}
+            disabled={deleting}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+            title="Delete this matter (cannot be undone)"
+          >
+            {deleting ? (
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
+            ) : (
+              <Trash2 size={16} />
+            )}
+            Delete matter
+          </button>
         </div>
       </div>
       <p className="text-sm text-slate-600 -mt-2">
@@ -354,10 +565,57 @@ export default function MatterDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Matter</p>
-              <h1 className="mt-2 text-2xl font-bold text-slate-900">{matter.client_reference}</h1>
-              <p className="mt-1 text-sm text-slate-600">Submitted {formatDate(matter.submitted_at)}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900">{matter.client_reference}</h1>
+                <button
+                  type="button"
+                  onClick={handleCopyReference}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  title="Copy reference"
+                >
+                  <Copy size={12} />
+                  Copy ref
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-slate-600">Received {formatDate(matter.submitted_at)}</p>
             </div>
             <MatterStatusBadge status={matter.status} />
+          </div>
+
+          <div className="document-checklist mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Document checklist</p>
+            <ul className="mt-3 space-y-2 text-sm">
+              <li className="flex items-center gap-2">
+                {matter.outstanding_verification ? (
+                  <XCircle size={16} className="shrink-0 text-amber-600" aria-hidden />
+                ) : (
+                  <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
+                )}
+                <span className={matter.outstanding_verification ? 'text-slate-700' : 'text-slate-900'}>
+                  ID received {matter.outstanding_verification ? '— outstanding' : ''}
+                </span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
+                <span className="text-slate-900">Instructions complete (client submitted)</span>
+              </li>
+              <li className="flex items-center gap-2">
+                {testamentaryCapacityComplete ? (
+                  <>
+                    <Check size={16} className="shrink-0 text-emerald-600" aria-hidden />
+                    <span className="text-slate-900">Testamentary Capacity complete</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={16} className="shrink-0 text-amber-600" aria-hidden />
+                    <span className="text-slate-700">Testamentary Capacity — </span>
+                    <Link to={`/solicitor/matters/${matter.id}/form`} className="font-medium text-indigo-700 hover:text-indigo-900">
+                      Complete in Edit questionnaire
+                    </Link>
+                  </>
+                )}
+              </li>
+            </ul>
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -371,11 +629,11 @@ export default function MatterDetailPage() {
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</p>
-              <p className="mt-2 text-sm font-medium text-slate-900">{matter.client_phone || clientSnapshot.phoneNumber || 'Not captured'}</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">{matter.client_phone || clientSnapshot.phoneNumber || clientSnapshot.mobile || mergedPayload?.mobile || mergedPayload?.phoneNumber || 'Not captured'}</p>
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verification</p>
-              <p className="mt-2 text-sm font-medium text-slate-900">{matter.outstanding_verification ? 'Outstanding' : 'Complete'}</p>
+              <p className="mt-2 text-sm font-medium text-slate-900">{matter.outstanding_verification ? 'ID needed' : 'Complete'}</p>
             </div>
             <div className="client-id-docs-card rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/80 p-4 sm:col-span-2">
               <p className="client-id-docs-card-title text-xs font-semibold uppercase tracking-wide text-indigo-600">Client ID documents</p>
@@ -393,18 +651,31 @@ export default function MatterDetailPage() {
             </div>
             <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned solicitor</p>
-              <select
-                value={matter.assigned_solicitor_id || ''}
-                onChange={handleAssignmentChange}
-                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">Unassigned</option>
-                {staffProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.display_name || profile.email} ({profile.role})
-                  </option>
-                ))}
-              </select>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  value={matter.assigned_solicitor_id || ''}
+                  onChange={handleAssignmentChange}
+                  className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Unassigned</option>
+                  {staffProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.display_name || profile.email} ({profile.role})
+                    </option>
+                  ))}
+                </select>
+                {user?.id && !matter.assigned_solicitor_id && (
+                  <button
+                    type="button"
+                    onClick={handleAssignToMe}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    title="Assign this matter to yourself"
+                  >
+                    <UserPlus size={16} />
+                    Assign to me
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -417,12 +688,23 @@ export default function MatterDetailPage() {
               <button type="button" onClick={() => handleStatusChange(MATTER_STATUS.IN_REVIEW)} title="Under your review" className="rounded-xl border border-indigo-300 px-4 py-2 text-sm font-medium text-indigo-900 hover:border-indigo-400">In progress</button>
               <button type="button" onClick={() => handleStatusChange(MATTER_STATUS.COMPLETED)} title="Matter finished; ready for execution" className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-900 hover:border-emerald-400">Mark complete</button>
             </div>
+            <div className="mt-4">
+              <label htmlFor="reminder-date" className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Reminder / due date</label>
+              <input
+                id="reminder-date"
+                type="datetime-local"
+                value={reminderDate}
+                onChange={handleReminderDateChange}
+                className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">Optional. Set a follow-up or deadline for this matter.</p>
+            </div>
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-semibold text-slate-900">Solicitor notes</p>
-          <p className="text-sm text-slate-600 mt-1">Internal notes remain outside the client-facing intake workflow.</p>
+          <p className="text-sm text-slate-600 mt-1">Internal notes remain outside the client-facing intake workflow. {notesDirty && <span className="font-medium text-amber-700">Unsaved changes — save before leaving.</span>}</p>
           <textarea
             value={solicitorNotes}
             onChange={(event) => setSolicitorNotes(event.target.value)}
@@ -491,6 +773,23 @@ export default function MatterDetailPage() {
           })}
         </div>
       </section>
+
+      {matter && (
+        <ConfirmModal
+          open={deleteConfirmOpen}
+          onClose={() => setDeleteConfirmOpen(false)}
+          onConfirm={handleConfirmDelete}
+          title="Permanently remove this matter?"
+          confirmLabel="Remove matter"
+          cancelLabel="Cancel"
+          variant="danger"
+        >
+          <p className="font-medium text-slate-900">Reference: {matter.client_reference || matter.id}</p>
+          <p className="mt-2 text-slate-700">
+            All client data, solicitor notes, and activity for this matter will be deleted. This cannot be undone.
+          </p>
+        </ConfirmModal>
+      )}
     </div>
   );
 }

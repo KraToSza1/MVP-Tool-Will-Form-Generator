@@ -26,6 +26,7 @@ html.dark-theme .bg-white,
 html.dark-theme .bg-gray-50,
 html.dark-theme .bg-gray-50\/50,
 html.dark-theme .bg-slate-50,
+html.dark-theme .bg-slate-50\/50,
 html.dark-theme .bg-slate-100 {
   background-color: rgba(15, 23, 42, 0.92) !important;
 }
@@ -254,6 +255,322 @@ html.dark-theme .upload-slot .text-green-600 {
 }
 html.dark-theme .upload-slot .text-red-600 {
   color: #fca5a5 !important;
+}
+
+/* Success / info summary banners (partner + executor cards) — dark theme */
+html.dark-theme .bg-green-100 {
+  background-color: rgba(6, 78, 59, 0.5) !important;
+}
+html.dark-theme .border-green-500 {
+  border-color: rgba(16, 185, 129, 0.7) !important;
+}
+html.dark-theme .text-green-800 {
+  color: #bbf7d0 !important;
+}
+html.dark-theme .bg-blue-100 {
+  background-color: rgba(30, 64, 175, 0.45) !important;
+}
+html.dark-theme .border-blue-500 {
+  border-color: rgba(59, 130, 246, 0.7) !important;
+}
+html.dark-theme .text-blue-800 {
+  color: #bfdbfe !important;
+}
+
+
+/* Confirm modal (delete matter etc.) — dark theme */
+html.dark-theme .confirm-modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+html.dark-theme .confirm-modal {
+  background-color: rgba(15, 23, 42, 0.98) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .confirm-modal-body .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .confirm-modal-body .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .confirm-modal-footer {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .confirm-modal-cancel {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .confirm-modal-cancel:hover {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+}
+
+/* Document checklist (Matter detail) — dark theme */
+html.dark-theme .document-checklist {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .document-checklist .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .document-checklist .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .document-checklist .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .document-checklist .text-amber-600 {
+  color: #fbbf24 !important;
+}
+html.dark-theme .document-checklist .text-emerald-600 {
+  color: #34d399 !important;
+}
+html.dark-theme .document-checklist a.text-indigo-700 {
+  color: #a5b4fc !important;
+}
+html.dark-theme .document-checklist a:hover.text-indigo-900,
+html.dark-theme .document-checklist a.text-indigo-700:hover {
+  color: #c7d2fe !important;
+}
+
+/* Solicitor dashboard: Your matters header and filters — dark theme */
+html.dark-theme .solicitor-dashboard-section {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .solicitor-dashboard-header {
+  background-color: rgba(30, 41, 59, 0.85) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+html.dark-theme .solicitor-dashboard-header .text-slate-900 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .solicitor-dashboard-header .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .solicitor-dashboard-btn {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .solicitor-dashboard-btn:hover {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+}
+html.dark-theme .solicitor-dashboard-btn.border-indigo-300,
+html.dark-theme .solicitor-dashboard-btn.bg-indigo-50 {
+  background-color: rgba(49, 46, 129, 0.35) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: #c4b5fd !important;
+}
+html.dark-theme .solicitor-dashboard-input {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .solicitor-dashboard-input::placeholder {
+  color: #64748b !important;
+}
+html.dark-theme .solicitor-dashboard-input option {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+html.dark-theme .solicitor-dashboard-help-panel {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .solicitor-dashboard-help-panel .text-slate-900,
+html.dark-theme .solicitor-dashboard-help-panel .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .solicitor-dashboard-help-panel .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .solicitor-dashboard-help-panel .border-slate-200,
+html.dark-theme .solicitor-dashboard-help-panel .divide-slate-100,
+html.dark-theme .solicitor-dashboard-help-panel .divide-slate-200 {
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Solicitor matters table (list rows, badges, delete button) — dark theme */
+html.dark-theme .solicitor-matters-table thead {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+}
+html.dark-theme .solicitor-matters-table thead th {
+  color: #94a3b8 !important;
+}
+html.dark-theme .solicitor-matters-table tbody {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+html.dark-theme .solicitor-matters-table tbody tr:hover {
+  background-color: rgba(30, 41, 59, 0.85) !important;
+}
+html.dark-theme .solicitor-matters-table tbody tr.bg-amber-50\/40,
+html.dark-theme .solicitor-matters-table tbody tr.hover\:bg-amber-50 {
+  background-color: rgba(120, 53, 15, 0.25) !important;
+}
+html.dark-theme .solicitor-matters-table tbody tr.bg-amber-50\/40:hover,
+html.dark-theme .solicitor-matters-table tbody tr.hover\:bg-amber-50:hover {
+  background-color: rgba(120, 53, 15, 0.35) !important;
+}
+/* Outstanding pills in table: ID verification (rose), Testamentary Capacity (amber) */
+html.dark-theme .solicitor-matters-table .border-rose-200.bg-rose-100.text-rose-900 {
+  background-color: rgba(127, 29, 29, 0.5) !important;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+  color: #fecaca !important;
+}
+html.dark-theme .solicitor-matters-table .border-amber-200.bg-amber-100.text-amber-900 {
+  background-color: rgba(120, 53, 15, 0.5) !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+  color: #fcd34d !important;
+}
+html.dark-theme .solicitor-matter-delete-btn {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(248, 113, 113, 0.5) !important;
+  color: #fca5a5 !important;
+}
+html.dark-theme .solicitor-matter-delete-btn:hover {
+  background-color: rgba(127, 29, 29, 0.4) !important;
+  border-color: rgba(248, 113, 113, 0.6) !important;
+  color: #fecaca !important;
+}
+html.dark-theme .solicitor-matter-delete-btn svg {
+  color: inherit !important;
+}
+
+/* Outstanding Items section — dark theme */
+html.dark-theme .outstanding-items-section {
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.95) 0%, rgba(15, 23, 42, 0.98) 50%, rgba(30, 41, 59, 0.95) 100%) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .outstanding-items-section .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .outstanding-items-section .text-slate-950 {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .outstanding-items-section .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+/* Status pill: "No outstanding files" (emerald) or "X outstanding files" (rose) */
+html.dark-theme .outstanding-items-section .border-emerald-200.bg-white.text-emerald-900 {
+  background-color: rgba(6, 78, 59, 0.5) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  color: #a7f3d0 !important;
+}
+html.dark-theme .outstanding-items-section .border-rose-200.bg-white.text-rose-900 {
+  background-color: rgba(127, 29, 29, 0.5) !important;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+  color: #fecaca !important;
+}
+/* Pinned cards: rose (ID Verification) */
+html.dark-theme .outstanding-items-section button.border-rose-200,
+html.dark-theme .outstanding-items-section button.border-rose-300 {
+  background-color: rgba(68, 64, 60, 0.6) !important;
+  border-color: rgba(248, 113, 113, 0.35) !important;
+}
+html.dark-theme .outstanding-items-section button.border-rose-300 {
+  border-color: rgba(248, 113, 113, 0.5) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-theme .outstanding-items-section button:hover.border-rose-200 {
+  background-color: rgba(68, 64, 60, 0.85) !important;
+  border-color: rgba(248, 113, 113, 0.5) !important;
+}
+html.dark-theme .outstanding-items-section .bg-rose-100 {
+  background-color: rgba(190, 18, 60, 0.35) !important;
+}
+html.dark-theme .outstanding-items-section .text-rose-700 {
+  color: #fca5a5 !important;
+}
+html.dark-theme .outstanding-items-section .border-rose-200.bg-rose-100.text-rose-900 {
+  background-color: rgba(190, 18, 60, 0.4) !important;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+  color: #fecaca !important;
+}
+html.dark-theme .outstanding-items-section .text-rose-800 {
+  color: #fca5a5 !important;
+}
+/* Pinned cards: amber (Testamentary Capacity) */
+html.dark-theme .outstanding-items-section button.border-amber-200,
+html.dark-theme .outstanding-items-section button.border-amber-300 {
+  background-color: rgba(68, 64, 60, 0.6) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+html.dark-theme .outstanding-items-section button.border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.55) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-theme .outstanding-items-section button:hover.border-amber-200 {
+  background-color: rgba(68, 64, 60, 0.85) !important;
+  border-color: rgba(245, 158, 11, 0.5) !important;
+}
+html.dark-theme .outstanding-items-section .bg-amber-100 {
+  background-color: rgba(180, 83, 9, 0.35) !important;
+}
+html.dark-theme .outstanding-items-section .text-amber-700 {
+  color: #fcd34d !important;
+}
+html.dark-theme .outstanding-items-section .border-amber-200.bg-amber-100.text-amber-900 {
+  background-color: rgba(180, 83, 9, 0.4) !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+  color: #fde68a !important;
+}
+html.dark-theme .outstanding-items-section .text-amber-800 {
+  color: #fde68a !important;
+}
+/* Bottom list card */
+html.dark-theme .outstanding-items-list {
+  background-color: rgba(15, 23, 42, 0.92) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+html.dark-theme .outstanding-items-list .border-b {
+  border-color: rgba(99, 102, 241, 0.25) !important;
+}
+html.dark-theme .outstanding-items-list .text-slate-950 {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .outstanding-items-list .text-slate-600 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .outstanding-items-list .text-slate-900 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .outstanding-items-list .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .outstanding-items-list .divide-slate-100 {
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+html.dark-theme .outstanding-items-list .border-slate-200.bg-slate-100 {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+  color: #cbd5e1 !important;
+}
+html.dark-theme .outstanding-items-list a.text-indigo-700 {
+  color: #c4b5fd !important;
+}
+html.dark-theme .outstanding-items-list a.text-indigo-700:hover {
+  color: #e9d5ff !important;
+}
+
+/* Solicitor login: "Add yourself as admin" fix box — dark theme */
+html.dark-theme .solicitor-login-fix-box {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+html.dark-theme .solicitor-login-fix-box .text-amber-900,
+html.dark-theme .solicitor-login-fix-box .text-amber-950 {
+  color: #fef3c7 !important;
+}
+html.dark-theme .solicitor-login-fix-box .text-amber-800 {
+  color: #fde68a !important;
+}
+html.dark-theme .solicitor-login-fix-box .bg-amber-100\/80 {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+}
+html.dark-theme .solicitor-login-fix-box .bg-amber-700:hover {
+  background-color: rgba(245, 158, 11, 0.6) !important;
 }
 
 /* Client ID documents card (Matter detail): stick to dark theme */

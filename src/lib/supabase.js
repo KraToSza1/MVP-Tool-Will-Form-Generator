@@ -8,7 +8,9 @@ const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!url || !anonKey) {
-  console.warn('[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY missing; cloud save/load disabled.');
+  console.warn('[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY missing; cloud save/load disabled. Add them to .env and restart dev server.');
+} else {
+  console.log('[Supabase] Client created (URL and anon key present).');
 }
 
 export const supabase = url && anonKey

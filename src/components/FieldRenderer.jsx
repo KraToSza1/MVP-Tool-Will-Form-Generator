@@ -402,14 +402,20 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           </div>
         )}
 
-        {/* Enhanced List of Added Items */}
+        {/* Enhanced List of Added Items — item may be string or object (e.g. petCarerData) */}
         {existingItems.length > 0 && (
           <div className="mt-3 space-y-2">
             <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
               <CheckCircle2 size={16} className="text-green-500" />
               <span>Added ({existingItems.length}):</span>
             </p>
-            {existingItems.map((item, index) => (
+            {existingItems.map((item, index) => {
+              const displayText = typeof item === 'string'
+                ? item
+                : item && typeof item === 'object'
+                  ? [item.firstName, item.lastName].filter(Boolean).join(' ') || item.title || item.name || (item.email || '').toString() || '—'
+                  : String(item ?? '');
+              return (
               <div
                 key={index}
                 className="flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] group"
@@ -419,7 +425,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
                     {index + 1}
                   </div>
-                  {item}
+                  {displayText}
                 </span>
                 <button
                   type="button"
@@ -430,7 +436,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

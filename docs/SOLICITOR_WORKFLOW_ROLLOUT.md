@@ -33,8 +33,21 @@ This migration:
 ## Required solicitor account setup
 
 1. In Supabase Auth, create solicitor accounts using the Users area or invite flow.
-2. After the user exists, verify a `profiles` row exists.
+2. After the user exists, verify a `profiles` row exists (or create it – see below).
 3. Set the role for each staff user:
+
+**If you're the admin and you get "No solicitor profile"** (you're in Auth but have no `profiles` row): run this in Supabase → SQL Editor, replacing the email with yours:
+
+```sql
+INSERT INTO public.profiles (id, email, display_name, role)
+SELECT id, email, COALESCE(raw_user_meta_data->>'display_name', split_part(COALESCE(email,''), '@', 1)), 'admin'
+FROM auth.users WHERE email = 'your-email@example.com'
+ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;
+```
+
+Then sign in again.
+
+4. For other staff (row already exists), set role:
 
 ```sql
 update public.profiles
@@ -50,7 +63,7 @@ set role = 'admin'
 where email = 'name@aristonesolicitors.co.uk';
 ```
 
-4. Optional display name:
+5. Optional display name:
 
 ```sql
 update public.profiles

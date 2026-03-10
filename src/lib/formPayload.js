@@ -11,6 +11,7 @@ const CLIENT_SNAPSHOT_FIELDS = [
   'email',
   'phoneNumber',
   'mobileNumber',
+  'mobile', // form field id for Mobile in WillSuite form
   'telephoneNumber',
   'dateOfBirth',
   'addressLine1',
@@ -127,7 +128,7 @@ export function buildClientSnapshot(formValues) {
   return {
     fullName: fullName || 'Unknown client',
     email: snapshot.email || '',
-    phoneNumber: snapshot.phoneNumber || snapshot.mobileNumber || snapshot.telephoneNumber || '',
+    phoneNumber: snapshot.phoneNumber || snapshot.mobileNumber || snapshot.mobile || snapshot.telephoneNumber || '',
     dateOfBirth: snapshot.dateOfBirth || '',
     addressLine1: snapshot.addressLine1 || '',
     postcode: snapshot.postcode || '',

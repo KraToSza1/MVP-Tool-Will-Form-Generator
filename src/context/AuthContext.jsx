@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { getCurrentSession, signInSolicitor, signOutSolicitor, subscribeToAuthChanges } from '../lib/auth.js';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { signInSolicitor, signOutSolicitor, subscribeToAuthChanges } from '../lib/auth.js';
 
 const AuthContext = createContext(null);
 
@@ -8,28 +8,34 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const gotInitial = useRef(false);
 
   useEffect(() => {
     let active = true;
-
-    getCurrentSession().then((result) => {
-      if (!active) return;
-      setSession(result.session ?? null);
-      setUser(result.user ?? null);
-      setProfile(result.profile ?? null);
-      setLoading(false);
-    });
+    const FALLBACK_MS = 6_000;
 
     const unsubscribe = subscribeToAuthChanges((result) => {
       if (!active) return;
+      gotInitial.current = true;
       setSession(result.session ?? null);
       setUser(result.user ?? null);
       setProfile(result.profile ?? null);
       setLoading(false);
     });
 
+    const fallback = setTimeout(() => {
+      if (!active) return;
+      if (!gotInitial.current) {
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      }
+    }, FALLBACK_MS);
+
     return () => {
       active = false;
+      clearTimeout(fallback);
       unsubscribe();
     };
   }, []);

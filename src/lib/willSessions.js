@@ -37,14 +37,14 @@ export async function createSession(payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[Will Tool] create_session: error', error.message, error);
+    console.error('[WillTool Flow] create_session: error', error.message, error);
     return { error: error.message };
   }
   if (data !== true) {
-    console.warn('[Will Tool] create_session: unexpected response', data);
+    console.warn('[WillTool Flow] create_session: unexpected response', data);
     return { error: data?.message ?? 'Create failed' };
   }
-  console.log('[Will Tool] create_session: success', { ref });
+  console.log('[WillTool Flow] Client session created', { ref, phase: 'client_start' });
   return { ref, secret };
 }
 
@@ -66,17 +66,18 @@ export async function loadSession(ref, secret) {
     p_secret: secret,
   });
   if (error) {
-    console.error('[Will Tool] load_session: error', error.message, error);
+    console.error('[WillTool Flow] load_session: error', error.message, error);
     return { error: error.message };
   }
   if (data == null) {
-    console.warn('[Will Tool] load_session: not found or invalid secret', { ref });
+    console.warn('[WillTool Flow] load_session: not found or invalid secret', { ref });
     return { error: 'Session not found or invalid secret' };
   }
   const payload = typeof data === 'object' && data !== null && 'payload' in data
     ? data.payload
     : data;
-  console.log('[Will Tool] load_session: success', { ref });
+  const keys = payload && typeof payload === 'object' ? Object.keys(payload).length : 0;
+  console.log('[WillTool Flow] Client session loaded', { ref, fieldCount: keys, phase: 'client_resume' });
   return { payload: payload ?? {} };
 }
 
@@ -100,10 +101,10 @@ export async function saveSession(ref, secret, payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[Will Tool] save_session: error', error.message, error);
+    console.error('[WillTool Flow] save_session: error', error.message, error);
     return { error: error.message };
   }
-  console.log('[Will Tool] save_session: success', { ref });
+  console.log('[WillTool Flow] Client draft saved to cloud', { ref, phase: 'client_draft_save' });
   if (data !== true) {
     return { error: data?.message ?? 'Update failed' };
   }

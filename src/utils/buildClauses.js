@@ -1,4 +1,7 @@
 // Shared clause builder for Preview and PDF
+// Set VITE_DEBUG_CLAUSES=true in .env to enable verbose [BUILD CLAUSES] logs
+const DEBUG_CLAUSES = import.meta.env.VITE_DEBUG_CLAUSES === 'true';
+
 export const buildClauses = ({
   formValues,
   formData,
@@ -37,7 +40,7 @@ export const buildClauses = ({
     if (fieldId === 'executorsSection') {
       // Check if Aristone was selected via chooseAristoneExecutor
       if (formValues.chooseAristoneExecutor === 'Aristone') {
-        console.log(`[BUILD CLAUSES] ✅ hasFieldValue found executorsSection via chooseAristoneExecutor`);
+        if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ✅ hasFieldValue found executorsSection via chooseAristoneExecutor`);
         return true;
       }
     }
@@ -45,7 +48,7 @@ export const buildClauses = ({
     if (fieldId === 'substituteExecutorsSection') {
       // Check if Aristone was selected via chooseAristoneSubstituteExecutor
       if (formValues.chooseAristoneSubstituteExecutor === 'Aristone') {
-        console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substituteExecutorsSection via chooseAristoneSubstituteExecutor`);
+        if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substituteExecutorsSection via chooseAristoneSubstituteExecutor`);
         return true;
       }
     }
@@ -63,7 +66,7 @@ export const buildClauses = ({
             (item.firstName || item.lastName || item.address1)
           );
           if (hasValidEntries) {
-            console.log(`[BUILD CLAUSES] ✅ hasFieldValue found petCarerSection via petCarerData with valid entries`);
+            if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ✅ hasFieldValue found petCarerSection via petCarerData with valid entries`);
             return true;
           }
         }
@@ -81,7 +84,7 @@ export const buildClauses = ({
             (item.firstName || item.lastName || item.address1)
           );
           if (hasValidEntries) {
-            console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substitutePetCarerSection via substitutePetCarerData with valid entries`);
+            if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ✅ hasFieldValue found substitutePetCarerSection via substitutePetCarerData with valid entries`);
             return true;
           }
         }
@@ -144,8 +147,7 @@ export const buildClauses = ({
     ];
     const found = candidates.some((key) => hasValue(formValues[key]));
     
-    // Debug logging for executor sections if not found
-    if (!found && (fieldId === 'executorsSection' || fieldId === 'substituteExecutorsSection' || 
+    if (DEBUG_CLAUSES && !found && (fieldId === 'executorsSection' || fieldId === 'substituteExecutorsSection' || 
                    fieldId === 'digitalExecutorsSection' || fieldId === 'petCarerSection' || 
                    fieldId === 'substitutePetCarerSection')) {
       console.log(`[BUILD CLAUSES] ⚠️ hasFieldValue NOT found for ${fieldId}:`, {
@@ -234,15 +236,14 @@ export const buildClauses = ({
       trimmed === ''
     );
     
-    // ALWAYS-ON Debug logging for problematic clauses (15, 17, 19, 28, 29)
-    if (id.includes('failedMoneyGiftPassProportionately') || 
+    if (DEBUG_CLAUSES && (id.includes('failedMoneyGiftPassProportionately') || 
         id.includes('failedSpecificGiftPassProportionately') || 
         id.includes('failedPropertyGiftPassProportionately') ||
         id.includes('provisionsForPets') ||
         id.includes('substitutePetCarer') ||
         id.includes('petCarerSection') ||
         id.includes('separateTrustees') ||
-        id.includes('appointSeparateTrusteesFLIT')) {
+        id.includes('appointSeparateTrusteesFLIT'))) {
       console.log(`[BUILD CLAUSES] 🔍 ANALYZING CLAUSE: ${id}`, {
         id,
         template: template,
@@ -275,14 +276,14 @@ export const buildClauses = ({
     // CRITICAL FIX: Block ALL incomplete clauses, not just conditional ones
     // Incomplete clauses must NEVER be rendered - they would contain unresolved markers or testator name substitutions
     if (incomplete) {
-      console.warn(`[BUILD CLAUSES] ⚠️ BLOCKING incomplete clause "${id}" - will not be added to clauses array`);
+      if (DEBUG_CLAUSES) console.warn(`[BUILD CLAUSES] ⚠️ BLOCKING incomplete clause "${id}" - will not be added to clauses array`);
       return; // Skip this clause entirely - do not add to clauses array
     }
     
     // CRITICAL FIX: Double-check for unresolved markers even if incomplete check passed
     // This is a safety net in case the incomplete check missed something
     if (hasUnresolvedMarkers) {
-      console.error(`[BUILD CLAUSES] ❌ CRITICAL ERROR: Clause "${id}" has unresolved markers but was not marked incomplete! Blocking anyway.`);
+      if (DEBUG_CLAUSES) console.error(`[BUILD CLAUSES] ❌ CRITICAL ERROR: Clause "${id}" has unresolved markers but was not marked incomplete! Blocking anyway.`);
       return; // Block it
     }
     
@@ -346,7 +347,7 @@ export const buildClauses = ({
             });
           }
           
-          console.log(`[BUILD CLAUSES] ⚠️ Skipping ${field.id} - conditions not met:`, {
+          if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ⚠️ Skipping ${field.id} - conditions not met:`, {
             fieldId: field.id,
             conditions: field.conditions,
             conditionLogic: field.conditionLogic,
@@ -422,7 +423,7 @@ export const buildClauses = ({
             }
           }
           
-          console.log(`[BUILD CLAUSES] Processing section field clause for ${field.id}:`, debugData);
+          if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] Processing section field clause for ${field.id}:`, debugData);
         }
         
         addClause({
@@ -453,7 +454,7 @@ export const buildClauses = ({
                 field.id === 'substitutePetCarer') {
               const fieldIds = extractFieldIds(selectedOption.willClauseText);
               const missingFields = fieldIds.filter((fid) => !hasFieldValue(fid));
-              console.log(`[BUILD CLAUSES] Processing option clause for ${field.id}:`, {
+              if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] Processing option clause for ${field.id}:`, {
                 selectedValue,
                 hasFieldRefs,
                 template: selectedOption.willClauseText, // Full template, no truncation
@@ -489,7 +490,7 @@ export const buildClauses = ({
             if (field.id === 'substitutePetCarerSection' || field.id === 'petCarerSection') {
               const fieldIds = extractFieldIds(subField.willClauseText);
               const missingFields = fieldIds.filter((fid) => !hasFieldValue(fid));
-              console.log(`[BUILD CLAUSES] Processing section clause for ${field.id}:`, {
+              if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] Processing section clause for ${field.id}:`, {
                 template: subField.willClauseText, // Full template, no truncation
                 interpolated: interpolated, // Full interpolated text, no truncation
                 isConditional,

@@ -20,6 +20,10 @@ export async function getFormDefinition() {
     .eq('name', DEFAULT_NAME)
     .maybeSingle();
   if (error) {
+    // Table may not exist yet (e.g. form_definitions not migrated); use static form and avoid console spam
+    if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
+      return { data: null, error: null };
+    }
     console.error('[formDefinition] getFormDefinition error:', error);
     return { data: null, error: error.message };
   }

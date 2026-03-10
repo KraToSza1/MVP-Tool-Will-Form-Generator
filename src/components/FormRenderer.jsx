@@ -67,6 +67,8 @@ import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js
 import { submitMatterFromDraft } from '../lib/matters.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
+// Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
+const DEBUG_INTERPOLATE = import.meta.env.VITE_DEBUG_CLAUSES === 'true';
 
 const REF_REGEX = /^[A-Z0-9]{8,12}$/;
 
@@ -156,8 +158,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     sessionLoadAttemptedRef.current = true;
 
     if (hasCloudRefAndSecret) {
+      console.log('[WillTool Flow] Client resuming: loading session from URL', { ref: refFromUrl, phase: 'client_load_start' });
       loadSession(refFromUrl, secretFromUrl).then((result) => {
         if (result.error) {
+          console.warn('[WillTool Flow] Client session load failed', { ref: refFromUrl, error: result.error });
           toast.error('Could not load session', { description: result.error });
           setSessionInitialized(true);
           return;
@@ -170,6 +174,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         setReferenceNumber(refFromUrl);
         setSessionSecret(secretFromUrl);
         setSessionInitialized(true);
+        console.log('[WillTool Flow] Client session loaded; form ready', { ref: refFromUrl, step, fieldCount: Object.keys(rest).length });
       });
       return;
     }
@@ -191,9 +196,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return Number.isFinite(idx) && idx >= 0 ? idx : 0;
     })();
     const initialPayload = buildCloudPayload(initialFromStorage, step);
+    console.log('[WillTool Flow] Client starting: creating new session', { step, fromStorage: Object.keys(initialFromStorage).length, phase: 'client_create_start' });
 
     createSession(initialPayload).then((result) => {
       if (result.error) {
+        console.warn('[WillTool Flow] Client session create failed', { error: result.error });
         toast.error('Could not create session', { description: result.error });
         setReferenceNumber(getOrCreateReferenceNumberLocal());
         setSessionInitialized(true);
@@ -207,6 +214,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       newUrl.searchParams.set('s', secret);
       window.history.replaceState({}, '', newUrl);
       setSessionInitialized(true);
+      console.log('[WillTool Flow] Client session created; URL updated', { ref });
     });
   }, [useCloud, hasCloudRefAndSecret, refFromUrl, secretFromUrl, useExternalPersistence]);
 
@@ -462,7 +470,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     Object.entries(bracketPlaceholderMap).forEach(([placeholder, fieldRef]) => {
       if (processedText.includes(placeholder)) {
-        console.log(`[INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
+        if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
         processedText = processedText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), fieldRef);
       }
     });
@@ -492,10 +500,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Only swap if it's actually different (avoid no-op)
           if (mappedId !== sectionId) {
             sectionId = mappedId;
-            console.log(`[INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
+            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
           } else {
-            // Even if same ID, ensure we're using the correct section ID for data lookup
-            console.log(`[INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
+            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
           }
         }
       }
@@ -548,7 +555,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           
           // Debug logging for separate trustees
           if (sectionId === 'separateTrusteesSection') {
-            console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - sectionData:`, {
+            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - sectionData:`, {
               sectionData,
               sectionDataType: Array.isArray(sectionData) ? 'array' : typeof sectionData,
               sectionDataLength: Array.isArray(sectionData) ? sectionData.length : 'N/A',
@@ -564,7 +571,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               // If sectionData is null, undefined, not an array, or empty, return unresolved marker immediately
               if (!sectionData || !Array.isArray(sectionData) || sectionData.length === 0) {
                 if (sectionId === 'separateTrusteesSection') {
-                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
+                  if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
                 }
                 return `{{field:${sectionId}:${subField}}}`;
               }
@@ -613,7 +620,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       );
                       
                       if (isPlaceholder) {
-                        console.log(`[INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
+                        if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
                         return ''; // Return empty to mark as incomplete
                       }
                       
@@ -626,10 +633,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         (testatorFirstName && testatorLastName && trimmed.includes(testatorFirstName) && trimmed.includes(testatorLastName));
                       
                       if (containsTestatorNameInString) {
-                        console.error(`[INTERPOLATE] ❌ CRITICAL: String item contains testator name: "${item}"`);
-                        console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
-                        console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
-                        console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
+                        if (DEBUG_INTERPOLATE) {
+                          console.error(`[INTERPOLATE] ❌ CRITICAL: String item contains testator name: "${item}"`);
+                          console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
+                          console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
+                          console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
+                        }
                         return ''; // Reject this item
                       }
                       
@@ -658,25 +667,25 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 
                 // CRITICAL FIX: Validate name doesn't match testator name BEFORE other validation
                 if (testatorFullName && name === testatorFullName) {
-                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name "${name}" matches testator name "${testatorFullName}" for ${sectionId}:fullDetails! Rejecting item.`);
-                  if (sectionId === 'separateTrusteesSection') {
-                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  if (DEBUG_INTERPOLATE) {
+                    console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name "${name}" matches testator name "${testatorFullName}" for ${sectionId}:fullDetails! Rejecting item.`);
+                    if (sectionId === 'separateTrusteesSection') console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
                   }
                   return ''; // Reject this item - testator cannot be their own trustee/pet carer
                 }
                 if (testatorNameWithoutTitle && nameWithoutTitle === testatorNameWithoutTitle) {
-                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name (no title) "${nameWithoutTitle}" matches testator name "${testatorNameWithoutTitle}" for ${sectionId}:fullDetails! Rejecting item.`);
-                  if (sectionId === 'separateTrusteesSection') {
-                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  if (DEBUG_INTERPOLATE) {
+                    console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item name (no title) "${nameWithoutTitle}" matches testator name "${testatorNameWithoutTitle}" for ${sectionId}:fullDetails! Rejecting item.`);
+                    if (sectionId === 'separateTrusteesSection') console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
                   }
                   return ''; // Reject this item
                 }
                 // Also check if firstName + lastName match (even if title differs)
                 if (testatorFirstName && testatorLastName && 
                     item.firstName === testatorFirstName && item.lastName === testatorLastName) {
-                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item firstName "${item.firstName}" + lastName "${item.lastName}" matches testator for ${sectionId}:fullDetails! Rejecting item.`);
-                  if (sectionId === 'separateTrusteesSection') {
-                    console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
+                  if (DEBUG_INTERPOLATE) {
+                    console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Item firstName "${item.firstName}" + lastName "${item.lastName}" matches testator for ${sectionId}:fullDetails! Rejecting item.`);
+                    if (sectionId === 'separateTrusteesSection') console.error(`[INTERPOLATE] separateTrusteesSection:fullDetails - Item details:`, item);
                   }
                   return ''; // Reject this item
                 }
@@ -685,7 +694,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 if ((!name || name.trim() === '') || (!address || !item.address1)) {
                   // Debug logging for separate trustees when validation fails
                   if (sectionId === 'separateTrusteesSection') {
-                    console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
+                    if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
                       item,
                       hasName: !!(name && name.trim()),
                       hasAddress: !!(address && item.address1),
@@ -711,7 +720,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             
             // Debug logging for separate trustees
             if (sectionId === 'separateTrusteesSection') {
-              console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
+              if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
                 formattedItems,
                 length: formattedItems.length,
                 items: formattedItems.map(item => ({ value: item, type: typeof item }))
@@ -743,26 +752,30 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 (testatorFirstName && testatorLastName && result.includes(testatorFirstName) && result.includes(testatorLastName));
               
               if (containsTestatorName) {
-                console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Result contains testator name for ${sectionId}:fullDetails!`);
-                console.error(`[INTERPOLATE] Result: "${result}"`);
-                console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
-                console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
-                console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
-                console.error(`[INTERPOLATE] ❌ BLOCKING - returning unresolved marker to prevent clause with testator name`);
+                if (DEBUG_INTERPOLATE) {
+                  console.error(`[INTERPOLATE] ❌ CRITICAL ERROR: Result contains testator name for ${sectionId}:fullDetails!`);
+                  console.error(`[INTERPOLATE] Result: "${result}"`);
+                  console.error(`[INTERPOLATE] Testator full name: "${testatorFullName}"`);
+                  console.error(`[INTERPOLATE] Testator name (no title): "${testatorNameWithoutTitle}"`);
+                  console.error(`[INTERPOLATE] Testator firstName + lastName: "${testatorFirstNameLastName}"`);
+                  console.error(`[INTERPOLATE] ❌ BLOCKING - returning unresolved marker to prevent clause with testator name`);
+                }
                 return `{{field:${sectionId}:${subField}}}`;
               }
               
               // Debug logging for separate trustees
               if (sectionId === 'separateTrusteesSection') {
-                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
-                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Testator name check passed (fullName: "${testatorFullName}", result: "${result}")`);
+                if (DEBUG_INTERPOLATE) {
+                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
+                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Testator name check passed (fullName: "${testatorFullName}", result: "${result}")`);
+                }
               }
               
               return result;
             } else {
               // No valid formatted items after filtering - return unresolved marker
               if (sectionId === 'separateTrusteesSection') {
-                console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
+                if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
               }
               return `{{field:${sectionId}:${subField}}}`;
             }
@@ -770,7 +783,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           
           // This should never be reached due to early return above, but add guard just in case
           if (sectionId === 'separateTrusteesSection') {
-            console.warn(`[INTERPOLATE] separateTrusteesSection:fullDetails - ⚠️ Unexpected code path, returning unresolved marker`);
+            if (DEBUG_INTERPOLATE) console.warn(`[INTERPOLATE] separateTrusteesSection:fullDetails - ⚠️ Unexpected code path, returning unresolved marker`);
           }
           return `{{field:${sectionId}:${subField}}}`;
         }
@@ -780,7 +793,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         // This prevents accidentally returning testator name or other wrong data
         if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
             (subField === 'fullDetails' || subField === 'fullList')) {
-          console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
+          if (DEBUG_INTERPOLATE) console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
           return `{{field:${sectionId}:${subField}}}`;
         }
         
@@ -970,7 +983,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       // MUST CHECK THIS BEFORE any generic fallbacks to prevent testator name substitution
       if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
           (subField === 'fullDetails' || subField === 'fullList')) {
-        console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached generic fallback section, returning unresolved marker (preventing testator name fallback)`);
+        if (DEBUG_INTERPOLATE) console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached generic fallback section, returning unresolved marker (preventing testator name fallback)`);
         return `{{field:${sectionId}:${subField}}}`;
       }
 
@@ -978,7 +991,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       // NEVER return empty string or use generic fallbacks - always return unresolved marker
       if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && 
           (subField === 'fullDetails' || subField === 'fullList')) {
-        console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached final fallback, returning unresolved marker (preventing empty string/testator name)`);
+        if (DEBUG_INTERPOLATE) console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Reached final fallback, returning unresolved marker (preventing empty string/testator name)`);
         return `{{field:${sectionId}:${subField}}}`;
       }
 
@@ -1233,8 +1246,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         });
       }
       
-      // ALWAYS-ON Debug logging for foreignWillNotRevoked condition evaluation
-      if (field.id === 'foreignWillNotRevoked' || clause.field === 'assetsAbroad') {
+      if (DEBUG_INTERPOLATE && (field.id === 'foreignWillNotRevoked' || clause.field === 'assetsAbroad')) {
         console.log(`[CONDITION EVAL] 🔍 Evaluating condition for field "${field.id}":`, {
           clauseField: clause.field,
           clauseValue: clause.value,
@@ -1253,8 +1265,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       ? (field.conditionLogic === 'OR' ? field.conditions.some(evalClause) : field.conditions.every(evalClause))
       : evalClause(field.conditions);
     
-    // ALWAYS-ON Debug logging for foreignWillNotRevoked
-    if (field.id === 'foreignWillNotRevoked') {
+    if (DEBUG_INTERPOLATE && field.id === 'foreignWillNotRevoked') {
       console.log(`[CONDITION EVAL] ✅ Final result for field "${field.id}":`, {
         fieldId: field.id,
         conditions: field.conditions,
@@ -1490,23 +1501,24 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }, 300);
     } else {
       const finishSubmission = async () => {
-        console.log('[Will Tool] submit: last step reached, calling submitCurrentMatter');
+        console.log('[WillTool Flow] Client reached last step; submitting matter', { ref: referenceNumber, step: currentIndex, phase: 'client_submit_start' });
         if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
         setIsSubmittingMatter(true);
         const result = await submitCurrentMatter();
         setIsSubmittingMatter(false);
 
         if (result?.error) {
+          console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
           console.error('[Will Tool] submit: failed', result.error);
           toast.error('Could not complete submission', { description: result.error });
           return;
         }
 
         if (result?.matterId) {
-          console.log('[Will Tool] submit: success, matterId=', result.matterId);
+          console.log('[WillTool Flow] Client submission complete; matter in DB', { matterId: result.matterId, ref: referenceNumber, phase: 'client_submit_success' });
           setSubmittedMatterId(result.matterId);
         } else {
-          console.log('[Will Tool] submit: completed (no matterId)', result);
+          console.log('[WillTool Flow] Client submission completed (no matterId)', { ref: referenceNumber, result });
         }
 
         setSubmitted(true);
@@ -1994,9 +2006,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         externalPersistence.save({ formValues, currentIndex, saveType: 'manual' });
       } else if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
         const cloudPayload = buildCloudPayload(formValues, currentIndex);
+        console.log('[WillTool Flow] Client manual save: sending draft to cloud', { ref: referenceNumber, step: currentIndex });
         saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
-          if (res.error) toast.error('Cloud save failed', { description: res.error });
-          else toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
+          if (res.error) {
+            console.warn('[WillTool Flow] Client cloud save failed', { ref: referenceNumber, error: res.error });
+            toast.error('Cloud save failed', { description: res.error });
+          } else {
+            console.log('[WillTool Flow] Client draft saved to cloud (manual)', { ref: referenceNumber });
+            toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
+          }
         });
       } else {
         toast.success('Draft saved', { description: 'Your progress has been saved to this device.' });
@@ -2648,7 +2666,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           } else if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
             const cloudPayload = buildCloudPayload(formValues, currentIndex);
             saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
-              if (res.error) console.warn('[AUTOSAVE] Cloud save failed:', res.error);
+              if (res.error) console.warn('[WillTool Flow] Client autosave cloud failed', { ref: referenceNumber, error: res.error });
             });
           }
         } else {
@@ -3116,6 +3134,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return;
       }
       
+      console.log('[WillTool Flow] PDF generation started', { isClientPDF: clientCopy || !solicitorMode, phase: 'client_pdf_start' });
       console.log('[PDF GENERATION] 🔄 Calling generatePDFWithJSPDF with sanitized values...');
       console.log('[PDF GENERATION] 📊 Sanitized values summary:', {
         totalFields: Object.keys(sanitizedValues).length,
@@ -3147,6 +3166,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         clientSignature
       }, { isClientPDF, formSchema: formData });
       
+      console.log('[WillTool Flow] PDF generation completed', { hasDoc: !!pdfResult?.doc, hasPlaceholders: pdfResult?.hasPlaceholders, phase: 'client_pdf_done' });
       console.log('[PDF GENERATION] ✅ PDF generation completed:', {
         hasDoc: !!pdfResult.doc,
         hasMissingItems: !!pdfResult.missingItems,
@@ -3332,6 +3352,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       document.body.appendChild(downloadLink);
       downloadLink.click();
+      console.log('[WillTool Flow] Client PDF downloaded', { filename, phase: 'client_pdf_download' });
 
       setTimeout(() => {
         document.body.removeChild(downloadLink);
