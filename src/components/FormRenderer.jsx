@@ -65,6 +65,7 @@ import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
+import { ID_VERIFICATION_DOC_KEYS, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -275,8 +276,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [currentIndex, solicitorMode]);
   
   const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
+  const uploadedIdDocumentCount = useMemo(() => {
+    const identityVerification = formValues?.identityVerification;
+    if (!identityVerification || typeof identityVerification !== 'object') return 0;
+    return ID_VERIFICATION_DOC_KEYS.filter((key) => hasMeaningfulAnswer(identityVerification[key])).length;
+  }, [formValues]);
+  const hasUploadedIdDocuments = uploadedIdDocumentCount > 0;
   
   const isDev = import.meta.env.DEV;
+  const isFinalStep = currentIndex === visibleSections.length - 1;
+  const primaryActionLabel = isFinalStep
+    ? isSubmittingMatter
+      ? (submittedMatterId ? 'Updating submission...' : 'Submitting...')
+      : (submittedMatterId ? 'Update submission' : 'Submit')
+    : 'Next';
 
   const submitCurrentMatter = useCallback(async () => {
     if (externalPersistence?.submit) {
@@ -345,6 +358,21 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     }
   }, [useCloud, useExternalPersistence]);
 
+  const closeCompletionModal = useCallback(({ scrollToIdentity = false } = {}) => {
+    setSubmitted(false);
+    if (!scrollToIdentity) return;
+
+    window.setTimeout(() => {
+      const identitySection = document.getElementById('identity-verification-section');
+      if (!identitySection) return;
+      identitySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const firstAction = identitySection.querySelector('button');
+      if (firstAction && typeof firstAction.focus === 'function') {
+        firstAction.focus();
+      }
+    }, 120);
+  }, []);
+
   // Handle scroll to show/hide back to top button
   useEffect(() => {
     const handleScroll = () => {
@@ -372,7 +400,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
         if (submitted) {
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing completion modal with Escape key');
-          if (!solicitorMode) startOverAfterSubmit();
+          if (!solicitorMode) closeCompletionModal();
           else setSubmitted(false);
         }
       }
@@ -420,7 +448,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [validationModalOpen, clauseModalOpen, submitted, formValues, solicitorMode, startOverAfterSubmit]);
+  }, [validationModalOpen, clauseModalOpen, submitted, formValues, solicitorMode, closeCompletionModal]);
 
   const scrollToTop = () => {
     DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
@@ -3690,9 +3718,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     </>
                     )}
                     {!solicitorMode && (
-                    <div className="flex flex-col gap-1 text-sm text-gray-700 bg-amber-50 border border-amber-300 px-4 py-3 rounded-xl max-w-lg">
-                      <p className="font-semibold text-amber-900">Questionnaire complete — this is not your final Will</p>
-                      <p>Solicitor review and identity verification happen next. Your documents will be emailed to you. An appointment will be scheduled for legal signing (wet signature) with witnesses.</p>
+                    <div className={`flex flex-col gap-1 text-sm text-gray-700 px-4 py-3 rounded-xl max-w-lg ${
+                      submittedMatterId
+                        ? 'bg-emerald-50 border border-emerald-300'
+                        : 'bg-amber-50 border border-amber-300'
+                    }`}>
+                      <p className={`font-semibold ${submittedMatterId ? 'text-emerald-900' : 'text-amber-900'}`}>
+                        {submittedMatterId ? 'Questionnaire submitted — ID can be added below' : 'Questionnaire complete — this is not your final Will'}
+                      </p>
+                      <p>
+                        {submittedMatterId
+                          ? 'Upload ID documents below, then click Update submission to attach them to the same matter for solicitor review.'
+                          : 'Submit ID next, then the solicitor reviews your questionnaire and arranges the in-person signing appointment.'}
+                      </p>
                     </div>
                     )}
                     </div>
@@ -3809,7 +3847,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 }).filter(Boolean)}
                 {/* #8 Identity verification - client mode, post-completion section on last step */}
                 {!solicitorMode && currentIndex === visibleSections.length - 1 && (
-                  <IdentityVerification formValues={formValues} setFormValues={setFormValues} />
+                  <IdentityVerification
+                    formValues={formValues}
+                    setFormValues={setFormValues}
+                    submittedMatterId={submittedMatterId}
+                  />
                 )}
               </div>
 
@@ -3856,7 +3898,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   type="button"
                   title={!allRequiredFilled ? 'Click to see what needs to be completed' : ''}
                 >
-                  <span>{currentIndex === visibleSections.length - 1 ? (isSubmittingMatter ? 'Submitting...' : 'Submit') : 'Next'}</span>
+                  <span>{primaryActionLabel}</span>
                   <ChevronRight size={18} className="sm:w-5 sm:h-5" />
                 </button>
               </div>
@@ -5252,6 +5294,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         </button>
       )}
 
+      {isSubmittingMatter && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 h-10 w-10 flex-shrink-0 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" aria-hidden="true" />
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {submittedMatterId ? 'Saving your latest changes' : 'Submitting your questionnaire'}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {hasUploadedIdDocuments
+                    ? 'We are processing your uploaded ID documents as well. On slower mobile connections this can take up to 90 seconds.'
+                    : 'Please keep this page open while your answers are saved securely.'}
+                </p>
+                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                  {hasUploadedIdDocuments ? `${uploadedIdDocumentCount} ID document${uploadedIdDocumentCount === 1 ? '' : 's'} included` : 'No ID documents attached yet'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Completion Modal - Shows what happens next */}
       {submitted && (
         <div 
@@ -5276,7 +5341,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
               </div>
               <button
-                onClick={() => (!solicitorMode ? startOverAfterSubmit() : setSubmitted(false))}
+                onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
                 className="p-2.5 hover:bg-white/20 rounded-xl transition-colors"
                 aria-label="Close"
               >
@@ -5331,22 +5396,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
                     <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Solicitor review</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Your completed questionnaire will be reviewed by our team.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Submit ID</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Upload photo ID and proof of address next. You can do that immediately from this same secure link.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-blue-100">
                     <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">2</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Identity verification</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Upload Photo ID and proofs of address if you haven&apos;t already.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Solicitor review</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">Once your intake and ID are in, the solicitor reviews everything and follows up if anything is missing.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-purple-100">
                     <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">3</div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Sign in person</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">An appointment will be scheduled. Sign your Will in person with witnesses present.</p>
+                      <p className="font-semibold text-gray-900 mb-1">Signing</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">An appointment will be scheduled so you can sign your Will in person with witnesses present.</p>
                     </div>
                   </div>
                 </div>
@@ -5357,9 +5422,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <div className="flex items-start gap-3">
                   <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-900 mb-1">Close to start a new questionnaire</p>
+                    <p className="text-sm font-semibold text-blue-900 mb-1">Close to return to your submitted form</p>
                     <p className="text-sm text-blue-800 leading-relaxed">
-                      {solicitorMode ? 'Close this message to return to the form.' : 'When you close this message, the form will clear and you can start a new questionnaire.'}
+                      {solicitorMode ? 'Close this message to return to the form.' : 'Close this message to upload ID now, make any final corrections, or use the same secure link later.'}
                     </p>
                   </div>
                 </div>
@@ -5369,12 +5434,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             {/* Footer - Client mode: no downloads. Solicitor mode: Execution + Client copy */}
             <div className="completion-modal-footer px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
               <button
-                onClick={() => setSubmitted(false)}
+                onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
                 className="text-sm text-gray-500 hover:text-gray-700 transition-colors order-2 sm:order-1"
               >
                 Close
               </button>
-              {solicitorMode && (
+              {solicitorMode ? (
               <div className="flex flex-wrap gap-2 order-1 sm:order-2">
                 <button
                   onClick={() => { setSubmitted(false); handleDownloadPDF(false); }}
@@ -5391,6 +5456,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 >
                   <Download size={18} />
                   Download Client copy (Intake-only – not a final Will)
+                </button>
+              </div>
+              ) : (
+              <div className="flex w-full flex-col gap-2 order-1 sm:order-2 sm:w-auto sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => closeCompletionModal({ scrollToIdentity: true })}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                >
+                  Upload ID now
+                </button>
+                <button
+                  type="button"
+                  onClick={startOverAfterSubmit}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Start new questionnaire
                 </button>
               </div>
               )}

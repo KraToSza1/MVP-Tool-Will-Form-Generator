@@ -358,7 +358,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           return shouldShow;
         })() && (
           <div className="add-item-form mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
               <div className="flex-1 relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-0">
                   <Edit size={18} />
@@ -366,7 +366,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                 <input
                   ref={(ref) => (inputRefs.current[targetFieldId] = ref)}
                   type="text"
-                  className="add-item-form-input w-full border border-gray-300 rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
+                  className="add-item-form-input w-full min-h-[52px] border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
                   placeholder={`Enter ${targetFieldId.replace(/([A-Z])/g, ' $1').replace('Data', '')} (press Enter to add)`}
                   value={currentInputValue}
                   onChange={(e) => {
@@ -384,30 +384,32 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   readOnly={false}
                 />
               </div>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                disabled={!currentInputValue.trim()}
-                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-3 rounded-xl shadow-md transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-105 active:scale-95 disabled:transform-none"
-              >
-                <Check className="w-5 h-5" />
-                <span>Add</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowInputs((prev) => ({ ...prev, [targetFieldId]: false }));
-                  setInputValues((prev) => ({ ...prev, [targetFieldId]: '' }));
-                }}
-                className="add-item-form-cancel bg-gray-300 hover:bg-gray-400 text-gray-700 px-5 py-3 rounded-xl transition-all duration-300 font-medium flex items-center gap-2 transform hover:scale-105 active:scale-95"
-              >
-                <X className="w-5 h-5" />
-                <span>Cancel</span>
-              </button>
+              <div className="flex gap-2 sm:flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  disabled={!currentInputValue.trim()}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-3 rounded-xl shadow-md transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 disabled:transform-none sm:flex-none"
+                >
+                  <Check className="w-5 h-5" />
+                  <span>Add</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInputs((prev) => ({ ...prev, [targetFieldId]: false }));
+                    setInputValues((prev) => ({ ...prev, [targetFieldId]: '' }));
+                  }}
+                  className="add-item-form-cancel flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-5 py-3 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 sm:flex-none"
+                >
+                  <X className="w-5 h-5" />
+                  <span>Cancel</span>
+                </button>
+              </div>
             </div>
             <p className="add-item-form-hint text-xs text-gray-600 mt-2 flex items-center gap-2">
               <Info size={14} />
-              <span>Press Enter or click Add to save. You can add multiple items.</span>
+              <span>The entry field now opens at full width on mobile. Press Enter or click Add to save.</span>
             </p>
           </div>
         )}

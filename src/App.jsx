@@ -34,7 +34,7 @@ function PublicShell() {
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:items-end gap-2">
+                <div className="flex flex-row flex-wrap items-center gap-2 sm:items-end">
                   <ThemeToggleButton compact />
                   <Link
                     to="/solicitor/login"

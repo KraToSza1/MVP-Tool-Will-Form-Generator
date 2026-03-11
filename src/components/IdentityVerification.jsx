@@ -11,6 +11,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera, Upload, FileCheck, AlertCircle, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { compressImageDataUrl } from '../lib/compressIdImages.js';
 
 const UPLOAD_IDS = {
   photoId: 'identityVerificationPhotoId',
@@ -29,7 +30,7 @@ const LABELS = {
 const MAX_FILE_SIZE_MB = 3;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const CAPTURE_JPEG_QUALITY = 0.85;
-const MAX_CAPTURE_WIDTH = 1920;
+const MAX_CAPTURE_WIDTH = 1200;
 
 function UploadSlot({ id, label, hasValue, error, onTakePhoto, onUpload }) {
   return (
@@ -70,14 +71,37 @@ function UploadSlot({ id, label, hasValue, error, onTakePhoto, onUpload }) {
   );
 }
 
-export default function IdentityVerification({ formValues, setFormValues }) {
+export default function IdentityVerification({ formValues, setFormValues, submittedMatterId = null }) {
   const data = formValues.identityVerification || {};
+  const isPostSubmission = Boolean(submittedMatterId);
   const [errors, setErrors] = useState({});
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraKey, setCameraKey] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  const persistDataUrl = async (key, dataUrl, successTitle, successDescription) => {
+    if (typeof dataUrl !== 'string') {
+      toast.error('Upload failed', { description: 'The selected file could not be read. Please try again.' });
+      return;
+    }
+
+    const normalizedDataUrl = await compressImageDataUrl(dataUrl);
+    setFormValues(prev => ({
+      ...prev,
+      identityVerification: {
+        ...(prev.identityVerification || {}),
+        [key]: normalizedDataUrl,
+      },
+    }));
+    setErrors(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    toast.success(successTitle, { description: successDescription });
+  };
 
   const validateFileSize = (file) => {
     if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -98,15 +122,7 @@ export default function IdentityVerification({ formValues, setFormValues }) {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      setFormValues(prev => ({
-        ...prev,
-        identityVerification: {
-          ...(prev.identityVerification || {}),
-          [key]: reader.result,
-        },
-      }));
-      setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
-      toast.success('Photo captured', { description: `${LABELS[key]} has been saved.` });
+      void persistDataUrl(key, reader.result, 'Photo captured', `${LABELS[key]} has been saved.`);
     };
     reader.onerror = () => toast.error('Failed to save photo.');
     reader.readAsDataURL(blob);
@@ -123,14 +139,7 @@ export default function IdentityVerification({ formValues, setFormValues }) {
     setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
     const reader = new FileReader();
     reader.onload = () => {
-      setFormValues(prev => ({
-        ...prev,
-        identityVerification: {
-          ...(prev.identityVerification || {}),
-          [key]: reader.result,
-        },
-      }));
-      toast.success('File uploaded', { description: `${LABELS[key]} has been uploaded successfully.` });
+      void persistDataUrl(key, reader.result, 'File uploaded', `${LABELS[key]} has been uploaded successfully.`);
     };
     reader.onerror = () => toast.error('Upload failed', { description: 'There was an error reading the file. Please try again.' });
     reader.readAsDataURL(file);
@@ -235,11 +244,17 @@ export default function IdentityVerification({ formValues, setFormValues }) {
 
   return (
     <>
-      <div className="id-verification-block mt-8 border-t-2 border-amber-300 pt-8 bg-amber-50/50 -mx-4 px-4 py-4 rounded-xl">
-        <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Verification stage — before solicitor meeting</p>
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">Identity verification</h3>
+      <div id="identity-verification-section" className="id-verification-block mt-8 scroll-mt-24 border-t-2 border-amber-300 pt-8 bg-amber-50/50 -mx-4 px-4 py-4 rounded-xl">
+        <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">
+          {isPostSubmission ? 'Next step — submit ID for review' : 'Verification stage — before solicitor meeting'}
+        </p>
+        <h3 className="text-lg font-semibold text-gray-800 mb-1">
+          {isPostSubmission ? 'Submit identification' : 'Identity verification'}
+        </h3>
         <p className="text-sm text-gray-600 mb-4">
-          Take a photo with your phone or computer camera, or upload a file. Maximum {MAX_FILE_SIZE_MB}MB per file.
+          {isPostSubmission
+            ? `Your questionnaire has already been submitted. Upload your documents here, then click Update submission below to attach them to the same matter. Maximum ${MAX_FILE_SIZE_MB}MB per file.`
+            : `Take a photo with your phone or computer camera, or upload a file. Maximum ${MAX_FILE_SIZE_MB}MB per file.`}
         </p>
         <div className="space-y-4">
           <UploadSlot id={UPLOAD_IDS.photoId} label={LABELS.photoId} hasValue={!!data[UPLOAD_IDS.photoId]} error={errors[UPLOAD_IDS.photoId]} onTakePhoto={handleTakePhoto} onUpload={handleUpload} />
