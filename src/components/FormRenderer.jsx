@@ -65,7 +65,7 @@ import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
-import { ID_VERIFICATION_DOC_KEYS, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
+import { ID_VERIFICATION_DOC_KEYS, getMissingIdVerificationDocs, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -254,6 +254,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSubmittingMatter, setIsSubmittingMatter] = useState(false);
   const [submittedMatterId, setSubmittedMatterId] = useState(null);
+  const [idVerificationIncompleteModalOpen, setIdVerificationIncompleteModalOpen] = useState(false);
+  const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   
@@ -308,7 +310,27 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     });
   }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret]);
 
-
+  const finishSubmission = useCallback(async () => {
+    if (isDev) DEBUG_LOGS && console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
+    setIsSubmittingMatter(true);
+    try {
+      const result = await submitCurrentMatter();
+      if (result?.error) {
+        console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
+        toast.error('Could not complete submission', { description: result.error });
+        return;
+      }
+      if (result?.matterId) {
+        setSubmittedMatterId(result.matterId);
+      }
+      setSubmitted(true);
+    } catch (err) {
+      console.error('[WillTool Flow] Client submit threw', { ref: referenceNumber, err });
+      toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
+    } finally {
+      setIsSubmittingMatter(false);
+    }
+  }, [referenceNumber, submitCurrentMatter]);
 
   useEffect(() => {
     if (!useExternalPersistence) {
@@ -320,6 +342,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const startOverAfterSubmit = useCallback(() => {
     setSubmitted(false);
     setSubmittedMatterId(null);
+    setSubmittedWithIncompleteId(false);
     setFormValues({});
     setCurrentIndex(0);
     setBanner(null);
@@ -1571,35 +1594,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
       }, 300);
     } else {
-      const finishSubmission = async () => {
-        console.log('[WillTool Flow] Client reached last step; submitting matter', { ref: referenceNumber, step: currentIndex, phase: 'client_submit_start' });
-        if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
-        setIsSubmittingMatter(true);
-        try {
-          const result = await submitCurrentMatter();
-
-          if (result?.error) {
-            console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
-            toast.error('Could not complete submission', { description: result.error });
-            return;
-          }
-
-          if (result?.matterId) {
-            console.log('[WillTool Flow] Client submission complete; matter in DB', { matterId: result.matterId, ref: referenceNumber, phase: 'client_submit_success' });
-            setSubmittedMatterId(result.matterId);
-          } else {
-            console.log('[WillTool Flow] Client submission completed (no matterId)', { ref: referenceNumber, result });
-          }
-
-          setSubmitted(true);
-        } catch (err) {
-          console.error('[WillTool Flow] Client submit threw', { ref: referenceNumber, err });
-          toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
-        } finally {
-          setIsSubmittingMatter(false);
-        }
-      };
-
+      const missingIdDocs = getMissingIdVerificationDocs({ identityVerification: formValues?.identityVerification });
+      const idVerificationIncomplete = !solicitorMode && missingIdDocs.length > 0;
+      if (idVerificationIncomplete) {
+        setIdVerificationIncompleteModalOpen(true);
+        return;
+      }
       void finishSubmission();
     }
   };
@@ -5317,6 +5317,47 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         </div>
       )}
 
+      {/* ID verification incomplete – prompt to upload or submit anyway */}
+      {idVerificationIncompleteModalOpen && !solicitorMode && (
+        <div
+          className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="id-incomplete-modal-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-amber-200" onClick={(e) => e.stopPropagation()}>
+            <h2 id="id-incomplete-modal-title" className="text-xl font-bold text-gray-900 mb-2">ID verification incomplete</h2>
+            <p className="text-sm text-gray-700 mb-4">
+              You haven&apos;t uploaded all ID documents. Your application will be marked as <strong>Partially complete – ID verification outstanding</strong>. You can submit now or add documents first.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIdVerificationIncompleteModalOpen(false);
+                  const el = document.getElementById('identity-verification-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                Add documents
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmittedWithIncompleteId(true);
+                  setIdVerificationIncompleteModalOpen(false);
+                  void finishSubmission();
+                }}
+                className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                Submit anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Completion Modal - Shows what happens next */}
       {submitted && (
         <div 
@@ -5337,7 +5378,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
                 <div>
                   <h2 id="completion-modal-title" className="text-2xl font-bold tracking-tight">Congratulations!</h2>
-                  <p className="text-sm text-emerald-100 mt-1">You've completed the entire questionnaire</p>
+                  <p className="text-sm text-emerald-100 mt-1">
+                    {submittedWithIncompleteId ? 'Partially complete – ID verification outstanding' : "You've completed the entire questionnaire"}
+                  </p>
                 </div>
               </div>
               <button
@@ -5354,9 +5397,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
                   {!solicitorMode && submittedMatterId ? (
-                    <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div className={`mb-4 rounded-xl border px-4 py-3 ${submittedWithIncompleteId ? 'border-amber-300 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
                       <p className="text-sm font-medium text-emerald-900">Matter submitted successfully.</p>
                       <p className="text-sm text-emerald-800 mt-1">Your questionnaire is now stored for solicitor review under secure reference <strong>{referenceNumber}</strong>.</p>
+                      {submittedWithIncompleteId && (
+                        <p className="text-sm font-medium text-amber-800 mt-2">This application is marked as <strong>Partially complete – ID verification outstanding</strong>. You can upload ID documents below and click Update submission to attach them.</p>
+                      )}
                     </div>
                   ) : null}
                 {solicitorMode ? (

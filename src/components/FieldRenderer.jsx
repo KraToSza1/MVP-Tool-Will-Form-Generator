@@ -598,9 +598,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       // to ensure immediate synchronization between React state and DOM
     };
 
-    // Get UK-specific placeholder
+    // Get UK-specific or field-specific placeholder
     let placeholder = field.placeholder || '';
-    if (isPostcode && !placeholder) {
+    if (field.id === 'knownAs' && !placeholder) {
+      placeholder = 'e.g. maiden name or name commonly used';
+    } else if (field.id === 'alias' && !placeholder) {
+      placeholder = 'e.g. nickname or other name used';
+    } else if (isPostcode && !placeholder) {
       placeholder = 'e.g., SW1A 1AA';
     } else if (isPhone && !placeholder) {
       // UK phone number formats: Mobile 07123 456789, London 020 1234 5678, Other 0117 123 4567

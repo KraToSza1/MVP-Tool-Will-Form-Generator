@@ -78,6 +78,7 @@ export default function IdentityVerification({ formValues, setFormValues, submit
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraKey, setCameraKey] = useState(null);
   const [cameraError, setCameraError] = useState(null);
+  const [cameraRetryCount, setCameraRetryCount] = useState(0);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -103,23 +104,9 @@ export default function IdentityVerification({ formValues, setFormValues, submit
     toast.success(successTitle, { description: successDescription });
   };
 
-  const validateFileSize = (file) => {
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      return `File size (${sizeMB}MB) exceeds the maximum limit of ${MAX_FILE_SIZE_MB}MB per file. Please choose a smaller file.`;
-    }
-    return null;
-  };
+  const isImageFile = (file) => file?.type?.startsWith('image/');
 
   const setValueFromBlob = (key, blob) => {
-    const sizeError = blob.size > MAX_FILE_SIZE_BYTES
-      ? `Photo is too large (${(blob.size / (1024 * 1024)).toFixed(2)}MB). Max ${MAX_FILE_SIZE_MB}MB.`
-      : null;
-    if (sizeError) {
-      setErrors(prev => ({ ...prev, [key]: sizeError }));
-      toast.error('Photo too large', { description: sizeError });
-      return;
-    }
     const reader = new FileReader();
     reader.onload = () => {
       void persistDataUrl(key, reader.result, 'Photo captured', `${LABELS[key]} has been saved.`);
@@ -130,10 +117,12 @@ export default function IdentityVerification({ formValues, setFormValues, submit
 
   const handleFile = (key, file) => {
     if (!file) return;
-    const sizeError = validateFileSize(file);
-    if (sizeError) {
-      setErrors(prev => ({ ...prev, [key]: sizeError }));
-      toast.error('File too large', { description: sizeError });
+    const isImage = isImageFile(file);
+    if (!isImage && file.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const msg = `File size (${sizeMB}MB) exceeds the maximum limit of ${MAX_FILE_SIZE_MB}MB per file. Please choose a smaller file.`;
+      setErrors(prev => ({ ...prev, [key]: msg }));
+      toast.error('File too large', { description: msg });
       return;
     }
     setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -148,7 +137,13 @@ export default function IdentityVerification({ formValues, setFormValues, submit
   const openCamera = (key) => {
     setCameraKey(key);
     setCameraError(null);
+    setCameraRetryCount(0);
     setCameraOpen(true);
+  };
+
+  const requestCameraAgain = () => {
+    setCameraError(null);
+    setCameraRetryCount((c) => c + 1);
   };
 
   const closeCamera = () => {
@@ -162,8 +157,7 @@ export default function IdentityVerification({ formValues, setFormValues, submit
   };
 
   useEffect(() => {
-    if (!cameraOpen || !cameraKey || !videoRef.current) return;
-    const video = videoRef.current;
+    if (!cameraOpen || !cameraKey) return;
     const constraints = {
       video: {
         facingMode: cameraKey === UPLOAD_IDS.selfieWithId ? 'user' : 'environment',
@@ -172,28 +166,44 @@ export default function IdentityVerification({ formValues, setFormValues, submit
       },
       audio: false,
     };
+    const controller = new AbortController();
     navigator.mediaDevices.getUserMedia(constraints)
       .then((stream) => {
+        if (controller.signal.aborted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
-        video.srcObject = stream;
-        video.play().catch(() => {});
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          video.play().catch(() => {});
+        }
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         const msg = err.name === 'NotAllowedError'
-          ? 'Camera access was denied. Please allow camera in your browser settings.'
+          ? 'Camera access was denied. Please allow camera in your browser settings, or click Try again to be prompted again.'
           : err.name === 'NotFoundError'
             ? 'No camera found on this device.'
             : 'Could not start camera. Please check permissions or try again.';
         setCameraError(msg);
-        toast.error('Camera error', { description: msg });
       });
     return () => {
+      controller.abort();
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
     };
-  }, [cameraOpen, cameraKey]);
+  }, [cameraOpen, cameraKey, cameraRetryCount]);
+
+  useEffect(() => {
+    if (!cameraError && streamRef.current && videoRef.current && videoRef.current.srcObject !== streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraError, cameraOpen, cameraKey]);
 
   const capturePhoto = () => {
     if (!videoRef.current || !cameraKey || !streamRef.current) return;
@@ -291,13 +301,22 @@ export default function IdentityVerification({ formValues, setFormValues, submit
               {cameraError ? (
                 <div className="py-8 text-center">
                   <p className="text-red-600 mb-4">{cameraError}</p>
-                  <button
-                    type="button"
-                    onClick={closeCamera}
-                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300"
-                  >
-                    Close
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={requestCameraAgain}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      Try again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeCamera}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
