@@ -31,7 +31,7 @@ function will_tool_embed_shortcode( $atts ) {
 	$height = esc_attr( $height );
 
 	return sprintf(
-		'<div class="will-tool-embed-fullwidth" style="width: 100vw; position: relative; left: 50%%; right: 50%%; margin-left: -50vw; margin-right: -50vw;"><iframe src="%s" width="100%%" height="%s" style="min-height: 80vh; border: none;" title="Will Form Generator"></iframe></div>',
+		'<div class="will-tool-embed-fullwidth" style="width: 100vw; position: relative; left: 50%%; right: 50%%; margin-left: -50vw; margin-right: -50vw;"><iframe src="%s" width="100%%" height="%s" style="min-height: 80vh; border: none;" title="Will Form Generator" allow="camera"></iframe></div>',
 		$url,
 		$height
 	);

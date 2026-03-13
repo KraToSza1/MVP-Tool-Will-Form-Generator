@@ -61,6 +61,8 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
    - **Shortcode** (if you use the plugin below).
 3. **If using the HTML widget**, paste this and replace the URL with your app URL:
 
+**Important for camera:** The app’s identity verification uses the device camera. For “Take photo” to work inside the iframe, the iframe must grant the camera permission with the `allow="camera"` attribute. The app must be served over **HTTPS** (or localhost).
+
 **Standard (respects column width):**
 ```html
 <iframe
@@ -69,6 +71,7 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
   height="800"
   style="min-height: 80vh; border: none; display: block;"
   title="Will Form Generator"
+  allow="camera"
 ></iframe>
 ```
 
@@ -81,7 +84,8 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
     height="800"
     style="min-height: 80vh; border: none;"
     title="Will Form Generator"
- ></iframe>
+    allow="camera"
+  ></iframe>
 </div>
 ```
 
@@ -136,7 +140,8 @@ If you want only your WordPress site to embed the app (e.g. `https://aristonesol
 
 ## Checklist
 
-- [ ] Will Tool is deployed and the URL works in a browser.
+- [ ] Will Tool is deployed and the URL works in a browser (HTTPS required for camera).
 - [ ] `vercel.json` (or your host) allows framing (e.g. `frame-ancestors *` or your WP domain).
+- [ ] Iframe includes `allow="camera"` so identity verification “Take photo” works inside the embed.
 - [ ] In Elementor: HTML widget with iframe **or** Shortcode widget with `[will_tool]`.
 - [ ] Iframe height looks good on mobile and desktop (test at 375px, 768px, 1280px).
