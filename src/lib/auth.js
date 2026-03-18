@@ -42,7 +42,8 @@ export async function getCurrentSession() {
   }
 }
 
-const SIGN_IN_TIMEOUT_MS = 18_000;
+/** Embedded iframes (e.g. WordPress) can be slow or throttle auth; allow longer wait. */
+const SIGN_IN_TIMEOUT_MS = 45_000;
 
 function withTimeout(promise, ms, message = 'Sign-in timed out') {
   return Promise.race([

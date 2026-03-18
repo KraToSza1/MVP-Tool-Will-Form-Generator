@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, LockKeyhole, Mail } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, LockKeyhole, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
@@ -24,16 +24,22 @@ export default function SolicitorLoginPage() {
   const [rememberEmail, setRememberEmail] = useState(() => !!getStoredEmail());
   const [submitting, setSubmitting] = useState(false);
   const [adminFixSql, setAdminFixSql] = useState(null);
+  const [inIframe, setInIframe] = useState(false);
+
+  useEffect(() => {
+    setInIframe(typeof window !== 'undefined' && window.self !== window.top);
+  }, []);
 
   if (!loading && isAuthenticated && isStaff) {
     const target = location.state?.from?.pathname || '/solicitor';
     return <Navigate to={target} replace />;
   }
 
-  const SIGN_IN_TIMEOUT_MS = 20_000;
+  const SIGN_IN_TIMEOUT_MS = 48_000;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const emailTrimmed = email.trim();
     setSubmitting(true);
     setAdminFixSql(null);
     let result;
@@ -41,15 +47,18 @@ export default function SolicitorLoginPage() {
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Sign-in timed out')), SIGN_IN_TIMEOUT_MS);
       });
-      result = await Promise.race([signIn({ email, password }), timeoutPromise]);
+      result = await Promise.race([signIn({ email: emailTrimmed, password }), timeoutPromise]);
     } catch (err) {
       console.error('[Solicitor Login] signIn threw', err);
       const isTimeout = err?.message === 'Sign-in timed out';
+      const inIframe = typeof window !== 'undefined' && window.self !== window.top;
       toast.error('Sign-in failed', {
         description: isTimeout
-          ? 'Request took too long. Check your connection, refresh the page and try again. If the console shows a "lock" warning, refresh first.'
+          ? inIframe
+            ? 'Sign-in often times out inside an embedded page (e.g. WordPress). Open solicitor login in a new tab using the link below, then sign in there.'
+            : 'Request took too long. Try again, or open this page in a new tab. Check your connection.'
           : (err?.message || 'Network or unexpected error. Check the console.'),
-        duration: 12000,
+        duration: 16000,
       });
       setSubmitting(false);
       return;
@@ -67,7 +76,7 @@ export default function SolicitorLoginPage() {
       } else if (isNoProfile) {
         const sql = `INSERT INTO public.profiles (id, email, display_name, role)
 SELECT id, email, COALESCE(raw_user_meta_data->>'display_name', split_part(COALESCE(email,''), '@', 1)), 'admin'
-FROM auth.users WHERE email = ${email ? `'${email.replace(/'/g, "''")}'` : "'YOUR_EMAIL@example.com'"}
+FROM auth.users WHERE email = ${emailTrimmed ? `'${emailTrimmed.replace(/'/g, "''")}'` : "'YOUR_EMAIL@example.com'"}
 ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
         setAdminFixSql(sql);
         description = "You're in Auth but not in the staff list. Run the SQL below in Supabase → SQL Editor, then sign in again.";
@@ -83,9 +92,9 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
       return;
     }
 
-    if (rememberEmail && email) {
+    if (rememberEmail && emailTrimmed) {
       try {
-        window.localStorage.setItem(REMEMBER_EMAIL_KEY, email);
+        window.localStorage.setItem(REMEMBER_EMAIL_KEY, emailTrimmed);
       } catch {
         /* ignore */
       }
@@ -101,8 +110,11 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
     navigate(location.state?.from?.pathname || '/solicitor', { replace: true });
   };
 
+  const directLoginUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/solicitor/login` : '/solicitor/login';
+
   return (
-    <div className="min-h-dvh bg-slate-100 flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-slate-100 flex items-center justify-center px-4 py-6">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl p-8 relative">
         <div className="absolute right-4 top-4">
           <ThemeToggleButton compact />
@@ -125,6 +137,29 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
             Use your Aristone Solicitors account to access client matters and solicitor-only workflow.
           </p>
         </div>
+
+        {inIframe && (
+          <div
+            className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+            role="region"
+            aria-label="Embedded sign-in notice"
+          >
+            <p className="font-semibold text-amber-900">Signing in from an embedded page?</p>
+            <p className="mt-1 text-amber-800/95">
+              Browsers often block or delay login when the Will Tool runs inside WordPress. Use the same email and password in a{' '}
+              <strong>new tab</strong> — that usually fixes timeouts.
+            </p>
+            <a
+              href={directLoginUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-800 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-600"
+            >
+              <ExternalLink size={16} aria-hidden />
+              Open solicitor login in new tab
+            </a>
+          </div>
+        )}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block">
