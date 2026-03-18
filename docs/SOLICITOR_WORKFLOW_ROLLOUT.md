@@ -30,6 +30,12 @@ This migration:
 - adds `submit_will_matter(...)` RPC for client-side submission
 - grants the existing `will_sessions` RPCs to `authenticated` users as well as `anon`
 
+If the solicitor dashboard returns **500 / “stack depth limit exceeded”** when loading matters, run:
+
+- `supabase/migrations/20260318000000_fix_is_staff_rls_recursion.sql`
+
+That fixes RLS recursion between `profiles` and `is_staff()`.
+
 ## Required solicitor account setup
 
 1. In Supabase Auth, create solicitor accounts using the Users area or invite flow.

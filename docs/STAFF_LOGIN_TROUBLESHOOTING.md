@@ -74,3 +74,17 @@ Supabase only accepts the password **actually stored** for that user. If you’r
 | Logged in but “access denied” | Fix `profiles.role` in Supabase |
 | App says Supabase not configured | Deploy must have `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` |
 | User exists in dashboard but app rejects | Confirm Vercel env Supabase URL = that project |
+
+---
+
+## Matters list: “stack depth limit exceeded” (HTTP 500)
+
+Solicitor dashboard fails loading matters. Supabase logs show **54001 stack depth limit exceeded**.
+
+**Cause:** Row Level Security on `profiles` + `matters` caused **infinite recursion** (`is_staff()` → read `profiles` → policy calls `is_staff()` again).
+
+**Fix:** In Supabase → **SQL Editor**, run the migration:
+
+`supabase/migrations/20260318000000_fix_is_staff_rls_recursion.sql`
+
+(pastes the `SECURITY DEFINER` versions of `is_staff` and `current_user_role`). Then refresh the dashboard.
