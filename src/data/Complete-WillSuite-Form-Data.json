@@ -284,8 +284,9 @@
               "type": "radio",
               "label": "Is the Testator a UK National or a Habitual Resident?",
               "options": [
-                  { "value": "Habitual Resident", "label": "Habitual Resident" }, 
-                  { "value": "UK National", "label": "UK National" }
+                  { "value": "Habitual Resident", "label": "Habitual Resident" },
+                  { "value": "UK National", "label": "UK National" },
+                  { "value": "Neither", "label": "Neither" }
               ],
               "value": null,
               "conditions": [
