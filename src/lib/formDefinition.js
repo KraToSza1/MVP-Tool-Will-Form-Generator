@@ -105,13 +105,38 @@ export async function getFactoryDefault() {
 }
 
 const SAVE_REQUEST_TIMEOUT_MS = 60_000;
-const GET_SESSION_TIMEOUT_MS = 4_000;
+/** Per-attempt cap for getSession / getUser races (4s was too aggressive under GC or main-thread pressure). */
+const GET_SESSION_ATTEMPT_MS = 12_000;
+const GET_SESSION_MAX_ATTEMPTS = 3;
+const GET_SESSION_RETRY_DELAY_MS = 350;
+const GET_USER_ATTEMPT_MS = 10_000;
+/** If getSession keeps timing out, use last known user id for updated_by (RLS still applies on the request). */
+const SESSION_USER_CACHE_TTL_MS = 20 * 60 * 1000;
+
 const REVISION_INSERT_TIMEOUT_MS = 20_000;
 const LIST_REVISIONS_TIMEOUT_MS = 15_000;
 
+let sessionUserIdCache = { userId: null, cachedAt: 0 };
+
+/**
+ * Call when auth/profile resolves (e.g. profiles.select ok) so saves can still set updated_by if getSession races.
+ * @param {string | null | undefined} userId
+ */
+export function primeFormDefinitionSessionUserId(userId) {
+  if (userId && typeof userId === 'string') {
+    sessionUserIdCache = { userId, cachedAt: Date.now() };
+    formLog('session_cache_primed', { userIdPrefix: `${userId.slice(0, 8)}…` });
+  }
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 function withTimeout(promise, ms, label) {
+  const p = promise && typeof promise.then === 'function' ? promise : Promise.resolve(promise);
   return Promise.race([
-    Promise.resolve(promise),
+    p,
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error(label || `Request timed out after ${ms}ms`)), ms)
     ),
@@ -119,32 +144,101 @@ function withTimeout(promise, ms, label) {
 }
 
 /**
- * Avoid hanging forever if auth.getSession() stalls (can block questionnaire save UI).
+ * Resolve session for updated_by without hanging forever. Retries, getUser fallback, then short-lived cache.
  */
 async function getSessionBounded() {
-  try {
-    const result = await Promise.race([
-      supabase.auth.getSession(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('getSession_timeout')), GET_SESSION_TIMEOUT_MS)
-      ),
-    ]);
-    return result;
-  } catch (e) {
-    formLog('getSession_timeout_or_error', { message: e?.message || String(e) });
-    return { data: { session: null } };
+  const tPipeline = typeof performance !== 'undefined' ? performance.now() : 0;
+
+  const tryOnceGetSession = async (attempt) => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    formLog('getSession_attempt_start', { attempt, max: GET_SESSION_MAX_ATTEMPTS, budgetMs: GET_SESSION_ATTEMPT_MS });
+    try {
+      const result = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getSession_timeout')), GET_SESSION_ATTEMPT_MS)
+        ),
+      ]);
+      const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+      const uid = result?.data?.session?.user?.id ?? null;
+      formLog('getSession_attempt_ok', { attempt, ms, hasUserId: !!uid });
+      if (uid) {
+        primeFormDefinitionSessionUserId(uid);
+      }
+      return result;
+    } catch (e) {
+      const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+      formLog('getSession_attempt_fail', {
+        attempt,
+        ms,
+        message: e?.message || String(e),
+      });
+      throw e;
+    }
+  };
+
+  for (let attempt = 1; attempt <= GET_SESSION_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await tryOnceGetSession(attempt);
+    } catch {
+      if (attempt < GET_SESSION_MAX_ATTEMPTS) {
+        formLog('getSession_retry_backoff', { delayMs: GET_SESSION_RETRY_DELAY_MS, nextAttempt: attempt + 1 });
+        await sleep(GET_SESSION_RETRY_DELAY_MS);
+      }
+    }
   }
+
+  formLog('getSession_all_attempts_failed', { attempts: GET_SESSION_MAX_ATTEMPTS });
+
+  const tGu = typeof performance !== 'undefined' ? performance.now() : 0;
+  formLog('getUser_fallback_start', { budgetMs: GET_USER_ATTEMPT_MS });
+  try {
+    const gu = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('getUser_timeout')), GET_USER_ATTEMPT_MS)),
+    ]);
+    const ms = tGu && typeof performance !== 'undefined' ? Math.round(performance.now() - tGu) : 0;
+    const user = gu?.data?.user ?? null;
+    if (user?.id) {
+      primeFormDefinitionSessionUserId(user.id);
+      formLog('getUser_fallback_ok', { ms, hasUserId: true });
+      return { data: { session: { user } } };
+    }
+    formLog('getUser_fallback_empty', { ms });
+  } catch (e) {
+    formLog('getUser_fallback_fail', { message: e?.message || String(e) });
+  }
+
+  const age = Date.now() - sessionUserIdCache.cachedAt;
+  if (sessionUserIdCache.userId && age >= 0 && age < SESSION_USER_CACHE_TTL_MS) {
+    const syntheticId = sessionUserIdCache.userId;
+    formLog('session_resolve_via_cache', {
+      ageMs: age,
+      ttlMs: SESSION_USER_CACHE_TTL_MS,
+      userIdPrefix: `${syntheticId.slice(0, 8)}…`,
+    });
+    return { data: { session: { user: { id: syntheticId } } } };
+  }
+
+  const totalMs =
+    tPipeline && typeof performance !== 'undefined' ? Math.round(performance.now() - tPipeline) : 0;
+  formLog('getSession_exhausted_no_user', { totalMs, hadStaleCache: !!sessionUserIdCache.userId });
+  return { data: { session: null } };
 }
 
 /**
  * @param {object} payload
  * @param {'save'|'restore'|'admin_seed'} source
  * @param {string} [notes]
+ * @param {string | null} [userIdFromSave] - avoids a second getSession round-trip after publish
  */
-async function insertFormRevision(payload, source, notes) {
-  const { data: sessionData } = await getSessionBounded();
-  const userId = sessionData?.session?.user?.id ?? null;
-  formLog('revision_insert_start', { source, payloadBytes: payloadByteSize(payload) });
+async function insertFormRevision(payload, source, notes, userIdFromSave = null) {
+  let userId = userIdFromSave;
+  if (!userId) {
+    const { data: sessionData } = await getSessionBounded();
+    userId = sessionData?.session?.user?.id ?? null;
+  }
+  formLog('revision_insert_start', { source, payloadBytes: payloadByteSize(payload), reusedUserId: !!userIdFromSave });
   try {
     const { error } = await withTimeout(
       supabase.from('form_definition_revisions').insert({
@@ -205,6 +299,7 @@ export async function saveFormDefinition(payload) {
   formLog('session_resolved', { hasUserId: !!userId });
 
   try {
+    formLog('upsert_await_start', { saveTimeoutMs: SAVE_REQUEST_TIMEOUT_MS });
     const { error } = await withTimeout(
       supabase.from('form_definitions').upsert(
         {
@@ -220,12 +315,19 @@ export async function saveFormDefinition(payload) {
     );
     if (error) {
       console.error('[formDefinition] saveFormDefinition error:', error);
-      formLog('upsert_error', { message: error.message, code: error.code });
+      formLog('upsert_error', { message: error.message, code: error.code, phase: 'postgrest_response' });
       return { error: error.message };
     }
   } catch (err) {
     console.error('[formDefinition] saveFormDefinition failed:', err);
-    formLog('upsert_error', { message: err?.message || String(err) });
+    const msg = err?.message || String(err);
+    const isTimeout =
+      typeof msg === 'string' &&
+      (msg.includes('too long') || msg.includes('timed out') || msg.includes('timeout'));
+    formLog('upsert_error', {
+      message: msg,
+      phase: isTimeout ? 'upsert_race_timeout_or_network' : 'upsert_throw',
+    });
     return { error: err?.message || 'Save failed' };
   }
 
@@ -238,7 +340,7 @@ export async function saveFormDefinition(payload) {
     updated_by: userId,
   });
 
-  const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null);
+  const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null, userId);
   if (revErr) {
     formLog('upsert_success_revision_failed', { upsertMs, revisionError: revErr });
   } else {
@@ -334,6 +436,7 @@ export async function restoreFormDefinitionRevision(revisionId) {
   const { data: sessionData } = await getSessionBounded();
   const userId = sessionData?.session?.user?.id ?? null;
 
+  formLog('restore_upsert_await_start', { saveTimeoutMs: SAVE_REQUEST_TIMEOUT_MS });
   const { error: upErr } = await withTimeout(
     supabase.from('form_definitions').upsert(
       {
@@ -353,7 +456,7 @@ export async function restoreFormDefinitionRevision(revisionId) {
     return { error: upErr.message };
   }
 
-  const { error: revInsErr } = await insertFormRevision(payload, 'restore', `from revision ${revisionId}`);
+  const { error: revInsErr } = await insertFormRevision(payload, 'restore', `from revision ${revisionId}`, userId);
   if (revInsErr) {
     qLog('restore_revision_log_failed', { message: revInsErr });
   }

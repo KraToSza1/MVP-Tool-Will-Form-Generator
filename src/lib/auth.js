@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
+import { primeFormDefinitionSessionUserId } from './formDefinition.js';
 
 /** Safe for console: which Supabase project the browser is using (compare to dashboard URL). */
 function getSupabaseProjectHost() {
@@ -60,6 +61,7 @@ async function fetchProfileRow(userId) {
     role: data?.role ?? null,
     email: data?.email ? maskEmail(data.email) : null,
   });
+  primeFormDefinitionSessionUserId(userId);
   return { profile: data ?? null, error: null };
 }
 
@@ -83,6 +85,9 @@ export async function getCurrentSession() {
 
     const session = data.session ?? null;
     const user = session?.user ?? null;
+    if (user?.id) {
+      primeFormDefinitionSessionUserId(user.id);
+    }
     const profile = user ? await getProfile(user.id) : null;
     if (session && user) {
       authLog('getCurrentSession', { hasSession: true, hasProfile: !!profile, role: profile?.role, userId: user.id });

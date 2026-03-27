@@ -13,6 +13,7 @@ import {
   Trash2,
   Plus,
   Undo2,
+  Layers,
 } from 'lucide-react';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import {
@@ -816,27 +817,51 @@ export default function QuestionnaireEditorPage() {
           />
         </div>
 
-        <div className="questionnaire-advanced-panel mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+        <div className="questionnaire-advanced-panel mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
           <button
             type="button"
+            id="questionnaire-advanced-trigger"
+            aria-expanded={showAdvanced}
+            aria-controls="questionnaire-advanced-toolbar"
             onClick={() => setShowAdvanced((s) => !s)}
-            className="questionnaire-advanced-toggle font-semibold text-slate-900 underline-offset-2 hover:underline"
+            className="questionnaire-advanced-toggle-btn group relative flex w-full items-center gap-3 rounded-xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-slate-50 px-4 py-3.5 text-left shadow-sm ring-1 ring-slate-900/[0.04] transition hover:border-indigo-300/90 hover:shadow-md hover:ring-indigo-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
           >
-            {showAdvanced ? 'Hide' : 'Show'} Advanced (reorder / add / remove)
+            <span
+              className="questionnaire-advanced-toggle-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-900/25 ring-1 ring-white/10"
+              aria-hidden
+            >
+              <Layers size={20} strokeWidth={2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="questionnaire-advanced-toggle-title block text-sm font-semibold tracking-tight text-slate-900">
+                Advanced editing
+              </span>
+              <span className="questionnaire-advanced-toggle-sub mt-0.5 block text-xs font-medium text-slate-500">
+                {showAdvanced ? 'Open — reorder, add sections, or remove fields' : 'Reorder sections · add or remove fields'}
+              </span>
+            </span>
+            <ChevronDown
+              size={22}
+              className={`shrink-0 text-slate-400 transition-transform duration-200 ease-out group-hover:text-indigo-500 ${showAdvanced ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
           </button>
-          <p className="questionnaire-advanced-hint mt-1 text-xs text-slate-600">
+          <p className="questionnaire-advanced-hint mt-3 text-xs leading-relaxed text-slate-600">
             Reordering changes screen order only. New fields use IDs starting with{' '}
-            <code className="questionnaire-advanced-code rounded bg-slate-200 px-1 font-mono text-slate-800">custom_</code>. Only those can be removed; only sections you add here can be deleted.
+            <code className="questionnaire-advanced-code rounded-md bg-slate-200/90 px-1.5 py-0.5 font-mono text-[0.8rem] text-slate-800">custom_</code>. Only those can be removed; only sections you add here can be deleted.
           </p>
           {showAdvanced && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div
+              id="questionnaire-advanced-toolbar"
+              className="questionnaire-advanced-toolbar mt-4 flex flex-wrap gap-2 border-t border-slate-200/80 pt-4"
+            >
               <button
                 type="button"
                 onClick={openAddSectionModal}
                 disabled={loading || saving}
-                className="questionnaire-advanced-add inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                className="questionnaire-advanced-add inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
               >
-                <Plus size={14} /> Add section
+                <Plus size={14} strokeWidth={2.5} /> Add section
               </button>
             </div>
           )}
