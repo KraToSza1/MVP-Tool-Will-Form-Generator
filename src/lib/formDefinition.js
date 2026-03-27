@@ -104,17 +104,15 @@ export async function getFactoryDefault() {
   return { data: bundledFactory, error: null, source: 'supabase' };
 }
 
-const SAVE_REQUEST_TIMEOUT_MS = 60_000;
-/** Per-attempt cap for getSession / getUser races (4s was too aggressive under GC or main-thread pressure). */
-const GET_SESSION_ATTEMPT_MS = 12_000;
-const GET_SESSION_MAX_ATTEMPTS = 3;
-const GET_SESSION_RETRY_DELAY_MS = 350;
-const GET_USER_ATTEMPT_MS = 10_000;
+const SAVE_REQUEST_TIMEOUT_MS = 90_000;
+/** Single auth attempt — stacking multiple getSession() calls does NOT cancel prior ones and can wedge GoTrue so every DB call waits. */
+const GET_SESSION_SINGLE_MS = 8_000;
+const GET_USER_SINGLE_MS = 8_000;
 /** If getSession keeps timing out, use last known user id for updated_by (RLS still applies on the request). */
 const SESSION_USER_CACHE_TTL_MS = 20 * 60 * 1000;
 
-const REVISION_INSERT_TIMEOUT_MS = 20_000;
-const LIST_REVISIONS_TIMEOUT_MS = 15_000;
+const REVISION_INSERT_TIMEOUT_MS = 25_000;
+const LIST_REVISIONS_TIMEOUT_MS = 60_000;
 
 let sessionUserIdCache = { userId: null, cachedAt: 0 };
 
@@ -129,10 +127,6 @@ export function primeFormDefinitionSessionUserId(userId) {
   }
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 function withTimeout(promise, ms, label) {
   const p = promise && typeof promise.then === 'function' ? promise : Promise.resolve(promise);
   return Promise.race([
@@ -143,87 +137,210 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+function getRestConfig() {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const base = url && typeof url === 'string' ? url.replace(/\/$/, '') : '';
+  return { base, anonKey };
+}
+
+/** Read JWT from localStorage — bypasses wedged supabase.auth.getSession() used internally by the JS client. */
+function parseJwtExpMs(jwt) {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+    const json = atob(b64 + pad);
+    const payload = JSON.parse(json);
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredSupabaseAccessToken() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const keys = Object.keys(localStorage);
+    for (const k of keys) {
+      if (!k.startsWith('sb-') || !k.includes('auth')) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token =
+        parsed?.access_token ||
+        parsed?.currentSession?.access_token ||
+        parsed?.session?.access_token;
+      if (token && typeof token === 'string') {
+        const expMs = parseJwtExpMs(token);
+        if (expMs && Date.now() > expMs - 15_000) continue;
+        return token;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /**
- * Resolve session for updated_by without hanging forever. Retries, getUser fallback, then short-lived cache.
+ * Prefer cache first: never call getSession when primed cache is valid (avoids queuing hung GoTrue work).
+ * At most ONE getSession + ONE getUser — never stack retries (prior calls are not cancelled by Promise.race).
  */
 async function getSessionBounded() {
   const tPipeline = typeof performance !== 'undefined' ? performance.now() : 0;
-
-  const tryOnceGetSession = async (attempt) => {
-    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-    formLog('getSession_attempt_start', { attempt, max: GET_SESSION_MAX_ATTEMPTS, budgetMs: GET_SESSION_ATTEMPT_MS });
-    try {
-      const result = await Promise.race([
-        supabase.auth.getSession(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('getSession_timeout')), GET_SESSION_ATTEMPT_MS)
-        ),
-      ]);
-      const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
-      const uid = result?.data?.session?.user?.id ?? null;
-      formLog('getSession_attempt_ok', { attempt, ms, hasUserId: !!uid });
-      if (uid) {
-        primeFormDefinitionSessionUserId(uid);
-      }
-      return result;
-    } catch (e) {
-      const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
-      formLog('getSession_attempt_fail', {
-        attempt,
-        ms,
-        message: e?.message || String(e),
-      });
-      throw e;
-    }
-  };
-
-  for (let attempt = 1; attempt <= GET_SESSION_MAX_ATTEMPTS; attempt++) {
-    try {
-      return await tryOnceGetSession(attempt);
-    } catch {
-      if (attempt < GET_SESSION_MAX_ATTEMPTS) {
-        formLog('getSession_retry_backoff', { delayMs: GET_SESSION_RETRY_DELAY_MS, nextAttempt: attempt + 1 });
-        await sleep(GET_SESSION_RETRY_DELAY_MS);
-      }
-    }
+  const age = Date.now() - sessionUserIdCache.cachedAt;
+  if (sessionUserIdCache.userId && age >= 0 && age < SESSION_USER_CACHE_TTL_MS) {
+    formLog('session_fast_path', {
+      ageMs: age,
+      ttlMs: SESSION_USER_CACHE_TTL_MS,
+      userIdPrefix: `${sessionUserIdCache.userId.slice(0, 8)}…`,
+    });
+    return { data: { session: { user: { id: sessionUserIdCache.userId } } } };
   }
 
-  formLog('getSession_all_attempts_failed', { attempts: GET_SESSION_MAX_ATTEMPTS });
+  formLog('session_slow_path', { reason: 'cache_missing_or_expired' });
 
-  const tGu = typeof performance !== 'undefined' ? performance.now() : 0;
-  formLog('getUser_fallback_start', { budgetMs: GET_USER_ATTEMPT_MS });
+  try {
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('getSession_timeout')), GET_SESSION_SINGLE_MS)
+      ),
+    ]);
+    const uid = result?.data?.session?.user?.id ?? null;
+    if (uid) {
+      primeFormDefinitionSessionUserId(uid);
+      formLog('getSession_ok', { ms: Math.round(performance.now() - tPipeline) });
+      return result;
+    }
+    formLog('getSession_null_user', {});
+  } catch (e) {
+    formLog('getSession_fail', { message: e?.message || String(e) });
+  }
+
   try {
     const gu = await Promise.race([
       supabase.auth.getUser(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('getUser_timeout')), GET_USER_ATTEMPT_MS)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('getUser_timeout')), GET_USER_SINGLE_MS)),
     ]);
-    const ms = tGu && typeof performance !== 'undefined' ? Math.round(performance.now() - tGu) : 0;
     const user = gu?.data?.user ?? null;
     if (user?.id) {
       primeFormDefinitionSessionUserId(user.id);
-      formLog('getUser_fallback_ok', { ms, hasUserId: true });
+      formLog('getUser_ok', { ms: Math.round(performance.now() - tPipeline) });
       return { data: { session: { user } } };
     }
-    formLog('getUser_fallback_empty', { ms });
   } catch (e) {
-    formLog('getUser_fallback_fail', { message: e?.message || String(e) });
+    formLog('getUser_fail', { message: e?.message || String(e) });
   }
 
-  const age = Date.now() - sessionUserIdCache.cachedAt;
-  if (sessionUserIdCache.userId && age >= 0 && age < SESSION_USER_CACHE_TTL_MS) {
-    const syntheticId = sessionUserIdCache.userId;
+  const age2 = Date.now() - sessionUserIdCache.cachedAt;
+  if (sessionUserIdCache.userId && age2 >= 0 && age2 < SESSION_USER_CACHE_TTL_MS) {
     formLog('session_resolve_via_cache', {
-      ageMs: age,
+      ageMs: age2,
       ttlMs: SESSION_USER_CACHE_TTL_MS,
-      userIdPrefix: `${syntheticId.slice(0, 8)}…`,
+      userIdPrefix: `${sessionUserIdCache.userId.slice(0, 8)}…`,
     });
-    return { data: { session: { user: { id: syntheticId } } } };
+    return { data: { session: { user: { id: sessionUserIdCache.userId } } } };
   }
 
-  const totalMs =
-    tPipeline && typeof performance !== 'undefined' ? Math.round(performance.now() - tPipeline) : 0;
-  formLog('getSession_exhausted_no_user', { totalMs, hadStaleCache: !!sessionUserIdCache.userId });
+  formLog('getSession_exhausted_no_user', { totalMs: Math.round(performance.now() - tPipeline) });
   return { data: { session: null } };
+}
+
+/**
+ * Direct PostgREST fetch with Bearer from storage — does not use supabase-js request pipeline (avoids internal getSession).
+ */
+async function restUpsertFormDefinition(payload, userId) {
+  const { base, anonKey } = getRestConfig();
+  const token = getStoredSupabaseAccessToken();
+  if (!base || !anonKey || !token) {
+    return { ok: false, reason: 'no_rest_config_or_token' };
+  }
+  const row = {
+    name: DEFAULT_NAME,
+    payload,
+    updated_at: new Date().toISOString(),
+    updated_by: userId,
+  };
+  const endpoint = `${base}/rest/v1/form_definitions?on_conflict=name`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify([row]),
+  });
+  if (res.ok) {
+    return { ok: true };
+  }
+  const text = await res.text().catch(() => '');
+  return {
+    ok: false,
+    reason: 'http_error',
+    status: res.status,
+    message: text.slice(0, 300),
+  };
+}
+
+async function restInsertFormRevision(payload, source, notes, userId) {
+  const { base, anonKey } = getRestConfig();
+  const token = getStoredSupabaseAccessToken();
+  if (!base || !anonKey || !token) {
+    return { ok: false, reason: 'no_rest_config_or_token' };
+  }
+  const row = {
+    payload,
+    source,
+    notes: notes ?? null,
+    created_by: userId,
+  };
+  const res = await fetch(`${base}/rest/v1/form_definition_revisions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify([row]),
+  });
+  if (res.ok) {
+    return { ok: true };
+  }
+  const text = await res.text().catch(() => '');
+  return { ok: false, reason: 'http_error', status: res.status, message: text.slice(0, 300) };
+}
+
+async function restListFormDefinitionRevisions(limit) {
+  const { base, anonKey } = getRestConfig();
+  const token = getStoredSupabaseAccessToken();
+  if (!base || !anonKey || !token) {
+    return { ok: false, reason: 'no_rest_config_or_token' };
+  }
+  const u = new URL(`${base}/rest/v1/form_definition_revisions`);
+  u.searchParams.set('select', 'id,created_at,source,notes,payload');
+  u.searchParams.set('order', 'created_at.desc');
+  u.searchParams.set('limit', String(limit));
+  const res = await fetch(u.toString(), {
+    headers: {
+      Accept: 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { ok: false, status: res.status, message: text.slice(0, 200) };
+  }
+  const rows = await res.json();
+  return { ok: true, rows: Array.isArray(rows) ? rows : [] };
 }
 
 /**
@@ -239,6 +356,26 @@ async function insertFormRevision(payload, source, notes, userIdFromSave = null)
     userId = sessionData?.session?.user?.id ?? null;
   }
   formLog('revision_insert_start', { source, payloadBytes: payloadByteSize(payload), reusedUserId: !!userIdFromSave });
+  const token = getStoredSupabaseAccessToken();
+  if (token) {
+    try {
+      formLog('revision_insert_transport', { mode: 'rest_fetch_jwt' });
+      const rr = await withTimeout(
+        restInsertFormRevision(payload, source, notes, userId),
+        REVISION_INSERT_TIMEOUT_MS,
+        'Recording questionnaire history took too long; your publish may still have succeeded.'
+      );
+      if (rr.ok) {
+        formLog('revision_insert_ok', { source, transport: 'rest' });
+        return { revisionId: null, error: null, skipped: false };
+      }
+      formLog('revision_insert_rest_fallback', { reason: rr.reason, status: rr.status, message: rr.message });
+    } catch (e) {
+      formLog('revision_insert_rest_fallback', { reason: 'throw', message: e?.message || String(e) });
+    }
+  } else {
+    formLog('revision_insert_transport', { mode: 'supabase_js', reason: 'no_stored_jwt' });
+  }
   try {
     const { error } = await withTimeout(
       supabase.from('form_definition_revisions').insert({
@@ -259,7 +396,7 @@ async function insertFormRevision(payload, source, notes, userIdFromSave = null)
       formLog('revision_insert_error', { message: error.message, code: error.code });
       return { revisionId: null, error: error.message, skipped: false };
     }
-    formLog('revision_insert_ok', { source });
+    formLog('revision_insert_ok', { source, transport: 'supabase_js' });
     return { revisionId: null, error: null, skipped: false };
   } catch (e) {
     formLog('revision_insert_failed', { message: e?.message || String(e) });
@@ -298,8 +435,49 @@ export async function saveFormDefinition(payload) {
   const userId = sessionData?.session?.user?.id ?? null;
   formLog('session_resolved', { hasUserId: !!userId });
 
+  const jwtPresent = !!getStoredSupabaseAccessToken();
+  if (jwtPresent) {
+    try {
+      formLog('upsert_transport', { mode: 'rest_fetch_jwt' });
+      const rr = await withTimeout(
+        restUpsertFormDefinition(payload, userId),
+        SAVE_REQUEST_TIMEOUT_MS,
+        'Saving the questionnaire took too long. Check your connection and try again.'
+      );
+      if (rr.ok) {
+        formLog('upsert_http_ok', {
+          table: 'form_definitions',
+          name: DEFAULT_NAME,
+          payloadBytes,
+          upsertMs: t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0,
+          updated_by: userId,
+          transport: 'rest',
+        });
+        const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null, userId);
+        if (revErr) {
+          formLog('upsert_success_revision_failed', { revisionError: revErr });
+        } else {
+          formLog('upsert_success', {
+            table: 'form_definitions',
+            name: DEFAULT_NAME,
+            payloadBytes,
+            revisionHistoryOk: !skipped,
+            transport: 'rest',
+          });
+        }
+        return { error: null, revisionId: null, revisionError: revErr || null };
+      }
+      formLog('upsert_rest_failed_fallback', { reason: rr.reason, status: rr.status, message: rr.message });
+    } catch (err) {
+      console.error('[formDefinition] REST upsert failed:', err);
+      formLog('upsert_rest_failed_fallback', { reason: 'throw', message: err?.message || String(err) });
+    }
+  } else {
+    formLog('upsert_transport', { mode: 'supabase_js', reason: 'no_stored_jwt' });
+  }
+
   try {
-    formLog('upsert_await_start', { saveTimeoutMs: SAVE_REQUEST_TIMEOUT_MS });
+    formLog('upsert_await_start', { saveTimeoutMs: SAVE_REQUEST_TIMEOUT_MS, transport: 'supabase_js' });
     const { error } = await withTimeout(
       supabase.from('form_definitions').upsert(
         {
@@ -338,6 +516,7 @@ export async function saveFormDefinition(payload) {
     payloadBytes,
     upsertMs,
     updated_by: userId,
+    transport: 'supabase_js',
   });
 
   const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null, userId);
@@ -366,6 +545,33 @@ export async function listFormDefinitionRevisions(limit = 50) {
   if (!isSupabaseConfigured()) {
     return { data: [], error: null };
   }
+  if (getStoredSupabaseAccessToken()) {
+    try {
+      qLog('revisions_list_transport', { mode: 'rest_fetch_jwt' });
+      const rr = await withTimeout(
+        restListFormDefinitionRevisions(limit),
+        LIST_REVISIONS_TIMEOUT_MS,
+        'Loading questionnaire history timed out.'
+      );
+      if (rr.ok && Array.isArray(rr.rows)) {
+        const data = rr.rows.map((r) => ({
+          id: r.id,
+          created_at: r.created_at,
+          source: r.source,
+          notes: r.notes,
+          payloadBytes: payloadByteSize(r.payload),
+        }));
+        qLog('revisions_list_success', { count: data.length, transport: 'rest' });
+        return { data, error: null };
+      }
+      qLog('revisions_list_rest_fallback', { ok: rr.ok, status: rr.status, message: rr.message });
+    } catch (e) {
+      qLog('revisions_list_rest_fallback', { message: e?.message || String(e) });
+    }
+  } else {
+    qLog('revisions_list_transport', { mode: 'supabase_js', reason: 'no_stored_jwt' });
+  }
+
   let rows;
   let error;
   try {
@@ -400,7 +606,7 @@ export async function listFormDefinitionRevisions(limit = 50) {
     notes: r.notes,
     payloadBytes: payloadByteSize(r.payload),
   }));
-  qLog('revisions_list_success', { count: data.length });
+  qLog('revisions_list_success', { count: data.length, transport: 'supabase_js' });
   return { data, error: null };
 }
 
