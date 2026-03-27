@@ -1,7 +1,45 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 
+/** Safe for console: which Supabase project the browser is using (compare to dashboard URL). */
+function getSupabaseProjectHost() {
+  try {
+    const u = import.meta.env.VITE_SUPABASE_URL;
+    return u ? new URL(u).hostname : '(VITE_SUPABASE_URL missing)';
+  } catch {
+    return '(invalid VITE_SUPABASE_URL)';
+  }
+}
+
+function maskEmail(email) {
+  if (!email || typeof email !== 'string') return '(empty)';
+  const at = email.indexOf('@');
+  if (at < 1) return '(invalid)';
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}***${domain}`;
+}
+
+/** Structured pipeline logs — filter console by: WillTool Auth */
+function authLog(phase, detail) {
+  const ctx = typeof window !== 'undefined' && window.self !== window.top ? 'iframe' : 'top-level';
+  if (detail !== undefined) {
+    console.log(`[WillTool Auth] ${phase}`, { ...detail, context: ctx });
+  } else {
+    console.log(`[WillTool Auth] ${phase}`, { context: ctx });
+  }
+}
+
+function authError(phase, err) {
+  const extra = err && typeof err === 'object'
+    ? { message: err.message, code: err.code, details: err.details, hint: err.hint, status: err.status }
+    : { raw: String(err) };
+  console.error(`[WillTool Auth] ${phase}`, extra);
+}
+
 async function fetchProfileRow(userId) {
   if (!supabase || !userId) {
+    authLog('profiles.select skipped', { reason: !supabase ? 'no client' : 'no userId' });
     return { profile: null, error: null };
   }
 
@@ -12,10 +50,16 @@ async function fetchProfileRow(userId) {
     .maybeSingle();
 
   if (error) {
-    console.error('[auth] getProfile error:', error);
+    authError('profiles.select failed', error);
     return { profile: null, error };
   }
 
+  authLog('profiles.select ok', {
+    userId,
+    hasRow: !!data,
+    role: data?.role ?? null,
+    email: data?.email ? maskEmail(data.email) : null,
+  });
   return { profile: data ?? null, error: null };
 }
 
@@ -41,7 +85,7 @@ export async function getCurrentSession() {
     const user = session?.user ?? null;
     const profile = user ? await getProfile(user.id) : null;
     if (session && user) {
-      console.log('[Solicitor Login] getCurrentSession', { hasSession: true, hasProfile: !!profile, role: profile?.role });
+      authLog('getCurrentSession', { hasSession: true, hasProfile: !!profile, role: profile?.role, userId: user.id });
     }
     return { session, user, profile };
   } catch (err) {
@@ -70,28 +114,35 @@ async function signInWithPasswordOnce(email, password) {
 }
 
 export async function signInSolicitor({ email, password }) {
-  console.log('[Solicitor Login] signIn attempt', { email, hasPassword: !!password, supabaseConfigured: isSupabaseConfigured() });
+  const host = getSupabaseProjectHost();
+  authLog('pipeline start', {
+    supabaseHost: host,
+    email: maskEmail(email),
+    hasPassword: !!password,
+    supabaseConfigured: isSupabaseConfigured(),
+  });
 
   if (!isSupabaseConfigured()) {
-    console.warn('[Solicitor Login] Supabase not configured – check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env');
+    authError('abort: Supabase client missing', new Error('Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'));
     return { error: 'Supabase not configured' };
   }
 
   let data, error;
   try {
+    authLog('step 1/4: auth.signInWithPassword (request)', {});
     const result = await signInWithPasswordOnce(email, password);
     data = result.data;
     error = result.error;
   } catch (err) {
     if (err?.message === 'Sign-in timed out') {
-      console.warn('[Solicitor Login] first signIn attempt timed out; retrying once (embedded iframes can be slow)');
+      authLog('step 1 retry: first attempt timed out, retrying once', {});
       try {
         const retry = await signInWithPasswordOnce(email, password);
         data = retry.data;
         error = retry.error;
       } catch (err2) {
         if (err2?.message === 'Sign-in timed out') {
-          console.warn('[Solicitor Login] signInWithPassword timed out after retry');
+          authError('step 1 FAILED: timeout after retry', err2);
           return {
             error:
               'Sign-in timed out. Your browser may be limiting the embedded page — try opening the Will Tool in a full tab (use “Open solicitor login in new tab” on the login page), or check your connection.',
@@ -105,12 +156,36 @@ export async function signInSolicitor({ email, password }) {
   }
 
   if (error) {
-    console.error('[Solicitor Login] signInWithPassword failed', { message: error.message, status: error.status, code: error.code });
+    authError('step 1 FAILED: auth.signInWithPassword', error);
+    authLog('hint: invalid_credentials = wrong password or email not in THIS project; confirm VITE_SUPABASE_URL host matches Supabase dashboard', {
+      supabaseHost: host,
+    });
     return { error: error.message, code: error.code };
   }
 
+  authLog('step 1 OK: password accepted by Supabase Auth', {
+    userId: data.user?.id,
+    emailFromAuth: data.user?.email ? maskEmail(data.user.email) : null,
+  });
+
+  // Ensure JWT is applied before RLS-protected queries (helps iframe / storage edge cases)
+  if (data.session?.access_token && data.session?.refresh_token) {
+    authLog('step 2/4: auth.setSession (apply JWT for RLS)', { hasAccessToken: true });
+    const { data: sessData, error: setErr } = await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    if (setErr) {
+      authError('step 2 WARNING: setSession', setErr);
+    } else {
+      authLog('step 2 OK: session applied', { sessionUserId: sessData?.session?.user?.id ?? null });
+    }
+  } else {
+    authLog('step 2/4: skipped (no tokens in signIn response — unexpected)', {});
+  }
+
   const userId = data.user?.id ?? null;
-  console.log('[Solicitor Login] Supabase auth OK, fetching profile for user', userId);
+  authLog('step 3/4: public.profiles SELECT', { userId });
   let profile = null;
   if (userId) {
     try {
@@ -121,7 +196,7 @@ export async function signInSolicitor({ email, password }) {
       );
 
       if (fetchResult.error) {
-        console.error('[Solicitor Login] profile query failed', fetchResult.error);
+        authError('step 3 FAILED: profiles SELECT', fetchResult.error);
         return {
           code: 'profile_fetch_failed',
           error:
@@ -136,13 +211,15 @@ export async function signInSolicitor({ email, password }) {
 
       // auth.users row exists but public.profiles row missing (trigger/backfill gap) — sync once via RPC
       if (!profile) {
+        authLog('step 3b: no profile row — calling RPC ensure_profile_from_auth', { userId });
         const { error: rpcError } = await supabase.rpc('ensure_profile_from_auth');
         if (rpcError) {
-          console.warn('[Solicitor Login] ensure_profile_from_auth RPC failed (run latest DB migration if needed):', rpcError);
+          authError('step 3b FAILED: RPC ensure_profile_from_auth (run migration 20260327120000 if missing)', rpcError);
         } else {
+          authLog('step 3b OK: RPC finished, re-fetching profiles', {});
           fetchResult = await fetchProfileRow(userId);
           if (fetchResult.error) {
-            console.error('[Solicitor Login] profile query after sync failed', fetchResult.error);
+            authError('step 3 FAILED: profiles SELECT after RPC', fetchResult.error);
             return {
               code: 'profile_fetch_failed',
               error:
@@ -156,7 +233,7 @@ export async function signInSolicitor({ email, password }) {
         }
       }
     } catch (err) {
-      console.warn('[Solicitor Login] getProfile timed out or failed', err);
+      authError('step 3 FAILED: exception during profile load', err);
       return {
         error:
           'Signed in but could not load your staff profile in time. Refresh the page, or open the Will Tool in a new tab and try again.',
@@ -167,7 +244,11 @@ export async function signInSolicitor({ email, password }) {
     }
   }
   if (!profile) {
-    console.warn('[Solicitor Login] No profile row after auth + sync. Add row in public.profiles or run migration ensure_profile_from_auth.');
+    authLog('pipeline end: NO PROFILE after auth + RPC', {
+      userId,
+      supabaseHost: getSupabaseProjectHost(),
+      hint: 'Insert row in public.profiles for this user id, or fix RPC',
+    });
     return {
       code: 'no_staff_profile',
       error:
@@ -177,7 +258,12 @@ export async function signInSolicitor({ email, password }) {
       profile: null,
     };
   }
-  console.log('[Solicitor Login] signIn success', { role: profile.role, userId });
+  authLog('pipeline end: SUCCESS', {
+    step: '4/4',
+    userId,
+    role: profile.role,
+    email: maskEmail(profile.email || ''),
+  });
   return { session: data.session ?? null, user: data.user ?? null, profile };
 }
 

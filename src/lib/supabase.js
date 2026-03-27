@@ -10,7 +10,12 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 if (!url || !anonKey) {
   console.warn('[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY missing; cloud save/load disabled. Add them to .env and restart dev server.');
 } else {
-  console.log('[Supabase] Client created (URL and anon key present).');
+  try {
+    const host = new URL(url).hostname;
+    console.log('[Supabase] Client created', { host, iframe: typeof window !== 'undefined' && window.self !== window.top });
+  } catch {
+    console.log('[Supabase] Client created (URL and anon key present).');
+  }
 }
 
 /** In a cross-origin iframe, skip parsing OAuth/magic-link hash on load (reduces work; password sign-in does not need it). Top-level keeps URL sessions for reset links etc. */
