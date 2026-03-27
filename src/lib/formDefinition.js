@@ -9,6 +9,41 @@ import bundledFactory from '../data/Complete-WillSuite-Form-Data.json';
 const DEFAULT_NAME = 'default';
 const FACTORY_ID = 'factory';
 
+/** Same order of magnitude as save/list — avoids hung supabase-js PostgREST calls with no upper bound. */
+const GET_FORM_DEFINITION_TIMEOUT_MS = 25_000;
+
+async function restGetFormDefinition() {
+  const { base, anonKey } = getRestConfig();
+  const token = getStoredSupabaseAccessToken();
+  if (!base || !anonKey || !token) {
+    return { ok: false, reason: 'no_rest_config_or_token' };
+  }
+  const u = new URL(`${base}/rest/v1/form_definitions`);
+  u.searchParams.set('select', 'payload');
+  u.searchParams.set('name', `eq.${DEFAULT_NAME}`);
+  u.searchParams.set('limit', '1');
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const res = await fetch(u.toString(), {
+    headers: {
+      Accept: 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const fetchMs = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { ok: false, reason: 'http_error', status: res.status, message: text.slice(0, 300), fetchMs };
+  }
+  const rows = await res.json();
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  const payload = row?.payload;
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.formSections)) {
+    return { ok: false, reason: 'no_valid_row', fetchMs };
+  }
+  return { ok: true, payload, fetchMs };
+}
+
 /**
  * @returns {Promise<{ data: object | null, error: string | null }>}
  * data is the payload (formTitle, formSections) or null if none saved.
@@ -19,32 +54,75 @@ export async function getFormDefinition() {
     qLog('get_skip', { reason: 'Supabase not configured' });
     return { data: null, error: null };
   }
-  const { data: row, error } = await supabase
-    .from('form_definitions')
-    .select('payload')
-    .eq('name', DEFAULT_NAME)
-    .maybeSingle();
-  if (error) {
-    if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
-      qLog('get_fallback_static', { reason: 'table_missing', code: error.code });
+
+  if (getStoredSupabaseAccessToken()) {
+    try {
+      qLog('get_transport', { mode: 'rest_fetch_jwt' });
+      const rr = await withTimeout(
+        restGetFormDefinition(),
+        GET_FORM_DEFINITION_TIMEOUT_MS,
+        'Loading questionnaire timed out.'
+      );
+      if (rr.ok && rr.payload) {
+        qLog('get_success', {
+          table: 'form_definitions',
+          name: DEFAULT_NAME,
+          payloadBytes: payloadByteSize(rr.payload),
+          sectionCount: rr.payload.formSections?.length,
+          transport: 'rest',
+          fetchMs: rr.fetchMs,
+        });
+        return { data: rr.payload, error: null };
+      }
+      qLog('get_rest_fallback', {
+        ok: !!rr.ok,
+        reason: rr.reason,
+        status: rr.status,
+        fetchMs: rr.fetchMs,
+      });
+    } catch (e) {
+      qLog('get_rest_fallback', { message: e?.message || String(e), phase: 'throw_or_timeout' });
+    }
+  } else {
+    qLog('get_transport', { mode: 'supabase_js', reason: 'no_stored_jwt' });
+  }
+
+  try {
+    qLog('get_transport', { mode: 'supabase_js' });
+    const res = await withTimeout(
+      supabase.from('form_definitions').select('payload').eq('name', DEFAULT_NAME).maybeSingle(),
+      GET_FORM_DEFINITION_TIMEOUT_MS,
+      'Loading questionnaire timed out.'
+    );
+    const { data: row, error } = res;
+    if (error) {
+      if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
+        qLog('get_fallback_static', { reason: 'table_missing', code: error.code });
+        return { data: null, error: null };
+      }
+      console.error('[formDefinition] getFormDefinition error:', error);
+      qLog('get_error', { message: error.message, code: error.code });
+      return { data: null, error: error.message };
+    }
+    const payload = row?.payload;
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.formSections)) {
+      qLog('get_fallback_static', { reason: 'no_valid_row' });
       return { data: null, error: null };
     }
-    console.error('[formDefinition] getFormDefinition error:', error);
-    qLog('get_error', { message: error.message, code: error.code });
-    return { data: null, error: error.message };
+    qLog('get_success', {
+      table: 'form_definitions',
+      name: DEFAULT_NAME,
+      payloadBytes: payloadByteSize(payload),
+      sectionCount: payload.formSections?.length,
+      transport: 'supabase_js',
+    });
+    return { data: payload, error: null };
+  } catch (e) {
+    const msg = e?.message || String(e);
+    console.error('[formDefinition] getFormDefinition failed:', e);
+    qLog('get_error', { message: msg, phase: 'supabase_timeout_or_network' });
+    return { data: null, error: msg };
   }
-  const payload = row?.payload;
-  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.formSections)) {
-    qLog('get_fallback_static', { reason: 'no_valid_row' });
-    return { data: null, error: null };
-  }
-  qLog('get_success', {
-    table: 'form_definitions',
-    name: DEFAULT_NAME,
-    payloadBytes: payloadByteSize(payload),
-    sectionCount: payload.formSections?.length,
-  });
-  return { data: payload, error: null };
 }
 
 /**
@@ -343,6 +421,30 @@ async function restListFormDefinitionRevisions(limit) {
   return { ok: true, rows: Array.isArray(rows) ? rows : [] };
 }
 
+async function restDeleteFormDefinitionRevision(revisionId) {
+  const { base, anonKey } = getRestConfig();
+  const token = getStoredSupabaseAccessToken();
+  if (!base || !anonKey || !token) {
+    return { ok: false, reason: 'no_rest_config_or_token' };
+  }
+  const u = new URL(`${base}/rest/v1/form_definition_revisions`);
+  u.searchParams.set('id', `eq.${revisionId}`);
+  const res = await fetch(u.toString(), {
+    method: 'DELETE',
+    headers: {
+      Accept: 'application/json',
+      apikey: anonKey,
+      Authorization: `Bearer ${token}`,
+      Prefer: 'return=minimal',
+    },
+  });
+  if (res.ok || res.status === 204) {
+    return { ok: true };
+  }
+  const text = await res.text().catch(() => '');
+  return { ok: false, reason: 'http_error', status: res.status, message: text.slice(0, 300) };
+}
+
 /**
  * @param {object} payload
  * @param {'save'|'restore'|'admin_seed'} source
@@ -608,6 +710,60 @@ export async function listFormDefinitionRevisions(limit = 50) {
   }));
   qLog('revisions_list_success', { count: data.length, transport: 'supabase_js' });
   return { data, error: null };
+}
+
+/**
+ * Remove one snapshot from history (does not change the live questionnaire).
+ * @param {string} revisionId
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function deleteFormDefinitionRevision(revisionId) {
+  qLog('revision_delete_start', { revisionId });
+  if (!isSupabaseConfigured()) {
+    return { error: 'Supabase not configured' };
+  }
+  if (!revisionId) {
+    return { error: 'Missing revision id' };
+  }
+
+  if (getStoredSupabaseAccessToken()) {
+    try {
+      const rr = await withTimeout(
+        restDeleteFormDefinitionRevision(revisionId),
+        LIST_REVISIONS_TIMEOUT_MS,
+        'Deleting snapshot timed out.'
+      );
+      if (rr.ok) {
+        qLog('revision_delete_success', { revisionId, transport: 'rest' });
+        return { error: null };
+      }
+      qLog('revision_delete_rest_fallback', { ok: rr.ok, status: rr.status, message: rr.message });
+    } catch (e) {
+      qLog('revision_delete_rest_fallback', { message: e?.message || String(e) });
+    }
+  } else {
+    qLog('revision_delete_transport', { mode: 'supabase_js', reason: 'no_stored_jwt' });
+  }
+
+  let error;
+  try {
+    const res = await withTimeout(
+      supabase.from('form_definition_revisions').delete().eq('id', revisionId),
+      LIST_REVISIONS_TIMEOUT_MS,
+      'Deleting snapshot timed out.'
+    );
+    error = res.error;
+  } catch (e) {
+    qLog('revision_delete_timeout', { message: e?.message || String(e) });
+    return { error: e?.message || 'Timeout deleting snapshot' };
+  }
+
+  if (error) {
+    qLog('revision_delete_error', { message: error.message });
+    return { error: error.message };
+  }
+  qLog('revision_delete_success', { revisionId, transport: 'supabase_js' });
+  return { error: null };
 }
 
 /**

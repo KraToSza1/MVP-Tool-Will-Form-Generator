@@ -22,6 +22,7 @@ import {
   getFactoryDefault,
   listFormDefinitionRevisions,
   restoreFormDefinitionRevision,
+  deleteFormDefinitionRevision,
 } from '../lib/formDefinition.js';
 import { qLog } from '../lib/questionnaireLog.js';
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
@@ -599,6 +600,7 @@ export default function QuestionnaireEditorPage() {
   const [revisions, setRevisions] = useState([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
   const [restoreBusyId, setRestoreBusyId] = useState(null);
+  const [deleteBusyId, setDeleteBusyId] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [addSectionModalOpen, setAddSectionModalOpen] = useState(false);
   const [addFieldModalSectionIndex, setAddFieldModalSectionIndex] = useState(null);
@@ -927,6 +929,9 @@ export default function QuestionnaireEditorPage() {
     [definition.formSections]
   );
 
+  /** Post-save reload uses the same transport as reads; cap so "Saving…" never hangs if a client stalls. */
+  const REFRESH_AFTER_SAVE_CAP_MS = 22_000;
+
   const handleSaveQuestionnaire = useCallback(async () => {
     qLog('save_clicked', { sectionCount: definition.formSections?.length });
     setSaving(true);
@@ -940,15 +945,32 @@ export default function QuestionnaireEditorPage() {
         qLog('save_revision_warning', { message: revisionError });
       }
       qLog('save_revision_ok', { revisionId: revisionId || null });
+      qLog('refresh_after_save_begin', { capMs: REFRESH_AFTER_SAVE_CAP_MS });
+      let refreshOk = false;
       try {
-        await refresh({ silent: true });
+        await Promise.race([
+          refresh({ silent: true }).then(() => {
+            refreshOk = true;
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('refresh_after_save_timeout')), REFRESH_AFTER_SAVE_CAP_MS)
+          ),
+        ]);
+        qLog('refresh_after_save_ok', {});
       } catch (err) {
-        console.warn('[QuestionnaireEditor] refresh after save failed', err);
-        qLog('refresh_after_save_failed', { message: String(err) });
-        toast.error('Saved, but could not reload', {
-          description: 'Your changes should be live. Refresh this page if something looks wrong.',
-        });
-        return;
+        const msg = err?.message || String(err);
+        if (msg === 'refresh_after_save_timeout') {
+          qLog('refresh_after_save_capped', { capMs: REFRESH_AFTER_SAVE_CAP_MS });
+          toast.warning('Questionnaire saved', {
+            description: 'Reloading the editor took too long; your publish is already live. Refresh this page if the list looks old.',
+          });
+        } else {
+          console.warn('[QuestionnaireEditor] refresh after save failed', err);
+          qLog('refresh_after_save_failed', { message: msg });
+          toast.error('Questionnaire saved', {
+            description: 'Could not reload this page from the server. Your changes should already be live — refresh the browser if needed.',
+          });
+        }
       }
       const now = new Date();
       setLastSavedAt(now);
@@ -958,7 +980,9 @@ export default function QuestionnaireEditorPage() {
         /* ignore */
       }
       setDirty(false);
-      toast.success('Questionnaire saved', { description: 'Clients and the form will see the updated questions.' });
+      if (refreshOk) {
+        toast.success('Questionnaire saved', { description: 'Clients and the form will see the updated questions.' });
+      }
       void loadRevisions();
     } finally {
       setSaving(false);
@@ -1007,6 +1031,29 @@ export default function QuestionnaireEditorPage() {
       void loadRevisions();
     } finally {
       setRestoreBusyId(null);
+    }
+  };
+
+  const handleDeleteRevision = async (revisionId) => {
+    if (
+      !window.confirm(
+        'Remove this snapshot from version history? This does not change the live questionnaire. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+    qLog('revision_delete_clicked', { revisionId });
+    setDeleteBusyId(revisionId);
+    try {
+      const { error } = await deleteFormDefinitionRevision(revisionId);
+      if (error) {
+        toast.error('Could not delete snapshot', { description: error });
+        return;
+      }
+      toast.success('Snapshot removed from history');
+      void loadRevisions();
+    } finally {
+      setDeleteBusyId(null);
     }
   };
 
@@ -1110,7 +1157,7 @@ export default function QuestionnaireEditorPage() {
             {revisionsLoading && <span className="text-xs text-slate-500">Loading…</span>}
           </div>
           <p className="questionnaire-version-history-desc mt-1 text-xs text-slate-600">
-            Last 50 published snapshots. Restoring replaces the live questionnaire for all clients.
+            Last 50 published snapshots (oldest are trimmed automatically when you save). Restoring replaces the live questionnaire for all clients. Delete removes a snapshot from history only—it does not change the current published form.
           </p>
           <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
             {revisions.length === 0 && !revisionsLoading && (
@@ -1123,18 +1170,30 @@ export default function QuestionnaireEditorPage() {
                 key={r.id}
                 className="questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
               >
-                <span className="text-slate-700">
+                <span className="min-w-0 flex-1 text-slate-700">
                   {formatSavedTime(new Date(r.created_at)) || r.created_at} · {r.source}
                   {typeof r.payloadBytes === 'number' ? ` · ~${r.payloadBytes} bytes` : ''}
                 </span>
-                <button
-                  type="button"
-                  disabled={!!restoreBusyId || loading}
-                  onClick={() => handleRestoreRevision(r.id)}
-                  className="questionnaire-revision-restore rounded-lg border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
-                >
-                  {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
-                </button>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={loading || restoreBusyId === r.id || deleteBusyId === r.id}
+                    onClick={() => handleRestoreRevision(r.id)}
+                    className="questionnaire-revision-restore rounded-lg border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading || deleteBusyId === r.id || restoreBusyId === r.id}
+                    onClick={() => handleDeleteRevision(r.id)}
+                    className="questionnaire-revision-delete inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    aria-label="Delete snapshot from history"
+                  >
+                    <Trash2 size={12} aria-hidden />
+                    {deleteBusyId === r.id ? 'Removing…' : 'Delete'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -1178,7 +1237,9 @@ export default function QuestionnaireEditorPage() {
                 Advanced editing
               </span>
               <span className="questionnaire-advanced-toggle-sub mt-0.5 block text-xs font-medium text-slate-500">
-                {showAdvanced ? 'Open — reorder, add sections, or remove fields' : 'Reorder sections · add or remove fields'}
+                {showAdvanced
+                  ? 'Open — reorder, add sections, or remove fields'
+                  : 'Reorder sections · add sections · Remove on rows you added'}
               </span>
             </span>
             <ChevronDown
@@ -1189,7 +1250,8 @@ export default function QuestionnaireEditorPage() {
           </button>
           <p className="questionnaire-advanced-hint mt-3 text-xs leading-relaxed text-slate-600">
             Drag the grip icon to reorder sections, use ↑↓, or pick a position number. Reordering changes client step order only; field IDs stay the same. New fields use IDs starting with{' '}
-            <code className="questionnaire-advanced-code rounded-md bg-slate-200/90 px-1.5 py-0.5 font-mono text-[0.8rem] text-slate-800">custom_</code>. Only those can be removed; only sections you add here can be deleted.
+            <code className="questionnaire-advanced-code rounded-md bg-slate-200/90 px-1.5 py-0.5 font-mono text-[0.8rem] text-slate-800">custom_</code>. For sections and fields you added, use{' '}
+            <strong className="font-semibold text-slate-800">Remove section</strong> / <strong className="font-semibold text-slate-800">Remove</strong> on each row (visible without opening this panel). Built-in questionnaire sections cannot be deleted here—edit wording only.
           </p>
           {showAdvanced && (
             <div
@@ -1290,18 +1352,20 @@ export default function QuestionnaireEditorPage() {
                       >
                         <ChevronDown size={16} />
                       </button>
-                      {section._editorAdded && (
-                        <button
-                          type="button"
-                          title="Remove section"
-                          onClick={() => removeSection(sIdx)}
-                          disabled={loading || saving}
-                          className="rounded-lg p-1.5 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
                     </>
+                  )}
+                  {section._editorAdded && (
+                    <button
+                      type="button"
+                      title="Remove this section (added in Advanced mode)"
+                      onClick={() => removeSection(sIdx)}
+                      disabled={loading || saving}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      aria-label="Remove section"
+                    >
+                      <Trash2 size={14} />
+                      <span className="hidden sm:inline">Remove section</span>
+                    </button>
                   )}
                   <button
                     type="button"
@@ -1358,18 +1422,20 @@ export default function QuestionnaireEditorPage() {
                               >
                                 <ChevronDown size={14} />
                               </button>
-                              {field.id?.startsWith?.('custom_') && (
-                                <button
-                                  type="button"
-                                  title="Remove field"
-                                  onClick={() => removeField(sIdx, fIdx)}
-                                  disabled={loading || saving}
-                                  className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
                             </>
+                          )}
+                          {field.id?.startsWith?.('custom_') && (
+                            <button
+                              type="button"
+                              title="Remove this question"
+                              onClick={() => removeField(sIdx, fIdx)}
+                              disabled={loading || saving}
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              aria-label="Remove question"
+                            >
+                              <Trash2 size={12} />
+                              <span className="hidden sm:inline">Remove</span>
+                            </button>
                           )}
                           <button
                             type="button"

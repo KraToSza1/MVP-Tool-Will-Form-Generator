@@ -23,17 +23,22 @@ export function FormDefinitionProvider({ children }) {
     const silent = opts.silent === true;
     qLog('refresh_start', { silent });
     if (!silent) setLoading(true);
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     try {
       const { data, error } = await getFormDefinition();
+      const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
       if (error || !data) {
-        qLog('refresh_complete', { silent, isCustom: false, usedStatic: true, error: error || null });
+        qLog('refresh_complete', { silent, isCustom: false, usedStatic: true, error: error || null, getMs: ms });
         setFormData(staticFormData);
         setIsCustom(false);
         return;
       }
-      qLog('refresh_complete', { silent, isCustom: true, sectionCount: data.formSections?.length });
+      qLog('refresh_complete', { silent, isCustom: true, sectionCount: data.formSections?.length, getMs: ms });
       setFormData(data);
       setIsCustom(true);
+    } catch (e) {
+      qLog('refresh_failed', { silent, message: e?.message || String(e) });
+      throw e;
     } finally {
       if (!silent) setLoading(false);
     }
