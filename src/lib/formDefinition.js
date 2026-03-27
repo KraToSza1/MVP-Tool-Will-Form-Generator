@@ -119,6 +119,13 @@ export async function getFormDefinition() {
     return { data: payload, error: null };
   } catch (e) {
     const msg = e?.message || String(e);
+    const isTimeout =
+      msg.includes('timed out') || msg.includes('timeout') || msg.includes('Timeout');
+    if (isTimeout) {
+      console.warn('[formDefinition] Questionnaire load timed out; using bundled questionnaire.', msg);
+      qLog('get_error', { message: msg, phase: 'timeout_use_bundle', soft: true });
+      return { data: null, error: null };
+    }
     console.error('[formDefinition] getFormDefinition failed:', e);
     qLog('get_error', { message: msg, phase: 'supabase_timeout_or_network' });
     return { data: null, error: msg };

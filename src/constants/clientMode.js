@@ -10,6 +10,20 @@ export const TESTAMENTARY_CAPACITY_SECTION_TITLE = 'Testamentary Capacity';
 /** Solicitor-only intake (not shown to clients; excluded from will via excludeFromWill on fields). */
 export const SOLICITOR_INTAKE_ONLY_SECTION_TITLE = 'Estate Overview (Optional)';
 
+/** Field IDs in Estate Overview + fees ack — strip from client autofill / client state (must match form JSON). */
+export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
+  'estateOverviewIntro',
+  'aristoneProfessionalFeesNotice',
+  'aristoneProfessionalFeesAck',
+  'estateAssetTypes',
+  'estateAssetOther',
+  'estateLiabilityTypes',
+  'estateGrossValueRange',
+  'estateLiabilityValueRange',
+  'estatePropertyValueRange',
+  'estateAdditionalNotes',
+]);
+
 // Legacy default index when the section title is not found (factory order)
 export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 18;
 export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_INDEX - 1;

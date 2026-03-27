@@ -65,6 +65,7 @@ import {
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
   SOLICITOR_INTAKE_ONLY_SECTION_TITLE,
+  SOLICITOR_INTAKE_ONLY_FIELD_IDS,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
@@ -264,7 +265,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
-  
+  const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
+  latestPersistRef.current = { formValues, currentIndex };
+
   // Client mode: hide Testamentary Capacity + solicitor-only intake (e.g. Estate Overview). Solicitors: Estate Overview only when Aristone is executor.
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
@@ -2281,14 +2284,21 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (isClient) {
         console.log('[FORM AUTO-FILL] 🔒 Client mode detected - filtering solicitor-only fields...');
         let removedCount = 0;
-        SOLICITOR_ONLY_FIELD_IDS.forEach(fieldId => {
+        SOLICITOR_ONLY_FIELD_IDS.forEach((fieldId) => {
           if (dummyData[fieldId] !== undefined) {
             delete dummyData[fieldId];
             removedCount++;
             console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
           }
         });
-        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields`);
+        SOLICITOR_INTAKE_ONLY_FIELD_IDS.forEach((fieldId) => {
+          if (dummyData[fieldId] !== undefined) {
+            delete dummyData[fieldId];
+            removedCount++;
+            console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor intake field: ${fieldId}`);
+          }
+        });
+        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only / intake-only fields`);
       }
       
       console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
@@ -2344,8 +2354,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       const modeText = isClient ? 'client' : 'solicitor';
       toast.success('Form auto-filled ✓', {
-        description: `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
-        duration: 4000
+        description:
+          isClient
+            ? `Filled ${Object.keys(dummyData).length} fields (client mode — Estate Overview & solicitor-only steps omitted). For full intake test use /solicitor with Aristone executor.`
+            : `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
+        duration: 5000
       });
       
       if (import.meta.env.DEV) {
@@ -2847,6 +2860,40 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     };
   }, [formValues, useCloud, sessionInitialized, referenceNumber, sessionSecret, currentIndex, externalPersistence, useExternalPersistence]);
 
+  /** Flush draft immediately on tab close / navigation so the last keystroke is not lost waiting for the 1s debounce. */
+  useEffect(() => {
+    const flushDraft = () => {
+      try {
+        const { formValues: fv, currentIndex: step } = latestPersistRef.current;
+        if (useExternalPersistence) return;
+        const dataToSave = buildLocalDraftPayload(fv);
+        const testStr = JSON.stringify(dataToSave);
+        if (testStr.length <= 5 * 1024 * 1024) {
+          localStorage.setItem('willForm', testStr);
+          localStorage.setItem('willFormStep', String(step));
+        }
+        if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
+          const cloudPayload = buildCloudPayload(fv, step);
+          void saveSession(referenceNumber, sessionSecret, cloudPayload);
+        }
+      } catch (e) {
+        console.warn('[AUTOSAVE] Draft flush on page leave failed', e);
+      }
+    };
+    const onLeave = () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      flushDraft();
+    };
+    window.addEventListener('pagehide', onLeave);
+    window.addEventListener('beforeunload', onLeave);
+    return () => {
+      window.removeEventListener('pagehide', onLeave);
+      window.removeEventListener('beforeunload', onLeave);
+    };
+  }, [useCloud, sessionInitialized, referenceNumber, sessionSecret, useExternalPersistence]);
 
   // Calculate clause preview - moved outside JSX to fix React Hooks error
   // (evaluateFieldConditions is already defined above, reusing it)

@@ -7,6 +7,114 @@
 const ARISTONE_EXECUTOR_LINE =
   'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
 
+/**
+ * Distinct demo identities so every role is visibly different in the UI (names, emails, phones, streets).
+ * Tag suffix "(demo autofill)" makes test data obvious in lists and PDFs.
+ */
+const DEMO = {
+  testator: {
+    title: 'Mr',
+    firstName: 'James',
+    middleName: 'Oliver',
+    lastName: 'Hartwell',
+    knownAs: 'Jim',
+    email: 'james.hartwell.demo@example.com',
+    mobile: '07700111101',
+    address1: '10 Testator Terrace',
+    address2: 'Kensington',
+    address3: 'London',
+    postcode: 'W8 4AA',
+    occupation: 'Chartered surveyor',
+  },
+  partner: {
+    fullName: 'Priya Hartwell',
+    email: 'priya.hartwell.demo@example.com',
+    mobile: '07700111102',
+    address1: '10 Testator Terrace',
+    address2: 'Kensington',
+    address3: 'London',
+    postcode: 'W8 4AA',
+  },
+  guardian1: 'Gavin Green — Guardian 1 (demo autofill)',
+  guardian2: 'Greta Green — Guardian 2 (demo autofill)',
+  guardianSub: 'Hugo Hayes — Substitute guardian (demo autofill)',
+  digitalExecutor: 'Dana Reyes — Digital executor (demo autofill)',
+  trustee: 'Tracy Okonkwo — Trustee (demo autofill)',
+  trusteeSub: 'Uma Patel — Substitute trustee (demo autofill)',
+  witness1: 'Wendy Wainwright — Witness 1 (demo autofill)',
+  witness2: 'Winston White — Witness 2 (demo autofill)',
+  executorIndiv1: 'David Day — Individual executor 1 (demo autofill)',
+  executorIndiv2: 'Laura Lake — Individual executor 2 (demo autofill)',
+  substituteExecIndiv: 'Robert Rook — Substitute executor individual (demo autofill)',
+  excluded: 'Evan Excluded — Deliberate exclusion (demo autofill)',
+  debtor: 'Darren Debtor — Debt released (demo autofill)',
+  signingOnBehalf: 'Sally Signer — Signs on behalf (demo autofill)',
+  interpreter: 'Ingrid Interpreter — Interpreter (demo autofill)',
+  chattelRecipient: 'Chloe Chattels — Chattels recipient (demo autofill)',
+  petCarer: {
+    title: 'Ms',
+    firstName: 'Penny',
+    lastName: 'Parker',
+    relationship: 'Friend',
+    address1: '1 Petcarer Lane',
+    address2: 'Richmond',
+    address3: 'Surrey',
+    city: 'Richmond',
+    postcode: 'TW9 1PC',
+    mobile: '07700222201',
+    email: 'penny.parker.pet.demo@example.com',
+    dateOfBirth: '1984-04-12',
+    gender: 'Female',
+  },
+  petCarerSub: {
+    title: 'Mr',
+    firstName: 'Quinn',
+    lastName: 'Quimby',
+    relationship: 'Brother',
+    address1: '2 Substitute Close',
+    address2: 'Windsor',
+    address3: 'Berkshire',
+    city: 'Windsor',
+    postcode: 'SL4 2PS',
+    mobile: '07700222202',
+    email: 'quinn.quimby.pet.demo@example.com',
+    dateOfBirth: '1986-11-03',
+    gender: 'Male',
+  },
+  flitTrusteeA: {
+    title: 'Mr',
+    firstName: 'Felix',
+    lastName: 'Flint',
+    relationship: 'Friend',
+    relationshipToTestator: 'Friend',
+    address1: '77 FLIT Row',
+    address2: 'Hampstead',
+    address3: 'London',
+    city: 'London',
+    postcode: 'NW3 5FL',
+    mobile: '07700333301',
+    email: 'felix.flint.flit.demo@example.com',
+    dateOfBirth: '1978-04-15',
+    gender: 'Male',
+  },
+  flitTrusteeB: {
+    title: 'Mrs',
+    firstName: 'Fiona',
+    lastName: 'Flint',
+    relationship: 'Sister',
+    relationshipToTestator: 'Sister',
+    address1: '88 FLIT Avenue',
+    address2: 'St John\'s Wood',
+    address3: 'London',
+    city: 'London',
+    postcode: 'NW8 6FL',
+    mobile: '07700333302',
+    email: 'fiona.flint.flit.demo@example.com',
+    dateOfBirth: '1981-11-08',
+    gender: 'Female',
+  },
+};
+
 export const generateDummyFormData = (formData) => {
   console.log('[AUTOFILL GENERATE] ========== GENERATING DUMMY DATA ==========');
   const dummyData = {};
@@ -117,6 +225,7 @@ export const generateDummyFormData = (formData) => {
     excludeSpecificStepProvisions: 'No',
     powerToRevokeLifeInterest: 'Yes',
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
+    gender: 'Male',
     executorAgeClause: '25',
     estateGrossValueRange: 'Range500_1m',
     estateLiabilityValueRange: 'Range100_250',
@@ -139,24 +248,42 @@ export const generateDummyFormData = (formData) => {
         return getYesOption(field) || getFirstOption(field);
 
       case 'text':
+        if (field.id === 'firstName') return DEMO.testator.firstName;
+        if (field.id === 'lastName') return DEMO.testator.lastName;
+        if (field.id === 'middleName') return DEMO.testator.middleName;
+        if (field.id === 'knownAs') return DEMO.testator.knownAs;
+        if (field.id === 'alias') return 'J. O. Hartwell';
+        if (field.id === 'partnerFullName') return DEMO.partner.fullName;
+        if (field.id === 'email') return DEMO.testator.email;
+        if (field.id.includes('partner') && field.id.includes('email')) return DEMO.partner.email;
         if (field.id.includes('Name') || field.id.includes('name')) {
-          if (field.id.includes('firstName') || field.id === 'firstName') return 'James';
-          if (field.id.includes('lastName') || field.id === 'lastName') return 'Mitchell';
-          if (field.id.includes('partner') || field.id === 'partnerFullName') return 'Sarah Mitchell';
-          if (field.id.includes('middle') || field.id === 'middleName') return 'Robert';
-          if (field.id.includes('knownAs')) return 'Jim';
-          if (field.id === 'chattelsGiftBeneficiaryName') return 'Emily Watson';
+          if (field.id.includes('firstName')) return DEMO.testator.firstName;
+          if (field.id.includes('lastName')) return DEMO.testator.lastName;
+          if (field.id === 'chattelsGiftBeneficiaryName') return DEMO.chattelRecipient.split(' — ')[0];
           if (field.id === 'foreignWillLocation') return 'Spain';
           if (field.id === 'nativeLanguage') return 'English';
-          return 'James Mitchell';
+          return `${DEMO.testator.firstName} ${DEMO.testator.lastName}`;
         }
-        if (field.id.includes('email')) return 'james.mitchell@email.co.uk';
-        if (field.id.includes('mobile') || field.id.includes('tel')) return '07700 900123';
-        if (field.id.includes('address1') || field.id === 'address1') return field.id?.includes('partner') ? '42 Oakwood Drive' : '15 Victoria Road';
-        if (field.id.includes('address2') || field.id === 'address2') return field.id?.includes('partner') ? 'Chelsea' : 'Kensington';
-        if (field.id.includes('address3') || field.id === 'address3') return 'London';
-        if (field.id.includes('postcode') || field.id === 'postcode') return field.id?.includes('partner') ? 'SW3 2AB' : 'W8 5RT';
-        if (field.id.includes('occupation')) return 'Accountant';
+        if (field.id.includes('email')) return DEMO.testator.email;
+        if (field.id === 'mobile') return DEMO.testator.mobile;
+        if (field.id.includes('partner') && (field.id.includes('mobile') || field.id.includes('tel'))) return DEMO.partner.mobile;
+        if (field.id.includes('mobile') || field.id.includes('tel')) return DEMO.testator.mobile;
+        if (field.id === 'address1' || (field.id.includes('address1') && !field.id.includes('partner'))) return DEMO.testator.address1;
+        if (field.id === 'address2' || (field.id.includes('address2') && !field.id.includes('partner'))) return DEMO.testator.address2;
+        if (field.id === 'address3' || (field.id.includes('address3') && !field.id.includes('partner'))) return DEMO.testator.address3;
+        if (field.id === 'postcode' || (field.id.includes('postcode') && !field.id.includes('partner'))) return DEMO.testator.postcode;
+        if (field.id.includes('partnerAddress1') || (field.id.includes('address1') && field.id.includes('partner'))) return DEMO.partner.address1;
+        if (field.id.includes('partnerAddress2') || (field.id.includes('address2') && field.id.includes('partner'))) return DEMO.partner.address2;
+        if (field.id.includes('partnerAddress3') || (field.id.includes('address3') && field.id.includes('partner'))) return DEMO.partner.address3;
+        if (field.id.includes('partnerPostcode') || (field.id.includes('postcode') && field.id.includes('partner'))) return DEMO.partner.postcode;
+        if (field.id.startsWith('witness1')) return field.id.includes('Address1') ? '11 Witness-One Way' : field.id.includes('Address2') ? 'Fulham' : field.id.includes('Address3') ? 'London' : field.id.includes('Postcode') ? 'SW6 1W1' : field.id.includes('Phone') ? '020 7001 0001' : field.id.includes('Occupation') ? 'Solicitor (demo W1)' : DEMO.witness1;
+        if (field.id.startsWith('witness2')) return field.id.includes('Address1') ? '22 Witness-Two Road' : field.id.includes('Address2') ? 'Putney' : field.id.includes('Address3') ? 'London' : field.id.includes('Postcode') ? 'SW15 2W2' : field.id.includes('Phone') ? '020 7002 0002' : field.id.includes('Occupation') ? 'Teacher (demo W2)' : DEMO.witness2;
+        if (field.id === 'executorAddress1') return '101 Executor Lane';
+        if (field.id === 'executorAddress2') return 'Hampstead';
+        if (field.id === 'executorAddress3') return 'London';
+        if (field.id === 'executorPostcode') return 'NW3 9EX';
+        if (field.id === 'tel2') return '020 7946 0000';
+        if (field.id.includes('occupation')) return DEMO.testator.occupation;
         if (field.id.includes('Schedule') || field.id.includes('schedule')) return String(Math.floor(Math.random() * 9000000) + 1000000);
         if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? '5000' : '100000';
         if (field.id === 'specificOrgansToDonate') return 'kidneys, liver, and corneas';
@@ -169,19 +296,19 @@ export const generateDummyFormData = (formData) => {
 
       case 'textarea':
         if (field.id.includes('charity') || field.id === 'charityBenefitDetails') return 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)';
-        if (field.id.includes('monetaryGiftsDetails')) return 'I give £25,000 to my son Thomas Mitchell when he reaches the age of 25. I give £15,000 to my daughter Charlotte Mitchell when she reaches the age of 21.';
-        if (field.id.includes('specificGiftsDetails')) return 'I give my grandfather\'s gold pocket watch to my son Thomas Mitchell. I give my collection of oil paintings to my daughter Charlotte Mitchell.';
-        if (field.id.includes('propertyGiftsDetails')) return 'I give my property at 15 Victoria Road, Kensington, London W8 5RT to my wife Sarah Mitchell absolutely.';
-        if (field.id.includes('propertyTrustDetails')) return 'my property at 15 Victoria Road, Kensington, London W8 5RT';
+        if (field.id.includes('monetaryGiftsDetails')) return 'I give £25,000 to my son Thomas Hartwell when he reaches 25. I give £15,000 to my daughter Charlotte Hartwell when she reaches 21. [demo autofill — distinct beneficiaries]';
+        if (field.id.includes('specificGiftsDetails')) return 'I give my grandfather\'s gold pocket watch to Thomas Hartwell. I give my oil paintings to Charlotte Hartwell. [demo autofill]';
+        if (field.id.includes('propertyGiftsDetails')) return `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely. [demo autofill]`;
+        if (field.id.includes('propertyTrustDetails')) return `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`;
         if (field.id.includes('propertyTrustTerms')) return 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.';
         if (field.id.includes('bprTrustDetails')) return 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.';
         if (field.id.includes('bprTrustTerms')) return 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.';
-        if (field.id.includes('furtherResidualGiftsDetails')) return 'If any of the above gifts fail, I give the failed share equally to my siblings David Mitchell and Helen Mitchell.';
-        if (field.id.includes('residualGiftsDetails')) return 'I give 50% of my residuary estate to my wife Sarah Mitchell absolutely, 25% to my son Thomas Mitchell absolutely, and 25% to my daughter Charlotte Mitchell absolutely.';
-        if (field.id.includes('specifyLoansGiftsText')) return 'I loaned £10,000 to my son Thomas Mitchell in January 2022 to assist with his house purchase.';
-        if (field.id.includes('lifeTenantDetails')) return 'My wife Sarah Mitchell';
-        if (field.id.includes('beneficiariesDetails')) return 'Thomas Mitchell and Charlotte Mitchell';
-        if (field.id.includes('trustEndDistributionDetails')) return 'Upon the death of the life tenant, the trust property shall pass equally to Thomas Mitchell and Charlotte Mitchell absolutely.';
+        if (field.id.includes('furtherResidualGiftsDetails')) return 'If any of the above gifts fail, I give the failed share equally to my siblings David Hartwell and Helen Hartwell. [demo autofill]';
+        if (field.id.includes('residualGiftsDetails')) return `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to Thomas Hartwell, 25% to Charlotte Hartwell. [demo autofill]`;
+        if (field.id.includes('specifyLoansGiftsText')) return 'I loaned £10,000 to Thomas Hartwell in January 2022 for a house purchase. [demo autofill]';
+        if (field.id.includes('lifeTenantDetails')) return `My wife ${DEMO.partner.fullName}`;
+        if (field.id.includes('beneficiariesDetails')) return 'Thomas Hartwell and Charlotte Hartwell';
+        if (field.id.includes('trustEndDistributionDetails')) return 'Upon the death of the life tenant, the trust passes equally to Thomas Hartwell and Charlotte Hartwell. [demo autofill]';
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
@@ -251,89 +378,77 @@ export const generateDummyFormData = (formData) => {
         field.subFields.forEach((sub) => {
           if (sub.type === 'hidden' && sub.id) {
             if (sub.id === 'guardianData') {
-              dummyData[sub.id] = ['Sarah Johnson', 'Michael Brown'];
+              dummyData[sub.id] = [DEMO.guardian1, DEMO.guardian2];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 2 items`);
             }
             else if (sub.id === 'substituteGuardianData') {
-              dummyData[sub.id] = ['Emma Williams'];
+              dummyData[sub.id] = [DEMO.guardianSub];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
             else if (sub.id === 'digitalExecutorData') {
-              dummyData[sub.id] = ['Sarah Wilson'];
+              dummyData[sub.id] = [DEMO.digitalExecutor];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
             else if (sub.id === 'substituteExecutorData') {
               dummyData[sub.id] =
-                dummyData.chooseAristoneSubstituteExecutor === 'Aristone' ? [ARISTONE_EXECUTOR_LINE] : ['Robert Taylor'];
+                dummyData.chooseAristoneSubstituteExecutor === 'Aristone'
+                  ? [ARISTONE_EXECUTOR_LINE]
+                  : [DEMO.substituteExecIndiv];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array (substitute executor)`);
             }
             else if (sub.id === 'executorData') {
               dummyData[sub.id] =
-                dummyData.chooseAristoneExecutor === 'Aristone' ? [ARISTONE_EXECUTOR_LINE] : ['David Thompson', 'Lisa Anderson'];
+                dummyData.chooseAristoneExecutor === 'Aristone'
+                  ? [ARISTONE_EXECUTOR_LINE]
+                  : [DEMO.executorIndiv1, DEMO.executorIndiv2];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array (executor)`);
             }
-            else if (sub.id.includes('trusteeData')) {
-              dummyData[sub.id] = ['James Wilson'];
+            else if (sub.id === 'substituteTrusteeData') {
+              dummyData[sub.id] = [DEMO.trusteeSub];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = substitute trustee`);
+            }
+            else if (sub.id === 'trusteeData') {
+              dummyData[sub.id] = [DEMO.trustee];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = trustee`);
+            }
+            else if (sub.id === 'witness1Data') {
+              dummyData[sub.id] = [DEMO.witness1];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('substituteTrusteeData')) {
-              dummyData[sub.id] = ['Patricia Martinez'];
+            else if (sub.id === 'witness2Data') {
+              dummyData[sub.id] = [DEMO.witness2];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('witness1Data')) {
-              dummyData[sub.id] = ['Alice Witness'];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
-            }
-            else if (sub.id.includes('witness2Data')) {
-              dummyData[sub.id] = ['Bob Witness'];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
-            }
-            else if (sub.id.includes('petCarerData')) {
-              dummyData[sub.id] = [{
-                title: 'Mr', firstName: 'Robert', lastName: 'Anderson', relationship: 'Friend',
-                address1: '28 Elm Grove', address2: 'Richmond', address3: 'Surrey', city: 'Richmond', postcode: 'TW10 5HJ',
-                mobile: '07700 900456', email: 'robert.anderson@email.co.uk', dateOfBirth: '1982-06-20', gender: 'Male'
-              }];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 object (pet carer)`);
-            }
-            else if (sub.id.includes('substitutePetCarerData')) {
-              dummyData[sub.id] = [{
-                title: 'Mrs', firstName: 'Jennifer', lastName: 'Mitchell', relationship: 'Sister',
-                address1: '52 High Street', address2: 'Windsor', address3: 'Berkshire', city: 'Windsor', postcode: 'SL4 1LD',
-                mobile: '07700 900789', email: 'jennifer.mitchell@email.co.uk', dateOfBirth: '1985-09-12', gender: 'Female'
-              }];
+            else if (sub.id === 'substitutePetCarerData') {
+              dummyData[sub.id] = [{ ...DEMO.petCarerSub }];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 object (substitute pet carer)`);
             }
-            else if (sub.id.includes('excludedPersonData')) {
-              dummyData[sub.id] = ['Robert Brown'];
+            else if (sub.id === 'petCarerData') {
+              dummyData[sub.id] = [{ ...DEMO.petCarer }];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 object (pet carer)`);
+            }
+            else if (sub.id === 'excludedPersonData') {
+              dummyData[sub.id] = [DEMO.excluded];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('separateTrusteeData')) {
-              dummyData[sub.id] = [{
-                title: 'Mr', firstName: 'Michael', lastName: 'Thompson', relationship: 'Friend',
-                address1: '67 Church Road', address2: 'Hampstead', address3: 'London', city: 'London', postcode: 'NW3 6BJ',
-                mobile: '07700 900234', email: 'michael.thompson@email.co.uk', dateOfBirth: '1978-04-15', gender: 'Male'
-              }, {
-                title: 'Mrs', firstName: 'Emma', lastName: 'Wilson', relationship: 'Sister',
-                address1: '93 Park Avenue', address2: 'St John\'s Wood', address3: 'London', city: 'London', postcode: 'NW8 7HY',
-                mobile: '07700 900567', email: 'emma.wilson@email.co.uk', dateOfBirth: '1981-11-08', gender: 'Female'
-              }];
+            else if (sub.id === 'separateTrusteeData') {
+              dummyData[sub.id] = [{ ...DEMO.flitTrusteeA }, { ...DEMO.flitTrusteeB }];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 2 objects (separate trustees)`);
             }
-            else if (sub.id.includes('chattelRecipientData')) {
-              dummyData[sub.id] = ['Emma Wilson'];
+            else if (sub.id === 'chattelRecipientData') {
+              dummyData[sub.id] = [DEMO.chattelRecipient];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('debtorData')) {
-              dummyData[sub.id] = ['James Smith'];
+            else if (sub.id === 'debtorData') {
+              dummyData[sub.id] = [DEMO.debtor];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('signingOnBehalfData')) {
-              dummyData[sub.id] = ['Margaret Harris'];
+            else if (sub.id === 'signingOnBehalfData') {
+              dummyData[sub.id] = [DEMO.signingOnBehalf];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('interpreterData')) {
-              dummyData[sub.id] = ['Thomas Clark'];
+            else if (sub.id === 'interpreterData') {
+              dummyData[sub.id] = [DEMO.interpreter];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
           } else if (sub.type === 'text' || sub.type === 'textarea' || sub.type === 'number' || sub.type === 'date') {
@@ -385,105 +500,66 @@ export const generateDummyFormData = (formData) => {
 
   // COMPREHENSIVE special fields - fill EVERYTHING that might be missed
   const specialFields = {
-    // Person/array data - must be ARRAYS for fullDetails interpolation (use REAL names, not placeholders)
-    guardianData: ['David Mitchell', 'Helen Mitchell'],
-    substituteGuardianData: ['Peter Mitchell'],
+    guardianData: [DEMO.guardian1, DEMO.guardian2],
+    substituteGuardianData: [DEMO.guardianSub],
     executorData: [ARISTONE_EXECUTOR_LINE],
     substituteExecutorData: [ARISTONE_EXECUTOR_LINE],
-    trusteeData: ['Jennifer Mitchell'],
-    substituteTrusteeData: ['Thomas Mitchell'],
-    witness1Data: ['Andrew Parker'],
-    witness2Data: ['Susan Parker'],
-    excludedPersonData: ['Richard Mitchell'],
-    digitalExecutorData: ['Charlotte Mitchell'],
-    separateTrusteeData: [{
-      title: 'Mr', 
-      firstName: 'Michael', 
-      lastName: 'Thompson', 
-      relationship: 'Friend',
-      relationshipToTestator: 'Friend',
-      address1: '67 Church Road', 
-      address2: 'Hampstead', 
-      address3: 'London', 
-      city: 'London',
-      postcode: 'NW3 6BJ',
-      mobile: '07700 900234', 
-      email: 'michael.thompson@email.co.uk', 
-      dateOfBirth: '1978-04-15', 
-      gender: 'Male'
-    }, {
-      title: 'Mrs', 
-      firstName: 'Emma', 
-      lastName: 'Wilson', 
-      relationship: 'Sister',
-      relationshipToTestator: 'Sister',
-      address1: '93 Park Avenue', 
-      address2: 'St John\'s Wood', 
-      address3: 'London', 
-      city: 'London',
-      postcode: 'NW8 7HY',
-      mobile: '07700 900567', 
-      email: 'emma.wilson@email.co.uk', 
-      dateOfBirth: '1981-11-08', 
-      gender: 'Female'
-    }],
-    chattelRecipientData: ['Emily Watson'],
-    debtorData: ['Daniel Mitchell'],
-    signingOnBehalfData: ['Margaret Thompson'],
-    interpreterData: ['Thomas Wilson'],
+    trusteeData: [DEMO.trustee],
+    substituteTrusteeData: [DEMO.trusteeSub],
+    witness1Data: [DEMO.witness1],
+    witness2Data: [DEMO.witness2],
+    excludedPersonData: [DEMO.excluded],
+    digitalExecutorData: [DEMO.digitalExecutor],
+    separateTrusteeData: [{ ...DEMO.flitTrusteeA }, { ...DEMO.flitTrusteeB }],
+    chattelRecipientData: [DEMO.chattelRecipient],
+    debtorData: [DEMO.debtor],
+    signingOnBehalfData: [DEMO.signingOnBehalf],
+    interpreterData: [DEMO.interpreter],
 
-    petCarerData: [{
-      title: 'Mr', firstName: 'Robert', lastName: 'Anderson', relationship: 'Friend',
-      address1: '28 Elm Grove', address2: 'Richmond', address3: 'Surrey', city: 'Richmond', postcode: 'TW10 5HJ',
-      mobile: '07700 900456', email: 'robert.anderson@email.co.uk', dateOfBirth: '1982-06-20', gender: 'Male'
-    }],
-    substitutePetCarerData: [{
-      title: 'Mrs', firstName: 'Jennifer', lastName: 'Mitchell', relationship: 'Sister',
-      address1: '52 High Street', address2: 'Windsor', address3: 'Berkshire', city: 'Windsor', postcode: 'SL4 1LD',
-      mobile: '07700 900789', email: 'jennifer.mitchell@email.co.uk', dateOfBirth: '1985-09-12', gender: 'Female'
-    }],
+    petCarerData: [{ ...DEMO.petCarer }],
+    substitutePetCarerData: [{ ...DEMO.petCarerSub }],
 
-    chattelsGiftBeneficiaryName: 'Emily Watson',
+    chattelsGiftBeneficiaryName: DEMO.chattelRecipient.split(' — ')[0],
 
-    address1: '15 Victoria Road',
-    address2: 'Kensington',
-    address3: 'London',
-    postcode: 'W8 5RT',
-    partnerAddress1: '42 Oakwood Drive',
-    partnerAddress2: 'Chelsea',
-    partnerAddress3: 'London',
-    partnerPostcode: 'SW3 2AB',
-    executorAddress1: '67 Church Road',
+    address1: DEMO.testator.address1,
+    address2: DEMO.testator.address2,
+    address3: DEMO.testator.address3,
+    postcode: DEMO.testator.postcode,
+    partnerAddress1: DEMO.partner.address1,
+    partnerAddress2: DEMO.partner.address2,
+    partnerAddress3: DEMO.partner.address3,
+    partnerPostcode: DEMO.partner.postcode,
+    executorAddress1: '101 Executor Lane',
     executorAddress2: 'Hampstead',
     executorAddress3: 'London',
-    executorPostcode: 'NW3 6BJ',
-    witness1Address1: '12 Garden Close',
+    executorPostcode: 'NW3 9EX',
+    witness1Address1: '11 Witness-One Way',
     witness1Address2: 'Fulham',
     witness1Address3: 'London',
-    witness1Postcode: 'SW6 3XY',
-    witness1Phone: '020 7736 1234',
-    witness1Occupation: 'Solicitor',
-    witness2Address1: '8 Manor Way',
+    witness1Postcode: 'SW6 1W1',
+    witness1Phone: '020 7001 0001',
+    witness1Occupation: 'Solicitor (demo W1)',
+    witness2Address1: '22 Witness-Two Road',
     witness2Address2: 'Putney',
     witness2Address3: 'London',
-    witness2Postcode: 'SW15 2AB',
-    witness2Phone: '020 8789 5678',
-    witness2Occupation: 'Teacher',
+    witness2Postcode: 'SW15 2W2',
+    witness2Phone: '020 7002 0002',
+    witness2Occupation: 'Teacher (demo W2)',
 
-    monetaryGiftsDetails: 'I give £25,000 to my son Thomas Mitchell when he reaches the age of 25. I give £15,000 to my daughter Charlotte Mitchell when she reaches the age of 21.',
-    specificGiftsDetails: 'I give my grandfather\'s gold pocket watch to my son Thomas Mitchell. I give my collection of oil paintings to my daughter Charlotte Mitchell.',
-    propertyGiftsDetails: 'I give my property at 15 Victoria Road, Kensington, London W8 5RT to my wife Sarah Mitchell absolutely.',
-    propertyTrustDetails: 'my property at 15 Victoria Road, Kensington, London W8 5RT',
+    monetaryGiftsDetails: 'I give £25,000 to Thomas Hartwell when he reaches 25. I give £15,000 to Charlotte Hartwell when she reaches 21. [demo autofill]',
+    specificGiftsDetails: 'Pocket watch to Thomas Hartwell; paintings to Charlotte Hartwell. [demo autofill]',
+    propertyGiftsDetails: `I give my property at ${DEMO.testator.address1} to ${DEMO.partner.fullName} absolutely. [demo autofill]`,
+    propertyTrustDetails: `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`,
     propertyTrustTerms: 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.',
     bprTrustDetails: 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.',
     bprTrustTerms: 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.',
-    furtherResidualGiftsDetails: 'If any of the above gifts fail, I give the failed share equally to my siblings David Mitchell and Helen Mitchell.',
-    residualGiftsDetails: 'I give 50% of my residuary estate to my wife Sarah Mitchell absolutely, 25% to my son Thomas Mitchell absolutely, and 25% to my daughter Charlotte Mitchell absolutely.',
-    specifyLoansGiftsText: 'I loaned £10,000 to my son Thomas Mitchell in January 2022 to assist with his house purchase.',
+    furtherResidualGiftsDetails: 'If gifts fail, failed share to David Hartwell and Helen Hartwell. [demo autofill]',
+    residualGiftsDetails: `50% residue to ${DEMO.partner.fullName}, 25% Thomas Hartwell, 25% Charlotte Hartwell. [demo autofill]`,
+    specifyLoansGiftsText: 'Loan £10,000 to Thomas Hartwell (Jan 2022). [demo autofill]',
     charityBenefitDetails: 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)',
-    lifeTenantDetails: 'My wife Sarah Mitchell',
-    beneficiariesDetails: 'Thomas Mitchell and Charlotte Mitchell',
-    trustEndDistributionDetails: 'Upon the death of the life tenant, the trust property shall pass equally to Thomas Mitchell and Charlotte Mitchell absolutely.',
+    lifeTenantDetails: `My wife ${DEMO.partner.fullName}`,
+    beneficiariesDetails: 'Thomas Hartwell and Charlotte Hartwell',
+    trustEndDistributionDetails: 'Trust ends: equal split to Thomas Hartwell and Charlotte Hartwell. [demo autofill]',
     funeralWishes: 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.',
     otherFuneralRequirements: 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.',
     physicalHealthDescription: 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.',
@@ -557,15 +633,21 @@ export const generateDummyFormData = (formData) => {
   const missingIds = [...allIds].filter((id) => dummyData[id] === undefined || dummyData[id] === null || dummyData[id] === '');
   console.log(`[AUTOFILL GENERATE] 🔍 Found ${missingIds.length} missing field IDs, filling with defaults...`);
   missingIds.forEach((id) => {
-    const defaultVal = id.includes('Name') ? 'James Mitchell'
-      : id.includes('email') ? 'james.mitchell@email.co.uk'
-      : id.includes('mobile') || id.includes('tel') ? '07700 900123'
-      : id.includes('address') ? '15 Victoria Road'
-      : id.includes('postcode') ? 'W8 5RT'
-      : id.includes('date') || id.includes('Date') ? new Date().toISOString().split('T')[0]
-      : id.includes('amount') || id.includes('Amount') ? '25000'
-      : id.includes('Details') || id.includes('details') ? 'Please provide details as required for this field.'
-      : 'Standard value';
+    let defaultVal = 'Standard value';
+    if (id === 'firstName') defaultVal = DEMO.testator.firstName;
+    else if (id === 'lastName') defaultVal = DEMO.testator.lastName;
+    else if (id.startsWith('witness1')) {
+      defaultVal = id.includes('Address1') ? '11 Witness-One Way' : id.includes('Postcode') ? 'SW6 1W1' : DEMO.witness1;
+    } else if (id.startsWith('witness2')) {
+      defaultVal = id.includes('Address1') ? '22 Witness-Two Road' : id.includes('Postcode') ? 'SW15 2W2' : DEMO.witness2;
+    } else if (id.includes('Name')) defaultVal = `${DEMO.testator.firstName} ${DEMO.testator.lastName}`;
+    else if (id.includes('email')) defaultVal = DEMO.testator.email;
+    else if (id.includes('mobile') || id.includes('tel')) defaultVal = DEMO.testator.mobile;
+    else if (id.includes('address')) defaultVal = DEMO.testator.address1;
+    else if (id.includes('postcode')) defaultVal = DEMO.testator.postcode;
+    else if (id.includes('date') || id.includes('Date')) defaultVal = new Date().toISOString().split('T')[0];
+    else if (id.includes('amount') || id.includes('Amount')) defaultVal = '25000';
+    else if (id.includes('Details') || id.includes('details')) defaultVal = 'Please provide details as required for this field. [demo autofill]';
     dummyData[id] = defaultVal;
   });
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);
