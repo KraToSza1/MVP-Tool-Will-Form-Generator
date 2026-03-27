@@ -12,6 +12,7 @@ import {
   History,
   Trash2,
   Plus,
+  Undo2,
 } from 'lucide-react';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import {
@@ -171,6 +172,128 @@ function SectionEditModal({ sectionName, onClose, onSave }) {
   );
 }
 
+/** Modal: add a new section with solicitor-facing metadata (staff note is not shown on the client form). */
+function AddSectionModal({ onClose, onConfirm }) {
+  const [sectionTitle, setSectionTitle] = useState('');
+  const [staffNote, setStaffNote] = useState('');
+  const [firstQuestionLabel, setFirstQuestionLabel] = useState('New question');
+  const [placeholder, setPlaceholder] = useState('');
+
+  const handleSubmit = () => {
+    const title = sectionTitle.trim();
+    if (!title) {
+      qLog('add_section_modal_validation_fail', { reason: 'empty_section_title' });
+      toast.error('Enter a section title');
+      return;
+    }
+    qLog('add_section_modal_apply', {
+      sectionTitleLen: title.length,
+      staffNoteLen: staffNote.trim().length,
+      firstQuestionLabelLen: firstQuestionLabel.trim().length,
+      hasPlaceholder: !!placeholder.trim(),
+    });
+    onConfirm({
+      sectionTitle: title,
+      staffNote: staffNote.trim(),
+      firstQuestionLabel: firstQuestionLabel.trim() || 'New question',
+      placeholder: placeholder.trim(),
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-section-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          qLog('add_section_modal_cancel', { reason: 'backdrop' });
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="add-section-modal-title" className="text-lg font-semibold text-slate-900">
+          Add new section
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">
+          This adds a draft section. Clients only see it after you click Save questionnaire.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Section title (shown to clients)</label>
+            <input
+              type="text"
+              value={sectionTitle}
+              onChange={(e) => setSectionTitle(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder="e.g. Additional instructions"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Internal note (solicitors only)</label>
+            <textarea
+              value={staffNote}
+              onChange={(e) => setStaffNote(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder="Optional — e.g. why this block exists, matter type, compliance reminder (not shown on the client form)"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">First question label</label>
+            <input
+              type="text"
+              value={firstQuestionLabel}
+              onChange={(e) => setFirstQuestionLabel(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder="New question"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Placeholder (optional)</label>
+            <input
+              type="text"
+              value={placeholder}
+              onChange={(e) => setPlaceholder(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder="Text shown inside the empty field"
+            />
+          </div>
+        </div>
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
+          The first field uses a new ID starting with <strong className="text-slate-800">custom_</strong>. You can add more fields after saving this draft to the list.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              qLog('add_section_modal_cancel', { reason: 'cancel_button' });
+              onClose();
+            }}
+            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            <Plus size={14} />
+            Add section
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const LAST_SAVED_STORAGE_KEY = 'will-tool-questionnaire-last-saved';
 
 function loadLastSavedFromSession() {
@@ -206,6 +329,7 @@ export default function QuestionnaireEditorPage() {
   const [revisionsLoading, setRevisionsLoading] = useState(false);
   const [restoreBusyId, setRestoreBusyId] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [addSectionModalOpen, setAddSectionModalOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !dirty) {
@@ -331,29 +455,78 @@ export default function QuestionnaireEditorPage() {
     qLog('dirty_set', { reason: 'field_reorder' });
   }, []);
 
-  const addSection = useCallback(() => {
-    setDefinition((d) => {
-      const next = deepClone(d);
-      const id = newCustomFieldId();
-      next.formSections = next.formSections || [];
-      next.formSections.push({
-        formSection: 'New section',
-        _editorAdded: true,
-        fields: [
-          {
-            id,
-            type: 'text',
-            label: 'New question',
-            value: '',
-          },
-        ],
-      });
-      return next;
-    });
-    setDirty(true);
-    qLog('structure_add_section', {});
-    qLog('dirty_set', { reason: 'add_section' });
+  const openAddSectionModal = useCallback(() => {
+    qLog('add_section_modal_open', {});
+    setAddSectionModalOpen(true);
   }, []);
+
+  const commitAddSectionFromModal = useCallback(
+    (payload) => {
+      const { sectionTitle, staffNote, firstQuestionLabel, placeholder } = payload;
+      const id = newCustomFieldId();
+      const sectionIndex = definition.formSections?.length ?? 0;
+      qLog('add_section_modal_confirm', {
+        sectionIndex,
+        sectionTitleLen: sectionTitle.length,
+        hasStaffNote: !!staffNote,
+        fieldId: id,
+      });
+      setDefinition((d) => {
+        const next = deepClone(d);
+        next.formSections = next.formSections || [];
+        const section = {
+          formSection: sectionTitle,
+          _editorAdded: true,
+          fields: [
+            {
+              id,
+              type: 'text',
+              label: firstQuestionLabel,
+              value: '',
+            },
+          ],
+        };
+        if (staffNote) section._editorStaffNote = staffNote;
+        if (placeholder) section.fields[0].placeholder = placeholder;
+        next.formSections.push(section);
+        return next;
+      });
+      setDirty(true);
+      qLog('structure_add_section', {
+        sectionIndex,
+        sectionTitleLen: sectionTitle.length,
+        hasStaffNote: !!staffNote,
+        fieldId: id,
+      });
+      qLog('dirty_set', { reason: 'add_section' });
+      setAddSectionModalOpen(false);
+      qLog('add_section_modal_closed', { reason: 'after_add' });
+      setExpandedSections((prev) => {
+        const next = new Set(prev);
+        next.add(sectionIndex);
+        return next;
+      });
+    },
+    [definition]
+  );
+
+  const handleDiscardDraft = useCallback(() => {
+    if (!dirty) return;
+    qLog('discard_changes_clicked', { sectionCount: definition.formSections?.length });
+    if (
+      !window.confirm(
+        'Discard all unpublished edits on this page? Your draft will match the last published questionnaire from the server.'
+      )
+    ) {
+      qLog('discard_changes_cancelled');
+      return;
+    }
+    setDefinition(deepClone(formData));
+    setDirty(false);
+    setExpandedSections(new Set([0]));
+    qLog('draft_discarded', { restoredSectionCount: formData?.formSections?.length });
+    toast.info('Draft discarded', { description: 'This page now matches the last published questionnaire.' });
+  }, [dirty, definition.formSections?.length, formData]);
 
   const addField = useCallback((sectionIndex) => {
     const id = newCustomFieldId();
@@ -498,6 +671,7 @@ export default function QuestionnaireEditorPage() {
   const sections = definition.formSections || [];
   const lastSavedLabel = formatSavedTime(lastSavedAt);
   const canSave = dirty && !loading && !saving;
+  const canDiscard = dirty && !loading && !saving;
 
   return (
     <div className={`space-y-6 ${dirty ? 'pb-24 sm:pb-20' : ''}`}>
@@ -540,6 +714,17 @@ export default function QuestionnaireEditorPage() {
             >
               Reset to default
             </button>
+            {dirty && (
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                disabled={!canDiscard}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Undo2 size={16} />
+                Discard changes
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSaveQuestionnaire}
@@ -647,7 +832,7 @@ export default function QuestionnaireEditorPage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={addSection}
+                onClick={openAddSectionModal}
                 disabled={loading || saving}
                 className="questionnaire-advanced-add inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
               >
@@ -806,6 +991,15 @@ export default function QuestionnaireEditorPage() {
           onSave={(name) => updateSection(editingSectionIndex, name)}
         />
       )}
+      {addSectionModalOpen && (
+        <AddSectionModal
+          onClose={() => {
+            qLog('add_section_modal_closed', { reason: 'user_cancel' });
+            setAddSectionModalOpen(false);
+          }}
+          onConfirm={commitAddSectionFromModal}
+        />
+      )}
 
       {dirty && (
         <div
@@ -817,16 +1011,27 @@ export default function QuestionnaireEditorPage() {
             <p className="text-sm font-medium text-slate-800">
               You have unpublished changes. Save questionnaire so clients see them.
             </p>
-            <button
-              type="button"
-              onClick={handleSaveQuestionnaire}
-              disabled={!canSave}
-              aria-busy={saving}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save size={16} />
-              {saving ? 'Saving…' : 'Save questionnaire'}
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                disabled={!canDiscard}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-400 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Undo2 size={16} />
+                Discard changes
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuestionnaire}
+                disabled={!canSave}
+                aria-busy={saving}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save size={16} />
+                {saving ? 'Saving…' : 'Save questionnaire'}
+              </button>
+            </div>
           </div>
         </div>
       )}
