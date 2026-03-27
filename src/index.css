@@ -262,6 +262,7 @@ html.dark-theme kbd.questionnaire-kbd {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
 html.dark-theme .questionnaire-editor-card {
+  background-color: rgba(15, 23, 42, 0.72) !important;
   border-color: rgba(99, 102, 241, 0.28) !important;
 }
 html.dark-theme .questionnaire-loading-banner {
@@ -270,6 +271,7 @@ html.dark-theme .questionnaire-loading-banner {
   color: #e2e8f0 !important;
 }
 html.dark-theme .questionnaire-modal-panel {
+  background-color: rgba(15, 23, 42, 0.98) !important;
   border-color: rgba(99, 102, 241, 0.35) !important;
 }
 html.dark-theme .questionnaire-modal-hint {
@@ -284,6 +286,86 @@ html.dark-theme a.questionnaire-back-link {
 }
 html.dark-theme a.questionnaire-back-link:hover {
   color: #e2e8f0 !important;
+}
+
+/* Version history + Advanced panels (slate; match Quick steps) */
+html.dark-theme .questionnaire-version-history {
+  background-color: rgba(30, 41, 59, 0.88) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .questionnaire-version-history-header,
+html.dark-theme .questionnaire-version-history .font-semibold {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .questionnaire-version-history-icon {
+  color: #a5b4fc !important;
+}
+html.dark-theme .questionnaire-version-history-desc,
+html.dark-theme .questionnaire-version-history-empty {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .questionnaire-revision-row {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+html.dark-theme .questionnaire-revision-row .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-revision-restore {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(129, 140, 248, 0.55) !important;
+  color: #e0e7ff !important;
+}
+html.dark-theme .questionnaire-revision-restore:hover:not(:disabled) {
+  background-color: rgba(49, 46, 129, 0.55) !important;
+}
+
+html.dark-theme .questionnaire-advanced-panel {
+  background-color: rgba(30, 41, 59, 0.88) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-advanced-toggle {
+  color: #f8fafc !important;
+}
+html.dark-theme .questionnaire-advanced-hint {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .questionnaire-advanced-code {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+  color: #f1f5f9 !important;
+}
+html.dark-theme .questionnaire-advanced-add {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-advanced-add:hover:not(:disabled) {
+  background-color: rgba(51, 65, 85, 0.9) !important;
+}
+
+html.dark-theme .questionnaire-modal-panel .text-slate-900,
+html.dark-theme .questionnaire-modal-panel .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-modal-panel .text-slate-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .questionnaire-modal-panel input,
+html.dark-theme .questionnaire-modal-panel textarea {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #f8fafc !important;
+}
+html.dark-theme .questionnaire-modal-panel .border-slate-300 {
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .questionnaire-modal-panel button.border-slate-300 {
+  background-color: transparent !important;
+  color: #cbd5e1 !important;
+}
+html.dark-theme .questionnaire-modal-panel button.border-slate-300:hover {
+  background-color: rgba(51, 65, 85, 0.6) !important;
 }
 
 /* Identity verification block: readable in dark theme */

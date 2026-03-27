@@ -576,23 +576,25 @@ export default function QuestionnaireEditorPage() {
           </ol>
         </div>
 
-        <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
-          <div className="flex flex-wrap items-center gap-2 text-indigo-900">
-            <History size={18} />
+        <div className="questionnaire-version-history mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="questionnaire-version-history-header flex flex-wrap items-center gap-2 text-slate-900">
+            <History size={18} className="shrink-0 text-indigo-600 questionnaire-version-history-icon" />
             <span className="font-semibold">Version history (Supabase)</span>
-            {revisionsLoading && <span className="text-xs text-indigo-600">Loading…</span>}
+            {revisionsLoading && <span className="text-xs text-slate-500">Loading…</span>}
           </div>
-          <p className="mt-1 text-xs text-indigo-800/90">
+          <p className="questionnaire-version-history-desc mt-1 text-xs text-slate-600">
             Last 50 published snapshots. Restoring replaces the live questionnaire for all clients.
           </p>
           <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
             {revisions.length === 0 && !revisionsLoading && (
-              <li className="text-slate-600">No history yet — history is recorded when you save (after migrations are applied).</li>
+              <li className="questionnaire-version-history-empty text-slate-600">
+                No history yet — history is recorded when you save (after migrations are applied).
+              </li>
             )}
             {revisions.map((r) => (
               <li
                 key={r.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2"
+                className="questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
               >
                 <span className="text-slate-700">
                   {formatSavedTime(new Date(r.created_at)) || r.created_at} · {r.source}
@@ -602,7 +604,7 @@ export default function QuestionnaireEditorPage() {
                   type="button"
                   disabled={!!restoreBusyId || loading}
                   onClick={() => handleRestoreRevision(r.id)}
-                  className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+                  className="questionnaire-revision-restore rounded-lg border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
                 >
                   {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
                 </button>
@@ -629,16 +631,17 @@ export default function QuestionnaireEditorPage() {
           />
         </div>
 
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm text-amber-950">
+        <div className="questionnaire-advanced-panel mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
           <button
             type="button"
             onClick={() => setShowAdvanced((s) => !s)}
-            className="font-semibold text-amber-950 underline-offset-2 hover:underline"
+            className="questionnaire-advanced-toggle font-semibold text-slate-900 underline-offset-2 hover:underline"
           >
             {showAdvanced ? 'Hide' : 'Show'} Advanced (reorder / add / remove)
           </button>
-          <p className="mt-1 text-xs text-amber-900/90">
-            Reordering changes screen order only. New fields use IDs starting with <code className="font-mono">custom_</code>. Only those can be removed; only sections you add here can be deleted.
+          <p className="questionnaire-advanced-hint mt-1 text-xs text-slate-600">
+            Reordering changes screen order only. New fields use IDs starting with{' '}
+            <code className="questionnaire-advanced-code rounded bg-slate-200 px-1 font-mono text-slate-800">custom_</code>. Only those can be removed; only sections you add here can be deleted.
           </p>
           {showAdvanced && (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -646,7 +649,7 @@ export default function QuestionnaireEditorPage() {
                 type="button"
                 onClick={addSection}
                 disabled={loading || saving}
-                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+                className="questionnaire-advanced-add inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
               >
                 <Plus size={14} /> Add section
               </button>
