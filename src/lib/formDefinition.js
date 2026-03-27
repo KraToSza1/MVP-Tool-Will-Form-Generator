@@ -3,7 +3,7 @@
  * Used so solicitors can edit question text, labels, and options.
  */
 import { supabase, isSupabaseConfigured } from './supabase.js';
-import { formLog, isQuestionnaireDebug, payloadByteSize, qLog } from './questionnaireLog.js';
+import { formLog, payloadByteSize, qLog } from './questionnaireLog.js';
 import bundledFactory from '../data/Complete-WillSuite-Form-Data.json';
 
 const DEFAULT_NAME = 'default';
@@ -104,15 +104,36 @@ export async function getFactoryDefault() {
   return { data: bundledFactory, error: null, source: 'supabase' };
 }
 
-const SAVE_REQUEST_TIMEOUT_MS = 90_000;
+const SAVE_REQUEST_TIMEOUT_MS = 60_000;
+const GET_SESSION_TIMEOUT_MS = 4_000;
+const REVISION_INSERT_TIMEOUT_MS = 20_000;
+const LIST_REVISIONS_TIMEOUT_MS = 15_000;
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error(label || `Request timed out after ${ms}ms`)), ms)
     ),
   ]);
+}
+
+/**
+ * Avoid hanging forever if auth.getSession() stalls (can block questionnaire save UI).
+ */
+async function getSessionBounded() {
+  try {
+    const result = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('getSession_timeout')), GET_SESSION_TIMEOUT_MS)
+      ),
+    ]);
+    return result;
+  } catch (e) {
+    formLog('getSession_timeout_or_error', { message: e?.message || String(e) });
+    return { data: { session: null } };
+  }
 }
 
 /**
@@ -121,26 +142,35 @@ function withTimeout(promise, ms, label) {
  * @param {string} [notes]
  */
 async function insertFormRevision(payload, source, notes) {
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData } = await getSessionBounded();
   const userId = sessionData?.session?.user?.id ?? null;
-  const { data, error } = await supabase
-    .from('form_definition_revisions')
-    .insert({
-      payload,
-      source,
-      notes: notes ?? null,
-      created_by: userId,
-    })
-    .select('id')
-    .maybeSingle();
+  formLog('revision_insert_start', { source, payloadBytes: payloadByteSize(payload) });
+  try {
+    const { error } = await withTimeout(
+      supabase.from('form_definition_revisions').insert({
+        payload,
+        source,
+        notes: notes ?? null,
+        created_by: userId,
+      }),
+      REVISION_INSERT_TIMEOUT_MS,
+      'Recording questionnaire history took too long; your publish may still have succeeded.'
+    );
 
-  if (error) {
-    if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
-      return { revisionId: null, error: null, skipped: true };
+    if (error) {
+      if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
+        formLog('revision_insert_skipped', { reason: 'table_missing' });
+        return { revisionId: null, error: null, skipped: true };
+      }
+      formLog('revision_insert_error', { message: error.message, code: error.code });
+      return { revisionId: null, error: error.message, skipped: false };
     }
-    return { revisionId: null, error: error.message, skipped: false };
+    formLog('revision_insert_ok', { source });
+    return { revisionId: null, error: null, skipped: false };
+  } catch (e) {
+    formLog('revision_insert_failed', { message: e?.message || String(e) });
+    return { revisionId: null, error: e?.message || 'Revision insert failed', skipped: false };
   }
-  return { revisionId: data?.id ?? null, error: null, skipped: false };
 }
 
 /**
@@ -150,6 +180,7 @@ async function insertFormRevision(payload, source, notes) {
  * @returns {Promise<{ error: string | null, revisionId?: string | null, revisionError?: string | null }>}
  */
 export async function saveFormDefinition(payload) {
+  formLog('save_pipeline_enter');
   if (!isSupabaseConfigured()) {
     formLog('save_error', { reason: 'Supabase not configured' });
     return { error: 'Supabase not configured' };
@@ -161,16 +192,17 @@ export async function saveFormDefinition(payload) {
 
   const payloadBytes = payloadByteSize(payload);
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData?.session?.user?.id ?? null;
 
   formLog('upsert_start', {
     table: 'form_definitions',
     onConflict: 'name',
     name: DEFAULT_NAME,
     payloadBytes,
-    updated_by: userId,
   });
+
+  const { data: sessionData } = await getSessionBounded();
+  const userId = sessionData?.session?.user?.id ?? null;
+  formLog('session_resolved', { hasUserId: !!userId });
 
   try {
     const { error } = await withTimeout(
@@ -197,24 +229,30 @@ export async function saveFormDefinition(payload) {
     return { error: err?.message || 'Save failed' };
   }
 
-  const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+  const upsertMs = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+  formLog('upsert_http_ok', {
+    table: 'form_definitions',
+    name: DEFAULT_NAME,
+    payloadBytes,
+    upsertMs,
+    updated_by: userId,
+  });
 
-  const { revisionId, error: revErr, skipped } = await insertFormRevision(payload, 'save', null);
+  const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null);
   if (revErr) {
-    formLog('revision_insert_failed', { message: revErr, upsertMs: ms });
+    formLog('upsert_success_revision_failed', { upsertMs, revisionError: revErr });
   } else {
     formLog('upsert_success', {
       table: 'form_definitions',
       name: DEFAULT_NAME,
       payloadBytes,
-      upsertMs: ms,
+      upsertMs,
       updated_by: userId,
-      revisionInserted: !skipped && !!revisionId,
-      revisionId: isQuestionnaireDebug() ? revisionId : undefined,
+      revisionHistoryOk: !skipped,
     });
   }
 
-  return { error: null, revisionId, revisionError: revErr || null };
+  return { error: null, revisionId: null, revisionError: revErr || null };
 }
 
 /**
@@ -226,11 +264,24 @@ export async function listFormDefinitionRevisions(limit = 50) {
   if (!isSupabaseConfigured()) {
     return { data: [], error: null };
   }
-  const { data: rows, error } = await supabase
-    .from('form_definition_revisions')
-    .select('id, created_at, source, notes, payload')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  let rows;
+  let error;
+  try {
+    const res = await withTimeout(
+      supabase
+        .from('form_definition_revisions')
+        .select('id, created_at, source, notes, payload')
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      LIST_REVISIONS_TIMEOUT_MS,
+      'Loading questionnaire history timed out.'
+    );
+    rows = res.data;
+    error = res.error;
+  } catch (e) {
+    qLog('revisions_list_timeout', { message: e?.message || String(e) });
+    return { data: [], error: e?.message || 'Timeout loading history' };
+  }
 
   if (error) {
     if (error.code === 'PGRST205' || (error.message && error.message.includes('Could not find the table'))) {
@@ -280,7 +331,7 @@ export async function restoreFormDefinitionRevision(revisionId) {
     return { error: 'Invalid revision payload' };
   }
 
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData } = await getSessionBounded();
   const userId = sessionData?.session?.user?.id ?? null;
 
   const { error: upErr } = await withTimeout(
