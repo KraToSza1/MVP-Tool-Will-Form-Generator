@@ -1155,28 +1155,28 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       const rows = getPartnerIntakeRows(formValues);
       const willName = partnerName && String(partnerName).trim();
       return (
-        <div className="my-4 rounded-lg border border-indigo-200 bg-indigo-50/90 p-4 text-sm text-slate-800 shadow-sm">
-          <p className="font-semibold text-indigo-900">Partner / spouse details (summary)</p>
+        <div className="my-4 rounded-lg border border-slate-600 bg-slate-800/95 p-4 text-sm text-slate-200 shadow-sm ring-1 ring-white/5">
+          <p className="font-semibold text-slate-100">Partner / spouse details (summary)</p>
           {willName ? (
-            <p className="mt-1 text-xs text-slate-600">
-              Name for Will: <span className="font-medium text-slate-900">{willName}</span>
+            <p className="mt-1 text-xs text-slate-400">
+              Name for Will: <span className="font-medium text-slate-100">{willName}</span>
             </p>
           ) : (
-            <p className="mt-1 text-xs text-amber-800">Enter the partner&apos;s full name in the field above for Will clauses.</p>
+            <p className="mt-1 text-xs text-amber-300/95">Enter the partner&apos;s full name in the field above for Will clauses.</p>
           )}
           {rows.length > 0 ? (
-            <dl className="mt-3 space-y-2 border-t border-indigo-100 pt-3">
+            <dl className="mt-3 space-y-2 border-t border-slate-600 pt-3">
               {rows
                 .filter((r) => r.label !== 'Full name (as for Will)')
                 .map(({ label, value }) => (
                   <div key={label} className="grid gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:gap-3">
-                    <dt className="text-xs font-medium text-slate-500">{label}</dt>
-                    <dd className="text-sm font-medium text-slate-900 break-words">{value}</dd>
+                    <dt className="text-xs font-medium text-slate-400">{label}</dt>
+                    <dd className="text-sm font-medium text-slate-100 break-words">{value}</dd>
                   </div>
                 ))}
             </dl>
           ) : (
-            <p className="mt-2 text-xs text-slate-600">Complete the fields above to see contact and address here.</p>
+            <p className="mt-2 text-xs text-slate-400">Complete the fields above to see contact and address here.</p>
           )}
         </div>
       );

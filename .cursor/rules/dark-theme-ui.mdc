@@ -1,0 +1,26 @@
+---
+description: New UI and logic must stay readable in dark theme (Will Tool client + solicitor)
+alwaysApply: true
+---
+
+# Dark theme — mandatory for new UI and logic
+
+The app uses `html.dark-theme` / `body.dark-theme` with global overrides in `src/index.css`. **Any new or changed UI** (components, display fields, modals, cards, summaries, toasts styling, section wrappers) **must** remain legible and on-brand in **dark mode**.
+
+## Do this every time you add or change UI
+
+1. **Prefer explicit dark-safe utilities** for panels and summaries: `border-slate-600`, `bg-slate-800` / `bg-slate-900`, `text-slate-100` / `text-slate-300`, accents `indigo-400` / `violet-400`. Do not rely on “light” pastels alone (`bg-indigo-50`, `bg-blue-100`, `text-slate-600` on light panels) as the primary surface for new work.
+2. **Opacity + tinted backgrounds are risky**: classes like `bg-indigo-50/90` often **do not** match the global selectors in `index.css` that remap `bg-indigo-50` for dark theme, so panels can stay **washed-out or wrong**. Either use **non-opacity** tokens that are already overridden, or use **explicit** slate/dark classes that read correctly without depending on those overrides.
+3. **After adding fields or display logic** (e.g. new `display` blocks, `section` summaries, validation banners), **visually verify contrast**: labels and body text must stay readable (avoid faint grey on light lavender).
+4. **Shared surfaces**: `FieldRenderer.jsx`, `FormRenderer.jsx`, modals (`ConfirmModal.jsx`), identity upload, questionnaire editor — keep the same mental model: **dark shell, light text, muted labels**.
+
+## Quick checklist
+
+- [ ] No new primary content panel using only `bg-*-50` / `bg-*-100` without confirming dark readability (or explicit dark slate panel).
+- [ ] Text on coloured backgrounds uses `text-slate-100`–`text-slate-300` (or approved accent) for body, not only `text-slate-500` on a light tint.
+- [ ] New logic that renders **conditional** UI still uses the same dark-friendly class set.
+
+## Related files
+
+- `src/index.css` — global dark-theme remaps (limitations on opacity utilities noted above).
+- `src/context/ThemeContext.jsx` — theme state for solicitor shell; client intake uses `dark-theme` class on document root.
