@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getFormDefinition } from '../lib/formDefinition.js';
+import { qLog } from '../lib/questionnaireLog.js';
 import staticFormData from '../data/Complete-WillSuite-Form-Data.json';
 
 const FormDefinitionContext = createContext({
@@ -20,14 +21,17 @@ export function FormDefinitionProvider({ children }) {
    */
   const refresh = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
+    qLog('refresh_start', { silent });
     if (!silent) setLoading(true);
     try {
       const { data, error } = await getFormDefinition();
       if (error || !data) {
+        qLog('refresh_complete', { silent, isCustom: false, usedStatic: true, error: error || null });
         setFormData(staticFormData);
         setIsCustom(false);
         return;
       }
+      qLog('refresh_complete', { silent, isCustom: true, sectionCount: data.formSections?.length });
       setFormData(data);
       setIsCustom(true);
     } finally {

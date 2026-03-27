@@ -66,6 +66,7 @@ import { createSession, loadSession, saveSession, isSupabaseConfigured } from '.
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
 import { ID_VERIFICATION_DOC_KEYS, getMissingIdVerificationDocs, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
+import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -889,6 +890,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             (subField === 'fullDetails' || subField === 'fullList')) {
           if (DEBUG_INTERPOLATE) console.warn(`[INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
           return `{{field:${sectionId}:${subField}}}`;
+        }
+
+        if (
+          (sectionId === 'excludedPersonSection' || sectionId === 'excludedPersonsSection') &&
+          (subField === 'fullDetails' || subField === 'fullList')
+        ) {
+          const array = values.excludedPersonData || [];
+          if (Array.isArray(array) && array.length > 0) {
+            return array.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+          }
+          return '';
         }
         
         const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;

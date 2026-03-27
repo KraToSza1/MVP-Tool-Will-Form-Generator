@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import formSchema from '../data/Complete-WillSuite-Form-Data.json';
 import { buildClauses } from '../utils/buildClauses.js';
 import { CLIENT_VISIBLE_MAX_SECTION_INDEX } from '../constants/clientMode.js';
+import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
 
 // Helper to convert image to base64 and get dimensions for jsPDF
 const loadImageAsBase64 = async (imagePath) => {
@@ -1135,6 +1136,18 @@ const interpolateText = (text, values, options = {}) => {
           (subField === 'fullDetails' || subField === 'fullList')) {
         console.warn(`[PDF INTERPOLATE] ⚠️ ${sectionId}:${subField} - Should have been handled above, returning unresolved marker`);
         return `{{field:${sectionId}:${subField}}}`;
+      }
+
+      if (
+        (sectionId === 'excludedPersonSection' || sectionId === 'excludedPersonsSection') &&
+        (subField === 'fullDetails' || subField === 'fullList')
+      ) {
+        const array = values.excludedPersonData || [];
+        if (Array.isArray(array) && array.length > 0) {
+          const resolved = array.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+          return wrapClientValue(resolved);
+        }
+        return '';
       }
 
       const fallbackId = fallbackMap[sectionId] || `${sectionId}Data`;

@@ -1,13 +1,37 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, ChevronDown, ChevronRight, Edit3, Save, FileText } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Edit3,
+  Save,
+  FileText,
+  History,
+  Trash2,
+  Plus,
+} from 'lucide-react';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
-import { saveFormDefinition } from '../lib/formDefinition.js';
+import {
+  saveFormDefinition,
+  getFactoryDefault,
+  listFormDefinitionRevisions,
+  restoreFormDefinitionRevision,
+} from '../lib/formDefinition.js';
+import { qLog } from '../lib/questionnaireLog.js';
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
+}
+
+function newCustomFieldId() {
+  const suffix = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '').slice(0, 10)
+    : String(Date.now());
+  return `custom_${suffix}`;
 }
 
 function FieldEditModal({ field, onClose, onSave }) {
@@ -76,9 +100,9 @@ function FieldEditModal({ field, onClose, onSave }) {
                       type="text"
                       value={optionLabels[i] ?? ''}
                       onChange={(e) => {
-                        const next = [...optionLabels];
-                        next[i] = e.target.value;
-                        setOptionLabels(next);
+                        const nextLabels = [...optionLabels];
+                        nextLabels[i] = e.target.value;
+                        setOptionLabels(nextLabels);
                       }}
                       className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                       placeholder="Label"
@@ -178,14 +202,38 @@ export default function QuestionnaireEditorPage() {
   const [expandedSections, setExpandedSections] = useState(() => new Set([0]));
   const [editingField, setEditingField] = useState(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState(null);
+  const [revisions, setRevisions] = useState([]);
+  const [revisionsLoading, setRevisionsLoading] = useState(false);
+  const [restoreBusyId, setRestoreBusyId] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Sync server form into local editor when not dirty (initial load, or after background refresh).
-  // If dirty, do not overwrite — avoids losing edits when silent refresh completes after save.
   useEffect(() => {
     if (!loading && !dirty) {
       setDefinition(deepClone(formData));
+      qLog('draft_loaded_from_context', {
+        sectionCount: formData?.formSections?.length,
+        formTitle: formData?.formTitle,
+      });
     }
   }, [loading, formData, dirty]);
+
+  const loadRevisions = useCallback(async () => {
+    setRevisionsLoading(true);
+    try {
+      const { data, error } = await listFormDefinitionRevisions(50);
+      if (error) {
+        qLog('revisions_ui_load_error', { message: error });
+        return;
+      }
+      setRevisions(data || []);
+    } finally {
+      setRevisionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRevisions();
+  }, [loadRevisions]);
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -200,48 +248,188 @@ export default function QuestionnaireEditorPage() {
   const toggleSection = useCallback((index) => {
     setExpandedSections((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
+      const wasOpen = next.has(index);
+      if (wasOpen) next.delete(index);
       else next.add(index);
+      qLog('section_expand_toggle', { sectionIndex: index, expanded: !wasOpen });
       return next;
     });
   }, []);
 
   const updateSection = useCallback((sectionIndex, newName) => {
+    qLog('section_title_edit', { sectionIndex, newName });
     setDefinition((d) => {
       const next = deepClone(d);
       if (next.formSections[sectionIndex]) next.formSections[sectionIndex].formSection = newName;
       return next;
     });
     setDirty(true);
+    qLog('dirty_set', { reason: 'section_title_edit' });
     setEditingSectionIndex(null);
   }, []);
 
   const updateField = useCallback((sectionIndex, fieldIndex, updatedField) => {
+    qLog('field_edit_apply', {
+      sectionIndex,
+      fieldIndex,
+      fieldId: updatedField?.id,
+    });
     setDefinition((d) => {
       const next = deepClone(d);
       if (next.formSections[sectionIndex]?.fields?.[fieldIndex]) {
-        next.formSections[sectionIndex].fields[fieldIndex] = { ...next.formSections[sectionIndex].fields[fieldIndex], ...updatedField };
+        next.formSections[sectionIndex].fields[fieldIndex] = {
+          ...next.formSections[sectionIndex].fields[fieldIndex],
+          ...updatedField,
+        };
       }
       return next;
     });
     setDirty(true);
+    qLog('dirty_set', { reason: 'field_edit_apply' });
     setEditingField(null);
   }, []);
 
+  const moveSection = useCallback((sectionIndex, direction) => {
+    if (!window.confirm('Changing section order may affect step flow in the client form. Field IDs stay the same. Continue?')) {
+      return;
+    }
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const arr = next.formSections;
+      const j = sectionIndex + direction;
+      if (j < 0 || j >= arr.length) return d;
+      [arr[sectionIndex], arr[j]] = [arr[j], arr[sectionIndex]];
+      return next;
+    });
+    setDirty(true);
+    qLog('section_reorder', { from: sectionIndex, to: sectionIndex + direction });
+    qLog('dirty_set', { reason: 'section_reorder' });
+    setExpandedSections((prev) => {
+      const n = new Set();
+      prev.forEach((idx) => {
+        if (idx === sectionIndex) n.add(sectionIndex + direction);
+        else if (idx === sectionIndex + direction) n.add(sectionIndex);
+        else n.add(idx);
+      });
+      return n;
+    });
+  }, []);
+
+  const moveField = useCallback((sectionIndex, fieldIndex, direction) => {
+    if (!window.confirm('Reordering fields can change visual order only; IDs are unchanged. Continue?')) return;
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const fields = next.formSections[sectionIndex]?.fields;
+      if (!fields) return d;
+      const j = fieldIndex + direction;
+      if (j < 0 || j >= fields.length) return d;
+      [fields[fieldIndex], fields[j]] = [fields[j], fields[fieldIndex]];
+      return next;
+    });
+    setDirty(true);
+    qLog('field_reorder', { sectionIndex, from: fieldIndex, to: fieldIndex + direction });
+    qLog('dirty_set', { reason: 'field_reorder' });
+  }, []);
+
+  const addSection = useCallback(() => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const id = newCustomFieldId();
+      next.formSections = next.formSections || [];
+      next.formSections.push({
+        formSection: 'New section',
+        _editorAdded: true,
+        fields: [
+          {
+            id,
+            type: 'text',
+            label: 'New question',
+            value: '',
+          },
+        ],
+      });
+      return next;
+    });
+    setDirty(true);
+    qLog('structure_add_section', {});
+    qLog('dirty_set', { reason: 'add_section' });
+  }, []);
+
+  const addField = useCallback((sectionIndex) => {
+    const id = newCustomFieldId();
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const sec = next.formSections[sectionIndex];
+      if (!sec) return d;
+      sec.fields = sec.fields || [];
+      sec.fields.push({ id, type: 'text', label: 'New question', value: '' });
+      return next;
+    });
+    setDirty(true);
+    qLog('structure_add_field', { sectionIndex, fieldId: id });
+    qLog('dirty_set', { reason: 'add_field' });
+  }, []);
+
+  const removeSection = useCallback(
+    (sectionIndex) => {
+      const sec = definition.formSections[sectionIndex];
+      if (!sec?._editorAdded) {
+        toast.error('Only sections added in Advanced mode can be removed.');
+        return;
+      }
+      if (!window.confirm('Remove this section and all its fields? This cannot be undone until you restore a saved version.')) {
+        return;
+      }
+      qLog('structure_remove_section', { sectionIndex });
+      setDefinition((d) => {
+        const next = deepClone(d);
+        next.formSections.splice(sectionIndex, 1);
+        return next;
+      });
+      setDirty(true);
+      qLog('dirty_set', { reason: 'remove_section' });
+    },
+    [definition.formSections]
+  );
+
+  const removeField = useCallback(
+    (sectionIndex, fieldIndex) => {
+      const field = definition.formSections[sectionIndex]?.fields?.[fieldIndex];
+      if (!field?.id?.startsWith?.('custom_')) {
+        toast.error('Only fields with IDs starting with custom_ (added in Advanced mode) can be removed.');
+        return;
+      }
+      if (!window.confirm('Remove this question from the draft?')) return;
+      qLog('structure_remove_field', { sectionIndex, fieldIndex });
+      setDefinition((d) => {
+        const next = deepClone(d);
+        next.formSections[sectionIndex].fields.splice(fieldIndex, 1);
+        return next;
+      });
+      setDirty(true);
+      qLog('dirty_set', { reason: 'remove_field' });
+    },
+    [definition.formSections]
+  );
+
   const handleSaveQuestionnaire = useCallback(async () => {
+    qLog('save_clicked', { sectionCount: definition.formSections?.length });
     setSaving(true);
     try {
-      const { error } = await saveFormDefinition(definition);
+      const { error, revisionId, revisionError } = await saveFormDefinition(definition);
       if (error) {
         toast.error('Could not save questionnaire', { description: error });
         return;
       }
-      // Reload context from DB without global "Loading questionnaire" (silent).
-      // Await so formData matches DB before we clear dirty — avoids overwriting with stale data.
+      if (revisionError) {
+        qLog('save_revision_warning', { message: revisionError });
+      }
+      qLog('save_revision_ok', { revisionId: revisionId || null });
       try {
         await refresh({ silent: true });
       } catch (err) {
         console.warn('[QuestionnaireEditor] refresh after save failed', err);
+        qLog('refresh_after_save_failed', { message: String(err) });
         toast.error('Saved, but could not reload', {
           description: 'Your changes should be live. Refresh this page if something looks wrong.',
         });
@@ -252,20 +440,22 @@ export default function QuestionnaireEditorPage() {
       try {
         sessionStorage.setItem(LAST_SAVED_STORAGE_KEY, now.toISOString());
       } catch {
-        /* ignore quota / private mode */
+        /* ignore */
       }
       setDirty(false);
       toast.success('Questionnaire saved', { description: 'Clients and the form will see the updated questions.' });
+      void loadRevisions();
     } finally {
       setSaving(false);
     }
-  }, [definition, refresh]);
+  }, [definition, refresh, loadRevisions]);
 
   useEffect(() => {
     const onKey = (e) => {
       if (!(e.metaKey || e.ctrlKey) || e.key !== 's') return;
       e.preventDefault();
       if (dirty && !saving && !loading) {
+        qLog('keyboard_save', {});
         void handleSaveQuestionnaire();
       }
     };
@@ -273,11 +463,36 @@ export default function QuestionnaireEditorPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dirty, saving, loading, handleSaveQuestionnaire]);
 
-  const handleResetToDefault = () => {
-    if (!window.confirm('Reload the built-in default questionnaire? Any unsaved custom changes will be lost.')) return;
-    setDefinition(deepClone(defaultFormData));
+  const handleResetToDefault = async () => {
+    if (!window.confirm('Reload the factory default questionnaire? Unsaved edits on this page will be replaced (you can still cancel by not saving).')) return;
+    qLog('reset_to_factory_clicked', {});
+    const { data, source } = await getFactoryDefault();
+    const payload = data || defaultFormData;
+    setDefinition(deepClone(payload));
     setDirty(true);
-    toast.info('Reset to built-in default', { description: 'Click Save questionnaire to publish this version.' });
+    qLog('reset_to_factory_applied', { source, sectionCount: payload?.formSections?.length });
+    toast.info('Draft reset to factory default', {
+      description: `Source: ${source}. Click Save questionnaire to publish.`,
+    });
+  };
+
+  const handleRestoreRevision = async (revisionId) => {
+    if (!window.confirm('Restore this saved version as the live questionnaire? Current published form will be replaced.')) return;
+    qLog('restore_revision_selected', { revisionId });
+    setRestoreBusyId(revisionId);
+    try {
+      const { error } = await restoreFormDefinitionRevision(revisionId);
+      if (error) {
+        toast.error('Could not restore', { description: error });
+        return;
+      }
+      toast.success('Questionnaire restored', { description: 'Reloading from server…' });
+      await refresh({ silent: true });
+      setDirty(false);
+      void loadRevisions();
+    } finally {
+      setRestoreBusyId(null);
+    }
   };
 
   const sections = definition.formSections || [];
@@ -361,6 +576,41 @@ export default function QuestionnaireEditorPage() {
           </ol>
         </div>
 
+        <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+          <div className="flex flex-wrap items-center gap-2 text-indigo-900">
+            <History size={18} />
+            <span className="font-semibold">Version history (Supabase)</span>
+            {revisionsLoading && <span className="text-xs text-indigo-600">Loading…</span>}
+          </div>
+          <p className="mt-1 text-xs text-indigo-800/90">
+            Last 50 published snapshots. Restoring replaces the live questionnaire for all clients.
+          </p>
+          <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
+            {revisions.length === 0 && !revisionsLoading && (
+              <li className="text-slate-600">No history yet — history is recorded when you save (after migrations are applied).</li>
+            )}
+            {revisions.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2"
+              >
+                <span className="text-slate-700">
+                  {formatSavedTime(new Date(r.created_at)) || r.created_at} · {r.source}
+                  {typeof r.payloadBytes === 'number' ? ` · ~${r.payloadBytes} bytes` : ''}
+                </span>
+                <button
+                  type="button"
+                  disabled={!!restoreBusyId || loading}
+                  onClick={() => handleRestoreRevision(r.id)}
+                  className="rounded-lg border border-indigo-300 px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         <div className="mt-6">
           <label className="block text-sm font-medium text-slate-700">Form title</label>
           <input
@@ -368,8 +618,10 @@ export default function QuestionnaireEditorPage() {
             value={definition.formTitle || ''}
             onChange={(e) => {
               const v = e.target.value;
+              qLog('form_title_change', { length: v.length });
               setDefinition((d) => ({ ...d, formTitle: v }));
               setDirty(true);
+              qLog('dirty_set', { reason: 'form_title_change' });
             }}
             disabled={loading || saving}
             className="mt-1 max-w-md rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
@@ -377,48 +629,156 @@ export default function QuestionnaireEditorPage() {
           />
         </div>
 
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm text-amber-950">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((s) => !s)}
+            className="font-semibold text-amber-950 underline-offset-2 hover:underline"
+          >
+            {showAdvanced ? 'Hide' : 'Show'} Advanced (reorder / add / remove)
+          </button>
+          <p className="mt-1 text-xs text-amber-900/90">
+            Reordering changes screen order only. New fields use IDs starting with <code className="font-mono">custom_</code>. Only those can be removed; only sections you add here can be deleted.
+          </p>
+          {showAdvanced && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={addSection}
+                disabled={loading || saving}
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+              >
+                <Plus size={14} /> Add section
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="mt-8 space-y-2 questionnaire-editor-sections">
           {sections.map((section, sIdx) => (
             <div key={sIdx} className="questionnaire-editor-section rounded-xl border border-amber-200/80 bg-amber-50/40">
-              <div className="flex w-full items-center justify-between gap-2 px-4 py-3">
+              <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <button
                   type="button"
                   onClick={() => toggleSection(sIdx)}
-                  className="flex flex-1 items-center gap-2 text-left font-medium text-stone-900 questionnaire-section-title"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left font-medium text-stone-900 questionnaire-section-title"
                 >
                   {expandedSections.has(sIdx) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  <FileText size={16} className="questionnaire-section-icon text-amber-700" />
-                  {section.formSection || `Section ${sIdx + 1}`}
+                  <FileText size={16} className="questionnaire-section-icon shrink-0 text-amber-700" />
+                  <span className="min-w-0 break-words">{section.formSection || `Section ${sIdx + 1}`}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingSectionIndex(sIdx)}
-                  disabled={loading || saving}
-                  className="questionnaire-edit-section-btn shrink-0 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Edit3 size={12} />
-                  Edit section
-                </button>
+                <div className="flex flex-wrap items-center gap-1">
+                  {showAdvanced && (
+                    <>
+                      <button
+                        type="button"
+                        title="Move section up"
+                        onClick={() => moveSection(sIdx, -1)}
+                        disabled={sIdx === 0 || loading || saving}
+                        className="rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 disabled:opacity-30"
+                      >
+                        <ChevronUp size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Move section down"
+                        onClick={() => moveSection(sIdx, 1)}
+                        disabled={sIdx >= sections.length - 1 || loading || saving}
+                        className="rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 disabled:opacity-30"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                      {section._editorAdded && (
+                        <button
+                          type="button"
+                          title="Remove section"
+                          onClick={() => removeSection(sIdx)}
+                          disabled={loading || saving}
+                          className="rounded-lg p-1.5 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingSectionIndex(sIdx)}
+                    disabled={loading || saving}
+                    className="questionnaire-edit-section-btn shrink-0 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Edit3 size={12} />
+                    Edit section
+                  </button>
+                </div>
               </div>
               {expandedSections.has(sIdx) && (
                 <div className="questionnaire-editor-section-content border-t border-amber-200/80 bg-white/70 px-4 pb-3 pt-2">
+                  {showAdvanced && (
+                    <button
+                      type="button"
+                      onClick={() => addField(sIdx)}
+                      disabled={loading || saving}
+                      className="mb-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-amber-300 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      <Plus size={12} /> Add field in this section
+                    </button>
+                  )}
                   <ul className="space-y-1">
                     {(section.fields || []).map((field, fIdx) => (
-                      <li key={field.id || fIdx} className="questionnaire-field-item flex items-center justify-between rounded-lg bg-white border border-stone-100 px-3 py-2 text-sm shadow-sm">
-                        <span className="text-stone-700 questionnaire-field-text">
+                      <li
+                        key={field.id || fIdx}
+                        className="questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-100 bg-white px-3 py-2 text-sm shadow-sm"
+                      >
+                        <span className="min-w-0 text-stone-700 questionnaire-field-text">
                           <span className="font-mono text-stone-500">{field.id}</span>
                           <span className="mx-2">·</span>
                           {field.label || '(no label)'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx, field })}
-                          disabled={loading || saving}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Edit3 size={12} />
-                          Edit
-                        </button>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1">
+                          {showAdvanced && (
+                            <>
+                              <button
+                                type="button"
+                                title="Move field up"
+                                onClick={() => moveField(sIdx, fIdx, -1)}
+                                disabled={fIdx === 0 || loading || saving}
+                                className="rounded p-1 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                              >
+                                <ChevronUp size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Move field down"
+                                onClick={() => moveField(sIdx, fIdx, 1)}
+                                disabled={fIdx >= (section.fields || []).length - 1 || loading || saving}
+                                className="rounded p-1 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                              {field.id?.startsWith?.('custom_') && (
+                                <button
+                                  type="button"
+                                  title="Remove field"
+                                  onClick={() => removeField(sIdx, fIdx)}
+                                  disabled={loading || saving}
+                                  className="rounded p-1 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx, field })}
+                            disabled={loading || saving}
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Edit3 size={12} />
+                            Edit
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
