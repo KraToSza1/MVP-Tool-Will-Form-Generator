@@ -9,7 +9,10 @@ import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
 import { isMatterTestamentaryCapacityOutstanding, getMissingIdVerificationDocs, getMissingTestamentaryCapacityFields, ID_VERIFICATION_DOC_LABELS } from '../lib/matterOutstanding.js';
-import { TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
+import {
+  TESTAMENTARY_CAPACITY_SECTION_INDEX,
+  TESTAMENTARY_CAPACITY_SECTION_TITLE,
+} from '../constants/clientMode.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
@@ -240,6 +243,10 @@ export default function MatterDetailPage() {
   );
   const testamentaryCapacityComplete = useMemo(() => !isMatterTestamentaryCapacityOutstanding(matter), [matter]);
   const { formData } = useFormDefinition();
+  const testamentaryCapacitySectionIndex = useMemo(() => {
+    const i = formData?.formSections?.findIndex((s) => s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE);
+    return i >= 0 ? i : TESTAMENTARY_CAPACITY_SECTION_INDEX;
+  }, [formData?.formSections]);
 
   const idDocs = useMemo(() => {
     const iv = mergedPayload?.identityVerification;
@@ -492,6 +499,16 @@ export default function MatterDetailPage() {
             <ArrowLeft size={16} />
             Back to dashboard
           </Link>
+          <a
+            href={getClientWillToolUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="Opens the same client intake as your customers (new tab)"
+          >
+            <ExternalLink size={14} />
+            Preview client intake
+          </a>
           <button
             type="button"
             onClick={handleCopyClientLink}
@@ -660,7 +677,7 @@ export default function MatterDetailPage() {
                         </ul>
                         <Link
                           to={`/solicitor/matters/${matter.id}/form`}
-                          state={{ openAtSection: TESTAMENTARY_CAPACITY_SECTION_INDEX }}
+                          state={{ openAtSection: testamentaryCapacitySectionIndex }}
                           className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 hover:text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
                         >
                           <FilePenLine size={16} />

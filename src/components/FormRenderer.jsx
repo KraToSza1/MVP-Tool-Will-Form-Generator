@@ -60,7 +60,11 @@ import { generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
 import { toast } from 'sonner';
-import { isSolicitorMode, SOLICITOR_ONLY_FIELD_IDS, TESTAMENTARY_CAPACITY_SECTION_INDEX } from '../constants/clientMode.js';
+import {
+  isSolicitorMode,
+  SOLICITOR_ONLY_FIELD_IDS,
+  TESTAMENTARY_CAPACITY_SECTION_TITLE,
+} from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
@@ -260,24 +264,33 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   
-  // Filter sections: hide Testamentary Capacity section from clients (solicitor-only)
+  // Client mode: hide Testamentary Capacity (by title so reorder/add section still works). Must depend on formData.
   const visibleSections = useMemo(() => {
+    if (!formData?.formSections) return [];
     if (solicitorMode) {
       return formData.formSections;
     }
-    // Client mode: exclude Testamentary Capacity section (index 18)
-    return formData.formSections.filter((_, idx) => idx !== TESTAMENTARY_CAPACITY_SECTION_INDEX);
-  }, [solicitorMode]);
-  
-  // Map currentIndex to actual section index (accounting for filtered sections)
+    return formData.formSections.filter((s) => s.formSection !== TESTAMENTARY_CAPACITY_SECTION_TITLE);
+  }, [solicitorMode, formData?.formSections]);
+
+  /** Index in full formData.formSections for the visible step (stable when TC is filtered by title). */
   const actualSectionIndex = useMemo(() => {
     if (solicitorMode) {
       return currentIndex;
     }
-    // In client mode, if currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX, add 1 to skip it
-    return currentIndex >= TESTAMENTARY_CAPACITY_SECTION_INDEX ? currentIndex + 1 : currentIndex;
-  }, [currentIndex, solicitorMode]);
-  
+    const section = visibleSections[currentIndex];
+    if (!section || !formData?.formSections) return currentIndex;
+    const i = formData.formSections.indexOf(section);
+    return i >= 0 ? i : currentIndex;
+  }, [currentIndex, solicitorMode, visibleSections, formData?.formSections]);
+
+  useEffect(() => {
+    if (!visibleSections.length) return;
+    if (currentIndex >= visibleSections.length) {
+      setCurrentIndex(visibleSections.length - 1);
+    }
+  }, [visibleSections, currentIndex]);
+
   const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
   const uploadedIdDocumentCount = useMemo(() => {
     const identityVerification = formValues?.identityVerification;

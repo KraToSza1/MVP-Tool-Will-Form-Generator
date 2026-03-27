@@ -14,6 +14,7 @@ import {
   Plus,
   Undo2,
   Layers,
+  GripVertical,
 } from 'lucide-react';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import {
@@ -331,6 +332,7 @@ export default function QuestionnaireEditorPage() {
   const [restoreBusyId, setRestoreBusyId] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [addSectionModalOpen, setAddSectionModalOpen] = useState(false);
+  const [dragFromIndex, setDragFromIndex] = useState(null);
 
   useEffect(() => {
     if (!loading && !dirty) {
@@ -435,6 +437,37 @@ export default function QuestionnaireEditorPage() {
         if (idx === sectionIndex) n.add(sectionIndex + direction);
         else if (idx === sectionIndex + direction) n.add(sectionIndex);
         else n.add(idx);
+      });
+      return n;
+    });
+  }, []);
+
+  const moveSectionToIndex = useCallback((fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return;
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const arr = next.formSections;
+      if (fromIndex < 0 || fromIndex >= arr.length || toIndex < 0 || toIndex >= arr.length) return d;
+      const [item] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, item);
+      return next;
+    });
+    setDirty(true);
+    qLog('section_reorder_drag', { from: fromIndex, to: toIndex });
+    qLog('dirty_set', { reason: 'section_reorder' });
+    setExpandedSections((prev) => {
+      const n = new Set();
+      prev.forEach((idx) => {
+        if (idx === fromIndex) {
+          n.add(toIndex);
+        } else if (fromIndex < toIndex) {
+          if (idx > fromIndex && idx <= toIndex) n.add(idx - 1);
+          else n.add(idx);
+        } else if (idx >= toIndex && idx < fromIndex) {
+          n.add(idx + 1);
+        } else {
+          n.add(idx);
+        }
       });
       return n;
     });
@@ -847,7 +880,7 @@ export default function QuestionnaireEditorPage() {
             />
           </button>
           <p className="questionnaire-advanced-hint mt-3 text-xs leading-relaxed text-slate-600">
-            Reordering changes screen order only. New fields use IDs starting with{' '}
+            Drag the grip icon to reorder sections, use ↑↓, or pick a position number. Reordering changes client step order only; field IDs stay the same. New fields use IDs starting with{' '}
             <code className="questionnaire-advanced-code rounded-md bg-slate-200/90 px-1.5 py-0.5 font-mono text-[0.8rem] text-slate-800">custom_</code>. Only those can be removed; only sections you add here can be deleted.
           </p>
           {showAdvanced && (
@@ -869,7 +902,21 @@ export default function QuestionnaireEditorPage() {
 
         <div className="mt-8 space-y-2 questionnaire-editor-sections">
           {sections.map((section, sIdx) => (
-            <div key={sIdx} className="questionnaire-editor-section rounded-xl border border-amber-200/80 bg-amber-50/40">
+            <div
+              key={sIdx}
+              className={`questionnaire-editor-section rounded-xl border border-amber-200/80 bg-amber-50/40 ${showAdvanced && dragFromIndex != null ? 'transition-colors' : ''} ${showAdvanced && dragFromIndex === sIdx ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}
+              onDragOver={(e) => {
+                if (!showAdvanced || dragFromIndex == null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (!showAdvanced || dragFromIndex == null) return;
+                moveSectionToIndex(dragFromIndex, sIdx);
+                setDragFromIndex(null);
+              }}
+            >
               <div className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <button
                   type="button"
@@ -883,6 +930,40 @@ export default function QuestionnaireEditorPage() {
                 <div className="flex flex-wrap items-center gap-1">
                   {showAdvanced && (
                     <>
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(e) => {
+                          setDragFromIndex(sIdx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(sIdx));
+                        }}
+                        onDragEnd={() => setDragFromIndex(null)}
+                        title="Drag to reorder section"
+                        aria-label="Drag to reorder section"
+                        className="cursor-grab rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 active:cursor-grabbing touch-manipulation"
+                      >
+                        <GripVertical size={18} />
+                      </button>
+                      <label className="flex items-center gap-1 rounded-lg border border-amber-200/80 bg-white/80 px-2 py-1 text-[11px] font-medium text-amber-900">
+                        <span className="hidden sm:inline">#</span>
+                        <select
+                          value={sIdx + 1}
+                          onChange={(e) => {
+                            const to = parseInt(e.target.value, 10) - 1;
+                            if (!Number.isNaN(to) && to !== sIdx) moveSectionToIndex(sIdx, to);
+                          }}
+                          disabled={loading || saving}
+                          className="max-w-[4rem] cursor-pointer rounded border-0 bg-transparent py-0 text-xs font-semibold text-amber-950 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          aria-label={`Move section to position 1–${sections.length}`}
+                        >
+                          {sections.map((_, i) => (
+                            <option key={i} value={i + 1}>
+                              {i + 1}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <button
                         type="button"
                         title="Move section up"

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { BriefcaseBusiness, FileEdit, LogOut, ShieldCheck } from 'lucide-react';
+import { BriefcaseBusiness, FileEdit, Home, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ThemeToggleButton from '../ThemeToggleButton.jsx';
 
@@ -54,6 +54,15 @@ export default function SolicitorLayout() {
             <FileEdit size={16} />
             Edit questionnaire
           </NavLink>
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/80"
+          >
+            <Home size={16} />
+            Client intake (preview)
+          </a>
         </nav>
 
         <Outlet />

@@ -4,7 +4,10 @@
  * Solicitor mode: full access including execution, witnesses, PDF download.
  */
 
-// Section index for "Testamentary Capacity" (0-based) - everything after this is solicitor-only
+/** Section title used to hide intake-only block from clients (must match form JSON). */
+export const TESTAMENTARY_CAPACITY_SECTION_TITLE = 'Testamentary Capacity';
+
+// Legacy default index when the section title is not found (factory order)
 export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 18;
 export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_INDEX - 1;
 
