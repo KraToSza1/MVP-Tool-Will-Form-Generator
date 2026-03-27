@@ -44,12 +44,21 @@ export async function getCurrentSession() {
 
 /** Embedded iframes (e.g. WordPress) can be slow or throttle auth; allow longer wait. */
 const SIGN_IN_TIMEOUT_MS = 45_000;
+const PROFILE_FETCH_TIMEOUT_MS = 25_000;
 
 function withTimeout(promise, ms, message = 'Sign-in timed out') {
   return Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
   ]);
+}
+
+async function signInWithPasswordOnce(email, password) {
+  const result = await withTimeout(
+    supabase.auth.signInWithPassword({ email, password }),
+    SIGN_IN_TIMEOUT_MS
+  );
+  return result;
 }
 
 export async function signInSolicitor({ email, password }) {
@@ -62,18 +71,29 @@ export async function signInSolicitor({ email, password }) {
 
   let data, error;
   try {
-    const result = await withTimeout(
-      supabase.auth.signInWithPassword({ email, password }),
-      SIGN_IN_TIMEOUT_MS
-    );
+    const result = await signInWithPasswordOnce(email, password);
     data = result.data;
     error = result.error;
   } catch (err) {
     if (err?.message === 'Sign-in timed out') {
-      console.warn('[Solicitor Login] signInWithPassword timed out – Supabase may be stuck (e.g. lock). Refresh and try again.');
-      return { error: 'Sign-in timed out. Refresh the page and try again.' };
+      console.warn('[Solicitor Login] first signIn attempt timed out; retrying once (embedded iframes can be slow)');
+      try {
+        const retry = await signInWithPasswordOnce(email, password);
+        data = retry.data;
+        error = retry.error;
+      } catch (err2) {
+        if (err2?.message === 'Sign-in timed out') {
+          console.warn('[Solicitor Login] signInWithPassword timed out after retry');
+          return {
+            error:
+              'Sign-in timed out. Your browser may be limiting the embedded page — try opening the Will Tool in a full tab (use “Open solicitor login in new tab” on the login page), or check your connection.',
+          };
+        }
+        throw err2;
+      }
+    } else {
+      throw err;
     }
-    throw err;
   }
 
   if (error) {
@@ -83,7 +103,21 @@ export async function signInSolicitor({ email, password }) {
 
   const userId = data.user?.id ?? null;
   console.log('[Solicitor Login] Supabase auth OK, fetching profile for user', userId);
-  const profile = userId ? await getProfile(userId) : null;
+  let profile = null;
+  if (userId) {
+    try {
+      profile = await withTimeout(getProfile(userId), PROFILE_FETCH_TIMEOUT_MS, 'Profile lookup timed out');
+    } catch (err) {
+      console.warn('[Solicitor Login] getProfile timed out or failed', err);
+      return {
+        error:
+          'Signed in but could not load your staff profile in time. Refresh the page, or open the Will Tool in a new tab and try again.',
+        session: data.session ?? null,
+        user: data.user ?? null,
+        profile: null,
+      };
+    }
+  }
   if (!profile) {
     console.warn('[Solicitor Login] No profile row found for this user. In Supabase: create a row in public.profiles for this user and set role = \'solicitor\'.');
     return {

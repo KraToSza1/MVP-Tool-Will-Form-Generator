@@ -13,12 +13,16 @@ if (!url || !anonKey) {
   console.log('[Supabase] Client created (URL and anon key present).');
 }
 
+/** In a cross-origin iframe, skip parsing OAuth/magic-link hash on load (reduces work; password sign-in does not need it). Top-level keeps URL sessions for reset links etc. */
+const detectSessionInUrl =
+  typeof window === 'undefined' ? true : window.self === window.top;
+
 export const supabase = url && anonKey
   ? createClient(url, anonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl,
       },
     })
   : null;

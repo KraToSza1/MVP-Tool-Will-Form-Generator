@@ -9,9 +9,8 @@
 - **There is no separate “backend”** (WordPress admin or database screen) where you edit the questionnaire in normal language.  
   The questionnaire is edited **inside the Will Tool website** after you sign in as staff.
 
-- **Do not** try to sign in while the Will Tool is **inside the law firm website** (embedded in a page).  
-  That often **fails or times out**.  
-  You must open the Will Tool **directly** in its own browser tab — see the link below.
+- You **can** sign in while the Will Tool is **embedded** on the law firm website — try that first.  
+  If sign-in **times out or spins too long**, open the Will Tool **directly** in its own browser tab (link below) and sign in there with the **same** email and password.
 
 ---
 
@@ -25,15 +24,15 @@
 
 ## Steps (about 2 minutes)
 
-### 1. Open this link in a **new tab** (copy and paste into the address bar)
+### 1. Open the Will Tool
 
-**Use the direct Will Tool address** — **not** the page on the main Aristone website that shows the form inside a frame.
+**Option A — from your website:** Open the normal Will page on the Aristone site (the tool may be **embedded** in the page). That is fine — go to **Solicitor login** and sign in there.
 
-Example (Raymond will confirm the exact live URL):
+**Option B — direct link (good if embed is slow):** Copy this into the address bar in a **new tab** (Raymond will confirm the exact live URL):
 
 `https://mvp-tool-will-form-generator-chi.vercel.app/`
 
-*(If your firm uses a custom domain for the tool, use that instead — it must open **full screen**, not inside WordPress.)*
+*(If your firm uses a custom domain for the tool, use that instead.)*
 
 ### 2. Sign in as a solicitor
 
@@ -42,8 +41,7 @@ Example (Raymond will confirm the exact live URL):
 - Click to sign in.
 
 **If sign-in fails or spins forever:**  
-Close that tab, open a **fresh tab**, go to the **same direct link** again, and try once more.  
-Still stuck? Email Raymond — he may need to reset your password or fix the database.
+Try the **direct link** in a new tab (Option B), or use **“Open solicitor login in new tab”** on the login page if you see it. Still stuck? Email Raymond — he may need to reset your password or fix the database.
 
 ### 3. Open the questionnaire editor
 
@@ -70,8 +68,8 @@ You can bookmark this page for next time (only works when you are already logged
 
 ## If you only have the firm website link
 
-That is fine for **clients** filling in the form.  
-For **editing questions**, always use the **direct Will Tool link** in its **own tab** for staff login, as above.
+That is fine. Open the Will page on the firm site, use **Solicitor login**, then **Edit questionnaire**.  
+If staff login **times out** in the embedded page, use the **direct Will Tool link** in a new tab (see Option B above).
 
 ---
 

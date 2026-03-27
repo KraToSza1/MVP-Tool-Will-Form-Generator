@@ -144,10 +144,9 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
             role="region"
             aria-label="Embedded sign-in notice"
           >
-            <p className="font-semibold text-amber-900">Signing in from an embedded page?</p>
+            <p className="font-semibold text-amber-900">Using the Will Tool inside your website?</p>
             <p className="mt-1 text-amber-800/95">
-              Browsers often block or delay login when the Will Tool runs inside WordPress. Use the same email and password in a{' '}
-              <strong>new tab</strong> — that usually fixes timeouts.
+              You can sign in here — same login as a full tab. Some browsers slow down or block embedded pages; if sign-in spins too long or times out, open the link below and sign in there (same account).
             </p>
             <a
               href={directLoginUrl}

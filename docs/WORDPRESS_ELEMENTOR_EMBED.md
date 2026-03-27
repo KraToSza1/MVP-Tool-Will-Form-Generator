@@ -61,7 +61,9 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
    - **Shortcode** (if you use the plugin below).
 3. **If using the HTML widget**, paste this and replace the URL with your app URL:
 
-**Important for camera:** The app’s identity verification uses the device camera. For “Take photo” to work inside the iframe, the iframe must grant the camera permission with the `allow="camera"` attribute. The app must be served over **HTTPS** (or localhost).
+**Important for camera:** The app’s identity verification uses the device camera. For “Take photo” to work inside the iframe, the iframe must grant the camera permission with the `allow` attribute. The app must be served over **HTTPS** (or localhost).
+
+**Staff sign-in:** Solicitor login is supported **inside** the iframe (same as opening the app in a full tab). If a browser times out, staff can use **Open solicitor login in new tab** on the login page. Include `clipboard-write` if staff use copy actions in the app; `fullscreen` is optional.
 
 **Standard (respects column width):**
 ```html
@@ -71,7 +73,7 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
   height="800"
   style="min-height: 80vh; border: none; display: block;"
   title="Will Form Generator"
-  allow="camera"
+  allow="camera; clipboard-write; fullscreen"
 ></iframe>
 ```
 
@@ -84,7 +86,7 @@ You can embed the Will Form Generator on a WordPress site that uses Elementor in
     height="800"
     style="min-height: 80vh; border: none;"
     title="Will Form Generator"
-    allow="camera"
+    allow="camera; clipboard-write; fullscreen"
   ></iframe>
 </div>
 ```

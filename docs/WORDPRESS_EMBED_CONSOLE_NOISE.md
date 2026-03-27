@@ -10,6 +10,6 @@ These messages appear on the **WordPress parent page**, not inside the Will Tool
 | `Layout was forced before the page was fully loaded` | WordPress / theme | Performance/theme issue; not Will Tool. |
 | Source map 404 `installHook.js.map` | Browser extension (e.g. React DevTools) | Harmless. |
 
-**Will Tool–related:** `Partitioned cookie … vercel.app` is normal for an embedded iframe; staff should use **direct Vercel URL** for solicitor login (see `STAFF_LOGIN_TROUBLESHOOTING.md`).
+**Will Tool–related:** `Partitioned cookie … vercel.app` is normal for an embedded iframe. Staff can sign in **inside** the embed; if login times out, use a **full tab** (see `STAFF_LOGIN_TROUBLESHOOTING.md`).
 
 **Database:** If you see `stack depth limit exceeded` on listing matters, run the migration `20260318000000_fix_is_staff_rls_recursion.sql` in Supabase SQL Editor.

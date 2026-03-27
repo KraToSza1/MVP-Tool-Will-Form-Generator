@@ -2,19 +2,23 @@
 
 ## “Sign-in timed out” (embedded in WordPress / iframe)
 
-If the Will Tool is **inside an iframe** on `aristonesolicitors.co.uk` but the app is hosted on **Vercel**, the browser treats it as **third-party**. Chrome often **throttles or blocks** calls to Supabase Auth, so login **hangs** until it times out — **not** a wrong password.
+The Will Tool is **meant to work embedded** on your site (iframe). Staff can sign in **inside** the embed using the same email and password as in a full tab.
 
-**Fix:** Open solicitor login **in a full tab**, not inside WordPress:
+Some browsers **slow down or throttle** network calls when the app runs in a **cross-origin** iframe (e.g. WordPress on your domain, app on Vercel). That can make sign-in **hang** until it times out — **not** always a wrong password.
+
+**What we do in the app:** faster Supabase connection (preconnect), one automatic retry on timeout, optional URL-session parsing disabled only **inside** the iframe, and a timeout around loading the staff profile after password sign-in.
+
+**If it still times out:** open solicitor login **in a full tab** (same account):
 
 `https://YOUR-VERCEL-APP.vercel.app/solicitor/login`
 
 (e.g. `https://mvp-tool-will-form-generator-chi.vercel.app/solicitor/login`)
 
-Same email and password. After sign-in, staff can use Matters / questionnaire in that tab.
-
 **Optional:** Add a WordPress menu link “Staff: Will Tool login” pointing to that URL (opens in new tab).
 
-The login page now shows an **amber box** with **Open solicitor login in new tab** when it detects an iframe.
+The login page shows an **amber box** with **Open solicitor login in new tab** when it detects an iframe — use that only if embedded sign-in fails.
+
+**Stronger setup (optional):** Point a **subdomain** of your firm’s site at Vercel (e.g. `will.aristonesolicitors.co.uk` → CNAME to the deployment). Same embed UX, sometimes fewer browser restrictions than `*.vercel.app` alone.
 
 ---
 
