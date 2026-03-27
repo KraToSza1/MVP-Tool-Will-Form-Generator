@@ -234,6 +234,77 @@ html.dark-theme .questionnaire-field-text .font-mono {
   color: #94a3b8 !important;
 }
 
+/* Stone palette — questionnaire rows & controls (Tailwind stone-* not covered by slate overrides) */
+html.dark-theme .text-stone-500 {
+  color: #94a3b8 !important;
+}
+html.dark-theme .text-stone-600 {
+  color: #cbd5e1 !important;
+}
+html.dark-theme .text-stone-700 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .text-stone-800 {
+  color: #f1f5f9 !important;
+}
+html.dark-theme .text-stone-900 {
+  color: #f8fafc !important;
+}
+html.dark-theme .border-stone-100 {
+  border-color: rgba(99, 102, 241, 0.22) !important;
+}
+html.dark-theme .hover\:bg-stone-100:hover {
+  background-color: rgba(51, 65, 85, 0.55) !important;
+}
+
+/* Section toolbar: reorder grip, position, arrows (amber on dark) */
+html.dark-theme .questionnaire-editor-section .text-amber-900,
+html.dark-theme .questionnaire-editor-section .text-amber-950 {
+  color: #fde68a !important;
+}
+html.dark-theme .questionnaire-editor-section .hover\:bg-amber-100:hover {
+  background-color: rgba(99, 102, 241, 0.22) !important;
+}
+html.dark-theme .questionnaire-editor-section .hover\:bg-amber-50:hover {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+}
+html.dark-theme .questionnaire-editor-section label.border-amber-200\/80,
+html.dark-theme .questionnaire-editor-section .border-amber-200\/80 {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(251, 191, 36, 0.35) !important;
+}
+html.dark-theme .questionnaire-editor-section .border-dashed.border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.45) !important;
+}
+
+html.dark-theme .questionnaire-remove-section-btn,
+html.dark-theme .questionnaire-remove-field-btn {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: #fecaca !important;
+}
+html.dark-theme .questionnaire-remove-section-btn:hover:not(:disabled),
+html.dark-theme .questionnaire-remove-field-btn:hover:not(:disabled) {
+  background-color: rgba(127, 29, 29, 0.35) !important;
+}
+
+html.dark-theme .questionnaire-revision-delete {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: #fecaca !important;
+}
+html.dark-theme .questionnaire-revision-delete:hover:not(:disabled) {
+  background-color: rgba(127, 29, 29, 0.35) !important;
+}
+
+/* Main editor title input */
+html.dark-theme .questionnaire-editor-card > .mt-6 input[type="text"],
+html.dark-theme .questionnaire-editor-card input.max-w-md {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #f8fafc !important;
+}
+
 /* Questionnaire editor page: Quick steps + sticky bar (slate; avoid illegible amber-on-amber) */
 html.dark-theme .questionnaire-quick-steps {
   background-color: rgba(30, 41, 59, 0.85) !important;

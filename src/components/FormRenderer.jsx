@@ -64,6 +64,7 @@ import {
   isSolicitorMode,
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
+  SOLICITOR_INTAKE_ONLY_SECTION_TITLE,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
@@ -264,14 +265,62 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   
-  // Client mode: hide Testamentary Capacity (by title so reorder/add section still works). Must depend on formData.
+  // Client mode: hide Testamentary Capacity + solicitor-only intake (e.g. Estate Overview). Solicitors: Estate Overview only when Aristone is executor.
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
+    const hideForClient = (s) =>
+      s.formSection !== TESTAMENTARY_CAPACITY_SECTION_TITLE &&
+      s.formSection !== SOLICITOR_INTAKE_ONLY_SECTION_TITLE;
+    let sections;
     if (solicitorMode) {
-      return formData.formSections;
+      sections = formData.formSections;
+    } else {
+      sections = formData.formSections.filter(hideForClient);
     }
-    return formData.formSections.filter((s) => s.formSection !== TESTAMENTARY_CAPACITY_SECTION_TITLE);
-  }, [solicitorMode, formData?.formSections]);
+    if (!solicitorMode) return sections;
+    const aristoneExecutor = formValues?.chooseAristoneExecutor === 'Aristone';
+    return sections.filter((s) => {
+      if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) return aristoneExecutor;
+      return true;
+    });
+  }, [solicitorMode, formData?.formSections, formValues?.chooseAristoneExecutor]);
+
+  // Aristone as executor: trustees must match executors (combined Executor/Trustee appointment in the Will).
+  useEffect(() => {
+    if (formValues?.chooseAristoneExecutor !== 'Aristone') return;
+    setFormValues((prev) => {
+      if (prev.appointDifferentTrustees === 'No') return prev;
+      return { ...prev, appointDifferentTrustees: 'No' };
+    });
+  }, [formValues?.chooseAristoneExecutor]);
+
+  // Estate intake: "No liabilities" → liability value range "None".
+  useEffect(() => {
+    const types = formValues?.estateLiabilityTypes;
+    if (!Array.isArray(types) || !types.includes('NoLiabilities')) return;
+    setFormValues((prev) => {
+      if (prev.estateLiabilityValueRange === 'None') return prev;
+      return { ...prev, estateLiabilityValueRange: 'None' };
+    });
+  }, [formValues?.estateLiabilityTypes]);
+
+  // Aristone not executor: cannot remain selected as professional trustee.
+  useEffect(() => {
+    if (formValues?.chooseAristoneExecutor === 'Aristone') return;
+    setFormValues((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      if (prev.professionalTrusteeSelection === 'Aristone') {
+        next.professionalTrusteeSelection = null;
+        changed = true;
+      }
+      if (prev.substituteProfessionalTrusteeSelection === 'Aristone') {
+        next.substituteProfessionalTrusteeSelection = null;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [formValues?.chooseAristoneExecutor]);
 
   /** Index in full formData.formSections for the visible step (stable when TC is filtered by title). */
   const actualSectionIndex = useMemo(() => {
@@ -1376,6 +1425,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
       
       if (clause.operator === 'eq') return value === clause.value;
+      if (clause.operator === 'ne') return value !== clause.value;
+      if (clause.operator === 'includes') {
+        return Array.isArray(value) && value.includes(clause.value);
+      }
       if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
       return false;
     };

@@ -33,6 +33,33 @@ import {
   optionsToMultiline,
 } from '../utils/customFieldBuilder.js';
 
+/** Browsers may show a generic “leave site?” dialog; this string is used where a custom line still appears. */
+const LEAVE_PAGE_UNSAVED_MSG =
+  'You have unsaved changes to the questionnaire. If you leave or refresh now, those edits may be lost.';
+
+/**
+ * Copy for window.confirm() — short, plain English, one decision per dialog.
+ * (In-app ConfirmModal is available elsewhere for themed UI.)
+ */
+const CONFIRM = {
+  moveSectionOrder:
+    'Reorder sections for clients?\n\nThis changes the order of steps in the client intake. Question and field IDs stay the same.\n\nContinue?',
+  moveFieldOrder:
+    'Change the order of questions in this section?\n\nOnly the display order changes; question IDs stay the same.',
+  discardDraft:
+    'Discard everything you have edited on this page since the last save?\n\nYour draft will be replaced by the last published questionnaire from the server.',
+  removeSection:
+    'Remove this whole section and every question inside it?\n\nYou can bring content back later only by restoring an older saved version of the whole questionnaire.',
+  removeField:
+    'Remove this question from your draft?\n\nYou can undo only by discarding changes or restoring a saved version.',
+  resetToFactory:
+    'Replace your current draft with the factory default questionnaire?\n\nNothing is published until you click Save questionnaire.',
+  restoreRevision:
+    'Publish this older snapshot as the live questionnaire?\n\nEveryone (including clients) will see this version after it loads. Your current published version will be replaced.',
+  deleteRevision:
+    'Delete this snapshot from version history?\n\nThe live questionnaire for clients does not change. This backup cannot be recovered.',
+};
+
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
@@ -638,7 +665,7 @@ export default function QuestionnaireEditorPage() {
     const onBeforeUnload = (e) => {
       if (!dirty) return;
       e.preventDefault();
-      e.returnValue = '';
+      e.returnValue = LEAVE_PAGE_UNSAVED_MSG;
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
@@ -689,7 +716,7 @@ export default function QuestionnaireEditorPage() {
   }, []);
 
   const moveSection = useCallback((sectionIndex, direction) => {
-    if (!window.confirm('Changing section order may affect step flow in the client form. Field IDs stay the same. Continue?')) {
+    if (!window.confirm(CONFIRM.moveSectionOrder)) {
       return;
     }
     setDefinition((d) => {
@@ -746,7 +773,7 @@ export default function QuestionnaireEditorPage() {
   }, []);
 
   const moveField = useCallback((sectionIndex, fieldIndex, direction) => {
-    if (!window.confirm('Reordering fields can change visual order only; IDs are unchanged. Continue?')) return;
+    if (!window.confirm(CONFIRM.moveFieldOrder)) return;
     setDefinition((d) => {
       const next = deepClone(d);
       const fields = next.formSections[sectionIndex]?.fields;
@@ -867,11 +894,7 @@ export default function QuestionnaireEditorPage() {
   const handleDiscardDraft = useCallback(() => {
     if (!dirty) return;
     qLog('discard_changes_clicked', { sectionCount: definition.formSections?.length });
-    if (
-      !window.confirm(
-        'Discard all unpublished edits on this page? Your draft will match the last published questionnaire from the server.'
-      )
-    ) {
+    if (!window.confirm(CONFIRM.discardDraft)) {
       qLog('discard_changes_cancelled');
       return;
     }
@@ -894,7 +917,7 @@ export default function QuestionnaireEditorPage() {
         toast.error('Only sections added in Advanced mode can be removed.');
         return;
       }
-      if (!window.confirm('Remove this section and all its fields? This cannot be undone until you restore a saved version.')) {
+      if (!window.confirm(CONFIRM.removeSection)) {
         return;
       }
       qLog('structure_remove_section', { sectionIndex });
@@ -916,7 +939,7 @@ export default function QuestionnaireEditorPage() {
         toast.error('Only fields with IDs starting with custom_ (added in Advanced mode) can be removed.');
         return;
       }
-      if (!window.confirm('Remove this question from the draft?')) return;
+      if (!window.confirm(CONFIRM.removeField)) return;
       qLog('structure_remove_field', { sectionIndex, fieldIndex });
       setDefinition((d) => {
         const next = deepClone(d);
@@ -1003,7 +1026,7 @@ export default function QuestionnaireEditorPage() {
   }, [dirty, saving, loading, handleSaveQuestionnaire]);
 
   const handleResetToDefault = async () => {
-    if (!window.confirm('Reload the factory default questionnaire? Unsaved edits on this page will be replaced (you can still cancel by not saving).')) return;
+    if (!window.confirm(CONFIRM.resetToFactory)) return;
     qLog('reset_to_factory_clicked', {});
     const { data, source } = await getFactoryDefault();
     const payload = data || defaultFormData;
@@ -1016,7 +1039,7 @@ export default function QuestionnaireEditorPage() {
   };
 
   const handleRestoreRevision = async (revisionId) => {
-    if (!window.confirm('Restore this saved version as the live questionnaire? Current published form will be replaced.')) return;
+    if (!window.confirm(CONFIRM.restoreRevision)) return;
     qLog('restore_revision_selected', { revisionId });
     setRestoreBusyId(revisionId);
     try {
@@ -1035,11 +1058,7 @@ export default function QuestionnaireEditorPage() {
   };
 
   const handleDeleteRevision = async (revisionId) => {
-    if (
-      !window.confirm(
-        'Remove this snapshot from version history? This does not change the live questionnaire. This cannot be undone.'
-      )
-    ) {
+    if (!window.confirm(CONFIRM.deleteRevision)) {
       return;
     }
     qLog('revision_delete_clicked', { revisionId });
@@ -1146,6 +1165,9 @@ export default function QuestionnaireEditorPage() {
               <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">⌘</kbd>{' '}
               +{' '}
               <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">S</kbd> on Mac) saves when you have unsaved changes.
+            </li>
+            <li>
+              If you close the tab or navigate away while you still have unpublished changes, your browser may ask whether to leave. Stay to keep editing; leaving can discard work that was not saved.
             </li>
           </ol>
         </div>
@@ -1360,7 +1382,7 @@ export default function QuestionnaireEditorPage() {
                       title="Remove this section (added in Advanced mode)"
                       onClick={() => removeSection(sIdx)}
                       disabled={loading || saving}
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      className="questionnaire-remove-section-btn inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                       aria-label="Remove section"
                     >
                       <Trash2 size={14} />
@@ -1430,7 +1452,7 @@ export default function QuestionnaireEditorPage() {
                               title="Remove this question"
                               onClick={() => removeField(sIdx, fIdx)}
                               disabled={loading || saving}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              className="questionnaire-remove-field-btn inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                               aria-label="Remove question"
                             >
                               <Trash2 size={12} />

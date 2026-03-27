@@ -186,6 +186,8 @@ export default function MatterDetailPage() {
     if (!notesDirty) return;
     const onBeforeUnload = (e) => {
       e.preventDefault();
+      e.returnValue =
+        'You have unsaved changes to solicitor notes. If you leave or refresh now, those edits may be lost.';
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);

@@ -55,7 +55,7 @@ function formatDate(value) {
 }
 
 export default function SolicitorDashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [matters, setMatters] = useState([]);
   const [allMattersForStats, setAllMattersForStats] = useState([]);
   const [search, setSearch] = useState('');
@@ -110,7 +110,7 @@ export default function SolicitorDashboardPage() {
     return () => {
       active = false;
     };
-  }, [assignedOnly, search, sortBy, status, user?.id]);
+  }, [assignedOnly, authLoading, search, sortBy, status, user?.id]);
 
   const stats = useMemo(() => {
     const list = allMattersForStats;

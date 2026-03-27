@@ -4,6 +4,9 @@
  * Handles ALL field types, section subFields, conditional fields, and array data
  */
 
+const ARISTONE_EXECUTOR_LINE =
+  'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
+
 export const generateDummyFormData = (formData) => {
   console.log('[AUTOFILL GENERATE] ========== GENERATING DUMMY DATA ==========');
   const dummyData = {};
@@ -42,6 +45,7 @@ export const generateDummyFormData = (formData) => {
   };
 
   // Options that UNLOCK and FILL everything - select values that show the most sections
+  // Mariyam / Aristone workflow: Aristone as executor → same as trustees (no separate trustee pick); estate intake test data when Aristone executor.
   const unlockEverything = {
     title: 'Mr',
     maritalStatus: 'Married',
@@ -61,9 +65,7 @@ export const generateDummyFormData = (formData) => {
     includeProfessionalRemuneration: 'Yes',
     appointDigitalAssetsExecutor: 'Yes',
     appointSeparateDigitalExecutor: 'Yes',
-    appointDifferentTrustees: 'Yes',
-    professionalTrusteeSelection: 'Aristone',
-    substituteProfessionalTrusteeSelection: 'Aristone',
+    appointDifferentTrustees: 'No',
     includeBPRTrust: 'Yes',
     leaveMoneyGifts: 'Yes',
     leaveSpecificGifts: 'Yes',
@@ -116,6 +118,9 @@ export const generateDummyFormData = (formData) => {
     powerToRevokeLifeInterest: 'Yes',
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
     executorAgeClause: '25',
+    estateGrossValueRange: 'Range500_1m',
+    estateLiabilityValueRange: 'Range100_250',
+    estatePropertyValueRange: 'Range500_1m',
   };
 
   // Get value for a field - used in recursive processing
@@ -156,6 +161,7 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? '5000' : '100000';
         if (field.id === 'specificOrgansToDonate') return 'kidneys, liver, and corneas';
         if (field.id === 'specificOrgansToExclude') return 'heart';
+        if (field.id === 'estateAssetOther') return 'Overseas rental (approx.)';
         if (field.id === 'minimumCharityAmountValue') return '50000';
         if (field.id === 'stepProvisionToExcludeOne') return '1';
         if (field.id === 'stepProvisionsToExcludeMultiple') return '1, 2 & 3';
@@ -179,6 +185,7 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
+        if (field.id === 'estateAdditionalNotes') return 'Autofill test: approximate figures for solicitor review only; not for the Will text.';
         return `Please provide details for ${field.label || field.id}.`;
 
       case 'date':
@@ -195,8 +202,17 @@ export const generateDummyFormData = (formData) => {
         return 25000;
 
       case 'checkboxGroup':
-        if (field.id === 'organPurposeGroup') return field.options ? field.options.map(o => o.id || o.value).filter(Boolean) : [];
-        return field.options ? field.options.map(o => o.id || o.value).filter(Boolean) : [];
+        if (field.id === 'organPurposeGroup') {
+          return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
+        }
+        if (field.id === 'aristoneProfessionalFeesAck') return ['ack'];
+        if (field.id === 'estateAssetTypes') {
+          return ['PropertyUK', 'PropertyOverseas', 'Cash', 'Savings', 'Investments', 'Pensions', 'Business'];
+        }
+        if (field.id === 'estateLiabilityTypes') {
+          return ['Mortgage', 'CreditCards', 'Tax'];
+        }
+        return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
 
       default:
         return null;
@@ -234,21 +250,27 @@ export const generateDummyFormData = (formData) => {
         processFields(field.subFields, field.label);
         field.subFields.forEach((sub) => {
           if (sub.type === 'hidden' && sub.id) {
-            if (sub.id.includes('guardianData')) {
+            if (sub.id === 'guardianData') {
               dummyData[sub.id] = ['Sarah Johnson', 'Michael Brown'];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 2 items`);
             }
-            else if (sub.id.includes('substituteGuardianData')) {
+            else if (sub.id === 'substituteGuardianData') {
               dummyData[sub.id] = ['Emma Williams'];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id.includes('executorData')) {
-              dummyData[sub.id] = ['David Thompson', 'Lisa Anderson'];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 2 items`);
-            }
-            else if (sub.id.includes('substituteExecutorData')) {
-              dummyData[sub.id] = ['Robert Taylor'];
+            else if (sub.id === 'digitalExecutorData') {
+              dummyData[sub.id] = ['Sarah Wilson'];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
+            }
+            else if (sub.id === 'substituteExecutorData') {
+              dummyData[sub.id] =
+                dummyData.chooseAristoneSubstituteExecutor === 'Aristone' ? [ARISTONE_EXECUTOR_LINE] : ['Robert Taylor'];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array (substitute executor)`);
+            }
+            else if (sub.id === 'executorData') {
+              dummyData[sub.id] =
+                dummyData.chooseAristoneExecutor === 'Aristone' ? [ARISTONE_EXECUTOR_LINE] : ['David Thompson', 'Lisa Anderson'];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array (executor)`);
             }
             else if (sub.id.includes('trusteeData')) {
               dummyData[sub.id] = ['James Wilson'];
@@ -284,10 +306,6 @@ export const generateDummyFormData = (formData) => {
             }
             else if (sub.id.includes('excludedPersonData')) {
               dummyData[sub.id] = ['Robert Brown'];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
-            }
-            else if (sub.id.includes('digitalExecutorData')) {
-              dummyData[sub.id] = ['Sarah Wilson'];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
             else if (sub.id.includes('separateTrusteeData')) {
@@ -331,9 +349,11 @@ export const generateDummyFormData = (formData) => {
               processedCount++;
             }
           } else if (sub.type === 'checkboxGroup') {
-            value = sub.options ? sub.options.map(o => o.id || o.value).filter(Boolean) : [];
-            dummyData[sub.id] = value;
-            processedCount++;
+            value = getFieldValue(sub, dummyData);
+            if (value != null) {
+              dummyData[sub.id] = value;
+              processedCount++;
+            }
           }
         });
         return;
@@ -368,8 +388,8 @@ export const generateDummyFormData = (formData) => {
     // Person/array data - must be ARRAYS for fullDetails interpolation (use REAL names, not placeholders)
     guardianData: ['David Mitchell', 'Helen Mitchell'],
     substituteGuardianData: ['Peter Mitchell'],
-    executorData: ['Michael Thompson', 'Emma Wilson'],
-    substituteExecutorData: ['Robert Anderson'],
+    executorData: [ARISTONE_EXECUTOR_LINE],
+    substituteExecutorData: [ARISTONE_EXECUTOR_LINE],
     trusteeData: ['Jennifer Mitchell'],
     substituteTrusteeData: ['Thomas Mitchell'],
     witness1Data: ['Andrew Parker'],
@@ -485,6 +505,13 @@ export const generateDummyFormData = (formData) => {
     stepProvisionToExcludeOne: '1',
     stepProvisionsToExcludeMultiple: '1, 2 & 3',
     executorSpecifyAge: 25,
+    aristoneProfessionalFeesAck: ['ack'],
+    estateAssetTypes: ['PropertyUK', 'PropertyOverseas', 'Cash', 'Savings', 'Investments', 'Pensions', 'Business'],
+    estateLiabilityTypes: ['Mortgage', 'CreditCards', 'Tax'],
+    estateGrossValueRange: 'Range500_1m',
+    estateLiabilityValueRange: 'Range100_250',
+    estatePropertyValueRange: 'Range500_1m',
+    estateAdditionalNotes: 'Autofill test: approximate figures for solicitor review only; not for the Will text.',
   };
 
   console.log('[AUTOFILL GENERATE] 🔄 Applying special fields...');

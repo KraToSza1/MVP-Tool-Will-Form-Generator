@@ -785,6 +785,10 @@ const evaluateConditions = (conditions, formValues, conditionLogic) => {
     if (!clause || !clause.field) return false;
     const value = formValues[clause.field];
     if (clause.operator === 'eq') return value === clause.value;
+    if (clause.operator === 'ne') return value !== clause.value;
+    if (clause.operator === 'includes') {
+      return Array.isArray(value) && value.includes(clause.value);
+    }
     if (clause.operator === 'in') {
       if (!Array.isArray(clause.value)) return value === clause.value;
       return clause.value.includes(value);

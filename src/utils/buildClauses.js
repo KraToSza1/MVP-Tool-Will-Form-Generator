@@ -178,6 +178,10 @@ export const buildClauses = ({
     if (!clause.field) return false;
     const value = formValues[clause.field];
     if (clause.operator === 'eq') return value === clause.value;
+    if (clause.operator === 'ne') return value !== clause.value;
+    if (clause.operator === 'includes') {
+      return Array.isArray(value) && value.includes(clause.value);
+    }
     if (clause.operator === 'in') {
       if (!Array.isArray(clause.value)) return value === clause.value;
       return clause.value.includes(value);
@@ -304,6 +308,7 @@ export const buildClauses = ({
     if (!section || !section.fields) return;
     section.fields.forEach((field) => {
       if (!field) return;
+      if (field.excludeFromWill) return;
       if (field.conditions && !evaluateConditions(field.conditions, field.conditionLogic)) {
         // Debug logging for executor-related sections and separate trustees
         if (field.id === 'executorsSection' || field.id === 'substituteExecutorsSection' || 
@@ -480,6 +485,7 @@ export const buildClauses = ({
 
       if (field.type === 'section' && field.subFields) {
         field.subFields.forEach((subField) => {
+          if (subField.excludeFromWill) return;
           if (subField.conditions && !evaluateConditions(subField.conditions, subField.conditionLogic)) return;
           if (subField.willClauseText) {
             const interpolated = interpolateText(subField.willClauseText, formValues);

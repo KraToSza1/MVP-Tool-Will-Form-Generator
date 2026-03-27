@@ -705,7 +705,10 @@
               { "value": "No", "label": "No" },
               { "value": "Yes", "label": "Yes" }
             ],
-            "value": null
+            "value": null,
+            "conditions": [
+              { "field": "chooseAristoneExecutor", "operator": "ne", "value": "Aristone" }
+            ]
           },
           {
             "id": "trusteesSection",
@@ -893,11 +896,13 @@
           {
             "id": "executorAgeClause",
             "type": "radio",
-            "label": "Include a clause directing that executors shall only act if all in that level reach a certain age",
+            "label": "Do you want to set a minimum age for your executors or trustees to act?",
             "options": [
+              { "value": "None", "label": "None (default: 18 applies automatically)" },
+              { "value": "21", "label": "21", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 21 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
+              { "value": "23", "label": "23", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 23 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
               { "value": "25", "label": "25", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 25 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
-              { "value": "No", "label": "No" },
-              { "value": "Other", "label": "Other" }
+              { "value": "Other", "label": "Other (input)" }
             ],
             "value": null
           },
@@ -930,6 +935,189 @@
               { "value": "ImperfectEnglish", "label": "The Testator has an imperfect knowledge of the English Language", "willClauseText": "Attestation clause to note Will was read over and interpreted by {{field:interpreterSection:fullDetails}} in {{field:nativeLanguage:value}} and English to Testator who confirmed understanding." }
             ],
             "value": null
+          }
+        ]
+      },
+
+      {
+        "formSection": "Estate Overview (Optional)",
+        "_solicitorIntakeOnly": true,
+        "fields": [
+          {
+            "id": "estateOverviewIntro",
+            "type": "display",
+            "text": "To help us confirm whether we can accept the appointment, please provide a general overview of your estate.\nYou only need to provide approximate information at this stage."
+          },
+          {
+            "id": "aristoneProfessionalFeesNotice",
+            "type": "display",
+            "text": "Professional fees notice",
+            "excludeFromWill": true
+          },
+          {
+            "id": "aristoneProfessionalFeesAck",
+            "type": "checkboxGroup",
+            "label": "Professional fees",
+            "required": true,
+            "excludeFromWill": true,
+            "options": [
+              { "id": "aristoneFeesAck", "label": "I understand and agree", "value": "ack" }
+            ]
+          },
+          {
+            "id": "estateAssetTypes",
+            "type": "checkboxGroup",
+            "label": "What types of assets do you have? (Select all that apply)",
+            "excludeFromWill": true,
+            "options": [
+              { "id": "PropertyUK", "label": "Property (UK)", "value": "PropertyUK" },
+              { "id": "PropertyOverseas", "label": "Property (overseas)", "value": "PropertyOverseas" },
+              { "id": "Cash", "label": "Cash / bank accounts", "value": "Cash" },
+              { "id": "Savings", "label": "Savings (including ISAs)", "value": "Savings" },
+              { "id": "Investments", "label": "Investments (shares, funds, bonds, etc.)", "value": "Investments" },
+              { "id": "Pensions", "label": "Pension(s)", "value": "Pensions" },
+              { "id": "Business", "label": "Business interests / shares in a company", "value": "Business" },
+              { "id": "PersonalItems", "label": "Valuable personal items (e.g. jewellery, art, vehicles)", "value": "PersonalItems" },
+              { "id": "LifeInsurance", "label": "Life insurance", "value": "LifeInsurance" },
+              { "id": "Digital", "label": "Digital assets / online income-generating assets", "value": "Digital" },
+              { "id": "Other", "label": "Other", "value": "Other" }
+            ]
+          },
+          {
+            "id": "estateAssetOther",
+            "type": "text",
+            "label": "Please specify (other assets)",
+            "placeholder": "Brief description",
+            "value": "",
+            "excludeFromWill": true,
+            "conditions": [
+              { "field": "estateAssetTypes", "operator": "includes", "value": "Other" }
+            ]
+          },
+          {
+            "id": "estateLiabilityTypes",
+            "type": "checkboxGroup",
+            "label": "Do you have any outstanding liabilities? (Select all that apply)",
+            "excludeFromWill": true,
+            "options": [
+              { "id": "Mortgage", "label": "Mortgage", "value": "Mortgage" },
+              { "id": "PersonalLoans", "label": "Personal loans", "value": "PersonalLoans" },
+              { "id": "CreditCards", "label": "Credit cards", "value": "CreditCards" },
+              { "id": "BusinessLiabilities", "label": "Business liabilities", "value": "BusinessLiabilities" },
+              { "id": "Tax", "label": "Tax liabilities", "value": "Tax" },
+              { "id": "HirePurchase", "label": "Hire purchase / car finance", "value": "HirePurchase" },
+              { "id": "OtherDebts", "label": "Other debts", "value": "OtherDebts" },
+              { "id": "NoLiabilities", "label": "No liabilities", "value": "NoLiabilities" }
+            ]
+          },
+          {
+            "id": "estateGrossValueRange",
+            "type": "radio",
+            "label": "What is the approximate value of your estate before deducting liabilities?",
+            "excludeFromWill": true,
+            "options": [
+              { "value": "Under50k", "label": "Under £50,000" },
+              { "value": "Range50_150", "label": "£50,000 – £150,000" },
+              { "value": "Range150_325", "label": "£150,001 – £325,000" },
+              { "value": "Range325_500", "label": "£325,001 – £500,000" },
+              { "value": "Range500_1m", "label": "£500,001 – £1 million" },
+              { "value": "Range1m_2m", "label": "£1 million – £2 million" },
+              { "value": "Over2m", "label": "Over £2 million" },
+              { "value": "PreferNotToSayGross", "label": "Prefer not to say" }
+            ],
+            "value": null
+          },
+          {
+            "id": "estateLiabilityValueRange",
+            "type": "radio",
+            "label": "What is the approximate total value of your liabilities?",
+            "excludeFromWill": true,
+            "options": [
+              { "value": "None", "label": "None" },
+              { "value": "Under25k", "label": "Under £25,000" },
+              { "value": "Range25_100", "label": "£25,000 – £100,000" },
+              { "value": "Range100_250", "label": "£100,001 – £250,000" },
+              { "value": "Over250k", "label": "Over £250,000" },
+              { "value": "PreferNotToSayLiab", "label": "Prefer not to say" }
+            ],
+            "value": null
+          },
+          {
+            "id": "estatePropertyValueRange",
+            "type": "radio",
+            "label": "What is the approximate total value of your property?",
+            "excludeFromWill": true,
+            "options": [
+              { "value": "Under150k", "label": "Under £150,000" },
+              { "value": "Range150_300", "label": "£150,000 – £300,000" },
+              { "value": "Range300_500", "label": "£300,001 – £500,000" },
+              { "value": "Range500_1m", "label": "£500,001 – £1 million" },
+              { "value": "Over1m", "label": "Over £1 million" },
+              { "value": "PreferNotToSayProp", "label": "Prefer not to say" }
+            ],
+            "value": null,
+            "conditions": [
+              {
+                "operator": "OR",
+                "clauses": [
+                  { "field": "estateAssetTypes", "operator": "includes", "value": "PropertyUK" },
+                  { "field": "estateAssetTypes", "operator": "includes", "value": "PropertyOverseas" }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "estateAdditionalNotes",
+            "type": "textarea",
+            "label": "Additional notes (optional)",
+            "value": "",
+            "excludeFromWill": true
+          }
+        ]
+      },
+
+      {
+        "formSection": "Funeral Arrangements",
+        "fields": [
+          {
+            "id": "specifyFuneralArrangements",
+            "type": "radio",
+            "label": "Does the Testator want to specify any funeral arrangements?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" } 
+            ],
+            "value": null
+          },
+          {
+            "id": "burialOrCremation",
+            "type": "radio",
+            "label": "Does the Testator wish to be buried or cremated?",
+            "options": [
+              { "value": "Buried", "label": "Buried", "willClauseText": "I wish for my body to be buried. I request that my Executors make all necessary arrangements for my funeral and burial in accordance with this wish." },
+              { "value": "Cremated", "label": "Cremated", "willClauseText": "I wish for my body to be cremated. I request that my Executors make all necessary arrangements for my funeral and cremation in accordance with this wish." },
+              { "value": "No Preference", "label": "No Preference", "willClauseText": "I express no preference regarding burial or cremation. I leave this decision to the discretion of my Executors or next of kin." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "otherFuneralRequirements",
+            "type": "textarea",
+            "label": "Please state any other requirements",
+            "value": "",
+            "infoText": "Please note: It is possible that the Will is not discovered until after funeral plans are made, so it is advisable to create a memorandum of funeral wishes if the Testator has any specific instructions.",
+             "willClauseText": "Regarding my funeral arrangements, I wish {{field:otherFuneralRequirements:value}}. I request that my Executors take all reasonable steps to honor these wishes.",
+            "examples": [ 
+              "I wish to be buried in a specific cemetery.",
+              "I wish to have a specific type of service.",
+              "I wish to have my ashes scattered at a specific location."
+            ],
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
+            ]
           }
         ]
       },
@@ -995,52 +1183,6 @@
                  "willClauseTextFragment": "organ donation and therapeutic purposes" 
               }
                
-            ]
-          }
-        ]
-      },
-       
-      {
-        "formSection": "Funeral Arrangements",
-        "fields": [
-          {
-            "id": "specifyFuneralArrangements",
-            "type": "radio",
-            "label": "Does the Testator want to specify any funeral arrangements?",
-            "options": [
-              { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes" } 
-            ],
-            "value": null
-          },
-          {
-            "id": "burialOrCremation",
-            "type": "radio",
-            "label": "Does the Testator wish to be buried or cremated?",
-            "options": [
-              { "value": "Buried", "label": "Buried", "willClauseText": "I wish for my body to be buried. I request that my Executors make all necessary arrangements for my funeral and burial in accordance with this wish." },
-              { "value": "Cremated", "label": "Cremated", "willClauseText": "I wish for my body to be cremated. I request that my Executors make all necessary arrangements for my funeral and cremation in accordance with this wish." },
-              { "value": "No Preference", "label": "No Preference", "willClauseText": "I express no preference regarding burial or cremation. I leave this decision to the discretion of my Executors or next of kin." }
-            ],
-            "value": null,
-            "conditions": [
-              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
-            ]
-          },
-          {
-            "id": "otherFuneralRequirements",
-            "type": "textarea",
-            "label": "Please state any other requirements",
-            "value": "",
-            "infoText": "Please note: It is possible that the Will is not discovered until after funeral plans are made, so it is advisable to create a memorandum of funeral wishes if the Testator has any specific instructions.",
-             "willClauseText": "Regarding my funeral arrangements, I wish {{field:otherFuneralRequirements:value}}. I request that my Executors take all reasonable steps to honor these wishes.",
-            "examples": [ 
-              "I wish to be buried in a specific cemetery.",
-              "I wish to have a specific type of service.",
-              "I wish to have my ashes scattered at a specific location."
-            ],
-            "conditions": [
-              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
             ]
           }
         ]

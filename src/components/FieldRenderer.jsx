@@ -195,6 +195,10 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       DEBUG_LOGS&&console.log(`[CONDITION] Checking clause - Field: ${clause.field}, Value: ${value}, Expected: ${clause.value}, Operator: ${clause.operator}`);
       
       if (clause.operator === 'eq') return value === clause.value;
+      if (clause.operator === 'ne') return value !== clause.value;
+      if (clause.operator === 'includes') {
+        return Array.isArray(value) && value.includes(clause.value);
+      }
       if (clause.operator === 'in') return clause.value.includes(value);
       if (clause.operator === 'AND' || clause.operator === 'OR') {
         const results = clause.clauses.map(evalClause);
@@ -799,9 +803,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   }
 
   if (field.type === 'radio' && field.options) {
-    const selectedOption = field.options.find(
-      (opt) => opt.value === formValues[field.id]
-    );
     DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
     
@@ -821,17 +822,26 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           </p>
         )}
         <div className={`mt-2 ${field.id === 'title' ? 'flex flex-wrap gap-2' : 'space-y-1'}`}>
-          {field.options.map((opt) => (
-            <label key={opt.value} className={`flex items-center gap-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 cursor-pointer border border-transparent hover:border-indigo-200 ${
+          {field.options.map((opt) => {
+            const aristoneTrusteeLocked =
+              (field.id === 'professionalTrusteeSelection' || field.id === 'substituteProfessionalTrusteeSelection') &&
+              opt.value === 'Aristone' &&
+              formValues.chooseAristoneExecutor !== 'Aristone';
+            return (
+            <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border border-transparent ${
+              aristoneTrusteeLocked
+                ? 'cursor-not-allowed opacity-50 pointer-events-none px-2 py-1.5'
+                : `hover:bg-gray-50 cursor-pointer hover:border-indigo-200 ${
               field.id === 'title' 
                 ? 'px-3 py-2 bg-white shadow-sm hover:shadow-md' 
                 : 'px-2 py-1.5'
-            }`}>
+            }`}`}>
               <input
                 type="radio"
                 name={field.id}
                 value={opt.value}
                 className="accent-indigo-600 w-4 h-4"
+                disabled={!!aristoneTrusteeLocked}
                 checked={formValues[field.id] === opt.value}
                     onChange={(e) => {
                       const newValue = e.target.value;
@@ -891,7 +901,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               />
               <span className={`text-gray-800 ${field.id === 'title' ? '' : 'flex-1'}`}>{opt.label}</span>
             </label>
-          ))}
+            );
+          })}
         </div>
         {validationErrors[field.id] && (
           <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
@@ -899,18 +910,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
-        {selectedOption?.willClauseText && (() => {
-          const hasUnresolvedPlaceholders = /\{\{field:[^}]+\}\}/.test(selectedOption.willClauseText);
-          if (hasUnresolvedPlaceholders) {
-            return null;
-          }
-          
-          return (
-            <div className="mt-2 p-2 bg-indigo-100 text-indigo-900 rounded-lg text-sm shadow-inner border border-indigo-200">
-              {selectedOption.willClauseText}
-            </div>
-          );
-        })()}
       </div>
     );
   }
@@ -951,12 +950,23 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                   className="accent-indigo-600 w-4 h-4"
                   checked={isChecked}
                   onChange={(e) => {
-                    const newValue = Array.isArray(formValues[field.id])
+                    let newValue = Array.isArray(formValues[field.id])
                       ? [...formValues[field.id]]
                       : [];
                     DEBUG_LOGS&&console.log(`[CHECKBOX CHANGE] Field "${field.id}" (${field.label}) - Option "${optValue}" ${e.target.checked ? 'CHECKED' : 'UNCHECKED'}`);
                     
-                    if (e.target.checked) {
+                    if (field.id === 'estateLiabilityTypes') {
+                      const NO = 'NoLiabilities';
+                      if (e.target.checked && optValue === NO) {
+                        newValue = [NO];
+                      } else if (e.target.checked) {
+                        newValue = newValue.filter((v) => v !== NO);
+                        if (!newValue.includes(optValue)) newValue.push(optValue);
+                      } else {
+                        const index = newValue.indexOf(optValue);
+                        if (index > -1) newValue.splice(index, 1);
+                      }
+                    } else if (e.target.checked) {
                       newValue.push(optValue);
                     } else {
                       const index = newValue.indexOf(optValue);
@@ -976,10 +986,16 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                     }
                     
                     logFormChange(field.id, newValue);
-                    setFormValues((prev) => ({
-                      ...prev,
-                      [field.id]: newValue,
-                    }));
+                    setFormValues((prev) => {
+                      const next = {
+                        ...prev,
+                        [field.id]: newValue,
+                      };
+                      if (field.id === 'estateLiabilityTypes' && newValue.includes('NoLiabilities')) {
+                        next.estateLiabilityValueRange = 'None';
+                      }
+                      return next;
+                    });
                   }}
                 />
                 <span className="text-gray-800 flex-1">{opt.label}</span>
@@ -1032,6 +1048,22 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   if (field.type === 'display') {
     DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
     
+    if (field.id === 'aristoneProfessionalFeesNotice') {
+      return (
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 my-4 text-sm text-gray-800">
+          <p className="mb-2">If you request Aristone Solicitors to act, professional fees will apply.</p>
+          <a
+            href="https://aristonesolicitors.co.uk/about-aristone/our-prices/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-700 underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+          >
+            https://aristonesolicitors.co.uk/about-aristone/our-prices/
+          </a>
+        </div>
+      );
+    }
+
     // Check if this is the partner info display and if we have a partner name
     const isPartnerDisplay = field.id === 'partnerInfoDisplay';
     const partnerName = formValues.partnerFullName;
