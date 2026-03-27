@@ -72,31 +72,31 @@ function UploadSlot({ id, label, hasValue, fileName, error, onUpload, buttonLabe
     ? (fileName ? `${fileName} — Uploaded` : 'Uploaded')
     : null;
   return (
-    <div className="upload-slot border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+    <div className="upload-slot rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-inner">
+      <label className="mb-2 block text-sm font-medium text-slate-200">{label}</label>
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => onUpload(id)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
           <Upload size={18} />
           <span>{buttonLabel}</span>
         </button>
         {hasValue && (
-          <span className="flex items-center gap-1 text-green-700 text-sm font-medium" role="status">
+          <span className="flex items-center gap-1 text-sm font-medium text-emerald-400" role="status">
             <FileCheck size={16} className="shrink-0" aria-hidden />
             {confirmationText}
           </span>
         )}
       </div>
       {error && (
-        <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+        <p className="mt-2 flex items-center gap-1 text-xs text-red-400">
           <AlertCircle size={14} />
           <span>{error}</span>
         </p>
       )}
-      <p className="mt-1 text-xs text-gray-500">Maximum file size: {MAX_FILE_SIZE_MB}MB per file</p>
+      <p className="mt-1 text-xs text-slate-400">Maximum file size: {MAX_FILE_SIZE_MB}MB per file</p>
     </div>
   );
 }
@@ -107,16 +107,16 @@ function SelfieSlotWeb({ id, label, hasValue, fileName, error, onChooseFile, onT
     ? (fileName ? `${fileName} — Uploaded` : 'Uploaded')
     : null;
   return (
-    <div className="upload-slot border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-      <p className="text-xs text-gray-600 mb-3">
+    <div className="upload-slot rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-inner">
+      <label className="mb-2 block text-sm font-medium text-slate-200">{label}</label>
+      <p className="mb-3 text-xs text-slate-400">
         Take a picture uses your device camera in the browser (Chrome, Safari, Edge, Firefox). Or choose an existing photo from your device.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => onChooseFile(id)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
           <Upload size={18} />
           <span>Choose a file</span>
@@ -124,25 +124,25 @@ function SelfieSlotWeb({ id, label, hasValue, fileName, error, onChooseFile, onT
         <button
           type="button"
           onClick={() => onTakePicture(id)}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-100 text-violet-900 rounded-lg cursor-pointer hover:bg-violet-200 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="flex cursor-pointer items-center gap-2 rounded-lg border border-violet-500/60 bg-violet-950/80 px-4 py-2 text-sm font-medium text-violet-100 transition-colors hover:border-violet-400 hover:bg-violet-900/90 focus:outline-none focus:ring-2 focus:ring-violet-500"
         >
           <Camera size={18} />
           <span>Take a picture</span>
         </button>
         {hasValue && (
-          <span className="flex items-center gap-1 text-green-700 text-sm font-medium" role="status">
+          <span className="flex items-center gap-1 text-sm font-medium text-emerald-400" role="status">
             <FileCheck size={16} className="shrink-0" aria-hidden />
             {confirmationText}
           </span>
         )}
       </div>
       {error && (
-        <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+        <p className="mt-2 flex items-center gap-1 text-xs text-red-400">
           <AlertCircle size={14} />
           <span>{error}</span>
         </p>
       )}
-      <p className="mt-1 text-xs text-gray-500">Maximum file size: {MAX_FILE_SIZE_MB}MB per file</p>
+      <p className="mt-1 text-xs text-slate-400">Maximum file size: {MAX_FILE_SIZE_MB}MB per file</p>
     </div>
   );
 }
@@ -501,19 +501,22 @@ export default function IdentityVerification({ formValues, setFormValues, submit
   const showPreview = Boolean(previewUrl && capturedBlob);
 
   return (
-    <div id="identity-verification-section" className="id-verification-block mt-8 scroll-mt-24 border-t-2 border-amber-300 pt-8 bg-amber-50/50 -mx-4 px-4 py-4 rounded-xl">
-      <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">
+    <div
+      id="identity-verification-section"
+      className="id-verification-block -mx-4 mt-8 scroll-mt-24 rounded-xl border border-slate-600 border-t-2 border-t-amber-400/80 bg-slate-900/95 px-4 py-6 pt-8 shadow-lg"
+    >
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300/90">
         {isPostSubmission ? 'Next step — submit ID for review' : 'Verification stage — before solicitor meeting'}
       </p>
-      <h3 className="text-lg font-semibold text-gray-800 mb-1">
+      <h3 className="mb-1 text-lg font-semibold text-slate-100">
         {isPostSubmission ? 'Submit identification' : 'Identity verification'}
       </h3>
-      <p className="text-sm text-gray-600 mb-2">
+      <p className="mb-2 text-sm text-slate-300">
         {isPostSubmission
           ? `Your questionnaire has already been submitted. Upload your documents here, then click Update submission below to attach them to the same matter. Maximum ${MAX_FILE_SIZE_MB}MB per file.`
           : `Upload your documents below. Maximum ${MAX_FILE_SIZE_MB}MB per file.`}
       </p>
-      <p className="text-sm text-gray-600 mb-4">{uploadHint}</p>
+      <p className="mb-4 text-sm text-slate-400">{uploadHint}</p>
       <div className="space-y-4">
         <UploadSlot
           id={UPLOAD_IDS.photoId}
@@ -572,39 +575,67 @@ export default function IdentityVerification({ formValues, setFormValues, submit
           aria-labelledby="selfie-camera-title"
           onClick={closeCamera}
         >
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 flex items-center justify-between border-b border-gray-200">
-              <h2 id="selfie-camera-title" className="text-lg font-semibold text-gray-800">
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-600 p-4">
+              <h2 id="selfie-camera-title" className="text-lg font-semibold text-slate-100">
                 Take your selfie
               </h2>
-              <button type="button" onClick={closeCamera} className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Close">
+              <button
+                type="button"
+                onClick={closeCamera}
+                className="rounded-lg border border-slate-500 bg-slate-800 p-2 text-slate-300 hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Close"
+              >
                 <X size={20} />
               </button>
             </div>
             <div className="p-4">
               {cameraError ? (
                 <div className="py-6 text-center">
-                  <p className="text-red-600 mb-4 text-sm">{cameraError}</p>
+                  <p className="mb-4 text-sm text-red-400">{cameraError}</p>
                   <div className="flex flex-wrap justify-center gap-3">
-                    <button type="button" onClick={() => { setCameraError(null); setLoading(true); setCameraRetry((c) => c + 1); }} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCameraError(null);
+                        setLoading(true);
+                        setCameraRetry((c) => c + 1);
+                      }}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+                    >
                       Try again
                     </button>
-                    <button type="button" onClick={closeCamera} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-medium">
+                    <button
+                      type="button"
+                      onClick={closeCamera}
+                      className="rounded-lg border border-slate-500 bg-slate-800 px-4 py-2 font-medium text-slate-100 hover:bg-slate-700"
+                    >
                       Close
                     </button>
                   </div>
                 </div>
               ) : showPreview ? (
                 <>
-                  <div className="relative bg-black rounded-lg overflow-hidden aspect-[4/3] max-h-[50vh]">
-                    <img src={previewUrl} alt="Your selfie" className="w-full h-full object-contain" />
+                  <div className="relative aspect-[4/3] max-h-[50vh] overflow-hidden rounded-lg bg-black">
+                    <img src={previewUrl} alt="Your selfie" className="h-full w-full object-contain" />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2 text-center">Use this photo or retake.</p>
-                  <div className="flex gap-3 mt-4">
-                    <button type="button" onClick={retake} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <p className="mt-2 text-center text-xs text-slate-400">Use this photo or retake.</p>
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={retake}
+                      className="flex-1 rounded-xl border border-slate-500 bg-slate-800 px-4 py-3 font-medium text-slate-100 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
                       Retake
                     </button>
-                    <button type="button" onClick={confirmSelfie} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button
+                      type="button"
+                      onClick={confirmSelfie}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
                       <FileCheck size={20} />
                       Use this photo
                     </button>
@@ -612,24 +643,31 @@ export default function IdentityVerification({ formValues, setFormValues, submit
                 </>
               ) : (
                 <>
-                  <div className="relative bg-black rounded-lg overflow-hidden aspect-[4/3] max-h-[50vh]">
+                  <div className="relative aspect-[4/3] max-h-[50vh] overflow-hidden rounded-lg bg-black">
                     {loading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-sm">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-sm text-white">
                         <span className="flex items-center gap-2">
                           <Loader2 size={22} className="animate-spin" aria-hidden />
                           Loading camera…
                         </span>
                       </div>
                     )}
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" style={{ visibility: loading ? 'hidden' : 'visible' }} />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="h-full w-full object-contain"
+                      style={{ visibility: loading ? 'hidden' : 'visible' }}
+                    />
                   </div>
                   {devices.length > 1 && !loading && (
                     <div className="mt-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Camera</label>
+                      <label className="mb-1 block text-xs font-medium text-slate-400">Camera</label>
                       <select
                         value={selectedDeviceId || ''}
                         onChange={(e) => switchCamera(e.target.value || null)}
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         aria-label="Switch camera"
                       >
                         <option value="">Default (usually front / built-in)</option>
@@ -641,12 +679,21 @@ export default function IdentityVerification({ formValues, setFormValues, submit
                       </select>
                     </div>
                   )}
-                  <p className="text-xs text-gray-500 mt-2 text-center">Hold your ID as required, then capture.</p>
-                  <div className="flex gap-3 mt-4">
-                    <button type="button" onClick={closeCamera} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <p className="mt-2 text-center text-xs text-slate-400">Hold your ID as required, then capture.</p>
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeCamera}
+                      className="flex-1 rounded-xl border border-slate-500 bg-slate-800 px-4 py-3 font-medium text-slate-100 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
                       Cancel
                     </button>
-                    <button type="button" onClick={capturePhoto} disabled={loading} className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 flex items-center justify-center gap-2 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      disabled={loading}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white hover:bg-indigo-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
                       <Camera size={20} />
                       Capture
                     </button>

@@ -5430,19 +5430,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       {isSubmittingMatter && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5">
+          <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900 p-6 shadow-2xl ring-1 ring-slate-600">
             <div className="flex items-start gap-4">
-              <div className="mt-1 h-10 w-10 flex-shrink-0 rounded-full border-4 border-indigo-100 border-t-indigo-600 animate-spin" aria-hidden="true" />
+              <div className="mt-1 h-10 w-10 flex-shrink-0 rounded-full border-4 border-indigo-900 border-t-indigo-400 animate-spin" aria-hidden="true" />
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-slate-900">
+                <h2 className="text-lg font-semibold text-slate-100">
                   {submittedMatterId ? 'Saving your latest changes' : 'Submitting your questionnaire'}
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">
                   {hasUploadedIdDocuments
                     ? 'We are processing your uploaded ID documents as well. On slower mobile connections this can take up to 90 seconds.'
                     : 'Please keep this page open while your answers are saved securely.'}
                 </p>
-                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-700">
+                <p className="mt-3 text-xs font-medium uppercase tracking-wide text-indigo-300">
                   {hasUploadedIdDocuments ? `${uploadedIdDocumentCount} ID document${uploadedIdDocumentCount === 1 ? '' : 's'} included` : 'No ID documents attached yet'}
                 </p>
               </div>
@@ -5459,12 +5459,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           aria-modal="true"
           aria-labelledby="id-incomplete-modal-title"
         >
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-amber-200" onClick={(e) => e.stopPropagation()}>
-            <h2 id="id-incomplete-modal-title" className="text-xl font-bold text-gray-900 mb-2">ID verification incomplete</h2>
-            <p className="text-sm text-gray-700 mb-4">
+          <div className="max-w-md w-full rounded-2xl border border-amber-500/40 bg-slate-900 p-6 shadow-2xl ring-1 ring-slate-600" onClick={(e) => e.stopPropagation()}>
+            <h2 id="id-incomplete-modal-title" className="mb-2 text-xl font-bold text-slate-100">ID verification incomplete</h2>
+            <p className="mb-4 text-sm text-slate-300">
               You haven&apos;t uploaded all ID documents. Your application will be marked as <strong>Partially complete – ID verification outstanding</strong>. You can submit now or add documents first.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -5472,7 +5472,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   const el = document.getElementById('identity-verification-section');
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="rounded-xl border border-slate-500 bg-slate-800 px-4 py-2.5 font-medium text-slate-100 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 Add documents
               </button>
@@ -5501,7 +5501,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           aria-labelledby="completion-modal-title"
         >
           <div 
-            className="completion-modal bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideIn ring-1 ring-black/5"
+            className="completion-modal flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-slate-900 shadow-2xl ring-1 ring-slate-600 animate-slideIn"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -5518,8 +5518,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
-                className="p-2.5 hover:bg-white/20 rounded-xl transition-colors"
+                className="rounded-xl border border-white/30 bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60"
                 aria-label="Close"
               >
                 <X size={22} />
@@ -5527,83 +5528,83 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             </div>
 
             {/* Content - #7 different for client (intake only) vs solicitor (full flow) */}
-            <div className="completion-modal-body p-6 overflow-y-auto flex-1 bg-gray-50/50">
+            <div className="completion-modal-body flex-1 overflow-y-auto bg-slate-800/40 p-6">
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">What happens next?</h3>
+                <h3 className="mb-4 text-lg font-semibold text-slate-100">What happens next?</h3>
                   {!solicitorMode && submittedMatterId ? (
-                    <div className={`mb-4 rounded-xl border px-4 py-3 ${submittedWithIncompleteId ? 'border-amber-300 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                      <p className="text-sm font-medium text-emerald-900">Matter submitted successfully.</p>
-                      <p className="text-sm text-emerald-800 mt-1">Your questionnaire is now stored for solicitor review under secure reference <strong>{referenceNumber}</strong>.</p>
+                    <div className={`mb-4 rounded-xl border px-4 py-3 ${submittedWithIncompleteId ? 'border-amber-500/50 bg-amber-950/40' : 'border-emerald-500/40 bg-emerald-950/35'}`}>
+                      <p className="text-sm font-medium text-emerald-200">Matter submitted successfully.</p>
+                      <p className="mt-1 text-sm text-emerald-100/90">Your questionnaire is now stored for solicitor review under secure reference <strong>{referenceNumber}</strong>.</p>
                       {submittedWithIncompleteId && (
-                        <p className="text-sm font-medium text-amber-800 mt-2">This application is marked as <strong>Partially complete – ID verification outstanding</strong>. You can upload ID documents below and click Update submission to attach them.</p>
+                        <p className="mt-2 text-sm font-medium text-amber-200">This application is marked as <strong>Partially complete – ID verification outstanding</strong>. You can upload ID documents below and click Update submission to attach them.</p>
                       )}
                     </div>
                   ) : null}
                 {solicitorMode ? (
-                <div className="space-y-3 text-gray-700">
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Download Execution PDF (for file)</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Full execution copy with witnesses for your records.</p>
+                <div className="space-y-3 text-slate-300">
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white shadow">1</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Download Execution PDF (for file)</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Full execution copy with witnesses for your records.</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-blue-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">2</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Download Client copy (intake-only)</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Intake-only PDF for sending to client before appointment.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow">2</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Download Client copy (intake-only)</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Intake-only PDF for sending to client before appointment.</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-purple-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">3</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Review with client</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Client reviews before appointment. Client signs in person with witnesses.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-purple-600 text-sm font-bold text-white shadow">3</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Review with client</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Client reviews before appointment. Client signs in person with witnesses.</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-amber-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-amber-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">4</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">File and store</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Keep signed Will on file and inform Executors.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber-600 text-sm font-bold text-white shadow">4</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">File and store</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Keep signed Will on file and inform Executors.</p>
                     </div>
                   </div>
                 </div>
                 ) : (
-                <div className="space-y-3 text-gray-700">
-                  <p className="font-medium text-amber-900 mb-3">Questionnaire complete — this is intake only. Legal signing happens in person later.</p>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-indigo-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">1</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Submit ID</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Upload photo ID and proof of address next. You can do that immediately from this same secure link.</p>
+                <div className="space-y-3 text-slate-300">
+                  <p className="mb-3 font-medium text-amber-200/95">Questionnaire complete — this is intake only. Legal signing happens in person later.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white shadow">1</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Submit ID</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Upload photo ID and proof of address next. You can do that immediately from this same secure link.</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-blue-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">2</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Solicitor review</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">Once your intake and ID are in, the solicitor reviews everything and follows up if anything is missing.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow">2</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Solicitor review</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Once your intake and ID are in, the solicitor reviews everything and follows up if anything is missing.</p>
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 p-4 bg-white rounded-xl shadow-sm border border-purple-100">
-                    <div className="flex-shrink-0 w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow">3</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 mb-1">Signing</p>
-                      <p className="text-sm text-gray-600 leading-relaxed">An appointment will be scheduled so you can sign your Will in person with witnesses present.</p>
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-purple-600 text-sm font-bold text-white shadow">3</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-1 font-semibold text-slate-100">Signing</p>
+                      <p className="text-sm leading-relaxed text-slate-400">An appointment will be scheduled so you can sign your Will in person with witnesses present.</p>
                     </div>
                   </div>
                 </div>
                 )}
               </div>
 
-              <div className="completion-modal-info bg-blue-50/80 border border-blue-200 p-4 rounded-xl">
+              <div className="completion-modal-info rounded-xl border border-blue-600/40 bg-blue-950/50 p-4">
                 <div className="flex items-start gap-3">
-                  <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <Info size={20} className="mt-0.5 flex-shrink-0 text-blue-400" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-900 mb-1">Close to return to your submitted form</p>
-                    <p className="text-sm text-blue-800 leading-relaxed">
+                    <p className="mb-1 text-sm font-semibold text-blue-100">Close to return to your submitted form</p>
+                    <p className="text-sm leading-relaxed text-blue-200/90">
                       {solicitorMode ? 'Close this message to return to the form.' : 'Close this message to upload ID now, make any final corrections, or use the same secure link later.'}
                     </p>
                   </div>
@@ -5612,10 +5613,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             </div>
 
             {/* Footer - Client mode: no downloads. Solicitor mode: Execution + Client copy */}
-            <div className="completion-modal-footer px-6 py-5 bg-white border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+            <div className="completion-modal-footer flex flex-col gap-3 border-t border-slate-600 bg-slate-900 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
               <button
+                type="button"
                 onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors order-2 sm:order-1"
+                className="order-2 inline-flex items-center justify-center rounded-xl border border-slate-500 bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:order-1"
               >
                 Close
               </button>
@@ -5650,7 +5652,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <button
                   type="button"
                   onClick={startOverAfterSubmit}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-500 bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   Start new questionnaire
                 </button>
@@ -5670,31 +5672,33 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           aria-labelledby="clear-confirm-title"
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-slideIn ring-1 ring-black/5"
+            className="max-w-md w-full overflow-hidden rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl ring-1 ring-slate-600 animate-slideIn"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 p-3 bg-amber-100 rounded-xl">
-                  <AlertTriangle size={28} className="text-amber-600" strokeWidth={2} />
+                <div className="flex-shrink-0 rounded-xl bg-amber-900/50 p-3 ring-1 ring-amber-600/40">
+                  <AlertTriangle size={28} className="text-amber-400" strokeWidth={2} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h2 id="clear-confirm-title" className="text-xl font-semibold text-gray-900 mb-2">Clear all data?</h2>
-                  <p className="text-gray-600 leading-relaxed">
+                <div className="min-w-0 flex-1">
+                  <h2 id="clear-confirm-title" className="mb-2 text-xl font-semibold text-slate-100">Clear all data?</h2>
+                  <p className="leading-relaxed text-slate-400">
                     Are you sure you want to clear all saved data and start fresh? This action cannot be undone.
                   </p>
                 </div>
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setClearConfirmOpen(false)}
-                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-xl transition-colors"
+                  className="flex-1 rounded-xl border border-slate-500 bg-slate-800 px-4 py-3 font-medium text-slate-100 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={confirmReset}
-                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-colors shadow-sm"
+                  className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400"
                 >
                   Clear Data
                 </button>
