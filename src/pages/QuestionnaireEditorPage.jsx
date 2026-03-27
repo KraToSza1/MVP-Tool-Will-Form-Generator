@@ -25,6 +25,8 @@ import {
   deleteFormDefinitionRevision,
 } from '../lib/formDefinition.js';
 import { qLog } from '../lib/questionnaireLog.js';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
 import {
   createCustomField,
@@ -37,27 +39,48 @@ import {
 const LEAVE_PAGE_UNSAVED_MSG =
   'You have unsaved changes to the questionnaire. If you leave or refresh now, those edits may be lost.';
 
-/**
- * Copy for window.confirm() — short, plain English, one decision per dialog.
- * (In-app ConfirmModal is available elsewhere for themed UI.)
- */
-const CONFIRM = {
-  moveSectionOrder:
-    'Reorder sections for clients?\n\nThis changes the order of steps in the client intake. Question and field IDs stay the same.\n\nContinue?',
-  moveFieldOrder:
-    'Change the order of questions in this section?\n\nOnly the display order changes; question IDs stay the same.',
-  discardDraft:
-    'Discard everything you have edited on this page since the last save?\n\nYour draft will be replaced by the last published questionnaire from the server.',
-  removeSection:
-    'Remove this whole section and every question inside it?\n\nYou can bring content back later only by restoring an older saved version of the whole questionnaire.',
-  removeField:
-    'Remove this question from your draft?\n\nYou can undo only by discarding changes or restoring a saved version.',
-  resetToFactory:
-    'Replace your current draft with the factory default questionnaire?\n\nNothing is published until you click Save questionnaire.',
-  restoreRevision:
-    'Publish this older snapshot as the live questionnaire?\n\nEveryone (including clients) will see this version after it loads. Your current published version will be replaced.',
-  deleteRevision:
-    'Delete this snapshot from version history?\n\nThe live questionnaire for clients does not change. This backup cannot be recovered.',
+/** Copy for in-app ConfirmModal (replaces browser window.confirm). */
+const CONFIRM_MODAL = {
+  moveSectionOrder: {
+    title: 'Reorder sections for clients?',
+    body: 'This changes the order of steps in the client intake. Question and field IDs stay the same.',
+  },
+  moveFieldOrder: {
+    title: 'Change question order?',
+    body: 'Only the display order changes in this section; question IDs stay the same.',
+  },
+  discardDraft: {
+    title: 'Discard draft changes?',
+    lead: 'Your edits on this page since the last save will be lost.',
+    detail: 'Your draft will be replaced by the last published questionnaire from the server.',
+  },
+  removeSection: {
+    title: 'Remove this section?',
+    lead: 'This removes the whole section and every question inside it.',
+    detail:
+      'You can bring content back later only by restoring an older saved version of the whole questionnaire.',
+  },
+  removeField: {
+    title: 'Remove this question?',
+    lead: 'This question will be removed from your draft.',
+    detail: 'You can undo only by discarding changes or restoring a saved version.',
+  },
+  resetToFactory: {
+    title: 'Replace draft with factory default?',
+    lead: 'Your current draft will be replaced with the factory default questionnaire.',
+    detail: 'Nothing is published until you click Save questionnaire.',
+  },
+  restoreRevision: {
+    title: 'Restore this snapshot?',
+    lead: 'This publishes the selected snapshot as the live questionnaire.',
+    detail:
+      'Everyone (including clients) will see this version after it loads. Your current published version will be replaced.',
+  },
+  deleteRevision: {
+    title: 'Delete this snapshot?',
+    lead: 'This removes the snapshot from version history only.',
+    detail: 'The live questionnaire for clients does not change. This backup cannot be recovered.',
+  },
 };
 
 function deepClone(obj) {
@@ -616,6 +639,7 @@ function formatSavedTime(date) {
 }
 
 export default function QuestionnaireEditorPage() {
+  const { isDark } = useTheme();
   const { formData, loading, refresh } = useFormDefinition();
   const [definition, setDefinition] = useState(() => deepClone(formData));
   const [dirty, setDirty] = useState(false);
@@ -632,6 +656,18 @@ export default function QuestionnaireEditorPage() {
   const [addSectionModalOpen, setAddSectionModalOpen] = useState(false);
   const [addFieldModalSectionIndex, setAddFieldModalSectionIndex] = useState(null);
   const [dragFromIndex, setDragFromIndex] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  const openConfirm = useCallback((config) => {
+    setConfirmDialog({
+      title: config.title,
+      children: config.children,
+      confirmLabel: config.confirmLabel ?? 'Confirm',
+      cancelLabel: config.cancelLabel ?? 'Cancel',
+      variant: config.variant ?? 'default',
+      onConfirm: config.onConfirm,
+    });
+  }, []);
 
   useEffect(() => {
     if (!loading && !dirty) {
@@ -715,31 +751,38 @@ export default function QuestionnaireEditorPage() {
     setEditingField(null);
   }, []);
 
-  const moveSection = useCallback((sectionIndex, direction) => {
-    if (!window.confirm(CONFIRM.moveSectionOrder)) {
-      return;
-    }
-    setDefinition((d) => {
-      const next = deepClone(d);
-      const arr = next.formSections;
-      const j = sectionIndex + direction;
-      if (j < 0 || j >= arr.length) return d;
-      [arr[sectionIndex], arr[j]] = [arr[j], arr[sectionIndex]];
-      return next;
-    });
-    setDirty(true);
-    qLog('section_reorder', { from: sectionIndex, to: sectionIndex + direction });
-    qLog('dirty_set', { reason: 'section_reorder' });
-    setExpandedSections((prev) => {
-      const n = new Set();
-      prev.forEach((idx) => {
-        if (idx === sectionIndex) n.add(sectionIndex + direction);
-        else if (idx === sectionIndex + direction) n.add(sectionIndex);
-        else n.add(idx);
+  const moveSection = useCallback(
+    (sectionIndex, direction) => {
+      openConfirm({
+        title: CONFIRM_MODAL.moveSectionOrder.title,
+        children: <p>{CONFIRM_MODAL.moveSectionOrder.body}</p>,
+        confirmLabel: 'Continue',
+        onConfirm: () => {
+          setDefinition((d) => {
+            const next = deepClone(d);
+            const arr = next.formSections;
+            const j = sectionIndex + direction;
+            if (j < 0 || j >= arr.length) return d;
+            [arr[sectionIndex], arr[j]] = [arr[j], arr[sectionIndex]];
+            return next;
+          });
+          setDirty(true);
+          qLog('section_reorder', { from: sectionIndex, to: sectionIndex + direction });
+          qLog('dirty_set', { reason: 'section_reorder' });
+          setExpandedSections((prev) => {
+            const n = new Set();
+            prev.forEach((idx) => {
+              if (idx === sectionIndex) n.add(sectionIndex + direction);
+              else if (idx === sectionIndex + direction) n.add(sectionIndex);
+              else n.add(idx);
+            });
+            return n;
+          });
+        },
       });
-      return n;
-    });
-  }, []);
+    },
+    [openConfirm]
+  );
 
   const moveSectionToIndex = useCallback((fromIndex, toIndex) => {
     if (fromIndex === toIndex) return;
@@ -772,21 +815,30 @@ export default function QuestionnaireEditorPage() {
     });
   }, []);
 
-  const moveField = useCallback((sectionIndex, fieldIndex, direction) => {
-    if (!window.confirm(CONFIRM.moveFieldOrder)) return;
-    setDefinition((d) => {
-      const next = deepClone(d);
-      const fields = next.formSections[sectionIndex]?.fields;
-      if (!fields) return d;
-      const j = fieldIndex + direction;
-      if (j < 0 || j >= fields.length) return d;
-      [fields[fieldIndex], fields[j]] = [fields[j], fields[fieldIndex]];
-      return next;
-    });
-    setDirty(true);
-    qLog('field_reorder', { sectionIndex, from: fieldIndex, to: fieldIndex + direction });
-    qLog('dirty_set', { reason: 'field_reorder' });
-  }, []);
+  const moveField = useCallback(
+    (sectionIndex, fieldIndex, direction) => {
+      openConfirm({
+        title: CONFIRM_MODAL.moveFieldOrder.title,
+        children: <p>{CONFIRM_MODAL.moveFieldOrder.body}</p>,
+        confirmLabel: 'Continue',
+        onConfirm: () => {
+          setDefinition((d) => {
+            const next = deepClone(d);
+            const fields = next.formSections[sectionIndex]?.fields;
+            if (!fields) return d;
+            const j = fieldIndex + direction;
+            if (j < 0 || j >= fields.length) return d;
+            [fields[fieldIndex], fields[j]] = [fields[j], fields[fieldIndex]];
+            return next;
+          });
+          setDirty(true);
+          qLog('field_reorder', { sectionIndex, from: fieldIndex, to: fieldIndex + direction });
+          qLog('dirty_set', { reason: 'field_reorder' });
+        },
+      });
+    },
+    [openConfirm]
+  );
 
   const openAddSectionModal = useCallback(() => {
     qLog('add_section_modal_open', {});
@@ -894,16 +946,25 @@ export default function QuestionnaireEditorPage() {
   const handleDiscardDraft = useCallback(() => {
     if (!dirty) return;
     qLog('discard_changes_clicked', { sectionCount: definition.formSections?.length });
-    if (!window.confirm(CONFIRM.discardDraft)) {
-      qLog('discard_changes_cancelled');
-      return;
-    }
-    setDefinition(deepClone(formData));
-    setDirty(false);
-    setExpandedSections(new Set([0]));
-    qLog('draft_discarded', { restoredSectionCount: formData?.formSections?.length });
-    toast.info('Draft discarded', { description: 'This page now matches the last published questionnaire.' });
-  }, [dirty, definition.formSections?.length, formData]);
+    openConfirm({
+      title: CONFIRM_MODAL.discardDraft.title,
+      children: (
+        <>
+          <p>{CONFIRM_MODAL.discardDraft.lead}</p>
+          <p>{CONFIRM_MODAL.discardDraft.detail}</p>
+        </>
+      ),
+      confirmLabel: 'Discard',
+      variant: 'danger',
+      onConfirm: () => {
+        setDefinition(deepClone(formData));
+        setDirty(false);
+        setExpandedSections(new Set([0]));
+        qLog('draft_discarded', { restoredSectionCount: formData?.formSections?.length });
+        toast.info('Draft discarded', { description: 'This page now matches the last published questionnaire.' });
+      },
+    });
+  }, [dirty, definition.formSections?.length, formData, openConfirm]);
 
   const openAddFieldModal = useCallback((sectionIndex) => {
     qLog('add_field_modal_open', { sectionIndex });
@@ -917,19 +978,29 @@ export default function QuestionnaireEditorPage() {
         toast.error('Only sections added in Advanced mode can be removed.');
         return;
       }
-      if (!window.confirm(CONFIRM.removeSection)) {
-        return;
-      }
-      qLog('structure_remove_section', { sectionIndex });
-      setDefinition((d) => {
-        const next = deepClone(d);
-        next.formSections.splice(sectionIndex, 1);
-        return next;
+      openConfirm({
+        title: CONFIRM_MODAL.removeSection.title,
+        children: (
+          <>
+            <p>{CONFIRM_MODAL.removeSection.lead}</p>
+            <p>{CONFIRM_MODAL.removeSection.detail}</p>
+          </>
+        ),
+        confirmLabel: 'Remove section',
+        variant: 'danger',
+        onConfirm: () => {
+          qLog('structure_remove_section', { sectionIndex });
+          setDefinition((d) => {
+            const next = deepClone(d);
+            next.formSections.splice(sectionIndex, 1);
+            return next;
+          });
+          setDirty(true);
+          qLog('dirty_set', { reason: 'remove_section' });
+        },
       });
-      setDirty(true);
-      qLog('dirty_set', { reason: 'remove_section' });
     },
-    [definition.formSections]
+    [definition.formSections, openConfirm]
   );
 
   const removeField = useCallback(
@@ -939,17 +1010,29 @@ export default function QuestionnaireEditorPage() {
         toast.error('Only fields with IDs starting with custom_ (added in Advanced mode) can be removed.');
         return;
       }
-      if (!window.confirm(CONFIRM.removeField)) return;
-      qLog('structure_remove_field', { sectionIndex, fieldIndex });
-      setDefinition((d) => {
-        const next = deepClone(d);
-        next.formSections[sectionIndex].fields.splice(fieldIndex, 1);
-        return next;
+      openConfirm({
+        title: CONFIRM_MODAL.removeField.title,
+        children: (
+          <>
+            <p>{CONFIRM_MODAL.removeField.lead}</p>
+            <p>{CONFIRM_MODAL.removeField.detail}</p>
+          </>
+        ),
+        confirmLabel: 'Remove',
+        variant: 'danger',
+        onConfirm: () => {
+          qLog('structure_remove_field', { sectionIndex, fieldIndex });
+          setDefinition((d) => {
+            const next = deepClone(d);
+            next.formSections[sectionIndex].fields.splice(fieldIndex, 1);
+            return next;
+          });
+          setDirty(true);
+          qLog('dirty_set', { reason: 'remove_field' });
+        },
       });
-      setDirty(true);
-      qLog('dirty_set', { reason: 'remove_field' });
     },
-    [definition.formSections]
+    [definition.formSections, openConfirm]
   );
 
   /** Post-save reload uses the same transport as reads; cap so "Saving…" never hangs if a client stalls. */
@@ -1025,55 +1108,95 @@ export default function QuestionnaireEditorPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dirty, saving, loading, handleSaveQuestionnaire]);
 
-  const handleResetToDefault = async () => {
-    if (!window.confirm(CONFIRM.resetToFactory)) return;
-    qLog('reset_to_factory_clicked', {});
-    const { data, source } = await getFactoryDefault();
-    const payload = data || defaultFormData;
-    setDefinition(deepClone(payload));
-    setDirty(true);
-    qLog('reset_to_factory_applied', { source, sectionCount: payload?.formSections?.length });
-    toast.info('Draft reset to factory default', {
-      description: `Source: ${source}. Click Save questionnaire to publish.`,
+  const handleResetToDefault = () => {
+    openConfirm({
+      title: CONFIRM_MODAL.resetToFactory.title,
+      children: (
+        <>
+          <p>{CONFIRM_MODAL.resetToFactory.lead}</p>
+          <p>{CONFIRM_MODAL.resetToFactory.detail}</p>
+        </>
+      ),
+      confirmLabel: 'Reset draft',
+      variant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          qLog('reset_to_factory_clicked', {});
+          const { data, source } = await getFactoryDefault();
+          const payload = data || defaultFormData;
+          setDefinition(deepClone(payload));
+          setDirty(true);
+          qLog('reset_to_factory_applied', { source, sectionCount: payload?.formSections?.length });
+          toast.info('Draft reset to factory default', {
+            description: `Source: ${source}. Click Save questionnaire to publish.`,
+          });
+        })();
+      },
     });
   };
 
-  const handleRestoreRevision = async (revisionId) => {
-    if (!window.confirm(CONFIRM.restoreRevision)) return;
-    qLog('restore_revision_selected', { revisionId });
-    setRestoreBusyId(revisionId);
-    try {
-      const { error } = await restoreFormDefinitionRevision(revisionId);
-      if (error) {
-        toast.error('Could not restore', { description: error });
-        return;
-      }
-      toast.success('Questionnaire restored', { description: 'Reloading from server…' });
-      await refresh({ silent: true });
-      setDirty(false);
-      void loadRevisions();
-    } finally {
-      setRestoreBusyId(null);
-    }
+  const handleRestoreRevision = (revisionId) => {
+    openConfirm({
+      title: CONFIRM_MODAL.restoreRevision.title,
+      children: (
+        <>
+          <p>{CONFIRM_MODAL.restoreRevision.lead}</p>
+          <p>{CONFIRM_MODAL.restoreRevision.detail}</p>
+        </>
+      ),
+      confirmLabel: 'Restore',
+      variant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          qLog('restore_revision_selected', { revisionId });
+          setRestoreBusyId(revisionId);
+          try {
+            const { error } = await restoreFormDefinitionRevision(revisionId);
+            if (error) {
+              toast.error('Could not restore', { description: error });
+              return;
+            }
+            toast.success('Questionnaire restored', { description: 'Reloading from server…' });
+            await refresh({ silent: true });
+            setDirty(false);
+            void loadRevisions();
+          } finally {
+            setRestoreBusyId(null);
+          }
+        })();
+      },
+    });
   };
 
-  const handleDeleteRevision = async (revisionId) => {
-    if (!window.confirm(CONFIRM.deleteRevision)) {
-      return;
-    }
-    qLog('revision_delete_clicked', { revisionId });
-    setDeleteBusyId(revisionId);
-    try {
-      const { error } = await deleteFormDefinitionRevision(revisionId);
-      if (error) {
-        toast.error('Could not delete snapshot', { description: error });
-        return;
-      }
-      toast.success('Snapshot removed from history');
-      void loadRevisions();
-    } finally {
-      setDeleteBusyId(null);
-    }
+  const handleDeleteRevision = (revisionId) => {
+    openConfirm({
+      title: CONFIRM_MODAL.deleteRevision.title,
+      children: (
+        <>
+          <p>{CONFIRM_MODAL.deleteRevision.lead}</p>
+          <p>{CONFIRM_MODAL.deleteRevision.detail}</p>
+        </>
+      ),
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        void (async () => {
+          qLog('revision_delete_clicked', { revisionId });
+          setDeleteBusyId(revisionId);
+          try {
+            const { error } = await deleteFormDefinitionRevision(revisionId);
+            if (error) {
+              toast.error('Could not delete snapshot', { description: error });
+              return;
+            }
+            toast.success('Snapshot removed from history');
+            void loadRevisions();
+          } finally {
+            setDeleteBusyId(null);
+          }
+        })();
+      },
+    });
   };
 
   const sections = definition.formSections || [];
@@ -1081,12 +1204,20 @@ export default function QuestionnaireEditorPage() {
   const canSave = dirty && !loading && !saving;
   const canDiscard = dirty && !loading && !saving;
 
+  const editorCardClass = isDark
+    ? 'rounded-2xl border border-slate-700 bg-[#0f1419] p-6 shadow-lg shadow-black/20 questionnaire-editor-card'
+    : 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm questionnaire-editor-card';
+  const sectionRowClass = (dragActive) =>
+    isDark
+      ? `questionnaire-editor-section rounded-xl border border-slate-600/90 bg-[#161b30] transition-all duration-200 ease-out ${showAdvanced && dragActive ? 'ring-2 ring-indigo-500/80 ring-offset-2 ring-offset-[#0f1419]' : ''} ${showAdvanced && dragFromIndex != null ? 'hover:border-indigo-500/40' : ''}`
+      : `questionnaire-editor-section rounded-xl border border-amber-200/80 bg-amber-50/40 transition-all duration-200 ease-out ${showAdvanced && dragActive ? 'ring-2 ring-indigo-400 ring-offset-1' : ''} ${showAdvanced && dragFromIndex != null ? 'transition-colors' : ''}`;
+
   return (
     <div className={`space-y-6 ${dirty ? 'pb-24 sm:pb-20' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           to="/solicitor"
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 questionnaire-back-link"
+          className={`inline-flex items-center gap-2 text-sm font-medium questionnaire-back-link ${isDark ? 'text-slate-400 hover:text-slate-100' : 'text-slate-600 hover:text-slate-900'}`}
         >
           <ArrowLeft size={16} />
           Back to dashboard
@@ -1095,22 +1226,22 @@ export default function QuestionnaireEditorPage() {
 
       {loading && (
         <div
-          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 questionnaire-loading-banner"
+          className={`rounded-xl border px-4 py-3 text-sm questionnaire-loading-banner ${isDark ? 'border-slate-600 bg-slate-800/80 text-slate-200' : 'border-slate-200 bg-slate-50 text-slate-700'}`}
           role="status"
         >
           Loading the saved questionnaire…
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm questionnaire-editor-card">
+      <div className={editorCardClass}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Edit questionnaire</h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <h1 className={`text-xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Edit questionnaire</h1>
+            <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               Change question text, labels, placeholders, and answer options. Clients will see these when filling the form. Section names and field IDs affect PDF logic—edit labels only if unsure.
             </p>
             {lastSavedLabel && (
-              <p className="mt-2 text-xs text-slate-500">Last published: {lastSavedLabel}</p>
+              <p className={`mt-2 text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Last published: {lastSavedLabel}</p>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1118,7 +1249,7 @@ export default function QuestionnaireEditorPage() {
               type="button"
               onClick={handleResetToDefault}
               disabled={loading || saving}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`rounded-xl border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
             >
               Reset to default
             </button>
@@ -1127,7 +1258,7 @@ export default function QuestionnaireEditorPage() {
                 type="button"
                 onClick={handleDiscardDraft}
                 disabled={!canDiscard}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
               >
                 <Undo2 size={16} />
                 Discard changes
@@ -1146,25 +1277,27 @@ export default function QuestionnaireEditorPage() {
           </div>
         </div>
 
-        <div className="questionnaire-quick-steps mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
-          <p className="font-semibold text-slate-900">Quick steps</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-800">
+        <div
+          className={`questionnaire-quick-steps mt-6 rounded-xl border p-4 text-sm ${isDark ? 'border-slate-600 bg-slate-800/40 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-800'}`}
+        >
+          <p className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Quick steps</p>
+          <ol className={`mt-2 list-decimal space-y-1 pl-5 ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>
             <li>
-              Expand a section and use <strong className="font-semibold text-slate-900">Edit</strong> to change wording. In the pop-up, click{' '}
-              <strong className="font-semibold text-slate-900">Apply changes</strong> (that only updates this page).
+              Expand a section and use <strong className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit</strong> to change wording. In the pop-up, click{' '}
+              <strong className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Apply changes</strong> (that only updates this page).
             </li>
             <li>
-              When you are finished, click <strong className="font-semibold text-slate-900">Save questionnaire</strong> (here or in the bar at the bottom) so clients see your updates.
+              When you are finished, click <strong className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Save questionnaire</strong> (here or in the bar at the bottom) so clients see your updates.
             </li>
-            <li className="text-slate-800">
+            <li className={isDark ? 'text-slate-300' : 'text-slate-800'}>
               Tip:{' '}
-              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">Ctrl</kbd>{' '}
+              <kbd className={`questionnaire-kbd rounded border px-1.5 py-0.5 font-mono text-xs font-medium shadow-sm ${isDark ? 'border-slate-500 bg-slate-700 text-slate-100' : 'border-slate-400 bg-slate-200 text-slate-900'}`}>Ctrl</kbd>{' '}
               +{' '}
-              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">S</kbd>{' '}
+              <kbd className={`questionnaire-kbd rounded border px-1.5 py-0.5 font-mono text-xs font-medium shadow-sm ${isDark ? 'border-slate-500 bg-slate-700 text-slate-100' : 'border-slate-400 bg-slate-200 text-slate-900'}`}>S</kbd>{' '}
               (or{' '}
-              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">⌘</kbd>{' '}
+              <kbd className={`questionnaire-kbd rounded border px-1.5 py-0.5 font-mono text-xs font-medium shadow-sm ${isDark ? 'border-slate-500 bg-slate-700 text-slate-100' : 'border-slate-400 bg-slate-200 text-slate-900'}`}>⌘</kbd>{' '}
               +{' '}
-              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">S</kbd> on Mac) saves when you have unsaved changes.
+              <kbd className={`questionnaire-kbd rounded border px-1.5 py-0.5 font-mono text-xs font-medium shadow-sm ${isDark ? 'border-slate-500 bg-slate-700 text-slate-100' : 'border-slate-400 bg-slate-200 text-slate-900'}`}>S</kbd> on Mac) saves when you have unsaved changes.
             </li>
             <li>
               If you close the tab or navigate away while you still have unpublished changes, your browser may ask whether to leave. Stay to keep editing; leaving can discard work that was not saved.
@@ -1172,27 +1305,29 @@ export default function QuestionnaireEditorPage() {
           </ol>
         </div>
 
-        <div className="questionnaire-version-history mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="questionnaire-version-history-header flex flex-wrap items-center gap-2 text-slate-900">
-            <History size={18} className="shrink-0 text-indigo-600 questionnaire-version-history-icon" />
+        <div
+          className={`questionnaire-version-history mt-6 rounded-xl border p-4 ${isDark ? 'border-slate-600 bg-slate-800/40' : 'border-slate-200 bg-slate-50'}`}
+        >
+          <div className={`questionnaire-version-history-header flex flex-wrap items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+            <History size={18} className={`shrink-0 questionnaire-version-history-icon ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
             <span className="font-semibold">Version history (Supabase)</span>
-            {revisionsLoading && <span className="text-xs text-slate-500">Loading…</span>}
+            {revisionsLoading && <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Loading…</span>}
           </div>
-          <p className="questionnaire-version-history-desc mt-1 text-xs text-slate-600">
+          <p className={`questionnaire-version-history-desc mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
             Last 50 published snapshots (oldest are trimmed automatically when you save). Restoring replaces the live questionnaire for all clients. Delete removes a snapshot from history only—it does not change the current published form.
           </p>
           <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
             {revisions.length === 0 && !revisionsLoading && (
-              <li className="questionnaire-version-history-empty text-slate-600">
+              <li className={`questionnaire-version-history-empty ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                 No history yet — history is recorded when you save (after migrations are applied).
               </li>
             )}
             {revisions.map((r) => (
               <li
                 key={r.id}
-                className="questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                className={`questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${isDark ? 'border-slate-600 bg-slate-900/60' : 'border-slate-200 bg-white'}`}
               >
-                <span className="min-w-0 flex-1 text-slate-700">
+                <span className={`min-w-0 flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   {formatSavedTime(new Date(r.created_at)) || r.created_at} · {r.source}
                   {typeof r.payloadBytes === 'number' ? ` · ~${r.payloadBytes} bytes` : ''}
                 </span>
@@ -1201,7 +1336,7 @@ export default function QuestionnaireEditorPage() {
                     type="button"
                     disabled={loading || restoreBusyId === r.id || deleteBusyId === r.id}
                     onClick={() => handleRestoreRevision(r.id)}
-                    className="questionnaire-revision-restore rounded-lg border border-indigo-300 bg-white px-2 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-50 disabled:opacity-50"
+                    className={`questionnaire-revision-restore rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-indigo-500/50 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-50'}`}
                   >
                     {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
                   </button>
@@ -1209,7 +1344,7 @@ export default function QuestionnaireEditorPage() {
                     type="button"
                     disabled={loading || deleteBusyId === r.id || restoreBusyId === r.id}
                     onClick={() => handleDeleteRevision(r.id)}
-                    className="questionnaire-revision-delete inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    className={`questionnaire-revision-delete inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-red-500/40 bg-red-950/30 text-red-300 hover:bg-red-950/50' : 'border-red-200 bg-white text-red-700 hover:bg-red-50'}`}
                     aria-label="Delete snapshot from history"
                   >
                     <Trash2 size={12} aria-hidden />
@@ -1222,7 +1357,7 @@ export default function QuestionnaireEditorPage() {
         </div>
 
         <div className="mt-6">
-          <label className="block text-sm font-medium text-slate-700">Form title</label>
+          <label className={`block text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Form title</label>
           <input
             type="text"
             value={definition.formTitle || ''}
@@ -1234,19 +1369,21 @@ export default function QuestionnaireEditorPage() {
               qLog('dirty_set', { reason: 'form_title_change' });
             }}
             disabled={loading || saving}
-            className="mt-1 max-w-md rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
+            className={`mt-1 max-w-md rounded-xl border px-3 py-2 text-sm disabled:opacity-60 ${isDark ? 'border-slate-600 bg-slate-800/80 text-slate-100 placeholder:text-slate-500' : 'border-slate-300 bg-white text-slate-900 disabled:bg-slate-50'}`}
             placeholder="Legacy Last Will & Testament Questionnaire"
           />
         </div>
 
-        <div className="questionnaire-advanced-panel mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
+        <div
+          className={`questionnaire-advanced-panel mt-4 rounded-xl border p-4 text-sm ${isDark ? 'border-slate-600 bg-slate-800/30 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-800'}`}
+        >
           <button
             type="button"
             id="questionnaire-advanced-trigger"
             aria-expanded={showAdvanced}
             aria-controls="questionnaire-advanced-toolbar"
             onClick={() => setShowAdvanced((s) => !s)}
-            className="questionnaire-advanced-toggle-btn group relative flex w-full items-center gap-3 rounded-xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-slate-50 px-4 py-3.5 text-left shadow-sm ring-1 ring-slate-900/[0.04] transition hover:border-indigo-300/90 hover:shadow-md hover:ring-indigo-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50"
+            className={`questionnaire-advanced-toggle-btn group relative flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${isDark ? 'border-slate-600 bg-gradient-to-br from-slate-800 to-slate-900 ring-1 ring-white/5 hover:border-indigo-500/40 hover:shadow-md hover:ring-indigo-500/20 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900' : 'border-slate-200/90 bg-gradient-to-br from-white via-white to-slate-50 ring-1 ring-slate-900/[0.04] hover:border-indigo-300/90 hover:shadow-md hover:ring-indigo-500/15 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50'}`}
           >
             <span
               className="questionnaire-advanced-toggle-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-900/25 ring-1 ring-white/10"
@@ -1255,10 +1392,10 @@ export default function QuestionnaireEditorPage() {
               <Layers size={20} strokeWidth={2} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="questionnaire-advanced-toggle-title block text-sm font-semibold tracking-tight text-slate-900">
+              <span className={`questionnaire-advanced-toggle-title block text-sm font-semibold tracking-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
                 Advanced editing
               </span>
-              <span className="questionnaire-advanced-toggle-sub mt-0.5 block text-xs font-medium text-slate-500">
+              <span className={`questionnaire-advanced-toggle-sub mt-0.5 block text-xs font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 {showAdvanced
                   ? 'Open — reorder, add sections, or remove fields'
                   : 'Reorder sections · add sections · Remove on rows you added'}
@@ -1266,25 +1403,25 @@ export default function QuestionnaireEditorPage() {
             </span>
             <ChevronDown
               size={22}
-              className={`shrink-0 text-slate-400 transition-transform duration-200 ease-out group-hover:text-indigo-500 ${showAdvanced ? 'rotate-180' : ''}`}
+              className={`shrink-0 transition-transform duration-200 ease-out ${isDark ? 'text-slate-500 group-hover:text-indigo-400' : 'text-slate-400 group-hover:text-indigo-500'} ${showAdvanced ? 'rotate-180' : ''}`}
               aria-hidden
             />
           </button>
-          <p className="questionnaire-advanced-hint mt-3 text-xs leading-relaxed text-slate-600">
+          <p className={`questionnaire-advanced-hint mt-3 text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
             Drag the grip icon to reorder sections, use ↑↓, or pick a position number. Reordering changes client step order only; field IDs stay the same. New fields use IDs starting with{' '}
-            <code className="questionnaire-advanced-code rounded-md bg-slate-200/90 px-1.5 py-0.5 font-mono text-[0.8rem] text-slate-800">custom_</code>. For sections and fields you added, use{' '}
-            <strong className="font-semibold text-slate-800">Remove section</strong> / <strong className="font-semibold text-slate-800">Remove</strong> on each row (visible without opening this panel). Built-in questionnaire sections cannot be deleted here—edit wording only.
+            <code className={`questionnaire-advanced-code rounded-md px-1.5 py-0.5 font-mono text-[0.8rem] ${isDark ? 'bg-slate-700 text-amber-200/90' : 'bg-slate-200/90 text-slate-800'}`}>custom_</code>. For sections and fields you added, use{' '}
+            <strong className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Remove section</strong> / <strong className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Remove</strong> on each row (visible without opening this panel). Built-in questionnaire sections cannot be deleted here—edit wording only.
           </p>
           {showAdvanced && (
             <div
               id="questionnaire-advanced-toolbar"
-              className="questionnaire-advanced-toolbar mt-4 flex flex-wrap gap-2 border-t border-slate-200/80 pt-4"
+              className={`questionnaire-advanced-toolbar mt-4 flex flex-wrap gap-2 border-t pt-4 ${isDark ? 'border-slate-600' : 'border-slate-200/80'}`}
             >
               <button
                 type="button"
                 onClick={openAddSectionModal}
                 disabled={loading || saving}
-                className="questionnaire-advanced-add inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+                className={`questionnaire-advanced-add inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition disabled:opacity-50 ${isDark ? 'border-slate-500 bg-slate-800 text-slate-100 hover:bg-slate-700' : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}
               >
                 <Plus size={14} strokeWidth={2.5} /> Add section
               </button>
@@ -1296,7 +1433,7 @@ export default function QuestionnaireEditorPage() {
           {sections.map((section, sIdx) => (
             <div
               key={sIdx}
-              className={`questionnaire-editor-section rounded-xl border border-amber-200/80 bg-amber-50/40 ${showAdvanced && dragFromIndex != null ? 'transition-colors' : ''} ${showAdvanced && dragFromIndex === sIdx ? 'ring-2 ring-indigo-400 ring-offset-1' : ''}`}
+              className={sectionRowClass(dragFromIndex === sIdx)}
               onDragOver={(e) => {
                 if (!showAdvanced || dragFromIndex == null) return;
                 e.preventDefault();
@@ -1313,10 +1450,10 @@ export default function QuestionnaireEditorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(sIdx)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left font-medium text-stone-900 questionnaire-section-title"
+                  className={`flex min-w-0 flex-1 items-center gap-2 text-left font-medium questionnaire-section-title ${isDark ? 'text-slate-100' : 'text-stone-900'}`}
                 >
                   {expandedSections.has(sIdx) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  <FileText size={16} className="questionnaire-section-icon shrink-0 text-amber-700" />
+                  <FileText size={16} className={`questionnaire-section-icon shrink-0 ${isDark ? 'text-amber-400/90' : 'text-amber-700'}`} />
                   <span className="min-w-0 break-words">{section.formSection || `Section ${sIdx + 1}`}</span>
                 </button>
                 <div className="flex flex-wrap items-center gap-1">
@@ -1333,11 +1470,13 @@ export default function QuestionnaireEditorPage() {
                         onDragEnd={() => setDragFromIndex(null)}
                         title="Drag to reorder section"
                         aria-label="Drag to reorder section"
-                        className="cursor-grab rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 active:cursor-grabbing touch-manipulation"
+                        className={`cursor-grab rounded-lg p-1.5 active:cursor-grabbing touch-manipulation transition-colors ${isDark ? 'text-amber-300/90 hover:bg-slate-700/80' : 'text-amber-900 hover:bg-amber-100'}`}
                       >
                         <GripVertical size={18} />
                       </button>
-                      <label className="flex items-center gap-1 rounded-lg border border-amber-200/80 bg-white/80 px-2 py-1 text-[11px] font-medium text-amber-900">
+                      <label
+                        className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium ${isDark ? 'border-amber-400/50 bg-slate-950/80 text-amber-200' : 'border-amber-200/80 bg-white/80 text-amber-900'}`}
+                      >
                         <span className="hidden sm:inline">#</span>
                         <select
                           value={sIdx + 1}
@@ -1346,7 +1485,7 @@ export default function QuestionnaireEditorPage() {
                             if (!Number.isNaN(to) && to !== sIdx) moveSectionToIndex(sIdx, to);
                           }}
                           disabled={loading || saving}
-                          className="max-w-[4rem] cursor-pointer rounded border-0 bg-transparent py-0 text-xs font-semibold text-amber-950 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className={`max-w-[4rem] cursor-pointer rounded border-0 bg-transparent py-0 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isDark ? 'text-amber-100' : 'text-amber-950'}`}
                           aria-label={`Move section to position 1–${sections.length}`}
                         >
                           {sections.map((_, i) => (
@@ -1361,7 +1500,7 @@ export default function QuestionnaireEditorPage() {
                         title="Move section up"
                         onClick={() => moveSection(sIdx, -1)}
                         disabled={sIdx === 0 || loading || saving}
-                        className="rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 disabled:opacity-30"
+                        className={`rounded-lg p-1.5 disabled:opacity-30 ${isDark ? 'text-amber-200 hover:bg-slate-700' : 'text-amber-900 hover:bg-amber-100'}`}
                       >
                         <ChevronUp size={16} />
                       </button>
@@ -1370,7 +1509,7 @@ export default function QuestionnaireEditorPage() {
                         title="Move section down"
                         onClick={() => moveSection(sIdx, 1)}
                         disabled={sIdx >= sections.length - 1 || loading || saving}
-                        className="rounded-lg p-1.5 text-amber-900 hover:bg-amber-100 disabled:opacity-30"
+                        className={`rounded-lg p-1.5 disabled:opacity-30 ${isDark ? 'text-amber-200 hover:bg-slate-700' : 'text-amber-900 hover:bg-amber-100'}`}
                       >
                         <ChevronDown size={16} />
                       </button>
@@ -1382,7 +1521,7 @@ export default function QuestionnaireEditorPage() {
                       title="Remove this section (added in Advanced mode)"
                       onClick={() => removeSection(sIdx)}
                       disabled={loading || saving}
-                      className="questionnaire-remove-section-btn inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      className={`questionnaire-remove-section-btn inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-red-500/40 bg-red-950/40 text-red-300 hover:bg-red-950/60' : 'border-red-200 bg-white text-red-700 hover:bg-red-50'}`}
                       aria-label="Remove section"
                     >
                       <Trash2 size={14} />
@@ -1393,7 +1532,7 @@ export default function QuestionnaireEditorPage() {
                     type="button"
                     onClick={() => setEditingSectionIndex(sIdx)}
                     disabled={loading || saving}
-                    className="questionnaire-edit-section-btn shrink-0 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={`questionnaire-edit-section-btn shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-indigo-500/45 bg-indigo-950/50 text-indigo-100 hover:bg-indigo-900/60 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-[#161b30]' : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 focus:ring-amber-400 focus:ring-offset-1'}`}
                   >
                     <Edit3 size={12} />
                     Edit section
@@ -1401,13 +1540,15 @@ export default function QuestionnaireEditorPage() {
                 </div>
               </div>
               {expandedSections.has(sIdx) && (
-                <div className="questionnaire-editor-section-content border-t border-amber-200/80 bg-white/70 px-4 pb-3 pt-2">
+                <div
+                  className={`questionnaire-editor-section-content border-t px-4 pb-3 pt-2 ${isDark ? 'border-slate-600 bg-slate-900/40' : 'border-amber-200/80 bg-white/70'}`}
+                >
                   {showAdvanced && (
                     <button
                       type="button"
                       onClick={() => openAddFieldModal(sIdx)}
                       disabled={loading || saving}
-                      className="mb-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-amber-300 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                      className={`mb-2 inline-flex items-center gap-1 rounded-lg border border-dashed px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-slate-500 text-slate-200 hover:bg-slate-800' : 'border-amber-300 text-amber-900 hover:bg-amber-50'}`}
                     >
                       <Plus size={12} /> Add field in this section
                     </button>
@@ -1416,10 +1557,10 @@ export default function QuestionnaireEditorPage() {
                     {(section.fields || []).map((field, fIdx) => (
                       <li
                         key={field.id || fIdx}
-                        className="questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-100 bg-white px-3 py-2 text-sm shadow-sm"
+                        className={`questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
                       >
-                        <span className="min-w-0 text-stone-700 questionnaire-field-text">
-                          <span className="font-mono text-stone-500">{field.id}</span>
+                        <span className={`min-w-0 questionnaire-field-text ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
+                          <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{field.id}</span>
                           <span className="mx-2">·</span>
                           {field.label || '(no label)'}
                         </span>
@@ -1431,7 +1572,7 @@ export default function QuestionnaireEditorPage() {
                                 title="Move field up"
                                 onClick={() => moveField(sIdx, fIdx, -1)}
                                 disabled={fIdx === 0 || loading || saving}
-                                className="rounded p-1 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                                className={`rounded p-1 disabled:opacity-30 ${isDark ? 'text-slate-400 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-100'}`}
                               >
                                 <ChevronUp size={14} />
                               </button>
@@ -1440,7 +1581,7 @@ export default function QuestionnaireEditorPage() {
                                 title="Move field down"
                                 onClick={() => moveField(sIdx, fIdx, 1)}
                                 disabled={fIdx >= (section.fields || []).length - 1 || loading || saving}
-                                className="rounded p-1 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                                className={`rounded p-1 disabled:opacity-30 ${isDark ? 'text-slate-400 hover:bg-slate-700' : 'text-stone-600 hover:bg-stone-100'}`}
                               >
                                 <ChevronDown size={14} />
                               </button>
@@ -1452,7 +1593,7 @@ export default function QuestionnaireEditorPage() {
                               title="Remove this question"
                               onClick={() => removeField(sIdx, fIdx)}
                               disabled={loading || saving}
-                              className="questionnaire-remove-field-btn inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              className={`questionnaire-remove-field-btn inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-red-500/40 text-red-300 hover:bg-red-950/50' : 'border-red-200 text-red-700 hover:bg-red-50'}`}
                               aria-label="Remove question"
                             >
                               <Trash2 size={12} />
@@ -1463,7 +1604,7 @@ export default function QuestionnaireEditorPage() {
                             type="button"
                             onClick={() => setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx, field })}
                             disabled={loading || saving}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-indigo-500/40 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-transparent text-indigo-600 hover:bg-indigo-50'}`}
                           >
                             <Edit3 size={12} />
                             Edit
@@ -1512,12 +1653,12 @@ export default function QuestionnaireEditorPage() {
 
       {dirty && (
         <div
-          className="questionnaire-sticky-save fixed inset-x-0 bottom-0 z-40 border-t border-slate-300 bg-slate-100 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] backdrop-blur-sm sm:px-6"
+          className={`questionnaire-sticky-save fixed inset-x-0 bottom-0 z-40 border-t px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] backdrop-blur-md sm:px-6 ${isDark ? 'border-slate-600 bg-slate-900/95 text-slate-100' : 'border-slate-300 bg-slate-100 text-slate-800'}`}
           role="status"
           aria-live="polite"
         >
           <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-slate-800">
+            <p className={`text-sm font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               You have unpublished changes. Save questionnaire so clients see them.
             </p>
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1525,7 +1666,7 @@ export default function QuestionnaireEditorPage() {
                 type="button"
                 onClick={handleDiscardDraft}
                 disabled={!canDiscard}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-400 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-slate-500 bg-slate-800 text-slate-100 hover:bg-slate-700' : 'border-slate-400 bg-white text-slate-800 hover:bg-slate-50'}`}
               >
                 <Undo2 size={16} />
                 Discard changes
@@ -1544,6 +1685,18 @@ export default function QuestionnaireEditorPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmDialog}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={() => confirmDialog?.onConfirm?.()}
+        title={confirmDialog?.title ?? ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel={confirmDialog?.cancelLabel}
+        variant={confirmDialog?.variant}
+      >
+        {confirmDialog?.children}
+      </ConfirmModal>
     </div>
   );
 }

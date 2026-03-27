@@ -28,8 +28,19 @@ const DEMO = {
   },
   partner: {
     fullName: 'Priya Hartwell',
+    title: 'Mrs',
+    firstName: 'Priya',
+    middleName: 'Anita',
+    lastName: 'Hartwell',
+    knownAs: '',
     email: 'priya.hartwell.demo@example.com',
     mobile: '07700111102',
+    tel2: '020 7946 0001',
+    dateOfBirth: '1978-07-14',
+    gender: 'Female',
+    occupation: 'GP (demo autofill)',
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
     address1: '10 Testator Terrace',
     address2: 'Kensington',
     address3: 'London',
@@ -230,6 +241,8 @@ export const generateDummyFormData = (formData) => {
     estateGrossValueRange: 'Range500_1m',
     estateLiabilityValueRange: 'Range100_250',
     estatePropertyValueRange: 'Range500_1m',
+    partnerTitle: 'Mrs',
+    partnerGender: 'Female',
   };
 
   // Get value for a field - used in recursive processing
@@ -244,6 +257,8 @@ export const generateDummyFormData = (formData) => {
     switch (field.type) {
       case 'radio':
       case 'select':
+        if (field.id === 'partnerTitle') return DEMO.partner.title;
+        if (field.id === 'partnerGender') return DEMO.partner.gender;
         if (field.id === 'organDonationPreference') return 'YesButOnly';
         return getYesOption(field) || getFirstOption(field);
 
@@ -254,6 +269,14 @@ export const generateDummyFormData = (formData) => {
         if (field.id === 'knownAs') return DEMO.testator.knownAs;
         if (field.id === 'alias') return 'J. O. Hartwell';
         if (field.id === 'partnerFullName') return DEMO.partner.fullName;
+        if (field.id === 'partnerFirstName') return DEMO.partner.firstName;
+        if (field.id === 'partnerMiddleName') return DEMO.partner.middleName;
+        if (field.id === 'partnerLastName') return DEMO.partner.lastName;
+        if (field.id === 'partnerKnownAs') return DEMO.partner.knownAs || 'Pri';
+        if (field.id === 'partnerOccupation') return DEMO.partner.occupation;
+        if (field.id === 'partnerNationalityCountry') return DEMO.partner.nationalityCountry;
+        if (field.id === 'partnerCountryOfResidence') return DEMO.partner.countryOfResidence;
+        if (field.id === 'partnerTel2') return DEMO.partner.tel2;
         if (field.id === 'email') return DEMO.testator.email;
         if (field.id.includes('partner') && field.id.includes('email')) return DEMO.partner.email;
         if (field.id.includes('Name') || field.id.includes('name')) {
@@ -316,6 +339,7 @@ export const generateDummyFormData = (formData) => {
         return `Please provide details for ${field.label || field.id}.`;
 
       case 'date':
+        if (field.id === 'partnerDateOfBirth') return DEMO.partner.dateOfBirth;
         if (field.id.includes('Birth') || field.id.includes('birth')) return '1975-03-22';
         if (field.id.includes('Execution') || field.id.includes('execution') || field.id.includes('Signing') || field.id.includes('signing') || field.id === 'willExecutionDate') return new Date().toISOString().split('T')[0];
         return '2020-01-01';

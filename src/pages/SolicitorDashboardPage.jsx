@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { listMatters, deleteMatter, MATTER_STATUS } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
+import { getPartnerShortLabel } from '../lib/partnerIntakeSummary.js';
 import { OUTSTANDING_CATEGORY, getMatterOutstandingCategories, isMatterIdVerificationOutstanding, isMatterTestamentaryCapacityOutstanding } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
@@ -480,6 +481,7 @@ export default function SolicitorDashboardPage() {
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3">Client reference</th>
                 <th className="px-5 py-3">Client</th>
+                <th className="px-5 py-3">Partner / spouse</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Verification</th>
                 <th className="px-5 py-3">Outstanding</th>
@@ -491,11 +493,11 @@ export default function SolicitorDashboardPage() {
             <tbody className="divide-y divide-slate-100 bg-white">
               {loading ? (
                 <tr>
-                  <td className="px-5 py-6 text-sm text-slate-600" colSpan={8}>Loading matters...</td>
+                  <td className="px-5 py-6 text-sm text-slate-600" colSpan={9}>Loading matters...</td>
                 </tr>
               ) : matters.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-10 text-center" colSpan={8}>
+                  <td className="px-5 py-10 text-center" colSpan={9}>
                     <p className="text-sm font-medium text-slate-700">No matters match the current filters.</p>
                     <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
                       {filtersActive ? 'Click Show all matters below or Show all above to clear filters. If it still doesn’t appear,' : 'If you expect to see a matter,'} check in Supabase that your account has role <code className="bg-slate-100 px-1 rounded">solicitor</code> or <code className="bg-slate-100 px-1 rounded">admin</code> in the <code className="bg-slate-100 px-1 rounded">profiles</code> table.
@@ -517,6 +519,7 @@ export default function SolicitorDashboardPage() {
                 const hasOutstandingCategories = outstandingCategories.length > 0;
                 const mergedPayload = mergeMatterPayloads(matter.client_payload, matter.solicitor_payload);
                 const displayPhone = mergedPayload?.phoneNumber || mergedPayload?.mobile || mergedPayload?.mobileNumber || mergedPayload?.telephoneNumber || matter.client_phone || matter.client_snapshot?.phoneNumber || matter.client_snapshot?.mobile || matter.client_snapshot?.raw?.mobile || matter.client_snapshot?.mobileNumber || 'No phone captured';
+                const partnerLabel = getPartnerShortLabel(mergedPayload);
 
                 return (
                   <tr key={matter.id} className={hasOutstandingCategories ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}>
@@ -529,6 +532,9 @@ export default function SolicitorDashboardPage() {
                       <p className="font-medium text-slate-900">{matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}</p>
                       <p>{matter.client_email || matter.client_snapshot?.email || 'No email captured'}</p>
                       <p>{displayPhone}</p>
+                    </td>
+                    <td className="max-w-[14rem] px-5 py-4 text-sm text-slate-700" title={partnerLabel || undefined}>
+                      <span className="line-clamp-2">{partnerLabel || '—'}</span>
                     </td>
                     <td className="px-5 py-4"><MatterStatusBadge status={matter.status} /></td>
                     <td className="px-5 py-4 text-sm text-slate-700">

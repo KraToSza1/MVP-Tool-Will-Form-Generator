@@ -178,6 +178,7 @@
             "type": "text",
             "label": "Partner's Full Name",
             "placeholder": "e.g., John David Smith",
+            "infoText": "Enter the name as it should appear in the Will. It should match the partner details below (title and names).",
             "required": true,
             "conditions": [
               { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
@@ -209,26 +210,169 @@
             ]
           },
           {
-            "id": "partnerSection", 
+            "id": "partnerSection",
             "type": "section",
-            "label": "Partner Information Summary",
+            "label": "Partner / spouse — full details",
+            "infoText": "Provide the same level of detail as for the testator: contact, address, and nationality / residence where relevant.",
             "conditions": [
               { "field": "maritalStatus", "operator": "in", "value": ["Civil Partnership", "Married", "Cohabiting"] },
               {
                 "operator": "AND",
                 "clauses": [
                   { "field": "maritalStatus", "operator": "in", "value": ["Single", "Widowed", "Divorced"] },
-                  { "field": "contemplation", "operator": "in", "value": ["Contemplation of Civil Partnership", "Contemplation of Marriage"] }
+                  { "field": "contemplation", "operator": "in", "value": ["Contemplation of Civil Partnership", "Contemplation of Marriage", "Either"] }
                 ]
               }
             ],
             "conditionLogic": "OR",
             "subFields": [
-               {
-                  "id": "partnerInfoDisplay",
-                  "type": "display",
-                  "text": "Partner name: {{field:partnerFullName:value}} ✅"
-               }
+              {
+                "id": "partnerTitle",
+                "type": "radio",
+                "label": "Title",
+                "required": true,
+                "options": [
+                  { "value": "Mr", "label": "Mr" },
+                  { "value": "Mrs", "label": "Mrs" },
+                  { "value": "Miss", "label": "Miss" },
+                  { "value": "Ms", "label": "Ms" },
+                  { "value": "Dr", "label": "Dr" },
+                  { "value": "Prof", "label": "Prof" },
+                  { "value": "Sir", "label": "Sir" },
+                  { "value": "Dame", "label": "Dame" },
+                  { "value": "Lord", "label": "Lord" },
+                  { "value": "Lady", "label": "Lady" },
+                  { "value": "Other", "label": "Other" }
+                ],
+                "value": null
+              },
+              {
+                "id": "partnerFirstName",
+                "type": "text",
+                "label": "First name(s)",
+                "required": true,
+                "value": ""
+              },
+              {
+                "id": "partnerMiddleName",
+                "type": "text",
+                "label": "Middle name(s)",
+                "value": ""
+              },
+              {
+                "id": "partnerLastName",
+                "type": "text",
+                "label": "Last name",
+                "required": true,
+                "value": ""
+              },
+              {
+                "id": "partnerKnownAs",
+                "type": "text",
+                "label": "Known as",
+                "infoText": "If different from their legal name",
+                "value": ""
+              },
+              {
+                "id": "partnerDateOfBirth",
+                "type": "date",
+                "label": "Date of birth",
+                "placeholder": "dd/mm/yyyy",
+                "infoText": "Please enter date in format: dd/mm/yyyy",
+                "required": true,
+                "value": ""
+              },
+              {
+                "id": "partnerGender",
+                "type": "radio",
+                "label": "Gender",
+                "required": true,
+                "options": [
+                  { "value": "Male", "label": "Male" },
+                  { "value": "Female", "label": "Female" },
+                  { "value": "Other", "label": "Other" }
+                ],
+                "value": null
+              },
+              {
+                "id": "partnerMobile",
+                "type": "text",
+                "label": "Mobile",
+                "required": true,
+                "placeholder": "e.g., 07123 456789",
+                "value": ""
+              },
+              {
+                "id": "partnerTel2",
+                "type": "text",
+                "label": "Tel 2",
+                "placeholder": "e.g., 020 1234 5678",
+                "infoText": "Alternative phone number",
+                "value": ""
+              },
+              {
+                "id": "partnerEmail",
+                "type": "text",
+                "label": "Email",
+                "required": true,
+                "placeholder": "email@example.com",
+                "value": ""
+              },
+              {
+                "id": "partnerOccupation",
+                "type": "text",
+                "label": "Occupation",
+                "value": ""
+              },
+              {
+                "id": "partnerNationalityCountry",
+                "type": "text",
+                "label": "Country of nationality / citizenship",
+                "placeholder": "e.g., United Kingdom",
+                "value": ""
+              },
+              {
+                "id": "partnerCountryOfResidence",
+                "type": "text",
+                "label": "Country of residence",
+                "placeholder": "e.g., United Kingdom",
+                "value": ""
+              },
+              {
+                "id": "partnerAddress1",
+                "type": "text",
+                "label": "Address line 1",
+                "placeholder": "e.g., Flat 5, 123 High Street",
+                "required": true,
+                "value": ""
+              },
+              {
+                "id": "partnerAddress2",
+                "type": "text",
+                "label": "Address line 2",
+                "placeholder": "e.g., Town or District",
+                "value": ""
+              },
+              {
+                "id": "partnerAddress3",
+                "type": "text",
+                "label": "Address line 3",
+                "placeholder": "e.g., City or County",
+                "value": ""
+              },
+              {
+                "id": "partnerPostcode",
+                "type": "text",
+                "label": "Postcode",
+                "placeholder": "e.g., SW1A 1AA",
+                "required": true,
+                "value": ""
+              },
+              {
+                "id": "partnerInfoDisplay",
+                "type": "display",
+                "text": "Partner details summary"
+              }
             ]
           }
         ]

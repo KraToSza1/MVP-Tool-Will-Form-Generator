@@ -53,6 +53,7 @@ import {
   getUKAddressExample,
 } from '../utils/ukValidations';
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
+import { getPartnerIntakeRows } from '../lib/partnerIntakeSummary.js';
 
 let _datePickerPromise;
 async function loadDatePicker() {
@@ -1150,29 +1151,35 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       }
     }
     
-    // Show different content based on whether partner name is entered
     if (isPartnerDisplay) {
-      if (partnerName && partnerName.trim()) {
-        return (
-          <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">✅</span>
-              <span className="font-semibold">Partner name saved:</span>
-              <span className="font-bold">{partnerName.trim()}</span>
-            </div>
-            <p className="text-xs mt-1 opacity-75">This name will be used throughout your Will.</p>
-          </div>
-        );
-      } else {
-        return (
-          <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💡</span>
-              <span>Enter your partner's full name in the field above - it will appear here automatically!</span>
-            </div>
-          </div>
-        );
-      }
+      const rows = getPartnerIntakeRows(formValues);
+      const willName = partnerName && String(partnerName).trim();
+      return (
+        <div className="my-4 rounded-lg border border-indigo-200 bg-indigo-50/90 p-4 text-sm text-slate-800 shadow-sm">
+          <p className="font-semibold text-indigo-900">Partner / spouse details (summary)</p>
+          {willName ? (
+            <p className="mt-1 text-xs text-slate-600">
+              Name for Will: <span className="font-medium text-slate-900">{willName}</span>
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-amber-800">Enter the partner&apos;s full name in the field above for Will clauses.</p>
+          )}
+          {rows.length > 0 ? (
+            <dl className="mt-3 space-y-2 border-t border-indigo-100 pt-3">
+              {rows
+                .filter((r) => r.label !== 'Full name (as for Will)')
+                .map(({ label, value }) => (
+                  <div key={label} className="grid gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:gap-3">
+                    <dt className="text-xs font-medium text-slate-500">{label}</dt>
+                    <dd className="text-sm font-medium text-slate-900 break-words">{value}</dd>
+                  </div>
+                ))}
+            </dl>
+          ) : (
+            <p className="mt-2 text-xs text-slate-600">Complete the fields above to see contact and address here.</p>
+          )}
+        </div>
+      );
     }
     
     // Regular display field
