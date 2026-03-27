@@ -25,6 +25,12 @@ import {
 } from '../lib/formDefinition.js';
 import { qLog } from '../lib/questionnaireLog.js';
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
+import {
+  createCustomField,
+  CUSTOM_FIELD_TYPES,
+  mergeCustomFieldEdit,
+  optionsToMultiline,
+} from '../utils/customFieldBuilder.js';
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -37,18 +43,151 @@ function newCustomFieldId() {
   return `custom_${suffix}`;
 }
 
+/** Shared inputs for creating a custom_* field (add section / add field modals). */
+function CustomFieldInputs({
+  fieldType,
+  onFieldTypeChange,
+  label,
+  onLabelChange,
+  placeholder,
+  onPlaceholderChange,
+  required,
+  onRequiredChange,
+  optionsText,
+  onOptionsTextChange,
+  infoText,
+  onInfoTextChange,
+}) {
+  const showPlaceholder = ['text', 'textarea', 'number', 'currency', 'date'].includes(fieldType);
+  const showOptions = fieldType === 'radio' || fieldType === 'checkboxGroup';
+  return (
+    <>
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Question type</label>
+        <select
+          value={fieldType}
+          onChange={(e) => onFieldTypeChange(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+        >
+          {CUSTOM_FIELD_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Question / label</label>
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => onLabelChange(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          placeholder="Wording shown to the client"
+        />
+      </div>
+      {showPlaceholder && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700">
+            Placeholder {fieldType === 'date' ? '(date hint)' : '(optional)'}
+          </label>
+          <input
+            type="text"
+            value={placeholder}
+            onChange={(e) => onPlaceholderChange(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            placeholder={fieldType === 'date' ? 'e.g. dd/mm/yyyy' : 'Text inside the empty field'}
+          />
+        </div>
+      )}
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          checked={required}
+          onChange={(e) => onRequiredChange(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        Required answer
+      </label>
+      {showOptions && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700">Answer options (one per line)</label>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Optional: use <code className="rounded bg-slate-100 px-1">value|Label</code> to set a stable value for PDF logic; otherwise a value is generated from the label.
+          </p>
+          <textarea
+            value={optionsText}
+            onChange={(e) => onOptionsTextChange(e.target.value)}
+            rows={5}
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+            placeholder={'Yes\nNo\nMaybe'}
+          />
+        </div>
+      )}
+      <div>
+        <label className="block text-sm font-medium text-slate-700">Help text (optional)</label>
+        <textarea
+          value={infoText}
+          onChange={(e) => onInfoTextChange(e.target.value)}
+          rows={2}
+          className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          placeholder="Short guidance under the question"
+        />
+      </div>
+    </>
+  );
+}
+
 function FieldEditModal({ field, onClose, onSave }) {
+  const isCustom = field.id?.startsWith?.('custom_');
   const [label, setLabel] = useState(field.label || '');
   const [placeholder, setPlaceholder] = useState(field.placeholder ?? '');
   const [infoText, setInfoText] = useState(field.infoText ?? '');
+  const [required, setRequired] = useState(!!field.required);
+  const [rows, setRows] = useState(field.rows || 4);
   const [optionLabels, setOptionLabels] = useState(
     Array.isArray(field.options)
       ? field.options.map((o) => o.label ?? o.value ?? '')
       : []
   );
+  const [optionsText, setOptionsText] = useState(() =>
+    Array.isArray(field.options) ? optionsToMultiline(field.options) : ''
+  );
 
   const handleSave = () => {
+    if (isCustom && (field.type === 'radio' || field.type === 'checkboxGroup')) {
+      try {
+        const next = mergeCustomFieldEdit(field, { label, infoText, required, optionsText });
+        onSave(next);
+      } catch (e) {
+        toast.error(e.message || 'Invalid options');
+        return;
+      }
+      onClose();
+      return;
+    }
+    if (isCustom) {
+      try {
+        const next = mergeCustomFieldEdit(field, {
+          label,
+          placeholder,
+          infoText,
+          required,
+          rows: field.type === 'textarea' ? rows : undefined,
+        });
+        onSave(next);
+      } catch (e) {
+        toast.error(e.message || 'Could not update field');
+        return;
+      }
+      onClose();
+      return;
+    }
+
     const next = { ...field, label, placeholder: placeholder || undefined, infoText: infoText || undefined };
+    if (field.type === 'textarea' && typeof rows === 'number' && rows > 0) {
+      next.rows = rows;
+    }
     if (Array.isArray(field.options) && optionLabels.length === field.options.length) {
       next.options = field.options.map((o, i) => ({ ...o, label: optionLabels[i] ?? o.label ?? o.value }));
     }
@@ -56,9 +195,16 @@ function FieldEditModal({ field, onClose, onSave }) {
     onClose();
   };
 
+  const showPlaceholder =
+    field.type === 'text' ||
+    field.type === 'date' ||
+    field.type === 'textarea' ||
+    field.type === 'number' ||
+    field.type === 'currency';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
         <h3 className="text-lg font-semibold text-slate-900">Edit question</h3>
         <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
         <div className="mt-4 space-y-4">
@@ -72,7 +218,18 @@ function FieldEditModal({ field, onClose, onSave }) {
               placeholder="e.g. Who moved my cheese?"
             />
           </div>
-          {(field.type === 'text' || field.type === 'date') && (
+          {isCustom && (
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                checked={required}
+                onChange={(e) => setRequired(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Required answer
+            </label>
+          )}
+          {showPlaceholder && (
             <div>
               <label className="block text-sm font-medium text-slate-700">Placeholder</label>
               <input
@@ -80,6 +237,19 @@ function FieldEditModal({ field, onClose, onSave }) {
                 value={placeholder}
                 onChange={(e) => setPlaceholder(e.target.value)}
                 className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+          )}
+          {field.type === 'textarea' && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Visible rows</label>
+              <input
+                type="number"
+                min={2}
+                max={20}
+                value={rows}
+                onChange={(e) => setRows(Number(e.target.value) || 4)}
+                className="mt-1 w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           )}
@@ -92,7 +262,21 @@ function FieldEditModal({ field, onClose, onSave }) {
               className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             />
           </div>
-          {optionLabels.length > 0 && (
+          {isCustom && (field.type === 'radio' || field.type === 'checkboxGroup') && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Answer options (one per line)</label>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Use <code className="rounded bg-slate-100 px-1">value|Label</code> to keep stable values if you later add logic.
+              </p>
+              <textarea
+                value={optionsText}
+                onChange={(e) => setOptionsText(e.target.value)}
+                rows={6}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+              />
+            </div>
+          )}
+          {!isCustom && optionLabels.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700">Answer options (label shown to user)</label>
               <p className="mt-0.5 text-xs text-slate-500">Changing the value can break logic; change only the label if unsure.</p>
@@ -178,8 +362,12 @@ function SectionEditModal({ sectionName, onClose, onSave }) {
 function AddSectionModal({ onClose, onConfirm }) {
   const [sectionTitle, setSectionTitle] = useState('');
   const [staffNote, setStaffNote] = useState('');
+  const [fieldType, setFieldType] = useState('text');
   const [firstQuestionLabel, setFirstQuestionLabel] = useState('New question');
   const [placeholder, setPlaceholder] = useState('');
+  const [required, setRequired] = useState(false);
+  const [optionsText, setOptionsText] = useState('Yes\nNo');
+  const [infoText, setInfoText] = useState('');
 
   const handleSubmit = () => {
     const title = sectionTitle.trim();
@@ -192,13 +380,19 @@ function AddSectionModal({ onClose, onConfirm }) {
       sectionTitleLen: title.length,
       staffNoteLen: staffNote.trim().length,
       firstQuestionLabelLen: firstQuestionLabel.trim().length,
+      fieldType,
       hasPlaceholder: !!placeholder.trim(),
+      required,
     });
     onConfirm({
       sectionTitle: title,
       staffNote: staffNote.trim(),
       firstQuestionLabel: firstQuestionLabel.trim() || 'New question',
+      fieldType,
       placeholder: placeholder.trim(),
+      required,
+      optionsText,
+      infoText: infoText.trim(),
     });
   };
 
@@ -216,7 +410,7 @@ function AddSectionModal({ onClose, onConfirm }) {
       }}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="add-section-modal-title" className="text-lg font-semibold text-slate-900">
@@ -247,29 +441,24 @@ function AddSectionModal({ onClose, onConfirm }) {
               placeholder="Optional — e.g. why this block exists, matter type, compliance reminder (not shown on the client form)"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">First question label</label>
-            <input
-              type="text"
-              value={firstQuestionLabel}
-              onChange={(e) => setFirstQuestionLabel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              placeholder="New question"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Placeholder (optional)</label>
-            <input
-              type="text"
-              value={placeholder}
-              onChange={(e) => setPlaceholder(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              placeholder="Text shown inside the empty field"
-            />
-          </div>
+          <p className="text-sm font-medium text-slate-800">First question in this section</p>
+          <CustomFieldInputs
+            fieldType={fieldType}
+            onFieldTypeChange={setFieldType}
+            label={firstQuestionLabel}
+            onLabelChange={setFirstQuestionLabel}
+            placeholder={placeholder}
+            onPlaceholderChange={setPlaceholder}
+            required={required}
+            onRequiredChange={setRequired}
+            optionsText={optionsText}
+            onOptionsTextChange={setOptionsText}
+            infoText={infoText}
+            onInfoTextChange={setInfoText}
+          />
         </div>
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
-          The first field uses a new ID starting with <strong className="text-slate-800">custom_</strong>. You can add more fields after saving this draft to the list.
+          The first field uses a new ID starting with <strong className="text-slate-800">custom_</strong>. Use <strong className="text-slate-800">Add field in this section</strong> to add more questions with any type you need.
         </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
@@ -289,6 +478,86 @@ function AddSectionModal({ onClose, onConfirm }) {
           >
             <Plus size={14} />
             Add section
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Modal: add a field to an existing section (same field types as new section). */
+function AddFieldModal({ onClose, onConfirm }) {
+  const [fieldType, setFieldType] = useState('text');
+  const [label, setLabel] = useState('New question');
+  const [placeholder, setPlaceholder] = useState('');
+  const [required, setRequired] = useState(false);
+  const [optionsText, setOptionsText] = useState('Yes\nNo');
+  const [infoText, setInfoText] = useState('');
+
+  const handleSubmit = () => {
+    qLog('add_field_modal_apply', { fieldType, labelLen: label.trim().length, required });
+    onConfirm({
+      fieldType,
+      label: label.trim() || 'New question',
+      placeholder: placeholder.trim(),
+      required,
+      optionsText,
+      infoText: infoText.trim(),
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-field-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="add-field-modal-title" className="text-lg font-semibold text-slate-900">
+          Add question to section
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">Choose how clients answer: text, paragraph, date, money, or lists of options.</p>
+        <div className="mt-4 space-y-4">
+          <CustomFieldInputs
+            fieldType={fieldType}
+            onFieldTypeChange={setFieldType}
+            label={label}
+            onLabelChange={setLabel}
+            placeholder={placeholder}
+            onPlaceholderChange={setPlaceholder}
+            required={required}
+            onRequiredChange={setRequired}
+            optionsText={optionsText}
+            onOptionsTextChange={setOptionsText}
+            infoText={infoText}
+            onInfoTextChange={setInfoText}
+          />
+        </div>
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
+          The new field uses an ID starting with <strong className="text-slate-800">custom_</strong>. You can reorder or remove it in Advanced mode.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            <Plus size={14} />
+            Add question
           </button>
         </div>
       </div>
@@ -332,6 +601,7 @@ export default function QuestionnaireEditorPage() {
   const [restoreBusyId, setRestoreBusyId] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [addSectionModalOpen, setAddSectionModalOpen] = useState(false);
+  const [addFieldModalSectionIndex, setAddFieldModalSectionIndex] = useState(null);
   const [dragFromIndex, setDragFromIndex] = useState(null);
 
   useEffect(() => {
@@ -496,14 +766,39 @@ export default function QuestionnaireEditorPage() {
 
   const commitAddSectionFromModal = useCallback(
     (payload) => {
-      const { sectionTitle, staffNote, firstQuestionLabel, placeholder } = payload;
+      const {
+        sectionTitle,
+        staffNote,
+        firstQuestionLabel,
+        fieldType,
+        placeholder,
+        required,
+        optionsText,
+        infoText,
+      } = payload;
       const id = newCustomFieldId();
       const sectionIndex = definition.formSections?.length ?? 0;
+      let firstField;
+      try {
+        firstField = createCustomField({
+          id,
+          type: fieldType,
+          label: firstQuestionLabel,
+          placeholder,
+          required,
+          optionsText,
+          infoText,
+        });
+      } catch (e) {
+        toast.error(e.message || 'Could not create the first question');
+        return;
+      }
       qLog('add_section_modal_confirm', {
         sectionIndex,
         sectionTitleLen: sectionTitle.length,
         hasStaffNote: !!staffNote,
         fieldId: id,
+        fieldType,
       });
       setDefinition((d) => {
         const next = deepClone(d);
@@ -511,17 +806,9 @@ export default function QuestionnaireEditorPage() {
         const section = {
           formSection: sectionTitle,
           _editorAdded: true,
-          fields: [
-            {
-              id,
-              type: 'text',
-              label: firstQuestionLabel,
-              value: '',
-            },
-          ],
+          fields: [firstField],
         };
         if (staffNote) section._editorStaffNote = staffNote;
-        if (placeholder) section.fields[0].placeholder = placeholder;
         next.formSections.push(section);
         return next;
       });
@@ -544,6 +831,37 @@ export default function QuestionnaireEditorPage() {
     [definition]
   );
 
+  const commitAddFieldFromModal = useCallback((sectionIndex, payload) => {
+    const id = newCustomFieldId();
+    let field;
+    try {
+      field = createCustomField({
+        id,
+        type: payload.fieldType,
+        label: payload.label,
+        placeholder: payload.placeholder,
+        required: payload.required,
+        optionsText: payload.optionsText,
+        infoText: payload.infoText,
+      });
+    } catch (e) {
+      toast.error(e.message || 'Could not create question');
+      return;
+    }
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const sec = next.formSections[sectionIndex];
+      if (!sec) return d;
+      sec.fields = sec.fields || [];
+      sec.fields.push(field);
+      return next;
+    });
+    setDirty(true);
+    qLog('structure_add_field', { sectionIndex, fieldId: id, fieldType: payload.fieldType });
+    qLog('dirty_set', { reason: 'add_field' });
+    setAddFieldModalSectionIndex(null);
+  }, []);
+
   const handleDiscardDraft = useCallback(() => {
     if (!dirty) return;
     qLog('discard_changes_clicked', { sectionCount: definition.formSections?.length });
@@ -562,19 +880,9 @@ export default function QuestionnaireEditorPage() {
     toast.info('Draft discarded', { description: 'This page now matches the last published questionnaire.' });
   }, [dirty, definition.formSections?.length, formData]);
 
-  const addField = useCallback((sectionIndex) => {
-    const id = newCustomFieldId();
-    setDefinition((d) => {
-      const next = deepClone(d);
-      const sec = next.formSections[sectionIndex];
-      if (!sec) return d;
-      sec.fields = sec.fields || [];
-      sec.fields.push({ id, type: 'text', label: 'New question', value: '' });
-      return next;
-    });
-    setDirty(true);
-    qLog('structure_add_field', { sectionIndex, fieldId: id });
-    qLog('dirty_set', { reason: 'add_field' });
+  const openAddFieldModal = useCallback((sectionIndex) => {
+    qLog('add_field_modal_open', { sectionIndex });
+    setAddFieldModalSectionIndex(sectionIndex);
   }, []);
 
   const removeSection = useCallback(
@@ -1011,7 +1319,7 @@ export default function QuestionnaireEditorPage() {
                   {showAdvanced && (
                     <button
                       type="button"
-                      onClick={() => addField(sIdx)}
+                      onClick={() => openAddFieldModal(sIdx)}
                       disabled={loading || saving}
                       className="mb-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-amber-300 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
                     >
@@ -1085,6 +1393,7 @@ export default function QuestionnaireEditorPage() {
 
       {editingField && (
         <FieldEditModal
+          key={`${editingField.sectionIndex}-${editingField.fieldIndex}-${editingField.field.id}`}
           field={editingField.field}
           onClose={() => setEditingField(null)}
           onSave={(updated) => updateField(editingField.sectionIndex, editingField.fieldIndex, updated)}
@@ -1104,6 +1413,12 @@ export default function QuestionnaireEditorPage() {
             setAddSectionModalOpen(false);
           }}
           onConfirm={commitAddSectionFromModal}
+        />
+      )}
+      {addFieldModalSectionIndex != null && (
+        <AddFieldModal
+          onClose={() => setAddFieldModalSectionIndex(null)}
+          onConfirm={(payload) => commitAddFieldFromModal(addFieldModalSectionIndex, payload)}
         />
       )}
 
