@@ -631,10 +631,13 @@
           {
             "id": "includeProfessionalRemuneration",
             "type": "radio",
-            "label": "Include professional executor power for remuneration?",
+            "label": "If you request Aristone Solicitors to act, professional fees will apply.",
             "options": [
-              { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes (Default)", "willClauseText": "Any of my Trustees who is a professional person shall be entitled to charge and be paid all usual professional or other proper fees for business done, services rendered or time spent personally or by their firm in the administration of my estate, including acts which a trustee not engaged in any profession or business could have done personally." }
+              {
+                "value": "Yes",
+                "label": "I understand and agree",
+                "willClauseText": "Any of my Trustees who is a professional person shall be entitled to charge and be paid all usual professional or other proper fees for business done, services rendered or time spent personally or by their firm in the administration of my estate, including acts which a trustee not engaged in any profession or business could have done personally."
+              }
             ],
             "value": null
           },
