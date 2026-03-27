@@ -34,8 +34,20 @@ export async function getFormDefinition() {
   return { data: payload, error: null };
 }
 
+const SAVE_REQUEST_TIMEOUT_MS = 90_000;
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(label || `Request timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 /**
  * Save the questionnaire definition. Staff only (RLS).
+ * Uses getSession() (local) instead of getUser() (extra server round-trip) for updated_by.
  * @param {object} payload - { formTitle, formSections }
  * @returns {Promise<{ error: string | null }>}
  */
@@ -46,21 +58,37 @@ export async function saveFormDefinition(payload) {
   if (!payload || !Array.isArray(payload.formSections)) {
     return { error: 'Invalid payload: formSections required' };
   }
-  const { data: user } = await supabase.auth.getUser();
-  const { error } = await supabase
-    .from('form_definitions')
-    .upsert(
-      {
-        name: DEFAULT_NAME,
-        payload,
-        updated_at: new Date().toISOString(),
-        updated_by: user?.user?.id ?? null,
-      },
-      { onConflict: 'name' }
+
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData?.session?.user?.id ?? null;
+
+  try {
+    const { error } = await withTimeout(
+      supabase.from('form_definitions').upsert(
+        {
+          name: DEFAULT_NAME,
+          payload,
+          updated_at: new Date().toISOString(),
+          updated_by: userId,
+        },
+        { onConflict: 'name' }
+      ),
+      SAVE_REQUEST_TIMEOUT_MS,
+      'Saving the questionnaire took too long. Check your connection and try again.'
     );
-  if (error) {
-    console.error('[formDefinition] saveFormDefinition error:', error);
-    return { error: error.message };
+    if (error) {
+      console.error('[formDefinition] saveFormDefinition error:', error);
+      return { error: error.message };
+    }
+  } catch (err) {
+    console.error('[formDefinition] saveFormDefinition failed:', err);
+    return { error: err?.message || 'Save failed' };
+  }
+
+  if (t0 && typeof performance !== 'undefined') {
+    const ms = Math.round(performance.now() - t0);
+    console.log('[WillTool Form] questionnaire saved to Supabase', { ms });
   }
   return { error: null };
 }

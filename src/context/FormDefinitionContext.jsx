@@ -14,17 +14,25 @@ export function FormDefinitionProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [isCustom, setIsCustom] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await getFormDefinition();
-    setLoading(false);
-    if (error || !data) {
-      setFormData(staticFormData);
-      setIsCustom(false);
-      return;
+  /**
+   * Reload questionnaire from Supabase.
+   * @param {{ silent?: boolean }} opts - If silent, do not set global loading (avoids blocking the editor after save).
+   */
+  const refresh = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true;
+    if (!silent) setLoading(true);
+    try {
+      const { data, error } = await getFormDefinition();
+      if (error || !data) {
+        setFormData(staticFormData);
+        setIsCustom(false);
+        return;
+      }
+      setFormData(data);
+      setIsCustom(true);
+    } finally {
+      if (!silent) setLoading(false);
     }
-    setFormData(data);
-    setIsCustom(true);
   }, []);
 
   useEffect(() => {

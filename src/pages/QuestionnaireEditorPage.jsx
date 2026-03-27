@@ -179,11 +179,13 @@ export default function QuestionnaireEditorPage() {
   const [editingField, setEditingField] = useState(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState(null);
 
+  // Sync server form into local editor when not dirty (initial load, or after background refresh).
+  // If dirty, do not overwrite — avoids losing edits when silent refresh completes after save.
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !dirty) {
       setDefinition(deepClone(formData));
     }
-  }, [loading, formData]);
+  }, [loading, formData, dirty]);
 
   useEffect(() => {
     const onBeforeUnload = (e) => {
@@ -234,7 +236,17 @@ export default function QuestionnaireEditorPage() {
         toast.error('Could not save questionnaire', { description: error });
         return;
       }
-      await refresh();
+      // Reload context from DB without global "Loading questionnaire" (silent).
+      // Await so formData matches DB before we clear dirty — avoids overwriting with stale data.
+      try {
+        await refresh({ silent: true });
+      } catch (err) {
+        console.warn('[QuestionnaireEditor] refresh after save failed', err);
+        toast.error('Saved, but could not reload', {
+          description: 'Your changes should be live. Refresh this page if something looks wrong.',
+        });
+        return;
+      }
       const now = new Date();
       setLastSavedAt(now);
       try {
