@@ -1,7 +1,9 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 
-async function getProfile(userId) {
-  if (!supabase || !userId) return null;
+async function fetchProfileRow(userId) {
+  if (!supabase || !userId) {
+    return { profile: null, error: null };
+  }
 
   const { data, error } = await supabase
     .from('profiles')
@@ -11,10 +13,16 @@ async function getProfile(userId) {
 
   if (error) {
     console.error('[auth] getProfile error:', error);
-    return null;
+    return { profile: null, error };
   }
 
-  return data;
+  return { profile: data ?? null, error: null };
+}
+
+/** @deprecated use fetchProfileRow; kept for callers that need only data */
+async function getProfile(userId) {
+  const { profile } = await fetchProfileRow(userId);
+  return profile;
 }
 
 export async function getCurrentSession() {
@@ -106,7 +114,47 @@ export async function signInSolicitor({ email, password }) {
   let profile = null;
   if (userId) {
     try {
-      profile = await withTimeout(getProfile(userId), PROFILE_FETCH_TIMEOUT_MS, 'Profile lookup timed out');
+      let fetchResult = await withTimeout(
+        fetchProfileRow(userId),
+        PROFILE_FETCH_TIMEOUT_MS,
+        'Profile lookup timed out'
+      );
+
+      if (fetchResult.error) {
+        console.error('[Solicitor Login] profile query failed', fetchResult.error);
+        return {
+          code: 'profile_fetch_failed',
+          error:
+            'We could not load your staff account from the server. Please try again in a moment. If this continues, contact technical support.',
+          session: data.session ?? null,
+          user: data.user ?? null,
+          profile: null,
+        };
+      }
+
+      profile = fetchResult.profile;
+
+      // auth.users row exists but public.profiles row missing (trigger/backfill gap) — sync once via RPC
+      if (!profile) {
+        const { error: rpcError } = await supabase.rpc('ensure_profile_from_auth');
+        if (rpcError) {
+          console.warn('[Solicitor Login] ensure_profile_from_auth RPC failed (run latest DB migration if needed):', rpcError);
+        } else {
+          fetchResult = await fetchProfileRow(userId);
+          if (fetchResult.error) {
+            console.error('[Solicitor Login] profile query after sync failed', fetchResult.error);
+            return {
+              code: 'profile_fetch_failed',
+              error:
+                'We could not load your staff account from the server. Please try again in a moment. If this continues, contact technical support.',
+              session: data.session ?? null,
+              user: data.user ?? null,
+              profile: null,
+            };
+          }
+          profile = fetchResult.profile;
+        }
+      }
     } catch (err) {
       console.warn('[Solicitor Login] getProfile timed out or failed', err);
       return {
@@ -119,7 +167,7 @@ export async function signInSolicitor({ email, password }) {
     }
   }
   if (!profile) {
-    console.warn('[Solicitor Login] No profile row found for this user. In Supabase: create a row in public.profiles for this user and set role = \'solicitor\'.');
+    console.warn('[Solicitor Login] No profile row after auth + sync. Add row in public.profiles or run migration ensure_profile_from_auth.');
     return {
       code: 'no_staff_profile',
       error:
