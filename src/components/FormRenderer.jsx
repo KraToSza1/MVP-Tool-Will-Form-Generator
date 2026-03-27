@@ -1395,6 +1395,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const result = currentSection.fields.every(field => {
       DEBUG_LOGS&&console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
       
+      if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+        return true;
+      }
+
       // Skip fields that shouldn't be shown (conditions not met)
       if (field.conditions && !evaluateFieldConditions(field)) {
         DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (conditions not met)`);
@@ -1429,12 +1433,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
-  }, [currentSection, formValues, evaluateFieldConditions]);
+  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode]);
 
   const isFormFullyCompleted = () => {
     try {
       return formData.formSections.every((section) =>
         section.fields.every(field => {
+          if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
           if (!evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
           if (field.required) {
@@ -1480,6 +1485,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     currentSection.fields.forEach((field, index) => {
       if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Checking field ${index + 1}/${currentSection.fields.length}:`, field.id, field.label, 'required:', field.required);
+
+      if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+        return;
+      }
       
       // Skip fields that shouldn't be shown (conditions not met)
       if (field.conditions && !evaluateFieldConditions(field)) {
@@ -1553,7 +1562,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       DEBUG_LOGS&&console.log('[VALIDATION] Issues:', issues);
     }
     return issues;
-  }, [currentSection, formValues, evaluateFieldConditions]);
+  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode]);
 
   // ---------------------------
   // Navigation Logic

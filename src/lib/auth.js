@@ -121,7 +121,9 @@ export async function signInSolicitor({ email, password }) {
   if (!profile) {
     console.warn('[Solicitor Login] No profile row found for this user. In Supabase: create a row in public.profiles for this user and set role = \'solicitor\'.');
     return {
-      error: 'No solicitor profile. Your account is not in the staff list. Ask an admin to add you in Supabase (profiles table, role = solicitor).',
+      code: 'no_staff_profile',
+      error:
+        'Your sign-in worked, but this account is not enabled for staff access yet. Ask your firm administrator to add you to the staff list in the Will Tool.',
       session: data.session ?? null,
       user: data.user ?? null,
       profile: null,

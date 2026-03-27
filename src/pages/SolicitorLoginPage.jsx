@@ -68,27 +68,39 @@ export default function SolicitorLoginPage() {
 
     if (result?.error) {
       const isNotConfigured = result.error === 'Supabase not configured';
-      const isNoProfile = result.error.includes('No solicitor profile') || result.error.includes('not in the staff list');
+      const isNoProfile =
+        result.code === 'no_staff_profile' ||
+        result.error.includes('No solicitor profile') ||
+        result.error.includes('not in the staff list');
       const isInvalidCreds = (result.code === 'invalid_credentials') || /invalid login|invalid credentials/i.test(result.error || '');
       let description = result.error;
       if (isNotConfigured) {
-        description = 'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env, then restart the dev server (npm run dev).';
+        description = import.meta.env.DEV
+          ? 'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env, then restart the dev server (npm run dev).'
+          : 'This site is not fully configured. Please contact technical support.';
       } else if (isNoProfile) {
-        const sql = `INSERT INTO public.profiles (id, email, display_name, role)
+        description =
+          'Your email and password were accepted, but this account is not set up for staff access yet. Please contact your firm administrator so they can enable your account.';
+        if (import.meta.env.DEV) {
+          const sql = `INSERT INTO public.profiles (id, email, display_name, role)
 SELECT id, email, COALESCE(raw_user_meta_data->>'display_name', split_part(COALESCE(email,''), '@', 1)), 'admin'
 FROM auth.users WHERE email = ${emailTrimmed ? `'${emailTrimmed.replace(/'/g, "''")}'` : "'YOUR_EMAIL@example.com'"}
 ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
-        setAdminFixSql(sql);
-        description = "You're in Auth but not in the staff list. Run the SQL below in Supabase → SQL Editor, then sign in again.";
+          setAdminFixSql(sql);
+        }
       } else if (isInvalidCreds) {
         description = 'Wrong email or password. Check your credentials and try again.';
       }
-      toast.error('Sign-in failed', { description, duration: 12000 });
+      toast.error('Unable to open staff workspace', { description, duration: 14000 });
       return;
     }
 
     if (result?.profile?.role !== 'solicitor' && result?.profile?.role !== 'admin') {
-      toast.error('Access denied', { description: 'Your account is not provisioned for solicitor access. Ask an admin to set your role in Supabase (profiles.role = solicitor or admin).' });
+      toast.error('Access not enabled', {
+        description:
+          'This account does not have solicitor access. Ask your firm administrator to assign you the correct role in the staff list.',
+        duration: 12000,
+      });
       return;
     }
 
@@ -207,10 +219,10 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
           </button>
         </form>
 
-        {adminFixSql && (
+        {import.meta.env.DEV && adminFixSql && (
           <div className="solicitor-login-fix-box mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">Add yourself as admin</p>
-            <p className="mt-1 text-xs text-amber-800">Supabase → SQL Editor → paste and Run, then sign in again.</p>
+            <p className="text-sm font-semibold text-amber-900">Developer: add profile in Supabase</p>
+            <p className="mt-1 text-xs text-amber-800">Local dev only — Supabase → SQL Editor → paste and Run, then sign in again.</p>
             <pre className="mt-3 overflow-x-auto rounded-lg bg-amber-100/80 p-3 text-xs text-amber-950 whitespace-pre font-mono">
               {adminFixSql}
             </pre>
@@ -220,7 +232,7 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(adminFixSql);
-                    toast.success('SQL copied', { description: 'Paste it in Supabase SQL Editor and run it.' });
+                    toast.success('SQL copied', { description: 'Paste in Supabase SQL Editor (dev only).' });
                   } catch {
                     toast.error('Copy failed');
                   }

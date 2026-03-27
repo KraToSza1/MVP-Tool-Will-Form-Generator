@@ -8,7 +8,7 @@
 export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 18;
 export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_INDEX - 1;
 
-// Field IDs within Testamentary Capacity that are solicitor-only (hidden in client mode)
+// Field IDs that are solicitor-only (hidden in client mode): execution/witnesses + professional executor workflow
 export const SOLICITOR_ONLY_FIELD_IDS = new Set([
   'includeWitnessDetails', 'witness1Section', 'witness2Section',
   'willExecutionDate', 'testatorSignature', 'consultantSignature', 'clientSignature',
@@ -17,6 +17,11 @@ export const SOLICITOR_ONLY_FIELD_IDS = new Set([
   'witness2StatusDisplay', 'addWitness2Button', 'witness2Data',
   'signingOnBehalfStatusDisplay', 'addSigningOnBehalfButton', 'signingOnBehalfData',
   'interpreterStatusDisplay', 'addInterpreterButton', 'interpreterData',
+  // Substitute / professional executors — completed by solicitor, not shown to clients (intake)
+  'substituteExecutorsSection',
+  'appointProfessionalExecutor',
+  'professionalExecutorSection',
+  'substituteProfessionalExecutorSection',
 ]);
 
 export const isSolicitorMode = () => {
