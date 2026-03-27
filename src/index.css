@@ -234,6 +234,58 @@ html.dark-theme .questionnaire-field-text .font-mono {
   color: #94a3b8 !important;
 }
 
+/* Questionnaire editor page: Quick steps + sticky bar (slate; avoid illegible amber-on-amber) */
+html.dark-theme .questionnaire-quick-steps {
+  background-color: rgba(30, 41, 59, 0.85) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-quick-steps .text-slate-800,
+html.dark-theme .questionnaire-quick-steps .text-slate-900 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-quick-steps strong {
+  color: #f8fafc !important;
+}
+html.dark-theme .questionnaire-sticky-save {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.55) !important;
+}
+html.dark-theme .questionnaire-sticky-save .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+html.dark-theme kbd.questionnaire-kbd {
+  background-color: rgba(51, 65, 85, 0.95) !important;
+  border-color: rgba(148, 163, 184, 0.55) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+html.dark-theme .questionnaire-editor-card {
+  border-color: rgba(99, 102, 241, 0.28) !important;
+}
+html.dark-theme .questionnaire-loading-banner {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+html.dark-theme .questionnaire-modal-panel {
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+html.dark-theme .questionnaire-modal-hint {
+  background-color: rgba(30, 41, 59, 0.75) !important;
+  color: #cbd5e1 !important;
+}
+html.dark-theme .questionnaire-modal-hint .text-slate-800 {
+  color: #f8fafc !important;
+}
+html.dark-theme a.questionnaire-back-link {
+  color: #94a3b8 !important;
+}
+html.dark-theme a.questionnaire-back-link:hover {
+  color: #e2e8f0 !important;
+}
+
 /* Identity verification block: readable in dark theme */
 html.dark-theme .id-verification-block,
 html.dark-theme .bg-amber-50\/50 {

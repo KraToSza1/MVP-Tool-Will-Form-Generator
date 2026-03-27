@@ -31,7 +31,7 @@ function FieldEditModal({ field, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
         <h3 className="text-lg font-semibold text-slate-900">Edit question</h3>
         <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
         <div className="mt-4 space-y-4">
@@ -41,7 +41,7 @@ function FieldEditModal({ field, onClose, onSave }) {
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               placeholder="e.g. Who moved my cheese?"
             />
           </div>
@@ -52,7 +52,7 @@ function FieldEditModal({ field, onClose, onSave }) {
                 type="text"
                 value={placeholder}
                 onChange={(e) => setPlaceholder(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           )}
@@ -62,7 +62,7 @@ function FieldEditModal({ field, onClose, onSave }) {
               value={infoText}
               onChange={(e) => setInfoText(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             />
           </div>
           {optionLabels.length > 0 && (
@@ -80,7 +80,7 @@ function FieldEditModal({ field, onClose, onSave }) {
                         next[i] = e.target.value;
                         setOptionLabels(next);
                       }}
-                      className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                       placeholder="Label"
                     />
                     <span className="self-center text-xs text-slate-400">value: {String(opt.value)}</span>
@@ -90,7 +90,7 @@ function FieldEditModal({ field, onClose, onSave }) {
             </div>
           )}
         </div>
-        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
           This updates your draft on this page only. When you are done, click <strong className="font-semibold text-slate-800">Save questionnaire</strong> at the top (or the bar at the bottom) so clients see the changes.
         </p>
         <div className="mt-4 flex justify-end gap-2">
@@ -112,7 +112,7 @@ function SectionEditModal({ sectionName, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
         <h3 className="text-lg font-semibold text-slate-900">Edit section title</h3>
         <div className="mt-4">
           <label className="block text-sm font-medium text-slate-700">Section name</label>
@@ -120,11 +120,11 @@ function SectionEditModal({ sectionName, onClose, onSave }) {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             placeholder="e.g. Personal Information"
           />
         </div>
-        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
           This updates your draft on this page only. When you are done, click <strong className="font-semibold text-slate-800">Save questionnaire</strong> at the top (or the bar at the bottom) so clients see the changes.
         </p>
         <div className="mt-4 flex justify-end gap-2">
@@ -287,19 +287,25 @@ export default function QuestionnaireEditorPage() {
   return (
     <div className={`space-y-6 ${dirty ? 'pb-24 sm:pb-20' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link to="/solicitor" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+        <Link
+          to="/solicitor"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 questionnaire-back-link"
+        >
           <ArrowLeft size={16} />
           Back to dashboard
         </Link>
       </div>
 
       {loading && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status">
+        <div
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 questionnaire-loading-banner"
+          role="status"
+        >
           Loading the saved questionnaire…
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm questionnaire-editor-card">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">Edit questionnaire</h1>
@@ -332,12 +338,26 @@ export default function QuestionnaireEditorPage() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
-          <p className="font-semibold text-amber-900">Quick steps</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-amber-950/90">
-            <li>Expand a section and use <strong className="font-semibold">Edit</strong> to change wording. In the pop-up, click <strong className="font-semibold">Apply changes</strong> (that only updates this page).</li>
-            <li>When you are finished, click <strong className="font-semibold">Save questionnaire</strong> (here or in the bar at the bottom) so clients see your updates.</li>
-            <li>Tip: <kbd className="rounded border border-amber-300 bg-white px-1.5 py-0.5 font-mono text-xs">Ctrl</kbd> + <kbd className="rounded border border-amber-300 bg-white px-1.5 py-0.5 font-mono text-xs">S</kbd> (or <kbd className="rounded border border-amber-300 bg-white px-1.5 py-0.5 font-mono text-xs">⌘</kbd> + <kbd className="rounded border border-amber-300 bg-white px-1.5 py-0.5 font-mono text-xs">S</kbd> on Mac) saves when you have unsaved changes.</li>
+        <div className="questionnaire-quick-steps mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
+          <p className="font-semibold text-slate-900">Quick steps</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-slate-800">
+            <li>
+              Expand a section and use <strong className="font-semibold text-slate-900">Edit</strong> to change wording. In the pop-up, click{' '}
+              <strong className="font-semibold text-slate-900">Apply changes</strong> (that only updates this page).
+            </li>
+            <li>
+              When you are finished, click <strong className="font-semibold text-slate-900">Save questionnaire</strong> (here or in the bar at the bottom) so clients see your updates.
+            </li>
+            <li className="text-slate-800">
+              Tip:{' '}
+              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">Ctrl</kbd>{' '}
+              +{' '}
+              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">S</kbd>{' '}
+              (or{' '}
+              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">⌘</kbd>{' '}
+              +{' '}
+              <kbd className="questionnaire-kbd rounded border border-slate-400 bg-slate-200 px-1.5 py-0.5 font-mono text-xs font-medium text-slate-900 shadow-sm">S</kbd> on Mac) saves when you have unsaved changes.
+            </li>
           </ol>
         </div>
 
@@ -352,7 +372,7 @@ export default function QuestionnaireEditorPage() {
               setDirty(true);
             }}
             disabled={loading || saving}
-            className="mt-1 max-w-md rounded-xl border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+            className="mt-1 max-w-md rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 disabled:bg-slate-50"
             placeholder="Legacy Last Will & Testament Questionnaire"
           />
         </div>
@@ -426,12 +446,12 @@ export default function QuestionnaireEditorPage() {
 
       {dirty && (
         <div
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-300 bg-amber-100/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm sm:px-6"
+          className="questionnaire-sticky-save fixed inset-x-0 bottom-0 z-40 border-t border-slate-300 bg-slate-100 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] backdrop-blur-sm sm:px-6"
           role="status"
           aria-live="polite"
         >
           <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-amber-950">
+            <p className="text-sm font-medium text-slate-800">
               You have unpublished changes. Save questionnaire so clients see them.
             </p>
             <button
