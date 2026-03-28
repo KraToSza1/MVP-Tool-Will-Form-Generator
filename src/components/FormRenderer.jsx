@@ -68,6 +68,7 @@ import {
   SOLICITOR_INTAKE_ONLY_FIELD_IDS,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
+import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
@@ -361,10 +362,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   const submitCurrentMatter = useCallback(async () => {
     if (externalPersistence?.submit) {
+      console.log('[WillTool Flow] client_submit_using_external_persistence', { phase: 'client_submit_external' });
       return externalPersistence.submit({ formValues, currentIndex, referenceNumber, sessionSecret });
     }
 
     if (!referenceNumber || !sessionSecret) {
+      console.warn('[WillTool Flow] client_submit_skipped_no_session', {
+        hasRef: !!referenceNumber,
+        hasSecret: !!sessionSecret,
+        phase: 'client_submit_skipped',
+      });
       return { ok: true };
     }
 
@@ -377,10 +384,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret]);
 
   const finishSubmission = useCallback(async () => {
+    console.log('[WillTool Flow] client_submit_ui_start', {
+      ref: referenceNumber,
+      currentIndex,
+      formKeys: Object.keys(formValues || {}).length,
+      phase: 'client_submit_ui_start',
+    });
     if (isDev) DEBUG_LOGS && console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
     setIsSubmittingMatter(true);
     try {
       const result = await submitCurrentMatter();
+      console.log('[WillTool Flow] client_submit_ui_result', {
+        ref: referenceNumber,
+        hasError: !!result?.error,
+        hasMatterId: !!result?.matterId,
+        ok: result?.ok,
+        phase: 'client_submit_ui_result',
+      });
       if (result?.error) {
         console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
         toast.error('Could not complete submission', { description: result.error });
@@ -390,13 +410,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         setSubmittedMatterId(result.matterId);
       }
       setSubmitted(true);
+      console.log('[WillTool Flow] client_submit_ui_success', {
+        ref: referenceNumber,
+        matterId: result?.matterId ?? null,
+        phase: 'client_submit_ui_success',
+      });
     } catch (err) {
       console.error('[WillTool Flow] Client submit threw', { ref: referenceNumber, err });
       toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
     } finally {
       setIsSubmittingMatter(false);
+      console.log('[WillTool Flow] client_submit_ui_finally', { ref: referenceNumber, phase: 'client_submit_ui_finally' });
     }
-  }, [referenceNumber, submitCurrentMatter]);
+  }, [referenceNumber, submitCurrentMatter, formValues, currentIndex]);
 
   useEffect(() => {
     if (!useExternalPersistence) {
@@ -2303,11 +2329,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
         totalFields: Object.keys(dummyData).length,
+        contactRegistryEntries: Array.isArray(dummyData.contactRegistry) ? dummyData.contactRegistry.length : 0,
         hasSeparateTrusteeData: !!dummyData.separateTrusteeData,
         separateTrusteeDataLength: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 'N/A',
+        guardianSampleIsObject: !!(dummyData.guardianData?.[0] && typeof dummyData.guardianData[0] === 'object'),
         howResidueDistributed: dummyData.howResidueDistributed,
         appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT,
-        sampleFields: Object.keys(dummyData).slice(0, 5)
+        sampleFields: Object.keys(dummyData).slice(0, 8)
       });
       
       if (dummyData.separateTrusteeData) {
@@ -2346,7 +2374,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         setFormValues(current => {
           console.log('[FORM AUTO-FILL] ✅ Form values refreshed:', {
             currentCount: Object.keys(current).length,
-            hasSeparateTrusteeData: !!current.separateTrusteeData
+            hasSeparateTrusteeData: !!current.separateTrusteeData,
+            contactRegistryEntries: Array.isArray(current.contactRegistry) ? current.contactRegistry.length : 0
           });
           return { ...current };
         });
@@ -3789,6 +3818,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   </div>
                 </div>
               </div>
+
+              {!solicitorMode && <FormPeopleSummaryPanel payload={formValues} variant="client" />}
 
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <div className="flex items-center gap-3">

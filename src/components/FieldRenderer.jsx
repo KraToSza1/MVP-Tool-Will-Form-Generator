@@ -37,8 +37,6 @@
  */
 
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
-/** Verbose add-button / openAddForm tracing (same env flag). */
-const TRACE_ADD_BUTTON = import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
 
 import React, { Suspense, useEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -53,7 +51,7 @@ import {
   getUKAddressExample,
 } from '../utils/ukValidations';
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
-import { getPartnerIntakeRows } from '../lib/partnerIntakeSummary.js';
+import AddPersonButtonField from './AddPersonButtonField.jsx';
 
 let _datePickerPromise;
 async function loadDatePicker() {
@@ -81,29 +79,15 @@ const LazySignaturePad = React.lazy(() => import('./SignaturePad.jsx'));
 
 function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditions }) {
   
-  const [showInputs, setShowInputs] = useState({});
-  const [inputValues, setInputValues] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [dateInputValue, setDateInputValue] = useState('');
   const [datePickerOpen, setDatePickerOpen] = useState({});
   const [datePickerManualValue, setDatePickerManualValue] = useState({});
   const sigPadRef = useRef({});
   const signatureToastShownRef = useRef({});
-  const inputRefs = useRef({});
   const textInputRef = useRef(null);
   const sigContainerRef = useRef(null);
   const isSignatureField = field?.type === 'signature';
-  const renderCountRef = useRef(0);
-  
-  // Track renders for add button fields
-  useEffect(() => {
-    if (field?.type === 'button' && field?.action === 'openAddForm' && TRACE_ADD_BUTTON) {
-      renderCountRef.current += 1;
-      console.log(`[FIELD RENDER] 🔴 FieldRenderer render #${renderCountRef.current} for "${field.id}"`);
-      console.log(`[FIELD RENDER] 🔴 showInputs state:`, showInputs);
-      console.log(`[FIELD RENDER] 🔴 inputValues state:`, inputValues);
-    }
-  });
 
   useEffect(() => {
     if (field?.type !== 'date') return;
@@ -131,18 +115,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     }
   }, [formValues, field?.id, field?.type]);
 
-  // Track showInputs changes for debugging add button issues
-  useEffect(() => {
-    if (field?.type === 'button' && field?.action === 'openAddForm' && TRACE_ADD_BUTTON) {
-      const rawTarget = field.id.replace(/^add/i, '').replace(/Button$/i, 'Data');
-      const targetFieldId = rawTarget.charAt(0).toLowerCase() + rawTarget.slice(1);
-      console.log(`[SHOW INPUTS EFFECT] 🟣 showInputs changed for field "${field.id}"`);
-      console.log(`[SHOW INPUTS EFFECT] 🟣 Target field: "${targetFieldId}"`);
-      console.log(`[SHOW INPUTS EFFECT] 🟣 showInputs[${targetFieldId}]:`, showInputs[targetFieldId]);
-      console.log(`[SHOW INPUTS EFFECT] 🟣 Full showInputs state:`, showInputs);
-    }
-  }, [showInputs, field?.id, field?.type, field?.action]);
-  
   // Icon mapping for field types
   const getFieldIcon = (fieldType, fieldId) => {
     if (fieldId?.toLowerCase().includes('email')) return <Mail size={16} />;
@@ -232,239 +204,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     if (targetFieldId === 'excludedPersonData') {
       return <ExcludedPersonAddBlock field={field} formValues={formValues} setFormValues={setFormValues} />;
     }
-    const currentInputValue = inputValues[targetFieldId] || '';
-    const existingItems = Array.isArray(formValues[targetFieldId]) 
-      ? formValues[targetFieldId] 
-      : (formValues[targetFieldId] ? [formValues[targetFieldId]] : []);
-    
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 Field "${field.id}" (${field.label}) - Target field: "${targetFieldId}"`);
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 Current inputValue: "${currentInputValue}"`);
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 showInputs[${targetFieldId}]:`, showInputs[targetFieldId]);
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 Existing items:`, existingItems);
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 inputValues state:`, inputValues);
-    TRACE_ADD_BUTTON && console.log(`[ADD BUTTON FIELD] 🔍 formValues[${targetFieldId}]:`, formValues[targetFieldId]);
-
-    const handleAddItem = () => {
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 ========== CLICKED ==========`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 Field "${field.id}" (${field.label})`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 Target field: "${targetFieldId}"`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 Current inputValue from state: "${inputValues[targetFieldId] || ''}"`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 currentInputValue variable: "${currentInputValue}"`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 showInputs[${targetFieldId}] BEFORE:`, showInputs[targetFieldId]);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 existingItems BEFORE:`, existingItems);
-      
-      // Get the current value directly from state, not the captured variable
-      const actualCurrentValue = inputValues[targetFieldId] || '';
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🟢 Actual current value from state: "${actualCurrentValue}"`);
-      
-      if (!actualCurrentValue.trim()) {
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ⚠️ Aborted: empty input`);
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ⚠️ Trimmed value: "${actualCurrentValue.trim()}"`);
-        return;
-      }
-
-      const newItem = actualCurrentValue.trim();
-      const updatedItems = [...existingItems, newItem];
-      
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ✅ Adding item: "${newItem}"`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ✅ Updated items array:`, updatedItems);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ✅ Total items now: ${updatedItems.length}`);
-      
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 Calling setFormValues...`);
-      setFormValues((prev) => {
-        const newValues = {
-          ...prev,
-          [targetFieldId]: updatedItems,
-        };
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 setFormValues callback - new formValues[${targetFieldId}]:`, newValues[targetFieldId]);
-        return newValues;
-      });
-
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 Clearing input and closing form...`);
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 showInputs[${targetFieldId}] BEFORE clear:`, showInputs[targetFieldId]);
-      
-      // Clear input and close it
-      setInputValues((prev) => {
-        const newInputs = { ...prev, [targetFieldId]: '' };
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 setInputValues callback - new inputValues[${targetFieldId}]:`, newInputs[targetFieldId]);
-        return newInputs;
-      });
-      
-      setShowInputs((prev) => {
-        const newShowInputs = { ...prev, [targetFieldId]: false };
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 setShowInputs callback - new showInputs[${targetFieldId}]:`, newShowInputs[targetFieldId]);
-        TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] 🔄 setShowInputs callback - full showInputs:`, newShowInputs);
-        return newShowInputs;
-      });
-      
-      TRACE_ADD_BUTTON && console.log(`[ADD ITEM BUTTON] ✅ State updates queued`);
-    };
-
-    const handleRemoveItem = (indexToRemove) => {
-      const itemToRemove = existingItems[indexToRemove];
-      const updatedItems = existingItems.filter((_, index) => index !== indexToRemove);
-      
-      DEBUG_LOGS&&console.log(`[REMOVE ITEM] Field "${field.id}" (${field.label}) - Removed item at index ${indexToRemove}: "${itemToRemove}"`);
-      DEBUG_LOGS&&console.log(`[REMOVE ITEM] Field "${field.id}" - Remaining items: ${updatedItems.length}`, updatedItems);
-      
-      setFormValues((prev) => ({
-        ...prev,
-        [targetFieldId]: updatedItems.length > 0 ? updatedItems : [],
-      }));
-    };
-
-    const handleKeyPress = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleAddItem();
-      }
-    };
-
-    return (
-      <div className="mb-4 animate-slideIn" data-field-id={field.id}>
-        {/* Enhanced Add Button */}
-        <button
-          type="button"
-          data-field-id={field.id}
-          onClick={(e) => {
-            TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 ========== BUTTON CLICKED ==========`);
-            TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Field "${field.id}" (${field.label})`);
-            TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Target field: "${targetFieldId}"`);
-            TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 showInputs[${targetFieldId}] BEFORE:`, showInputs[targetFieldId]);
-            TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Current showInputs state:`, showInputs);
-            e.preventDefault();
-            e.stopPropagation();
-            setShowInputs((prev) => {
-              const newShowInputs = { ...prev, [targetFieldId]: true };
-              TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - setting ${targetFieldId} to true`);
-              TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - new showInputs[${targetFieldId}]:`, newShowInputs[targetFieldId]);
-              TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 setShowInputs callback - full showInputs:`, newShowInputs);
-              return newShowInputs;
-            });
-            setTimeout(() => {
-              TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Focusing input after 100ms...`);
-              const inputElement = inputRefs.current[targetFieldId];
-              TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Input ref exists:`, !!inputElement);
-              if (inputElement) {
-                inputElement.focus();
-                TRACE_ADD_BUTTON && console.log(`[ADD BUTTON CLICK] 🔵 Input focused`);
-              } else {
-                TRACE_ADD_BUTTON && console.warn(`[ADD BUTTON CLICK] ⚠️ Input ref not found for ${targetFieldId}`);
-              }
-            }, 100);
-          }}
-          className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-105 active:scale-95"
-        >
-          <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-          <span>{field.label}</span>
-        </button>
-
-        {/* Enhanced Input Form with Animation */}
-        {(() => {
-          const shouldShow = showInputs[targetFieldId];
-          TRACE_ADD_BUTTON && console.log(`[INPUT FORM RENDER] 🟡 Rendering check for "${targetFieldId}"`);
-          TRACE_ADD_BUTTON && console.log(`[INPUT FORM RENDER] 🟡 showInputs[${targetFieldId}]:`, shouldShow);
-          TRACE_ADD_BUTTON && console.log(`[INPUT FORM RENDER] 🟡 Full showInputs:`, showInputs);
-          TRACE_ADD_BUTTON && console.log(`[INPUT FORM RENDER] 🟡 Will render form:`, shouldShow);
-          return shouldShow;
-        })() && (
-          <div className="add-item-form mt-4 p-5 bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl shadow-lg animate-slideDown">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-              <div className="flex-1 relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-0">
-                  <Edit size={18} />
-                </div>
-                <input
-                  ref={(ref) => (inputRefs.current[targetFieldId] = ref)}
-                  type="text"
-                  className="add-item-form-input w-full min-h-[52px] border border-gray-300 rounded-xl pl-10 pr-4 py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-800 bg-white transition-all duration-300 shadow-sm focus:shadow-md relative z-10"
-                  placeholder={`Enter ${targetFieldId.replace(/([A-Z])/g, ' $1').replace('Data', '')} (press Enter to add)`}
-                  value={currentInputValue}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    TRACE_ADD_BUTTON && console.log(`[INPUT CHANGE] 🟠 Input changed for "${targetFieldId}": "${newValue}"`);
-                    TRACE_ADD_BUTTON && console.log(`[INPUT CHANGE] 🟠 Previous value: "${currentInputValue}"`);
-                    setInputValues((prev) => {
-                      const newInputs = { ...prev, [targetFieldId]: newValue };
-                      TRACE_ADD_BUTTON && console.log(`[INPUT CHANGE] 🟠 setInputValues callback - new inputValues[${targetFieldId}]:`, newInputs[targetFieldId]);
-                      return newInputs;
-                    });
-                  }}
-                  onKeyPress={handleKeyPress}
-                  disabled={false}
-                  readOnly={false}
-                />
-              </div>
-              <div className="flex gap-2 sm:flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={handleAddItem}
-                  disabled={!currentInputValue.trim()}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-5 py-3 rounded-xl shadow-md transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 disabled:transform-none sm:flex-none"
-                >
-                  <Check className="w-5 h-5" />
-                  <span>Add</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowInputs((prev) => ({ ...prev, [targetFieldId]: false }));
-                    setInputValues((prev) => ({ ...prev, [targetFieldId]: '' }));
-                  }}
-                  className="add-item-form-cancel flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-5 py-3 rounded-xl transition-all duration-300 font-medium flex items-center justify-center gap-2 transform hover:scale-105 active:scale-95 sm:flex-none"
-                >
-                  <X className="w-5 h-5" />
-                  <span>Cancel</span>
-                </button>
-              </div>
-            </div>
-            <p className="add-item-form-hint text-xs text-gray-600 mt-2 flex items-center gap-2">
-              <Info size={14} />
-              <span>The entry field now opens at full width on mobile. Press Enter or click Add to save.</span>
-            </p>
-          </div>
-        )}
-
-        {/* Enhanced List of Added Items — item may be string or object (e.g. petCarerData) */}
-        {existingItems.length > 0 && (
-          <div className="add-item-list mt-3 space-y-2">
-            <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-green-500" />
-              <span>Added ({existingItems.length}):</span>
-            </p>
-            {existingItems.map((item, index) => {
-              const displayText = typeof item === 'string'
-                ? item
-                : item && typeof item === 'object'
-                  ? [item.firstName, item.lastName].filter(Boolean).join(' ') || item.title || item.name || (item.email || '').toString() || '—'
-                  : String(item ?? '');
-              return (
-              <div
-                key={index}
-                className="add-item-list-item flex items-center justify-between bg-white border border-gray-300 rounded-xl px-4 py-3 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] group"
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <span className="text-gray-800 flex-1 flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
-                    {index + 1}
-                  </div>
-                  {displayText}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveItem(index)}
-                  className="add-item-list-remove ml-3 text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-2 transform hover:scale-110 active:scale-95"
-                  title="Remove"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
+    return <AddPersonButtonField field={field} formValues={formValues} setFormValues={setFormValues} />;
   }
 
   if (field.type === 'text' || field.type === 'number' || field.type === 'currency') {
@@ -1065,9 +805,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       );
     }
 
-    // Check if this is the partner info display and if we have a partner name
     const isPartnerDisplay = field.id === 'partnerInfoDisplay';
-    const partnerName = formValues.partnerFullName;
     
     // Check if this is executor status display
     const isExecutorDisplay = field.id === 'executorStatusDisplay';
@@ -1151,35 +889,9 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       }
     }
     
+    // Inline partner summary removed — same data appears in People overview / matter review; keeps the step scannable.
     if (isPartnerDisplay) {
-      const rows = getPartnerIntakeRows(formValues);
-      const willName = partnerName && String(partnerName).trim();
-      return (
-        <div className="my-4 rounded-lg border border-slate-600 bg-slate-800/95 p-4 text-sm text-slate-200 shadow-sm ring-1 ring-white/5">
-          <p className="font-semibold text-slate-100">Partner / spouse details (summary)</p>
-          {willName ? (
-            <p className="mt-1 text-xs text-slate-400">
-              Name for Will: <span className="font-medium text-slate-100">{willName}</span>
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-amber-300/95">Enter the partner&apos;s full name in the field above for Will clauses.</p>
-          )}
-          {rows.length > 0 ? (
-            <dl className="mt-3 space-y-2 border-t border-slate-600 pt-3">
-              {rows
-                .filter((r) => r.label !== 'Full name (as for Will)')
-                .map(({ label, value }) => (
-                  <div key={label} className="grid gap-1 sm:grid-cols-[minmax(0,11rem)_1fr] sm:gap-3">
-                    <dt className="text-xs font-medium text-slate-400">{label}</dt>
-                    <dd className="text-sm font-medium text-slate-100 break-words">{value}</dd>
-                  </div>
-                ))}
-            </dl>
-          ) : (
-            <p className="mt-2 text-xs text-slate-400">Complete the fields above to see contact and address here.</p>
-          )}
-        </div>
-      );
+      return null;
     }
     
     // Regular display field

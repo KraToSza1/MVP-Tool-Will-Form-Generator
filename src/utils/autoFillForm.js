@@ -4,6 +4,8 @@
  * Handles ALL field types, section subFields, conditional fields, and array data
  */
 
+import { CONTACT_REGISTRY_KEY } from '../lib/personRegistry.js';
+
 const ARISTONE_EXECUTOR_LINE =
   'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
 
@@ -125,6 +127,315 @@ const DEMO = {
     gender: 'Female',
   },
 };
+
+/**
+ * Final pass: contactRegistry + rich person rows matching PersonRecordModal / PDF (objects with _personRecordId).
+ * Runs after specialFields / unlock / missing-id defaults so demo data always wins for people arrays.
+ */
+function applyRichPersonDemoOverrides(dummyData) {
+  let seq = 0;
+  const row = (fields) => ({
+    _personRecordId: `autofill-demo-${++seq}`,
+    ...fields,
+  });
+  const ts = new Date().toISOString();
+
+  dummyData[CONTACT_REGISTRY_KEY] = [
+    {
+      id: 'demo-reg-testator',
+      savedAt: ts,
+      title: DEMO.testator.title,
+      firstName: DEMO.testator.firstName,
+      middleName: DEMO.testator.middleName,
+      lastName: DEMO.testator.lastName,
+      email: DEMO.testator.email,
+      mobile: DEMO.testator.mobile,
+      address1: DEMO.testator.address1,
+      address2: DEMO.testator.address2,
+      address3: DEMO.testator.address3,
+      postcode: DEMO.testator.postcode,
+      occupation: DEMO.testator.occupation,
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    },
+    {
+      id: 'demo-reg-partner',
+      savedAt: ts,
+      title: DEMO.partner.title,
+      firstName: DEMO.partner.firstName,
+      middleName: DEMO.partner.middleName,
+      lastName: DEMO.partner.lastName,
+      email: DEMO.partner.email,
+      mobile: DEMO.partner.mobile,
+      address1: DEMO.partner.address1,
+      address2: DEMO.partner.address2,
+      address3: DEMO.partner.address3,
+      postcode: DEMO.partner.postcode,
+      occupation: DEMO.partner.occupation,
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Partner / spouse (from intake)',
+    },
+    {
+      id: 'demo-reg-gavin',
+      savedAt: ts,
+      title: 'Mr',
+      firstName: 'Gavin',
+      lastName: 'Green',
+      email: 'gavin.green.demo@example.com',
+      mobile: '07700111110',
+      address1: '3 Guardian Grove',
+      postcode: 'SW4 9GG',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    },
+  ];
+
+  dummyData.guardianData = [
+    row({
+      title: 'Mr',
+      firstName: 'Gavin',
+      middleName: 'George',
+      lastName: 'Green',
+      dateOfBirth: '01/06/1981',
+      gender: 'Male',
+      mobile: '07700111110',
+      email: 'gavin.green.demo@example.com',
+      address1: '3 Guardian Grove',
+      address2: 'Clapham',
+      address3: 'London',
+      postcode: 'SW4 9GG',
+      occupation: 'Teacher (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
+    }),
+    row({
+      title: 'Ms',
+      firstName: 'Greta',
+      lastName: 'Green',
+      dateOfBirth: '15/08/1983',
+      gender: 'Female',
+      mobile: '07700111111',
+      email: 'greta.green.demo@example.com',
+      address1: '4 Guardian Grove',
+      address2: 'Clapham',
+      address3: 'London',
+      postcode: 'SW4 9GH',
+      occupation: 'Architect (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
+    }),
+  ];
+  dummyData.substituteGuardianData = [
+    row({
+      title: 'Mr',
+      firstName: 'Hugo',
+      lastName: 'Hayes',
+      mobile: '07700111112',
+      email: 'hugo.hayes.demo@example.com',
+      address1: '5 Substitute Street',
+      address2: 'Brixton',
+      address3: 'London',
+      postcode: 'SW9 1HU',
+      occupation: 'Engineer (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Uncle',
+    }),
+  ];
+
+  dummyData.executorData = [ARISTONE_EXECUTOR_LINE];
+  dummyData.substituteExecutorData = [ARISTONE_EXECUTOR_LINE];
+  dummyData.professionalExecutorData = [ARISTONE_EXECUTOR_LINE];
+  dummyData.substituteProfessionalExecutorData = [ARISTONE_EXECUTOR_LINE];
+  dummyData.professionalTrusteeData = [ARISTONE_EXECUTOR_LINE];
+  dummyData.substituteProfessionalTrusteeData = [ARISTONE_EXECUTOR_LINE];
+
+  dummyData.digitalExecutorData = [
+    row({
+      title: 'Ms',
+      firstName: 'Dana',
+      lastName: 'Reyes',
+      mobile: '07700111120',
+      email: 'dana.reyes.demo@example.com',
+      address1: '9 Digital Drive',
+      address2: 'Croydon',
+      address3: 'London',
+      postcode: 'CR0 9DE',
+      occupation: 'IT consultant (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
+    }),
+  ];
+  dummyData.trusteeData = [
+    row({
+      title: 'Ms',
+      firstName: 'Tracy',
+      lastName: 'Okonkwo',
+      mobile: '07700111121',
+      email: 'tracy.okonkwo.demo@example.com',
+      address1: '10 Trustee Terrace',
+      address2: 'Ealing',
+      address3: 'London',
+      postcode: 'W5 1TR',
+      occupation: 'Accountant (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.substituteTrusteeData = [
+    row({
+      title: 'Ms',
+      firstName: 'Uma',
+      lastName: 'Patel',
+      mobile: '07700111122',
+      email: 'uma.patel.demo@example.com',
+      address1: '11 Trustee Terrace',
+      address2: 'Ealing',
+      address3: 'London',
+      postcode: 'W5 1TS',
+      occupation: 'Solicitor (demo autofill)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.witness1Data = [
+    row({
+      title: 'Ms',
+      firstName: 'Wendy',
+      lastName: 'Wainwright',
+      mobile: '07700111130',
+      email: 'wendy.w.demo@example.com',
+      address1: '11 Witness-One Way',
+      address2: 'Fulham',
+      address3: 'London',
+      postcode: 'SW6 1W1',
+      occupation: 'Solicitor (demo W1)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.witness2Data = [
+    row({
+      title: 'Mr',
+      firstName: 'Winston',
+      lastName: 'White',
+      mobile: '07700111131',
+      email: 'winston.w.demo@example.com',
+      address1: '22 Witness-Two Road',
+      address2: 'Putney',
+      address3: 'London',
+      postcode: 'SW15 2W2',
+      occupation: 'Teacher (demo W2)',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.excludedPersonData = [
+    row({
+      title: 'Mr',
+      firstName: 'Evan',
+      lastName: 'Excluded',
+      knownAs: '',
+      address1: '99 Excluded Lane',
+      address2: 'Tooting',
+      address3: 'London',
+      postcode: 'SW17 9EX',
+      mobile: '07700111140',
+      email: 'evan.excluded.demo@example.com',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Former partner',
+    }),
+  ];
+  dummyData.chattelRecipientData = [
+    row({
+      title: 'Ms',
+      firstName: 'Chloe',
+      lastName: 'Chattels',
+      mobile: '07700111141',
+      email: 'chloe.chattels.demo@example.com',
+      address1: '12 Chattels Close',
+      address2: 'Richmond',
+      address3: 'Surrey',
+      postcode: 'TW9 1CH',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.debtorData = [
+    row({
+      title: 'Mr',
+      firstName: 'Darren',
+      lastName: 'Debtor',
+      mobile: '07700111142',
+      email: 'darren.debtor.demo@example.com',
+      address1: '13 Debtor Street',
+      address2: 'Wimbledon',
+      address3: 'London',
+      postcode: 'SW19 1DB',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+    }),
+  ];
+  dummyData.signingOnBehalfData = [
+    row({
+      title: 'Ms',
+      firstName: 'Sally',
+      lastName: 'Signer',
+      mobile: '07700111143',
+      email: 'sally.signer.demo@example.com',
+      address1: '14 Signer Place',
+      address2: 'Hammersmith',
+      address3: 'London',
+      postcode: 'W6 1SG',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Attorney',
+    }),
+  ];
+  dummyData.interpreterData = [
+    row({
+      title: 'Ms',
+      firstName: 'Ingrid',
+      lastName: 'Interpreter',
+      mobile: '07700111144',
+      email: 'ingrid.interpreter.demo@example.com',
+      address1: '15 Interpreter Inn',
+      address2: 'Acton',
+      address3: 'London',
+      postcode: 'W3 1IN',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
+    }),
+  ];
+
+  dummyData.petCarerData = [{ ...DEMO.petCarer, _personRecordId: `autofill-demo-${++seq}` }];
+  dummyData.substitutePetCarerData = [{ ...DEMO.petCarerSub, _personRecordId: `autofill-demo-${++seq}` }];
+  dummyData.separateTrusteeData = [
+    { ...DEMO.flitTrusteeA, _personRecordId: `autofill-demo-${++seq}` },
+    { ...DEMO.flitTrusteeB, _personRecordId: `autofill-demo-${++seq}` },
+  ];
+
+  if (dummyData.nationalityCountry == null || dummyData.nationalityCountry === '' || dummyData.nationalityCountry === 'Standard value') {
+    dummyData.nationalityCountry = 'United Kingdom';
+  }
+  if (dummyData.countryOfResidence == null || dummyData.countryOfResidence === '' || dummyData.countryOfResidence === 'Standard value') {
+    dummyData.countryOfResidence = 'United Kingdom';
+  }
+
+  console.log('[AUTOFILL GENERATE] 🧑‍🤝‍🧑 Rich person demo pass:', {
+    contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
+    guardianRows: Array.isArray(dummyData.guardianData) ? dummyData.guardianData.length : 0,
+    executorRows: Array.isArray(dummyData.executorData) ? dummyData.executorData.length : 0,
+    professionalExecutorRows: Array.isArray(dummyData.professionalExecutorData) ? dummyData.professionalExecutorData.length : 0,
+    witnessRows: (Array.isArray(dummyData.witness1Data) ? dummyData.witness1Data.length : 0) + (Array.isArray(dummyData.witness2Data) ? dummyData.witness2Data.length : 0),
+  });
+}
 
 export const generateDummyFormData = (formData) => {
   console.log('[AUTOFILL GENERATE] ========== GENERATING DUMMY DATA ==========');
@@ -475,6 +786,10 @@ export const generateDummyFormData = (formData) => {
               dummyData[sub.id] = [DEMO.interpreter];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
+            else if (sub.id === 'professionalExecutorData' || sub.id === 'substituteProfessionalExecutorData' || sub.id === 'professionalTrusteeData' || sub.id === 'substituteProfessionalTrusteeData') {
+              dummyData[sub.id] = [ARISTONE_EXECUTOR_LINE];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = Aristone professional line`);
+            }
           } else if (sub.type === 'text' || sub.type === 'textarea' || sub.type === 'number' || sub.type === 'date') {
             value = getFieldValue(sub, dummyData);
             if (value != null) {
@@ -543,6 +858,14 @@ export const generateDummyFormData = (formData) => {
     petCarerData: [{ ...DEMO.petCarer }],
     substitutePetCarerData: [{ ...DEMO.petCarerSub }],
 
+    professionalExecutorData: [ARISTONE_EXECUTOR_LINE],
+    substituteProfessionalExecutorData: [ARISTONE_EXECUTOR_LINE],
+    professionalTrusteeData: [ARISTONE_EXECUTOR_LINE],
+    substituteProfessionalTrusteeData: [ARISTONE_EXECUTOR_LINE],
+
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
+
     chattelsGiftBeneficiaryName: DEMO.chattelRecipient.split(' — ')[0],
 
     address1: DEMO.testator.address1,
@@ -553,6 +876,19 @@ export const generateDummyFormData = (formData) => {
     partnerAddress2: DEMO.partner.address2,
     partnerAddress3: DEMO.partner.address3,
     partnerPostcode: DEMO.partner.postcode,
+    partnerTitle: DEMO.partner.title,
+    partnerFirstName: DEMO.partner.firstName,
+    partnerMiddleName: DEMO.partner.middleName,
+    partnerLastName: DEMO.partner.lastName,
+    partnerKnownAs: DEMO.partner.knownAs || '',
+    partnerDateOfBirth: DEMO.partner.dateOfBirth,
+    partnerGender: DEMO.partner.gender,
+    partnerMobile: DEMO.partner.mobile,
+    partnerTel2: DEMO.partner.tel2,
+    partnerEmail: DEMO.partner.email,
+    partnerOccupation: DEMO.partner.occupation,
+    partnerNationalityCountry: DEMO.partner.nationalityCountry,
+    partnerCountryOfResidence: DEMO.partner.countryOfResidence,
     executorAddress1: '101 Executor Lane',
     executorAddress2: 'Hampstead',
     executorAddress3: 'London',
@@ -676,13 +1012,17 @@ export const generateDummyFormData = (formData) => {
   });
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);
 
+  applyRichPersonDemoOverrides(dummyData);
+
   console.log('[AUTOFILL GENERATE] 📊 Final summary:', {
     totalFields: Object.keys(dummyData).length,
+    contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
     hasSeparateTrusteeData: !!dummyData.separateTrusteeData,
     separateTrusteeDataType: Array.isArray(dummyData.separateTrusteeData) ? 'array' : typeof dummyData.separateTrusteeData,
     separateTrusteeDataLength: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 'N/A',
     howResidueDistributed: dummyData.howResidueDistributed,
-    appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT
+    appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT,
+    samplePersonKeys: dummyData.guardianData?.[0] ? Object.keys(dummyData.guardianData[0]).filter((k) => !k.startsWith('_')).slice(0, 8) : [],
   });
   console.log('[AUTOFILL GENERATE] ========== GENERATION COMPLETE ==========');
 
@@ -708,6 +1048,7 @@ export const autoFillForm = (setFormValues, formData) => {
     
     console.log('[AUTOFILL] ✅ Generated dummy data:', {
       totalFields: Object.keys(dummyData).length,
+      contactRegistryEntries: Array.isArray(dummyData.contactRegistry) ? dummyData.contactRegistry.length : 0,
       sampleFields: Object.keys(dummyData).slice(0, 10),
       hasSeparateTrusteeData: !!dummyData.separateTrusteeData,
       separateTrusteeDataLength: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 0,

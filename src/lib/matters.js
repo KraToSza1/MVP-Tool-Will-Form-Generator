@@ -33,50 +33,224 @@ const STAFF_MATTER_COLUMNS = `
   current_step
 `;
 
+function safeJsonByteLength(value) {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return -1;
+  }
+}
+
+/**
+ * Call submit_will_matter via PostgREST fetch using the anon key as Bearer.
+ * The shared Supabase client may attach a logged-in user's JWT; PostgREST then runs RPC as
+ * `authenticated`, which can interact badly with policies. Public questionnaire submit is intended
+ * for the `anon` role (same as GRANT EXECUTE TO anon).
+ */
+async function submitWillMatterViaAnonFetch({ ref, secret, payload, currentIndex, snapshot, signal }) {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!baseUrl || !anonKey) {
+    return { data: null, error: { message: 'Supabase URL or anon key missing' } };
+  }
+  const url = `${String(baseUrl).replace(/\/$/, '')}/rest/v1/rpc/submit_will_matter`;
+  const res = await fetch(url, {
+    method: 'POST',
+    signal,
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_ref: ref,
+      p_secret: secret,
+      p_payload: payload,
+      p_current_step: currentIndex,
+      p_client_snapshot: snapshot,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let parsed;
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch {
+      parsed = { message: text || res.statusText };
+    }
+    const msg =
+      parsed.message ||
+      parsed.hint ||
+      (typeof parsed === 'string' ? parsed : null) ||
+      `Request failed (${res.status})`;
+    return {
+      data: null,
+      error: {
+        message: msg,
+        code: parsed.code,
+        details: parsed.details,
+        hint: parsed.hint,
+      },
+    };
+  }
+  if (!text || !String(text).trim()) {
+    return { data: null, error: { message: 'Empty response from server' } };
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { data: null, error: { message: 'Invalid JSON from server' } };
+  }
+  return { data, error: null };
+}
+
 export async function submitMatterFromDraft({ ref, secret, formValues, currentIndex }) {
   if (!isSupabaseConfigured()) {
     console.warn('[WillTool Flow] submit_matter: Supabase not configured');
     return { error: 'Supabase not configured' };
   }
 
+  const t0 = performance.now();
+  console.log('[WillTool Flow] client_submit_build_start', { ref, currentIndex, phase: 'client_submit_build_start' });
+
   const payload = buildMatterPayload(formValues, currentIndex);
   if (formValues?.identityVerification && typeof formValues.identityVerification === 'object') {
+    console.log('[WillTool Flow] client_submit_compress_id_start', { ref, phase: 'client_submit_compress_id_start' });
+    const tCompress = performance.now();
     payload.identityVerification = await compressIdentityVerification(formValues.identityVerification);
+    console.log('[WillTool Flow] client_submit_compress_id_done', {
+      ref,
+      ms: Math.round(performance.now() - tCompress),
+      phase: 'client_submit_compress_id_done',
+    });
   }
-  const snapshot = buildClientSnapshot(formValues);
-  const payloadSize = typeof payload?.identityVerification === 'object'
-    ? JSON.stringify(payload).length
-    : 0;
-  console.log('[WillTool Flow] Client submitting to matter (RPC submit_will_matter)', { ref, currentIndex, snapshotKeys: Object.keys(snapshot || {}), hasIdDocs: !!payload.identityVerification, payloadBytes: payloadSize, phase: 'client_submit' });
 
-  const RPC_TIMEOUT_MS = 90_000; // 90s for large ID doc uploads
-  const rpcPromise = supabase.rpc('submit_will_matter', {
-    p_ref: ref,
-    p_secret: secret,
-    p_payload: payload,
-    p_current_step: currentIndex,
-    p_client_snapshot: snapshot,
+  const snapshot = buildClientSnapshot(formValues);
+  const payloadBytes = safeJsonByteLength(payload);
+  const snapshotBytes = safeJsonByteLength(snapshot);
+  const topLevelKeys = Object.keys(formValues || {}).length;
+
+  console.log('[WillTool Flow] Client submitting to matter (RPC submit_will_matter)', {
+    ref,
+    currentIndex,
+    snapshotKeys: Object.keys(snapshot || {}),
+    hasIdDocs: !!payload.identityVerification,
+    payloadBytes,
+    snapshotBytes,
+    formValuesTopLevelKeys: topLevelKeys,
+    phase: 'client_submit',
   });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('Submission timed out. Your draft is saved—try again or use a smaller file for ID documents.')), RPC_TIMEOUT_MS);
+
+  // Wall-clock cap: some browsers / stacks leave fetch() pending after AbortSignal.abort(), so awaiting
+  // only the Supabase client can hang forever. Promise.race + reject always completes; we still abort() to cancel the request.
+  const RPC_TIMEOUT_MS = 90_000;
+  const controller = new AbortController();
+  const rpcCall = (async () => {
+    try {
+      console.log('[WillTool Flow] client_submit_fetch_anon', { ref, phase: 'client_submit_fetch_anon' });
+      return await submitWillMatterViaAnonFetch({
+        ref,
+        secret,
+        payload,
+        currentIndex,
+        snapshot,
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (e?.name === 'AbortError') {
+        return {
+          data: null,
+          error: {
+            message: 'Request aborted',
+            hint: 'Request was aborted (timeout or manual cancellation)',
+          },
+        };
+      }
+      return { data: null, error: { message: e?.message || 'Network error' } };
+    }
+  })();
+
+  let wallTimeoutId;
+  const timeoutRejectPromise = new Promise((_, reject) => {
+    wallTimeoutId = setTimeout(() => {
+      console.warn('[WillTool Flow] submit_matter: RPC wall-clock timeout (Promise.race)', {
+        ref,
+        ms: RPC_TIMEOUT_MS,
+        phase: 'client_submit_race_timeout',
+      });
+      try {
+        controller.abort();
+      } catch (abortErr) {
+        console.warn('[WillTool Flow] submit_matter: controller.abort threw', abortErr);
+      }
+      reject(
+        new Error(
+          'Submission timed out. Your draft is saved—try again in a moment.',
+        ),
+      );
+    }, RPC_TIMEOUT_MS);
   });
+
+  const heartbeatId = setInterval(() => {
+    console.warn('[WillTool Flow] submit_matter: still awaiting RPC…', {
+      ref,
+      elapsedMs: Math.round(performance.now() - t0),
+      phase: 'client_submit_heartbeat',
+    });
+  }, 10_000);
+
+  const tRpc = performance.now();
+  console.log('[WillTool Flow] client_submit_rpc_await', { ref, phase: 'client_submit_rpc_await', elapsedSinceStartMs: Math.round(tRpc - t0) });
 
   let result;
   try {
-    result = await Promise.race([rpcPromise, timeoutPromise]);
+    result = await Promise.race([rpcCall, timeoutRejectPromise]);
   } catch (err) {
-    console.error('[WillTool Flow] submit_matter: threw or timed out', { ref, err });
+    clearTimeout(wallTimeoutId);
+    clearInterval(heartbeatId);
+    console.error('[WillTool Flow] submit_matter: race rejected (timeout or network throw)', {
+      ref,
+      message: err?.message,
+      phase: 'client_submit_race_reject',
+    });
     return { error: err?.message || 'Submission failed. Try again.' };
   }
 
+  clearTimeout(wallTimeoutId);
+  clearInterval(heartbeatId);
+
+  const rpcMs = Math.round(performance.now() - tRpc);
   const { data, error } = result;
 
   if (error) {
-    console.error('[WillTool Flow] submit_matter: error', error.message, error);
-    return { error: error.message };
+    const aborted =
+      (error?.message || '').includes('AbortError') ||
+      (error?.message || '').includes('aborted') ||
+      (error?.hint || '').includes('aborted');
+    console.error('[WillTool Flow] submit_matter: RPC returned error', {
+      ref,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      rpcMs,
+      aborted,
+      phase: 'client_submit_rpc_error',
+    });
+    if (aborted) {
+      return { error: 'Submission timed out. Your draft is saved—try again in a moment.' };
+    }
+    return { error: error.message || 'Submission failed. Try again.' };
   }
 
-  console.log('[WillTool Flow] Matter created in DB; client submission complete', { matterId: data, ref, phase: 'client_submit_done' });
+  console.log('[WillTool Flow] Matter created in DB; client submission complete', {
+    matterId: data,
+    ref,
+    rpcMs,
+    totalMs: Math.round(performance.now() - t0),
+    phase: 'client_submit_done',
+  });
   return { matterId: data };
 }
 

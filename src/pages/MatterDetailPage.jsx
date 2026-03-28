@@ -13,7 +13,7 @@ import {
   TESTAMENTARY_CAPACITY_SECTION_INDEX,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
 } from '../constants/clientMode.js';
-import { getPartnerIntakeRows } from '../lib/partnerIntakeSummary.js';
+import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
@@ -725,30 +725,7 @@ export default function MatterDetailPage() {
                   : 'View ID documents (none uploaded yet)'}
               </button>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Partner / spouse (from intake)</p>
-              <p className="mt-1 text-xs text-slate-600">
-                Same detail level as the testator when marital status includes a partner. Shown from saved questionnaire data.
-              </p>
-              {getPartnerIntakeRows(mergedPayload).length > 0 ? (
-                <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {getPartnerIntakeRows(mergedPayload).map(({ label, value }) => (
-                    <div key={label} className="rounded-lg bg-slate-50 px-3 py-2">
-                      <dt className="text-xs font-medium text-slate-500">{label}</dt>
-                      <dd className="mt-0.5 text-sm font-medium text-slate-900 break-words">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="mt-2 text-sm text-slate-600">
-                  No partner fields saved yet, or not applicable. Open{' '}
-                  <Link to={`/solicitor/matters/${matter.id}/form`} className="font-medium text-indigo-700 hover:text-indigo-900">
-                    Edit questionnaire
-                  </Link>{' '}
-                  to complete marital / partner details.
-                </p>
-              )}
-            </div>
+            <FormPeopleSummaryPanel payload={mergedPayload} variant="solicitor" />
 
             <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned solicitor</p>
