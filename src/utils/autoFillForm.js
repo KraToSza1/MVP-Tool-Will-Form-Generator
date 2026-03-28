@@ -12,45 +12,55 @@ const ARISTONE_EXECUTOR_LINE =
 /**
  * Distinct demo identities so every role is visibly different in the UI (names, emails, phones, streets).
  * Tag suffix "(demo autofill)" makes test data obvious in lists and PDFs.
+ * Update this block when refreshing public demo names (keep one coherent "family" for clauses).
  */
 const DEMO = {
   testator: {
     title: 'Mr',
-    firstName: 'James',
-    middleName: 'Oliver',
-    lastName: 'Hartwell',
+    firstName: 'Marcus',
+    middleName: 'Julian',
+    lastName: 'Ellwood',
     knownAs: 'Jim',
-    email: 'james.hartwell.demo@example.com',
-    mobile: '07700111101',
-    address1: '10 Testator Terrace',
-    address2: 'Kensington',
+    email: 'marcus.ellwood.demo@example.com',
+    mobile: '07700999101',
+    address1: '42 Meridian Wharf',
+    address2: 'Canary Wharf',
     address3: 'London',
-    postcode: 'W8 4AA',
-    occupation: 'Chartered surveyor',
+    postcode: 'E14 9WT',
+    occupation: 'Software architect (demo autofill)',
   },
   partner: {
-    fullName: 'Priya Hartwell',
+    fullName: 'Elena Voss',
     title: 'Mrs',
-    firstName: 'Priya',
-    middleName: 'Anita',
-    lastName: 'Hartwell',
+    firstName: 'Elena',
+    middleName: 'Rina',
+    lastName: 'Voss',
     knownAs: '',
-    email: 'priya.hartwell.demo@example.com',
-    mobile: '07700111102',
-    tel2: '020 7946 0001',
-    dateOfBirth: '1978-07-14',
+    email: 'elena.voss.demo@example.com',
+    mobile: '07700999102',
+    tel2: '020 7946 1102',
+    dateOfBirth: '1980-09-22',
     gender: 'Female',
-    occupation: 'GP (demo autofill)',
+    occupation: 'Nurse (demo autofill)',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
-    address1: '10 Testator Terrace',
-    address2: 'Kensington',
+    address1: '42 Meridian Wharf',
+    address2: 'Canary Wharf',
     address3: 'London',
-    postcode: 'W8 4AA',
+    postcode: 'E14 9WT',
   },
-  guardian1: 'Gavin Green — Guardian 1 (demo autofill)',
-  guardian2: 'Greta Green — Guardian 2 (demo autofill)',
-  guardianSub: 'Hugo Hayes — Substitute guardian (demo autofill)',
+  /** Children / siblings named in gift & residue demo paragraphs */
+  children: {
+    son: { firstName: 'Leo', lastName: 'Ellwood' },
+    daughter: { firstName: 'Maya', lastName: 'Ellwood' },
+  },
+  siblings: {
+    brother: { firstName: 'Noah', lastName: 'Ellwood' },
+    sister: { firstName: 'Iris', lastName: 'Ellwood' },
+  },
+  guardian1: 'Rowan Blake — Guardian 1 (demo autofill)',
+  guardian2: 'Sienna Blake — Guardian 2 (demo autofill)',
+  guardianSub: 'Theo Marsh — Substitute guardian (demo autofill)',
   digitalExecutor: 'Dana Reyes — Digital executor (demo autofill)',
   trustee: 'Tracy Okonkwo — Trustee (demo autofill)',
   trusteeSub: 'Uma Patel — Substitute trustee (demo autofill)',
@@ -177,15 +187,15 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationship: 'Partner / spouse (from intake)',
     },
     {
-      id: 'demo-reg-gavin',
+      id: 'demo-reg-rowan',
       savedAt: ts,
       title: 'Mr',
-      firstName: 'Gavin',
-      lastName: 'Green',
-      email: 'gavin.green.demo@example.com',
-      mobile: '07700111110',
-      address1: '3 Guardian Grove',
-      postcode: 'SW4 9GG',
+      firstName: 'Rowan',
+      lastName: 'Blake',
+      email: 'rowan.blake.demo@example.com',
+      mobile: '07700999110',
+      address1: '7 Guardian Grove',
+      postcode: 'SE16 7GG',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
     },
@@ -194,17 +204,17 @@ function applyRichPersonDemoOverrides(dummyData) {
   dummyData.guardianData = [
     row({
       title: 'Mr',
-      firstName: 'Gavin',
-      middleName: 'George',
-      lastName: 'Green',
+      firstName: 'Rowan',
+      middleName: 'Kai',
+      lastName: 'Blake',
       dateOfBirth: '01/06/1981',
       gender: 'Male',
-      mobile: '07700111110',
-      email: 'gavin.green.demo@example.com',
-      address1: '3 Guardian Grove',
-      address2: 'Clapham',
+      mobile: '07700999110',
+      email: 'rowan.blake.demo@example.com',
+      address1: '7 Guardian Grove',
+      address2: 'Rotherhithe',
       address3: 'London',
-      postcode: 'SW4 9GG',
+      postcode: 'SE16 7GG',
       occupation: 'Teacher (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
@@ -212,16 +222,16 @@ function applyRichPersonDemoOverrides(dummyData) {
     }),
     row({
       title: 'Ms',
-      firstName: 'Greta',
-      lastName: 'Green',
+      firstName: 'Sienna',
+      lastName: 'Blake',
       dateOfBirth: '15/08/1983',
       gender: 'Female',
-      mobile: '07700111111',
-      email: 'greta.green.demo@example.com',
-      address1: '4 Guardian Grove',
-      address2: 'Clapham',
+      mobile: '07700999111',
+      email: 'sienna.blake.demo@example.com',
+      address1: '8 Guardian Grove',
+      address2: 'Rotherhithe',
       address3: 'London',
-      postcode: 'SW4 9GH',
+      postcode: 'SE16 7GH',
       occupation: 'Architect (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
@@ -231,14 +241,14 @@ function applyRichPersonDemoOverrides(dummyData) {
   dummyData.substituteGuardianData = [
     row({
       title: 'Mr',
-      firstName: 'Hugo',
-      lastName: 'Hayes',
-      mobile: '07700111112',
-      email: 'hugo.hayes.demo@example.com',
-      address1: '5 Substitute Street',
-      address2: 'Brixton',
+      firstName: 'Theo',
+      lastName: 'Marsh',
+      mobile: '07700999112',
+      email: 'theo.marsh.demo@example.com',
+      address1: '9 Substitute Street',
+      address2: 'Deptford',
       address3: 'London',
-      postcode: 'SW9 1HU',
+      postcode: 'SE8 4HU',
       occupation: 'Engineer (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
@@ -578,12 +588,12 @@ export const generateDummyFormData = (formData) => {
         if (field.id === 'lastName') return DEMO.testator.lastName;
         if (field.id === 'middleName') return DEMO.testator.middleName;
         if (field.id === 'knownAs') return DEMO.testator.knownAs;
-        if (field.id === 'alias') return 'J. O. Hartwell';
+        if (field.id === 'alias') return 'M. J. Ellwood';
         if (field.id === 'partnerFullName') return DEMO.partner.fullName;
         if (field.id === 'partnerFirstName') return DEMO.partner.firstName;
         if (field.id === 'partnerMiddleName') return DEMO.partner.middleName;
         if (field.id === 'partnerLastName') return DEMO.partner.lastName;
-        if (field.id === 'partnerKnownAs') return DEMO.partner.knownAs || 'Pri';
+        if (field.id === 'partnerKnownAs') return DEMO.partner.knownAs || 'Ellie';
         if (field.id === 'partnerOccupation') return DEMO.partner.occupation;
         if (field.id === 'partnerNationalityCountry') return DEMO.partner.nationalityCountry;
         if (field.id === 'partnerCountryOfResidence') return DEMO.partner.countryOfResidence;
@@ -630,19 +640,33 @@ export const generateDummyFormData = (formData) => {
 
       case 'textarea':
         if (field.id.includes('charity') || field.id === 'charityBenefitDetails') return 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)';
-        if (field.id.includes('monetaryGiftsDetails')) return 'I give £25,000 to my son Thomas Hartwell when he reaches 25. I give £15,000 to my daughter Charlotte Hartwell when she reaches 21. [demo autofill — distinct beneficiaries]';
-        if (field.id.includes('specificGiftsDetails')) return 'I give my grandfather\'s gold pocket watch to Thomas Hartwell. I give my oil paintings to Charlotte Hartwell. [demo autofill]';
+        if (field.id.includes('monetaryGiftsDetails')) {
+          return `I give £25,000 to my son ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to my daughter ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21. [demo autofill — distinct beneficiaries]`;
+        }
+        if (field.id.includes('specificGiftsDetails')) {
+          return `I give my grandfather's gold pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}. I give my oil paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+        }
         if (field.id.includes('propertyGiftsDetails')) return `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely. [demo autofill]`;
         if (field.id.includes('propertyTrustDetails')) return `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`;
         if (field.id.includes('propertyTrustTerms')) return 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.';
         if (field.id.includes('bprTrustDetails')) return 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.';
         if (field.id.includes('bprTrustTerms')) return 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.';
-        if (field.id.includes('furtherResidualGiftsDetails')) return 'If any of the above gifts fail, I give the failed share equally to my siblings David Hartwell and Helen Hartwell. [demo autofill]';
-        if (field.id.includes('residualGiftsDetails')) return `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to Thomas Hartwell, 25% to Charlotte Hartwell. [demo autofill]`;
-        if (field.id.includes('specifyLoansGiftsText')) return 'I loaned £10,000 to Thomas Hartwell in January 2022 for a house purchase. [demo autofill]';
+        if (field.id.includes('furtherResidualGiftsDetails')) {
+          return `If any of the above gifts fail, I give the failed share equally to my siblings ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}. [demo autofill]`;
+        }
+        if (field.id.includes('residualGiftsDetails')) {
+          return `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+        }
+        if (field.id.includes('specifyLoansGiftsText')) {
+          return `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase. [demo autofill]`;
+        }
         if (field.id.includes('lifeTenantDetails')) return `My wife ${DEMO.partner.fullName}`;
-        if (field.id.includes('beneficiariesDetails')) return 'Thomas Hartwell and Charlotte Hartwell';
-        if (field.id.includes('trustEndDistributionDetails')) return 'Upon the death of the life tenant, the trust passes equally to Thomas Hartwell and Charlotte Hartwell. [demo autofill]';
+        if (field.id.includes('beneficiariesDetails')) {
+          return `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`;
+        }
+        if (field.id.includes('trustEndDistributionDetails')) {
+          return `Upon the death of the life tenant, the trust passes equally to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+        }
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
@@ -906,20 +930,20 @@ export const generateDummyFormData = (formData) => {
     witness2Phone: '020 7002 0002',
     witness2Occupation: 'Teacher (demo W2)',
 
-    monetaryGiftsDetails: 'I give £25,000 to Thomas Hartwell when he reaches 25. I give £15,000 to Charlotte Hartwell when she reaches 21. [demo autofill]',
-    specificGiftsDetails: 'Pocket watch to Thomas Hartwell; paintings to Charlotte Hartwell. [demo autofill]',
+    monetaryGiftsDetails: `I give £25,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21. [demo autofill]`,
+    specificGiftsDetails: `Pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}; paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
     propertyGiftsDetails: `I give my property at ${DEMO.testator.address1} to ${DEMO.partner.fullName} absolutely. [demo autofill]`,
     propertyTrustDetails: `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`,
     propertyTrustTerms: 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.',
     bprTrustDetails: 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.',
     bprTrustTerms: 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.',
-    furtherResidualGiftsDetails: 'If gifts fail, failed share to David Hartwell and Helen Hartwell. [demo autofill]',
-    residualGiftsDetails: `50% residue to ${DEMO.partner.fullName}, 25% Thomas Hartwell, 25% Charlotte Hartwell. [demo autofill]`,
-    specifyLoansGiftsText: 'Loan £10,000 to Thomas Hartwell (Jan 2022). [demo autofill]',
+    furtherResidualGiftsDetails: `If gifts fail, failed share to ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}. [demo autofill]`,
+    residualGiftsDetails: `50% residue to ${DEMO.partner.fullName}, 25% ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
+    specifyLoansGiftsText: `Loan £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} (Jan 2022). [demo autofill]`,
     charityBenefitDetails: 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)',
     lifeTenantDetails: `My wife ${DEMO.partner.fullName}`,
-    beneficiariesDetails: 'Thomas Hartwell and Charlotte Hartwell',
-    trustEndDistributionDetails: 'Trust ends: equal split to Thomas Hartwell and Charlotte Hartwell. [demo autofill]',
+    beneficiariesDetails: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
+    trustEndDistributionDetails: `Trust ends: equal split to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
     funeralWishes: 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.',
     otherFuneralRequirements: 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.',
     physicalHealthDescription: 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.',
