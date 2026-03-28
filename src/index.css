@@ -534,6 +534,47 @@ html.dark-theme .confirm-modal-cancel:hover {
   background-color: rgba(51, 65, 85, 0.95) !important;
 }
 
+/*
+ * People overview + person detail (read-only modals from FormPeopleSummaryPanel).
+ * Always use a dark shell: ThemeProvider "light" removes html.dark-theme and would otherwise
+ * leave portal content looking like a light modal (white header/footer, grey field tiles).
+ */
+.will-tool-people-overview-modal[role="dialog"],
+.will-tool-person-summary-modal[role="dialog"] {
+  background-color: rgb(15 23 42) !important;
+  color: #f1f5f9 !important;
+  border-color: rgb(71 85 105) !important;
+}
+.will-tool-people-overview-header,
+.will-tool-person-summary-header {
+  background-color: rgb(2 6 23) !important;
+  border-color: rgb(51 65 85) !important;
+}
+.will-tool-people-overview-body,
+.will-tool-person-summary-body {
+  background-color: rgb(15 23 42) !important;
+}
+.will-tool-people-overview-footer,
+.will-tool-person-summary-footer {
+  background-color: rgb(2 6 23) !important;
+  border-color: rgb(51 65 85) !important;
+}
+.will-tool-person-summary-row {
+  background-color: rgb(30 41 59) !important;
+  border-color: rgb(51 65 85) !important;
+}
+.will-tool-person-summary-row dt {
+  color: #94a3b8 !important;
+}
+.will-tool-person-summary-row dd {
+  color: #f1f5f9 !important;
+}
+.will-tool-person-summary-badge {
+  background-color: rgba(99, 102, 241, 0.22) !important;
+  color: #e0e7ff !important;
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.35) !important;
+}
+
 /* Document checklist (Matter detail) — dark theme */
 html.dark-theme .document-checklist {
   background-color: rgba(30, 41, 59, 0.92) !important;
