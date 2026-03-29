@@ -289,14 +289,21 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     });
   }, [solicitorMode, formData?.formSections, formValues?.chooseAristoneExecutor]);
 
-  // Aristone as executor: trustees must match executors (combined Executor/Trustee appointment in the Will).
+  // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
   useEffect(() => {
-    if (formValues?.chooseAristoneExecutor !== 'Aristone') return;
+    const aristoneAsExecutor =
+      formValues?.chooseAristoneExecutor === 'Aristone' ||
+      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
+    if (!aristoneAsExecutor) return;
     setFormValues((prev) => {
       if (prev.appointDifferentTrustees === 'No') return prev;
       return { ...prev, appointDifferentTrustees: 'No' };
     });
-  }, [formValues?.chooseAristoneExecutor]);
+  }, [
+    formValues?.chooseAristoneExecutor,
+    formValues?.appointProfessionalExecutor,
+    formValues?.professionalExecutorSelection,
+  ]);
 
   // Estate intake: "No liabilities" → liability value range "None".
   useEffect(() => {
@@ -310,7 +317,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   // Aristone not executor: cannot remain selected as professional trustee.
   useEffect(() => {
-    if (formValues?.chooseAristoneExecutor === 'Aristone') return;
+    const aristoneAsExecutor =
+      formValues?.chooseAristoneExecutor === 'Aristone' ||
+      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
+    if (aristoneAsExecutor) return;
     setFormValues((prev) => {
       let changed = false;
       const next = { ...prev };
@@ -324,7 +334,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
       return changed ? next : prev;
     });
-  }, [formValues?.chooseAristoneExecutor]);
+  }, [
+    formValues?.chooseAristoneExecutor,
+    formValues?.appointProfessionalExecutor,
+    formValues?.professionalExecutorSelection,
+  ]);
 
   /** Index in full formData.formSections for the visible step (stable when TC is filtered by title). */
   const actualSectionIndex = useMemo(() => {

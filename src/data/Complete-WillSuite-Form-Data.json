@@ -851,7 +851,14 @@
             ],
             "value": null,
             "conditions": [
-              { "field": "chooseAristoneExecutor", "operator": "ne", "value": "Aristone" }
+              { "field": "chooseAristoneExecutor", "operator": "ne", "value": "Aristone" },
+              {
+                "operator": "OR",
+                "clauses": [
+                  { "field": "appointProfessionalExecutor", "operator": "ne", "value": "Yes" },
+                  { "field": "professionalExecutorSelection", "operator": "ne", "value": "Aristone" }
+                ]
+              }
             ]
           },
           {
@@ -1042,10 +1049,10 @@
             "type": "radio",
             "label": "Do you want to set a minimum age for your executors or trustees to act?",
             "options": [
-              { "value": "None", "label": "None (default: 18 applies automatically)" },
-              { "value": "21", "label": "21", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 21 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
-              { "value": "23", "label": "23", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 23 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
-              { "value": "25", "label": "25", "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of 25 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed." },
+              { "value": "None", "label": "None (default → 18 applies automatically)" },
+              { "value": "21", "label": "21", "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 21 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed." },
+              { "value": "23", "label": "23", "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 23 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed." },
+              { "value": "25", "label": "25", "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 25 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed." },
               { "value": "Other", "label": "Other (input)" }
             ],
             "value": null
@@ -1055,7 +1062,7 @@
             "type": "number",
             "label": "Specify age",
             "value": "",
-             "willClauseText": "My individual Executors (if any) shall only be eligible to act if they have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor I have appointed.",
+             "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed.",
              "conditions": [
               { "field": "executorAgeClause", "operator": "eq", "value": "Other" }
             ]
@@ -1328,6 +1335,21 @@
               }
                
             ]
+          }
+        ]
+      },
+
+      {
+        "formSection": "Funeral Wishes",
+        "fields": [
+          {
+            "id": "funeralWishes",
+            "type": "textarea",
+            "label": "Funeral Wishes",
+            "placeholder": "Enter the Testator's funeral wishes (e.g., 'I wish to be cremated and have my ashes scattered at sea')",
+            "rows": 5,
+            "value": "",
+            "willClauseText": "I request that my Executors take all reasonable steps to honor my funeral wishes as expressed in this Will."
           }
         ]
       },
@@ -1816,21 +1838,6 @@
           }
         ]
       },
-        
-        {
-          "formSection": "Funeral Wishes",
-          "fields": [
-            {
-              "id": "funeralWishes",
-              "type": "textarea",
-              "label": "Funeral Wishes",
-              "placeholder": "Enter the Testator's funeral wishes (e.g., 'I wish to be cremated and have my ashes scattered at sea')",
-              "rows": 5,
-              "value": "",
-              "willClauseText": "I request that my Executors take all reasonable steps to honor my funeral wishes as expressed in this Will."
-            }
-          ]
-        },
       {
         "formSection": "Other Provisions",
         "fields": [

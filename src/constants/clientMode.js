@@ -24,8 +24,8 @@ export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
   'estateAdditionalNotes',
 ]);
 
-// Legacy default index when the section title is not found (factory order)
-export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 18;
+// Legacy default index when the section title is not found (factory order; keep in sync with Complete-WillSuite-Form-Data.json)
+export const TESTAMENTARY_CAPACITY_SECTION_INDEX = 19;
 export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_INDEX - 1;
 
 // Field IDs that are solicitor-only (hidden in client mode): execution/witnesses + professional executor workflow

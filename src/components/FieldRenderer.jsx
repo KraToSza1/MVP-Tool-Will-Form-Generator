@@ -564,10 +564,13 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         )}
         <div className={`mt-2 ${field.id === 'title' ? 'flex flex-wrap gap-2' : 'space-y-1'}`}>
           {field.options.map((opt) => {
+            const aristoneIsExecutor =
+              formValues.chooseAristoneExecutor === 'Aristone' ||
+              (formValues.appointProfessionalExecutor === 'Yes' && formValues.professionalExecutorSelection === 'Aristone');
             const aristoneTrusteeLocked =
               (field.id === 'professionalTrusteeSelection' || field.id === 'substituteProfessionalTrusteeSelection') &&
               opt.value === 'Aristone' &&
-              formValues.chooseAristoneExecutor !== 'Aristone';
+              !aristoneIsExecutor;
             return (
             <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border border-transparent ${
               aristoneTrusteeLocked

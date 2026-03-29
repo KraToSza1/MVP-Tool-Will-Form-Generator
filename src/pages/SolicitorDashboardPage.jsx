@@ -87,6 +87,9 @@ export default function SolicitorDashboardPage() {
   };
 
   useEffect(() => {
+    // Wait for auth session (Safari/Chrome): avoid querying before Supabase session is ready (was showing 0 matters).
+    if (authLoading) return;
+
     let active = true;
     queueMicrotask(() => {
       if (active) setLoading(true);

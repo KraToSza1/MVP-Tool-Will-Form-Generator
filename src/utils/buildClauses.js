@@ -52,6 +52,16 @@ export const buildClauses = ({
         return true;
       }
     }
+
+    if (fieldId === 'professionalExecutorSection') {
+      if (
+        formValues.appointProfessionalExecutor === 'Yes' &&
+        formValues.professionalExecutorSelection === 'Aristone'
+      ) {
+        if (DEBUG_CLAUSES) console.log(`[BUILD CLAUSES] ✅ hasFieldValue found professionalExecutorSection via professionalExecutorSelection Aristone`);
+        return true;
+      }
+    }
     
     // CRITICAL FIX: Special handling for pet carer sections - check if provisionsForPets is "Yes"
     // and if petCarerData/substitutePetCarerData exists and contains valid entries
