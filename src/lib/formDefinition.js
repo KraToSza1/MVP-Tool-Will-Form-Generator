@@ -10,7 +10,10 @@ const DEFAULT_NAME = 'default';
 const FACTORY_ID = 'factory';
 
 /** Same order of magnitude as save/list — avoids hung supabase-js PostgREST calls with no upper bound. */
-const GET_FORM_DEFINITION_TIMEOUT_MS = 25_000;
+const GET_FORM_DEFINITION_TIMEOUT_MS = 55_000;
+
+/** Coalesce parallel loads (e.g. React Strict Mode double mount) into one network request. */
+let getFormDefinitionInFlight = null;
 
 async function restGetFormDefinition() {
   const { base, anonKey } = getRestConfig();
@@ -49,6 +52,16 @@ async function restGetFormDefinition() {
  * data is the payload (formTitle, formSections) or null if none saved.
  */
 export async function getFormDefinition() {
+  if (getFormDefinitionInFlight) {
+    return getFormDefinitionInFlight;
+  }
+  getFormDefinitionInFlight = getFormDefinitionImpl().finally(() => {
+    getFormDefinitionInFlight = null;
+  });
+  return getFormDefinitionInFlight;
+}
+
+async function getFormDefinitionImpl() {
   qLog('get_start', { table: 'form_definitions', name: DEFAULT_NAME });
   if (!isSupabaseConfigured()) {
     qLog('get_skip', { reason: 'Supabase not configured' });

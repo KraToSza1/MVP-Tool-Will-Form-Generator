@@ -22,62 +22,62 @@ export default function SolicitorLayout() {
   return (
     <div className={shellClass}>
       <header className="border-b border-slate-200 bg-slate-950 text-white transition-colors">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link to="/solicitor" className="inline-flex items-center gap-2 font-semibold tracking-wide">
-              <ShieldCheck size={18} />
-              Aristone Solicitors Workspace
+        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <Link to="/solicitor" className="inline-flex items-center gap-2 font-semibold tracking-wide break-words text-left">
+              <ShieldCheck size={18} className="shrink-0" />
+              <span className="leading-snug">Aristone Solicitors Workspace</span>
             </Link>
-            <p className="text-sm text-slate-300 mt-1">Secure matter management and solicitor-only workflow.</p>
+            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-prose">Secure matter management and solicitor-only workflow.</p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:justify-end shrink-0">
             <ThemeToggleButton compact />
-            <div className="text-right">
-              <p className="text-sm font-semibold">{profile?.display_name || profile?.email || 'Solicitor'}</p>
+            <div className="text-left sm:text-right min-w-0">
+              <p className="text-sm font-semibold truncate max-w-[12rem] sm:max-w-none">{profile?.display_name || profile?.email || 'Solicitor'}</p>
               <p className="text-xs uppercase tracking-wide text-slate-400">{profile?.role || 'staff'}</p>
             </div>
             <button
               type="button"
               onClick={() => signOut()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 sm:px-4 py-2 text-sm font-medium hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[44px] min-w-[44px] sm:min-w-0"
             >
               <LogOut size={16} />
-              Sign out
+              <span className="sm:inline">Sign out</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        <nav className="mb-6 flex flex-wrap gap-2">
+      <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6 w-full min-w-0">
+        <nav className="mb-4 sm:mb-6 flex flex-wrap gap-2" aria-label="Workspace navigation">
           <NavLink
             to="/solicitor"
             end
             className={({ isActive }) =>
-              `inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border transition-colors ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : navInactive}`
+              `inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium border transition-colors min-h-[44px] ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : navInactive}`
             }
           >
-            <BriefcaseBusiness size={16} />
+            <BriefcaseBusiness size={16} className="shrink-0" />
             Matters
           </NavLink>
           <NavLink
             to="/solicitor/questionnaire"
             className={({ isActive }) =>
-              `inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border transition-colors ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : navInactive}`
+              `inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl px-3 sm:px-4 py-2.5 text-sm font-medium border transition-colors min-h-[44px] ${isActive ? 'bg-indigo-600 text-white border-indigo-600' : navInactive}`
             }
           >
-            <FileEdit size={16} />
-            Edit questionnaire
+            <FileEdit size={16} className="shrink-0" />
+            <span className="text-center leading-tight">Edit questionnaire</span>
           </NavLink>
           <a
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${previewLinkClass}`}
+            className={`inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl border px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors min-h-[44px] ${previewLinkClass}`}
           >
-            <Home size={16} />
-            Client intake (preview)
+            <Home size={16} className="shrink-0" />
+            <span className="text-center leading-tight">Client intake (preview)</span>
           </a>
         </nav>
 

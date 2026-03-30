@@ -35,8 +35,6 @@ export default function SolicitorLoginPage() {
     return <Navigate to={target} replace />;
   }
 
-  const SIGN_IN_TIMEOUT_MS = 48_000;
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     const emailTrimmed = email.trim();
@@ -44,10 +42,8 @@ export default function SolicitorLoginPage() {
     setAdminFixSql(null);
     let result;
     try {
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Sign-in timed out')), SIGN_IN_TIMEOUT_MS);
-      });
-      result = await Promise.race([signIn({ email: emailTrimmed, password }), timeoutPromise]);
+      // Timeouts are handled inside signInSolicitor (can exceed 45s when it retries once + profile fetch).
+      result = await signIn({ email: emailTrimmed, password });
     } catch (err) {
       console.error('[Solicitor Login] signIn threw', err);
       const isTimeout = err?.message === 'Sign-in timed out';

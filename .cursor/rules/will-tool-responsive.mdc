@@ -1,0 +1,26 @@
+---
+description: Will Tool — responsive UI and accessibility for all viewports
+globs: "src/**/*.{jsx,tsx,css}"
+alwaysApply: true
+---
+
+# Will Tool — responsive layout (mandatory)
+
+This repo is a React + Tailwind app (not the Shopify theme). **Every UI change** must work on small phones through large desktops.
+
+## Breakpoints (Tailwind defaults)
+
+- **Default**: mobile-first (no prefix).
+- **sm:** 640px, **md:** 768px, **lg:** 1024px, **xl:** 1280px.
+
+## Required checks
+
+1. **No accidental horizontal page scroll** on common widths (320px–375px minimum content width). Use `min-w-0` on flex children, `break-words` / `break-all` on long refs and emails, and avoid fixed widths that exceed the viewport.
+2. **Touch targets**: primary actions at least ~44×44px (`min-h-[44px]` or comfortable padding).
+3. **Wide tables**: do not rely on a multi-column `<table>` alone on small screens. Prefer **card / stacked layouts below `lg`** and table **`lg:` and up**, or a single scroll container with `overflow-x-auto` and clear scroll affordance.
+4. **Nav and toolbars**: stack or full-width buttons on narrow screens; use `flex-wrap`, `w-full sm:w-auto`, `flex-col sm:flex-row` as needed.
+5. **Dark theme**: when adding solicitor-dashboard or list UI, mirror styles under `html.dark-theme` in `src/index.css` (see existing `.solicitor-dashboard-*`, `.solicitor-matter-card`, `.solicitor-matters-table`).
+
+## PDF / forms
+
+The client questionnaire and PDF flows should also avoid overflow at **375px**, **768px**, and **1280px** where applicable.

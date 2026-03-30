@@ -55,6 +55,25 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function getMatterDisplayData(matter) {
+  const outstandingCategories = getMatterOutstandingCategories(matter);
+  const hasOutstandingCategories = outstandingCategories.length > 0;
+  const mergedPayload = mergeMatterPayloads(matter.client_payload, matter.solicitor_payload);
+  const displayPhone =
+    mergedPayload?.phoneNumber ||
+    mergedPayload?.mobile ||
+    mergedPayload?.mobileNumber ||
+    mergedPayload?.telephoneNumber ||
+    matter.client_phone ||
+    matter.client_snapshot?.phoneNumber ||
+    matter.client_snapshot?.mobile ||
+    matter.client_snapshot?.raw?.mobile ||
+    matter.client_snapshot?.mobileNumber ||
+    'No phone captured';
+  const partnerLabel = getPartnerShortLabel(mergedPayload);
+  return { outstandingCategories, hasOutstandingCategories, mergedPayload, displayPhone, partnerLabel };
+}
+
 export default function SolicitorDashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [matters, setMatters] = useState([]);
@@ -180,7 +199,7 @@ export default function SolicitorDashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 w-full max-w-full">
       {showEmptyState && (
         <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-6 shadow-sm">
           <div className="flex gap-4">
@@ -213,11 +232,11 @@ export default function SolicitorDashboardPage() {
       )}
 
       {!showEmptyState && (
-        <section className={`outstanding-items-section rounded-3xl border-2 p-6 shadow-sm ${hasOutstandingItems ? 'border-rose-200 bg-gradient-to-br from-rose-50 via-amber-50 to-white' : 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-slate-50'}`}>
+        <section className={`outstanding-items-section rounded-2xl sm:rounded-3xl border-2 p-4 sm:p-6 shadow-sm ${hasOutstandingItems ? 'border-rose-200 bg-gradient-to-br from-rose-50 via-amber-50 to-white' : 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-slate-50'}`}>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Outstanding items</p>
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">ID Verification Outstanding and Testamentary Capacity Outstanding stay pinned here.</h2>
+              <h2 className="mt-2 text-lg sm:text-2xl font-bold tracking-tight text-slate-950 break-words leading-snug">ID Verification Outstanding and Testamentary Capacity Outstanding stay pinned here.</h2>
               <p className="mt-2 max-w-3xl text-sm text-slate-700">
                 These categories are shown above the main matter list so they cannot be missed. Click either category to see the files that still need action.
               </p>
@@ -318,7 +337,7 @@ export default function SolicitorDashboardPage() {
         </section>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3 text-slate-600">
             <BriefcaseBusiness size={18} />
@@ -358,19 +377,19 @@ export default function SolicitorDashboardPage() {
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden solicitor-dashboard-section">
         {/* Header: title + actions — solicitor-dashboard-header for dark theme */}
-        <div className="solicitor-dashboard-header border-b border-slate-100 bg-slate-50/50 px-6 py-5">
+        <div className="solicitor-dashboard-header border-b border-slate-100 bg-slate-50/50 px-4 sm:px-6 py-4 sm:py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Your matters</h1>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 break-words">Your matters</h1>
               <p className="mt-1.5 text-sm text-slate-500 max-w-xl">
                 Clients submit via the Will Tool. Search by reference, name, email or phone. Hover status badges for explanations.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={handleCopyClientLink}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 solicitor-dashboard-btn"
+                className="inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 solicitor-dashboard-btn min-h-[44px]"
                 title="Copy Will Tool link to send to clients"
               >
                 <Copy size={16} className="text-slate-500" />
@@ -379,7 +398,7 @@ export default function SolicitorDashboardPage() {
               <button
                 type="button"
                 onClick={() => setStatusHelpOpen((o) => !o)}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 solicitor-dashboard-btn ${statusHelpOpen ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400'}`}
+                className={`inline-flex w-full sm:w-auto justify-center items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 solicitor-dashboard-btn min-h-[44px] ${statusHelpOpen ? 'border-indigo-300 bg-indigo-50 text-indigo-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400'}`}
                 aria-expanded={statusHelpOpen}
               >
                 <HelpCircle size={16} className="text-slate-500" />
@@ -390,7 +409,7 @@ export default function SolicitorDashboardPage() {
           </div>
 
           {/* Filters row */}
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block">
               <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1.5">Search</span>
               <div className="relative">
@@ -478,123 +497,198 @@ export default function SolicitorDashboardPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="solicitor-matters-table min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-3">Client reference</th>
-                <th className="px-5 py-3">Client</th>
-                <th className="px-5 py-3">Partner / spouse</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Verification</th>
-                <th className="px-5 py-3">Outstanding</th>
-                <th className="px-5 py-3">Received</th>
-                <th className="px-5 py-3">Last activity</th>
-                <th className="px-5 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {loading ? (
-                <tr>
-                  <td className="px-5 py-6 text-sm text-slate-600" colSpan={9}>Loading matters...</td>
-                </tr>
-              ) : matters.length === 0 ? (
-                <tr>
-                  <td className="px-5 py-10 text-center" colSpan={9}>
-                    <p className="text-sm font-medium text-slate-700">No matters match the current filters.</p>
-                    <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
-                      {filtersActive ? 'Click Show all matters below or Show all above to clear filters. If it still doesn’t appear,' : 'If you expect to see a matter,'} check in Supabase that your account has role <code className="bg-slate-100 px-1 rounded">solicitor</code> or <code className="bg-slate-100 px-1 rounded">admin</code> in the <code className="bg-slate-100 px-1 rounded">profiles</code> table.
-                    </p>
-                    {filtersActive && (
-                      <button
-                        type="button"
-                        onClick={clearFilters}
-                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <FilterX size={16} />
-                        Show all matters
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ) : matters.map((matter) => {
-                const outstandingCategories = getMatterOutstandingCategories(matter);
-                const hasOutstandingCategories = outstandingCategories.length > 0;
-                const mergedPayload = mergeMatterPayloads(matter.client_payload, matter.solicitor_payload);
-                const displayPhone = mergedPayload?.phoneNumber || mergedPayload?.mobile || mergedPayload?.mobileNumber || mergedPayload?.telephoneNumber || matter.client_phone || matter.client_snapshot?.phoneNumber || matter.client_snapshot?.mobile || matter.client_snapshot?.raw?.mobile || matter.client_snapshot?.mobileNumber || 'No phone captured';
-                const partnerLabel = getPartnerShortLabel(mergedPayload);
-
+        {/* Mobile / tablet: stacked cards (no horizontal scroll). Desktop: full table. */}
+        {loading ? (
+          <div className="px-4 py-8 sm:px-6 text-sm text-slate-600">Loading matters…</div>
+        ) : matters.length === 0 ? (
+          <div className="px-4 py-10 sm:px-6 text-center">
+            <p className="text-sm font-medium text-slate-700">No matters match the current filters.</p>
+            <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
+              {filtersActive ? 'Click Show all matters below or Show all above to clear filters. If it still doesn’t appear,' : 'If you expect to see a matter,'} check in Supabase that your account has role <code className="bg-slate-100 px-1 rounded">solicitor</code> or <code className="bg-slate-100 px-1 rounded">admin</code> in the <code className="bg-slate-100 px-1 rounded">profiles</code> table.
+            </p>
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+              >
+                <FilterX size={16} />
+                Show all matters
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="lg:hidden space-y-3 px-4 pb-4 sm:px-6">
+              {matters.map((matter) => {
+                const { outstandingCategories, hasOutstandingCategories, displayPhone, partnerLabel } = getMatterDisplayData(matter);
                 return (
-                  <tr key={matter.id} className={hasOutstandingCategories ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}>
-                    <td className="px-5 py-4">
-                      <Link to={`/solicitor/matters/${matter.id}`} className="font-semibold text-indigo-700 hover:text-indigo-900">
+                  <div
+                    key={matter.id}
+                    className={`solicitor-matter-card rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${hasOutstandingCategories ? 'bg-amber-50/40' : ''}`}
+                  >
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <Link to={`/solicitor/matters/${matter.id}`} className="text-base font-semibold text-indigo-700 hover:text-indigo-900 break-all">
                         {matter.client_reference}
                       </Link>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-slate-700">
                       <p className="font-medium text-slate-900">{matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}</p>
-                      <p>{matter.client_email || matter.client_snapshot?.email || 'No email captured'}</p>
-                      <p>{displayPhone}</p>
-                    </td>
-                    <td className="max-w-[14rem] px-5 py-4 text-sm text-slate-700" title={partnerLabel || undefined}>
-                      <span className="line-clamp-2">{partnerLabel || '—'}</span>
-                    </td>
-                    <td className="px-5 py-4"><MatterStatusBadge status={matter.status} /></td>
-                    <td className="px-5 py-4 text-sm text-slate-700">
-                      {matter.outstanding_verification ? 'ID needed' : 'Complete'}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-slate-700">
-                      {hasOutstandingCategories ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {outstandingCategories.map((category) => {
-                            const meta = OUTSTANDING_CATEGORY_META[category];
-                            return (
-                              <span key={category} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
-                                {meta.shortLabel}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">None</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-sm text-slate-700" title={formatDate(matter.submitted_at)}>{matter.submitted_at ? new Date(matter.submitted_at).toLocaleDateString() : '—'}</td>
-                    <td className="px-5 py-4 text-sm text-slate-700">{formatDate(matter.last_activity_at)}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to={`/solicitor/matters/${matter.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          Open matter
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setMatterToDelete(matter);
-                          }}
-                          disabled={deletingId === matter.id}
-                          className="solicitor-matter-delete-btn inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-                          title="Delete this matter (cannot be undone)"
-                        >
-                          {deletingId === matter.id ? (
-                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
-                          ) : (
-                            <Trash2 size={14} />
-                          )}
-                          Delete
-                        </button>
+                      <p className="text-sm text-slate-600 break-all">{matter.client_email || matter.client_snapshot?.email || 'No email captured'}</p>
+                      <p className="text-sm text-slate-600 break-all">{displayPhone}</p>
+                      <p className="text-sm text-slate-700">
+                        <span className="text-slate-500">Partner / spouse: </span>
+                        <span className="line-clamp-3">{partnerLabel || '—'}</span>
+                      </p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 items-center">
+                      <MatterStatusBadge status={matter.status} />
+                      <span className="text-xs font-medium text-slate-600">
+                        {matter.outstanding_verification ? 'ID needed' : 'Verification complete'}
+                      </span>
+                    </div>
+                    {hasOutstandingCategories && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {outstandingCategories.map((category) => {
+                          const meta = OUTSTANDING_CATEGORY_META[category];
+                          return (
+                            <span key={category} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+                              {meta.shortLabel}
+                            </span>
+                          );
+                        })}
                       </div>
-                    </td>
-                  </tr>
+                    )}
+                    <dl className="mt-3 grid grid-cols-1 gap-1 text-xs text-slate-600 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-slate-500">Received</dt>
+                        <dd>{matter.submitted_at ? new Date(matter.submitted_at).toLocaleDateString() : '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-500">Last activity</dt>
+                        <dd className="break-words">{formatDate(matter.last_activity_at)}</dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <Link
+                        to={`/solicitor/matters/${matter.id}`}
+                        className="inline-flex flex-1 min-w-0 justify-center items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                      >
+                        Open matter
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setMatterToDelete(matter);
+                        }}
+                        disabled={deletingId === matter.id}
+                        className="solicitor-matter-delete-btn inline-flex flex-1 min-w-0 justify-center items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 min-h-[44px]"
+                        title="Delete this matter (cannot be undone)"
+                      >
+                        {deletingId === matter.id ? (
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                        Delete
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="solicitor-matters-table min-w-[860px] w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-4 xl:px-5 py-3">Client reference</th>
+                    <th className="px-4 xl:px-5 py-3">Client</th>
+                    <th className="px-4 xl:px-5 py-3">Partner / spouse</th>
+                    <th className="px-4 xl:px-5 py-3">Status</th>
+                    <th className="px-4 xl:px-5 py-3">Verification</th>
+                    <th className="px-4 xl:px-5 py-3">Outstanding</th>
+                    <th className="px-4 xl:px-5 py-3">Received</th>
+                    <th className="px-4 xl:px-5 py-3">Last activity</th>
+                    <th className="px-4 xl:px-5 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {matters.map((matter) => {
+                    const { outstandingCategories, hasOutstandingCategories, displayPhone, partnerLabel } = getMatterDisplayData(matter);
+                    return (
+                      <tr key={matter.id} className={hasOutstandingCategories ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}>
+                        <td className="px-4 xl:px-5 py-4">
+                          <Link to={`/solicitor/matters/${matter.id}`} className="font-semibold text-indigo-700 hover:text-indigo-900">
+                            {matter.client_reference}
+                          </Link>
+                        </td>
+                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
+                          <p className="font-medium text-slate-900">{matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}</p>
+                          <p className="break-all">{matter.client_email || matter.client_snapshot?.email || 'No email captured'}</p>
+                          <p className="break-all">{displayPhone}</p>
+                        </td>
+                        <td className="max-w-[14rem] px-4 xl:px-5 py-4 text-sm text-slate-700" title={partnerLabel || undefined}>
+                          <span className="line-clamp-2">{partnerLabel || '—'}</span>
+                        </td>
+                        <td className="px-4 xl:px-5 py-4"><MatterStatusBadge status={matter.status} /></td>
+                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
+                          {matter.outstanding_verification ? 'ID needed' : 'Complete'}
+                        </td>
+                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
+                          {hasOutstandingCategories ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {outstandingCategories.map((category) => {
+                                const meta = OUTSTANDING_CATEGORY_META[category];
+                                return (
+                                  <span key={category} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+                                    {meta.shortLabel}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">None</span>
+                          )}
+                        </td>
+                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700" title={formatDate(matter.submitted_at)}>{matter.submitted_at ? new Date(matter.submitted_at).toLocaleDateString() : '—'}</td>
+                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">{formatDate(matter.last_activity_at)}</td>
+                        <td className="px-4 xl:px-5 py-4">
+                          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                            <Link
+                              to={`/solicitor/matters/${matter.id}`}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 whitespace-nowrap min-h-[40px]"
+                            >
+                              Open matter
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setMatterToDelete(matter);
+                              }}
+                              disabled={deletingId === matter.id}
+                              className="solicitor-matter-delete-btn inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 min-h-[40px]"
+                              title="Delete this matter (cannot be undone)"
+                            >
+                              {deletingId === matter.id ? (
+                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
 
       <ConfirmModal
