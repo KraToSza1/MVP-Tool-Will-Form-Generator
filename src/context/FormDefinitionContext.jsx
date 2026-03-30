@@ -33,6 +33,27 @@ export function FormDefinitionProvider({ children }) {
         setIsCustom(false);
         return;
       }
+      /*
+       * Supabase `form_definitions` replaces the bundled questionnaire at runtime.
+       * If the DB row is older than this deploy's bundle (no/missing _schemaRevision), clients
+       * would see stale questions — "changes disappeared" after a publish or session change.
+       */
+      const bundledRev = Number(staticFormData._schemaRevision) || 0;
+      const remoteRev = Number(data._schemaRevision) || 0;
+      if (remoteRev < bundledRev) {
+        qLog('refresh_complete', {
+          silent,
+          isCustom: false,
+          usedStatic: true,
+          reason: 'remote_questionnaire_older_than_bundle',
+          bundledRev,
+          remoteRev,
+          getMs: ms,
+        });
+        setFormData(staticFormData);
+        setIsCustom(false);
+        return;
+      }
       qLog('refresh_complete', { silent, isCustom: true, sectionCount: data.formSections?.length, getMs: ms });
       setFormData(data);
       setIsCustom(true);

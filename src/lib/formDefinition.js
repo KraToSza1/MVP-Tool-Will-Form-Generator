@@ -530,7 +530,15 @@ export async function saveFormDefinition(payload) {
     return { error: 'Invalid payload: formSections required' };
   }
 
-  const payloadBytes = payloadByteSize(payload);
+  const mergedPayload = {
+    ...payload,
+    _schemaRevision: Math.max(
+      Number(bundledFactory._schemaRevision) || 0,
+      Number(payload._schemaRevision) || 0
+    ),
+  };
+
+  const payloadBytes = payloadByteSize(mergedPayload);
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
 
   formLog('upsert_start', {
@@ -549,7 +557,7 @@ export async function saveFormDefinition(payload) {
     try {
       formLog('upsert_transport', { mode: 'rest_fetch_jwt' });
       const rr = await withTimeout(
-        restUpsertFormDefinition(payload, userId),
+        restUpsertFormDefinition(mergedPayload, userId),
         SAVE_REQUEST_TIMEOUT_MS,
         'Saving the questionnaire took too long. Check your connection and try again.'
       );
@@ -562,7 +570,7 @@ export async function saveFormDefinition(payload) {
           updated_by: userId,
           transport: 'rest',
         });
-        const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null, userId);
+        const { error: revErr, skipped } = await insertFormRevision(mergedPayload, 'save', null, userId);
         if (revErr) {
           formLog('upsert_success_revision_failed', { revisionError: revErr });
         } else {
@@ -591,7 +599,7 @@ export async function saveFormDefinition(payload) {
       supabase.from('form_definitions').upsert(
         {
           name: DEFAULT_NAME,
-          payload,
+          payload: mergedPayload,
           updated_at: new Date().toISOString(),
           updated_by: userId,
         },
@@ -628,7 +636,7 @@ export async function saveFormDefinition(payload) {
     transport: 'supabase_js',
   });
 
-  const { error: revErr, skipped } = await insertFormRevision(payload, 'save', null, userId);
+  const { error: revErr, skipped } = await insertFormRevision(mergedPayload, 'save', null, userId);
   if (revErr) {
     formLog('upsert_success_revision_failed', { upsertMs, revisionError: revErr });
   } else {
