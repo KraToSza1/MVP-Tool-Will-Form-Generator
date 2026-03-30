@@ -55,7 +55,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
-import { Download, FileText, Scroll, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
+import { Download, FileText, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
 import { generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
@@ -253,7 +253,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [banner, setBanner] = useState(null); // { type: 'error'|'info', message: string }
   const [validationModalOpen, setValidationModalOpen] = useState(false);
   const [validationIssues, setValidationIssues] = useState([]);
-  const [clauseModalOpen, setClauseModalOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -282,12 +281,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       sections = formData.formSections.filter(hideForClient);
     }
     if (!solicitorMode) return sections;
-    const aristoneExecutor = formValues?.chooseAristoneExecutor === 'Aristone';
+    const aristoneExecutor =
+      formValues?.chooseAristoneExecutor === 'Aristone' ||
+      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
     return sections.filter((s) => {
       if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) return aristoneExecutor;
       return true;
     });
-  }, [solicitorMode, formData?.formSections, formValues?.chooseAristoneExecutor]);
+  }, [
+    solicitorMode,
+    formData?.formSections,
+    formValues?.chooseAristoneExecutor,
+    formValues?.appointProfessionalExecutor,
+    formValues?.professionalExecutorSelection,
+  ]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
   useEffect(() => {
@@ -523,10 +530,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing validation modal with Escape key');
           setValidationModalOpen(false);
         }
-        if (clauseModalOpen) {
-          DEBUG_LOGS&&console.log('[KEYBOARD] Closing clause modal with Escape key');
-          setClauseModalOpen(false);
-        }
         if (submitted) {
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing completion modal with Escape key');
           if (!solicitorMode) closeCompletionModal();
@@ -577,7 +580,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [validationModalOpen, clauseModalOpen, submitted, formValues, solicitorMode, closeCompletionModal]);
+  }, [validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModal]);
 
   const scrollToTop = () => {
     DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
@@ -2957,17 +2960,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     };
   }, [formValues]);
 
-  const clausePreview = useMemo(() => {
-    if (currentIndex < 1) return null;
-    const clauses = buildClauses({
-      formValues: debouncedFormValues,
-      formData,
-      interpolateText,
-      maxSectionIndex: currentIndex
-    });
-    return clauses.length > 0 ? clauses : null;
-  }, [currentIndex, debouncedFormValues, interpolateText]);
-
   const clauseDebugExport = useMemo(() => {
     if (!import.meta.env.DEV) return null;
     return buildClauseDebugExport(debouncedFormValues, currentIndex);
@@ -2986,72 +2978,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       URL.revokeObjectURL(url);
     };
   }, [clauseDebugExport]);
-
-  const renderClausePreview = (wrapperClassName = '') => {
-    if (currentIndex < 1) {
-      return null;
-    }
-
-    return (
-      <aside className={wrapperClassName}>
-        {clausePreview && clausePreview.length > 0 ? (
-          <div className="w-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 border-2 border-indigo-200 rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl">
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Scroll className="w-5 h-5" />
-              </div>
-              <h3 className="font-bold text-lg">Clause Preview</h3>
-              <span className="ml-auto bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
-                <CheckCircle2 size={14} />
-                {clausePreview.length} {clausePreview.length === 1 ? 'Clause' : 'Clauses'}
-              </span>
-            </div>
-
-            <div className={`p-4 ${clausePreview.length > 3 ? 'max-h-[70vh] overflow-y-auto custom-scrollbar' : ''}`} id="clause-preview-container">
-              <div className="space-y-4">
-                {clausePreview.map((clause) => (
-                  <div
-                    key={clause.id}
-                    className="bg-white border-l-4 border-indigo-500 rounded-r-lg p-3 shadow-sm hover:shadow-md transition-all duration-300"
-                    data-clause-id={clause.id}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-indigo-700 mb-1 uppercase tracking-wide">
-                          {clause.title}
-                        </p>
-                        <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-line">
-                          {getClauseDisplayText(clause)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="w-full bg-gradient-to-br from-indigo-50 via-white to-blue-50 border-2 border-indigo-200 rounded-xl shadow-lg overflow-hidden">
-            <div className="p-4">
-              <div className="text-center py-12 animate-fadeIn">
-                <div className="text-center py-6">
-                  <div className="mb-3 flex justify-center">
-                    <div className="p-3 bg-indigo-100 rounded-full">
-                      <FileText size={24} className="text-indigo-600" />
-                    </div>
-                  </div>
-                  <p className="text-gray-700 font-semibold mb-1.5">No clauses generated yet</p>
-                  <p className="text-sm text-gray-500">
-                    Complete relevant fields to see generated clauses appear here.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </aside>
-    );
-  };
 
   // Aggressive check for corrupted numbers that break PDF rendering
   const isInvalidNumber = (val) => {
@@ -3836,24 +3762,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               {!solicitorMode && <FormPeopleSummaryPanel payload={formValues} variant="client" />}
 
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  {currentIndex >= 1 && (
-                    <button
-                      onClick={() => {
-                        setClauseModalOpen(true);
-                      }}
-                      className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-lg transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto ${
-                        clausePreview && clausePreview.length > 0
-                          ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 active:from-purple-800 active:to-purple-900 text-white'
-                          : 'bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 active:from-gray-600 active:to-gray-700 text-white'
-                      }`}
-                      type="button"
-                    >
-                      <Scroll size={18} className="sm:w-5 sm:h-5" />
-                      <span>View Clauses ({clausePreview?.length || 0})</span>
-                    </button>
-                  )}
-                </div>
+                <div className="flex items-center gap-3" />
                 <div className="flex items-center gap-2">
                   {/* Client mode: no downloads. Solicitor mode: Execution PDF + Client copy */}
                   {currentIndex === visibleSections.length - 1 && isFormFullyCompleted() ? (
@@ -3982,18 +3891,32 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       displayLabel = "Partner's Full Name (Future Spouse/Partner)";
                     }
                   }
-                  const interpolatedFieldWillClause = field.willClauseText
-                    ? interpolateText(field.willClauseText, formValues)
-                    : null;
-
+                  /** Questionnaire must not surface draft Will clause text — PDF only (client / firm request). */
                   const interpolatedOptions = field.options
-                    ? field.options.map(opt => ({
+                    ? field.options.map((opt) => ({
                         ...opt,
                         willClauseText: opt.willClauseText
                           ? interpolateText(opt.willClauseText, formValues)
-                          : null
+                          : null,
                       }))
                     : null;
+                  const fieldForUi = {
+                    ...field,
+                    label: displayLabel,
+                    infoText:
+                      field.id === 'partnerFullName'
+                        ? "Simply type your partner's full name in the field above. The form saves automatically as you type - no need to press any buttons!"
+                        : field.infoText,
+                    willClauseText: undefined,
+                    options: (interpolatedOptions || field.options)?.map((o) => ({ ...o, willClauseText: undefined })),
+                  };
+                  if (fieldForUi.subFields) {
+                    fieldForUi.subFields = fieldForUi.subFields.map((sf) => ({
+                      ...sf,
+                      willClauseText: undefined,
+                      options: sf.options?.map((o) => ({ ...o, willClauseText: undefined })),
+                    }));
+                  }
 
                   return (
                     <div
@@ -4005,16 +3928,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       }}
                     >
                       <FieldRenderer
-                        field={{
-                          ...field,
-                          label: displayLabel,
-                          // Add helpful info text for partner name field
-                          infoText: field.id === 'partnerFullName' ? 
-                            "Simply type your partner's full name in the field above. The form saves automatically as you type - no need to press any buttons!" : 
-                            field.infoText,
-                          willClauseText: interpolatedFieldWillClause,
-                          options: interpolatedOptions || field.options
-                        }}
+                        field={fieldForUi}
                         formValues={formValues}
                         setFormValues={setFormValues}
                         expandedFields={expandedFields}
@@ -4121,95 +4035,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           </div>
         </div>
       </main>
-
-      {/* Clause Preview Modal */}
-      {clauseModalOpen && (
-        <div 
-          className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 px-4 animate-fadeIn"
-          onClick={() => setClauseModalOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="clause-modal-title"
-        >
-          <div 
-            className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-slideIn my-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Scroll className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold">Clause Preview</h2>
-                  <p className="text-sm text-indigo-100 mt-0.5">
-                    {clausePreview?.length || 0} {clausePreview?.length === 1 ? 'clause' : 'clauses'} generated
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setClauseModalOpen(false);
-                }}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-gradient-to-br from-indigo-50 via-white to-blue-50">
-              {clausePreview && clausePreview.length > 0 ? (
-                <div className="space-y-4">
-                  {clausePreview.map((clause) => (
-                    <div
-                      key={clause.id}
-                      className="bg-white border-l-4 border-indigo-500 rounded-r-lg p-4 shadow-md hover:shadow-lg transition-all duration-300"
-                      data-clause-id={clause.id}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-indigo-700 mb-2 uppercase tracking-wide">
-                            {clause.title}
-                          </p>
-                          <p className="text-gray-800 leading-relaxed text-sm whitespace-pre-line">
-                            {getClauseDisplayText(clause)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="p-4 bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                    <Scroll className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <p className="text-gray-600 font-medium mb-1.5">No clauses to preview yet</p>
-                  <p className="text-sm text-gray-500">
-                    Complete the form fields above to see generated will clauses appear here
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => {
-                  setClauseModalOpen(false);
-                }}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all duration-200 font-medium"
-                aria-label="Close clause preview modal"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
           {/* Validation Modal */}
           {(() => {

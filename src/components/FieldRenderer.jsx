@@ -686,12 +686,27 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             const isChecked = Array.isArray(formValues[field.id])
               ? formValues[field.id].includes(optValue)
               : false;
-            
+            const liabilitySelected = Array.isArray(formValues[field.id]) ? formValues[field.id] : [];
+            const NO_L = 'NoLiabilities';
+            const isNoLiabilitiesField = field.id === 'estateLiabilityTypes';
+            const disabledByOther =
+              isNoLiabilitiesField && optValue === NO_L && liabilitySelected.some((v) => v !== NO_L);
+            const disabledByNoOnly =
+              isNoLiabilitiesField && optValue !== NO_L && liabilitySelected.includes(NO_L);
+
             return (
-              <label key={optValue || opt.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1.5 rounded-lg transition-colors duration-200 border border-transparent hover:border-indigo-200">
+              <label
+                key={optValue || opt.id}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors duration-200 border border-transparent ${
+                  disabledByOther || disabledByNoOnly
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer hover:bg-gray-50 hover:border-indigo-200'
+                }`}
+              >
                 <input
                   type="checkbox"
                   className="accent-indigo-600 w-4 h-4"
+                  disabled={disabledByOther || disabledByNoOnly}
                   checked={isChecked}
                   onChange={(e) => {
                     let newValue = Array.isArray(formValues[field.id])
