@@ -1,6 +1,6 @@
 {
     "formTitle": "Legacy Last Will & Testament Questionnaire",
-    "_schemaRevision": 1,
+    "_schemaRevision": 3,
     "formSections": [
       {
         "formSection": "Personal Information",
@@ -776,7 +776,7 @@
           {
             "id": "includeProfessionalRemuneration",
             "type": "radio",
-            "label": "If you request Aristone Solicitors to act, professional fees will apply.",
+            "label": "Include the standard professional trustee remuneration clause in your Will:",
             "options": [
               {
                 "value": "Yes",
@@ -1229,52 +1229,6 @@
       },
 
       {
-        "formSection": "Funeral Arrangements",
-        "fields": [
-          {
-            "id": "specifyFuneralArrangements",
-            "type": "radio",
-            "label": "Does the Testator want to specify any funeral arrangements?",
-            "options": [
-              { "value": "No", "label": "No" },
-              { "value": "Yes", "label": "Yes" } 
-            ],
-            "value": null
-          },
-          {
-            "id": "burialOrCremation",
-            "type": "radio",
-            "label": "Does the Testator wish to be buried or cremated?",
-            "options": [
-              { "value": "Buried", "label": "Buried", "willClauseText": "I wish for my body to be buried. I request that my Executors make all necessary arrangements for my funeral and burial in accordance with this wish." },
-              { "value": "Cremated", "label": "Cremated", "willClauseText": "I wish for my body to be cremated. I request that my Executors make all necessary arrangements for my funeral and cremation in accordance with this wish." },
-              { "value": "No Preference", "label": "No Preference", "willClauseText": "I express no preference regarding burial or cremation. I leave this decision to the discretion of my Executors or next of kin." }
-            ],
-            "value": null,
-            "conditions": [
-              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
-            ]
-          },
-          {
-            "id": "otherFuneralRequirements",
-            "type": "textarea",
-            "label": "Please state any other requirements",
-            "value": "",
-            "infoText": "Please note: It is possible that the Will is not discovered until after funeral plans are made, so it is advisable to create a memorandum of funeral wishes if the Testator has any specific instructions.",
-             "willClauseText": "Regarding my funeral arrangements, I wish {{field:otherFuneralRequirements:value}}. I request that my Executors take all reasonable steps to honor these wishes.",
-            "examples": [ 
-              "I wish to be buried in a specific cemetery.",
-              "I wish to have a specific type of service.",
-              "I wish to have my ashes scattered at a specific location."
-            ],
-            "conditions": [
-              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
-            ]
-          }
-        ]
-      },
-
-      {
         "formSection": "Organ Donation",
         "fields": [
           {
@@ -1335,6 +1289,52 @@
                  "willClauseTextFragment": "organ donation and therapeutic purposes" 
               }
                
+            ]
+          }
+        ]
+      },
+
+      {
+        "formSection": "Funeral Arrangements",
+        "fields": [
+          {
+            "id": "specifyFuneralArrangements",
+            "type": "radio",
+            "label": "Does the Testator want to specify any funeral arrangements?",
+            "options": [
+              { "value": "No", "label": "No" },
+              { "value": "Yes", "label": "Yes" } 
+            ],
+            "value": null
+          },
+          {
+            "id": "burialOrCremation",
+            "type": "radio",
+            "label": "Does the Testator wish to be buried or cremated?",
+            "options": [
+              { "value": "Buried", "label": "Buried", "willClauseText": "I wish for my body to be buried. I request that my Executors make all necessary arrangements for my funeral and burial in accordance with this wish." },
+              { "value": "Cremated", "label": "Cremated", "willClauseText": "I wish for my body to be cremated. I request that my Executors make all necessary arrangements for my funeral and cremation in accordance with this wish." },
+              { "value": "No Preference", "label": "No Preference", "willClauseText": "I express no preference regarding burial or cremation. I leave this decision to the discretion of my Executors or next of kin." }
+            ],
+            "value": null,
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
+            ]
+          },
+          {
+            "id": "otherFuneralRequirements",
+            "type": "textarea",
+            "label": "Please state any other requirements",
+            "value": "",
+            "infoText": "Please note: It is possible that the Will is not discovered until after funeral plans are made, so it is advisable to create a memorandum of funeral wishes if the Testator has any specific instructions.",
+             "willClauseText": "Regarding my funeral arrangements, I wish {{field:otherFuneralRequirements:value}}. I request that my Executors take all reasonable steps to honor these wishes.",
+            "examples": [ 
+              "I wish to be buried in a specific cemetery.",
+              "I wish to have a specific type of service.",
+              "I wish to have my ashes scattered at a specific location."
+            ],
+            "conditions": [
+              { "field": "specifyFuneralArrangements", "operator": "eq", "value": "Yes" }
             ]
           }
         ]

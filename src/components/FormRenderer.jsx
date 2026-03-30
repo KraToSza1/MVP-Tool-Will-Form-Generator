@@ -100,6 +100,21 @@ function getOrCreateReferenceNumberLocal() {
   return newRef;
 }
 
+/** Strip draft Will clause text from field definitions for questionnaire UI only (PDF uses raw form definition). */
+function stripWillClauseTextForUi(field) {
+  if (!field || typeof field !== 'object') return field;
+  const next = { ...field, willClauseText: undefined };
+  if (Array.isArray(next.options)) {
+    next.options = next.options.map((o) =>
+      o && typeof o === 'object' ? { ...o, willClauseText: undefined } : o
+    );
+  }
+  if (Array.isArray(next.subFields)) {
+    next.subFields = next.subFields.map(stripWillClauseTextForUi);
+  }
+  return next;
+}
+
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
   const { formData } = useFormDefinition();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -340,6 +355,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         changed = true;
       }
       return changed ? next : prev;
+    });
+  }, [
+    formValues?.chooseAristoneExecutor,
+    formValues?.appointProfessionalExecutor,
+    formValues?.professionalExecutorSelection,
+  ]);
+
+  // Aristone as executor: Estate Overview covers fees + mandatory ack; hide duplicate remuneration control and set Will clause for PDF.
+  useEffect(() => {
+    const aristoneAsExecutor =
+      formValues?.chooseAristoneExecutor === 'Aristone' ||
+      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
+    if (!aristoneAsExecutor) return;
+    setFormValues((prev) => {
+      if (prev.includeProfessionalRemuneration === 'Yes') return prev;
+      return { ...prev, includeProfessionalRemuneration: 'Yes' };
     });
   }, [
     formValues?.chooseAristoneExecutor,
@@ -3851,6 +3882,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;
                   }
+                  // Professional remuneration: Estate Overview covers fees when Aristone is executor — hide duplicate control (PDF still uses includeProfessionalRemuneration via auto-set).
+                  if (field.id === 'includeProfessionalRemuneration') {
+                    const aristoneExecutor =
+                      formValues?.chooseAristoneExecutor === 'Aristone' ||
+                      (formValues?.appointProfessionalExecutor === 'Yes' &&
+                        formValues?.professionalExecutorSelection === 'Aristone');
+                    if (aristoneExecutor) return null;
+                  }
                   // Skip fields that shouldn't be shown (conditions not met)
                   if (field.conditions && !evaluateFieldConditions(field)) {
                     // ALWAYS-ON Debug logging for foreignWillNotRevoked
@@ -3892,31 +3931,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     }
                   }
                   /** Questionnaire must not surface draft Will clause text — PDF only (client / firm request). */
-                  const interpolatedOptions = field.options
-                    ? field.options.map((opt) => ({
-                        ...opt,
-                        willClauseText: opt.willClauseText
-                          ? interpolateText(opt.willClauseText, formValues)
-                          : null,
-                      }))
-                    : null;
-                  const fieldForUi = {
+                  const fieldForUi = stripWillClauseTextForUi({
                     ...field,
                     label: displayLabel,
                     infoText:
                       field.id === 'partnerFullName'
                         ? "Simply type your partner's full name in the field above. The form saves automatically as you type - no need to press any buttons!"
                         : field.infoText,
-                    willClauseText: undefined,
-                    options: (interpolatedOptions || field.options)?.map((o) => ({ ...o, willClauseText: undefined })),
-                  };
-                  if (fieldForUi.subFields) {
-                    fieldForUi.subFields = fieldForUi.subFields.map((sf) => ({
-                      ...sf,
-                      willClauseText: undefined,
-                      options: sf.options?.map((o) => ({ ...o, willClauseText: undefined })),
-                    }));
-                  }
+                  });
 
                   return (
                     <div
