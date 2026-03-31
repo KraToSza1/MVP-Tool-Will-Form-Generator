@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { User, X, Check, Info } from 'lucide-react';
-import { PERSON_RECORD_SPECS, emptyPersonRecord } from '../utils/personRecordSpecs.js';
+import { PERSON_RECORD_SPECS, emptyPersonRecord, pickPersonFieldsForModal } from '../utils/personRecordSpecs.js';
 import {
   getContactCandidates,
   finalizePersonRecordForSave,
@@ -79,7 +79,7 @@ export default function PersonRecordModal({
     const c = candidates.find((x) => x.id === id);
     if (c?.data) {
       logPerson('prefill_applied', { targetFieldId, source: c.source, id: c.id });
-      setDraft({ ...emptyPersonRecord(), ...c.data });
+      setDraft({ ...emptyPersonRecord(), ...pickPersonFieldsForModal(c.data) });
     }
   };
 
@@ -113,7 +113,7 @@ export default function PersonRecordModal({
           <div className="min-w-0">
             <p id="person-record-modal-title" className="flex items-center gap-2 text-base font-semibold text-slate-100">
               <User className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden />
-              <span>Person details</span>
+              <span>Title, full name & address</span>
             </p>
             {contextLabel ? (
               <p className="mt-0.5 text-xs text-slate-400">For: {contextLabel}</p>
@@ -149,8 +149,8 @@ export default function PersonRecordModal({
           <p className="flex gap-2 text-xs text-slate-400">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" aria-hidden />
             <span>
-              Choose someone you already entered to copy their details, then adjust if needed. At least first and last name,
-              or &quot;known as&quot;, is required.
+              We only collect title, full name and address. You can copy from someone you already entered, then edit.
+              First name, last name, and at least address line 1 or postcode are required.
             </span>
           </p>
 

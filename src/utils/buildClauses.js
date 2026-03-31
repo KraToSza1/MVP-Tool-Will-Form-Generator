@@ -123,6 +123,7 @@ export const buildClauses = ({
       debtsReleasedSection: 'debtorData',
       digitalExecutorSection: 'digitalExecutorData',
       digitalExecutorsSection: 'digitalExecutorData', // CRITICAL FIX: Added missing mapping
+      digitalExecutorIfNoSection: 'digitalExecutorIfNoData',
       executorsSection: 'executorData', // CRITICAL FIX: Added missing mapping
       substituteExecutorsSection: 'substituteExecutorData', // CRITICAL FIX: Added missing mapping
       professionalExecutorSection: 'professionalExecutorData',

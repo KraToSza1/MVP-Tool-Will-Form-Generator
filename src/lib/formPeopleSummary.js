@@ -14,6 +14,7 @@ export const PEOPLE_ARRAY_KEYS = [
   { key: 'professionalExecutorData', role: 'Professional executor' },
   { key: 'substituteProfessionalExecutorData', role: 'Substitute professional executor' },
   { key: 'digitalExecutorData', role: 'Digital executor' },
+  { key: 'digitalExecutorIfNoData', role: 'Digital executor (no default digital-assets powers)' },
   { key: 'trusteeData', role: 'Trustee' },
   { key: 'substituteTrusteeData', role: 'Substitute trustee' },
   { key: 'separateTrusteeData', role: 'Separate trustee (FLIT / other)' },

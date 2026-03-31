@@ -843,6 +843,34 @@
             ]
           },
           {
+            "id": "digitalExecutorIfNoSection",
+            "type": "section",
+            "label": "Who should be appointed to deal with your digital assets?",
+            "infoText": "You chose not to authorise your general executors for digital assets. Name the person you wish to appoint for this purpose.",
+            "willClauseText": "I appoint {{field:digitalExecutorIfNoSection:fullDetails}} solely for the purpose of dealing with my digital assets, including accessing, managing, and distributing these assets according to my wishes.",
+            "conditions": [
+              { "field": "appointDigitalAssetsExecutor", "operator": "eq", "value": "No" }
+            ],
+            "subFields": [
+              {
+                "id": "digitalExecutorIfNoStatusDisplay",
+                "type": "display",
+                "text": "No digital executor has been specified."
+              },
+              {
+                "id": "addDigitalExecutorIfNoButton",
+                "type": "button",
+                "label": "Add Digital Executor",
+                "action": "openAddForm"
+              },
+              {
+                "id": "digitalExecutorIfNoData",
+                "type": "hidden",
+                "value": null
+              }
+            ]
+          },
+          {
             "id": "appointDifferentTrustees",
             "type": "radio",
             "label": "Shall there be different Trustees appointed to the Executors?",
@@ -1098,12 +1126,13 @@
           {
             "id": "estateOverviewIntro",
             "type": "display",
-            "text": "To help us confirm whether we can accept the appointment, please provide a general overview of your estate.\nYou only need to provide approximate information at this stage."
+            "text": "To help us confirm whether we can accept the appointment, please provide a general overview of your estate.\nYou only need to provide approximate information at this stage.",
+            "excludeFromWill": true
           },
           {
             "id": "aristoneProfessionalFeesNotice",
             "type": "display",
-            "text": "Professional fees notice",
+            "text": "If you instruct Aristone Solicitors as professional executor, their fees will be charged in line with the firm’s terms of engagement. This notice is for intake only and does not form part of your Will.",
             "excludeFromWill": true
           },
           {

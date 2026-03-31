@@ -4,6 +4,34 @@ import { buildClauses } from '../utils/buildClauses.js';
 import { CLIENT_VISIBLE_MAX_SECTION_INDEX } from '../constants/clientMode.js';
 import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
 
+/** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
+const pdfDebugEnabled = () =>
+  (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
+  (typeof globalThis !== 'undefined' && globalThis.__PDF_DEBUG__ === true);
+
+const pdfDebugLog = (...args) => {
+  if (pdfDebugEnabled()) console.log('[PDF]', ...args);
+};
+
+const pdfDebugPreview = (s, max = 140) => {
+  if (s == null || s === '') return '(empty)';
+  const t = String(s).replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+};
+
+/** Extra mm reserved inside the column so wrapped lines match drawable width (single source of truth with {@link getEffectiveTextWidth}). */
+const PDF_RIGHT_GUTTER_MM = 4;
+/** Shrink wrap width vs measured column so line breaks stay inside jsPDF measurement tolerance. */
+const PDF_WRAP_FUDGE_MM = 2.5;
+/** Shrink drawable width vs passed effective width so bold/render width stays inside the column. */
+const PDF_DRAW_FUDGE_MM = 1.5;
+
+/** Extra mm reserved for clause-body token layout + draw so summed getTextWidth never exceeds drawable edge (jsPDF measure vs place drift). */
+const CLAUSE_COLUMN_SAFETY_MM = 0.75;
+
+const getEffectiveTextWidth = (columnWidthMm) =>
+  Math.max(8, columnWidthMm - PDF_RIGHT_GUTTER_MM);
+
 // Helper to convert image to base64 and get dimensions for jsPDF
 const loadImageAsBase64 = async (imagePath) => {
   try {
@@ -223,6 +251,52 @@ const normalizeClauseText = (text) => {
   
   // Trim and return
   return normalized.trim();
+};
+
+/**
+ * Final deterministic cleanup after interpolation + {@link normalizeClauseText}, immediately before PDF render.
+ * Targets duplicated fragments and malformed lead-ins (not fixable by layout).
+ *
+ * --- Dev test strings (copy into clause text or unit tests) ---
+ * 1) Bold client values: I give \uE001Marcus\uE002 absolutely.
+ * 2) Long clause, no bold: (repeat lorem to exceed one line)
+ * 3) Failed-share lead: I give the failed share to If any of the above gifts fail, I give the rest ...
+ * 4) Duplicate estate: I give 50% of my net estate of my net estate to charity.
+ * 5) Double period: I direct burial at Crematorium.. Any other wishes ...
+ */
+/** One pass of PDF-only cleanup; called in a loop until stable (max 5). */
+const finalizeClauseTextForPdfPass = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let s = text;
+
+  s = s.replace(/([a-zA-Z0-9])\.\.+(?=\s|$|[,;])/g, '$1.');
+
+  s = s.replace(
+    /\bI\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+of\s+the\s+above\s+gifts?\s+fail/gi,
+    'If any of the above gifts fail'
+  );
+  s = s.replace(
+    /\bI\s+give\s+the\s+failed\s+share\s+to\s+If\s+any\s+of\s+the\s+above\s+gifts?\s+should\s+fail/gi,
+    'If any of the above gifts should fail'
+  );
+
+  s = s.replace(/\bof\s+my\s+net\s+estate\s+of\s+my\s+net\s+estate\b/gi, 'of my net estate');
+
+  s = s.replace(/,\s*and\s*\.\s*$/gi, '.');
+
+  return s.trim();
+};
+
+const finalizeClauseTextForPdf = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  let s = text;
+  let prev = null;
+  for (let i = 0; i < 5; i++) {
+    prev = s;
+    s = finalizeClauseTextForPdfPass(s);
+    if (s === prev) break;
+  }
+  return s;
 };
 
 // Sanitize punctuation in clause text (double periods, stray punctuation)
@@ -812,6 +886,205 @@ const evaluateConditions = (conditions, formValues, conditionLogic) => {
 const BOLD_START = '\uE001';
 const BOLD_END = '\uE002';
 
+/** Collapse whitespace on clause text while preserving bold markers. */
+const collapseWhitespaceForPdf = (text) => String(text).replace(/\s+/g, ' ').trim();
+
+/** Measure one token at the given font size (mm) with correct bold/normal. */
+const measureClauseTokenMm = (doc, token, fontSize) => {
+  doc.setFontSize(fontSize);
+  doc.setFont('times', token.bold ? 'bold' : 'normal');
+  return doc.getTextWidth(token.text);
+};
+
+/**
+ * Convert a string with BOLD_START/BOLD_END into ordered segments { text, bold }.
+ */
+const tokenizeMarkedString = (raw) => {
+  const s = String(raw);
+  const out = [];
+  let bold = false;
+  let buf = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === BOLD_START) {
+      if (buf) {
+        out.push({ text: buf, bold });
+        buf = '';
+      }
+      bold = true;
+      continue;
+    }
+    if (c === BOLD_END) {
+      if (buf) {
+        out.push({ text: buf, bold });
+        buf = '';
+      }
+      bold = false;
+      continue;
+    }
+    buf += c;
+  }
+  if (buf) out.push({ text: buf, bold });
+  return out;
+};
+
+/**
+ * Split segment text into word-level tokens; spaces are separate tokens; bold state preserved.
+ */
+const flattenToWordTokens = (segments) => {
+  const tokens = [];
+  for (const seg of segments) {
+    if (!seg.text) continue;
+    const parts = seg.text.split(/(\s+)/);
+    for (const p of parts) {
+      if (p === '') continue;
+      tokens.push({ text: p, bold: seg.bold });
+    }
+  }
+  return tokens;
+};
+
+const isWhitespaceOnlyToken = (t) => /^\s+$/.test(t.text);
+
+/**
+ * Build lines using measured token widths (times bold/normal). Line breaks match what will be drawn.
+ * Emergency shrink only for a single token wider than maxWidthMm (no hyphen splitting).
+ */
+const layoutSegmentAwareLines = (doc, tokens, maxWidthMm, fontSize) => {
+  const lines = [];
+  let cur = [];
+  let curW = 0;
+  const measure = (tok) => measureClauseTokenMm(doc, tok, fontSize);
+
+  for (const tok of tokens) {
+    const w = measure(tok);
+
+    if (isWhitespaceOnlyToken(tok)) {
+      if (cur.length === 0) continue;
+      if (curW + w <= maxWidthMm) {
+        cur.push(tok);
+        curW += w;
+      } else {
+        lines.push({ tokens: [...cur], emergencyScale: 1 });
+        cur = [];
+        curW = 0;
+      }
+      continue;
+    }
+
+    if (curW + w <= maxWidthMm) {
+      cur.push(tok);
+      curW += w;
+      continue;
+    }
+
+    if (cur.length > 0) {
+      lines.push({ tokens: [...cur], emergencyScale: 1 });
+      cur = [];
+      curW = 0;
+    }
+
+    if (w > maxWidthMm) {
+      lines.push({ tokens: [tok], emergencyScale: maxWidthMm / w });
+      continue;
+    }
+
+    cur.push(tok);
+    curW = w;
+  }
+
+  if (cur.length) lines.push({ tokens: [...cur], emergencyScale: 1 });
+  return lines;
+};
+
+const CLAUSE_WIDTH_EPS_MM = 0.08;
+
+/**
+ * Draw pre-laid-out token lines; optional per-line emergency scale for one overlong token.
+ * Logs measured width vs limit; errors if a token would draw past rightLimit (recovery: wrap token).
+ */
+const drawSegmentAwareClauseLines = (doc, lineBlocks, x, y, maxWidthMm, lineHeight, baseFontSize, clauseRefForLog) => {
+  const rightLimit = x + maxWidthMm;
+  let lineY = y;
+  let visualLineIdx = 0;
+
+  const logAndAssertVisualLine = (lineWidthMm, preview, blockLineIdx, emergencyScale) => {
+    pdfDebugLog('drawSegmentAwareClauseLines:visualLine', {
+      clauseRef: clauseRefForLog,
+      layoutBlockIdx: blockLineIdx,
+      visualLineIdx,
+      lineWidthmm: lineWidthMm.toFixed(3),
+      rightEdgeMm: rightLimit.toFixed(3),
+      maxWidthmm: maxWidthMm.toFixed(3),
+      emergencyScale: emergencyScale < 1 ? emergencyScale.toFixed(4) : '1',
+      linePreview: pdfDebugPreview(preview, 160),
+    });
+    if (lineWidthMm > maxWidthMm + CLAUSE_WIDTH_EPS_MM) {
+      console.error('[PDF][CLAUSE_WIDTH] visual line wider than column maxWidthMm', {
+        clauseRef: clauseRefForLog,
+        layoutBlockIdx: blockLineIdx,
+        visualLineIdx,
+        lineWidthmm: lineWidthMm.toFixed(3),
+        maxWidthmm: maxWidthMm.toFixed(3),
+        lineText: preview,
+      });
+    }
+    visualLineIdx += 1;
+  };
+
+  for (let lineIdx = 0; lineIdx < lineBlocks.length; lineIdx++) {
+    const block = lineBlocks[lineIdx];
+    const scale = block.emergencyScale != null && block.emergencyScale < 1 ? block.emergencyScale : 1;
+    const drawSize = baseFontSize * scale;
+
+    let drawX = x;
+    let lineBuf = '';
+    const lineTextForLog = block.tokens.map((t) => t.text).join('');
+
+    for (let ti = 0; ti < block.tokens.length; ti++) {
+      const tok = block.tokens[ti];
+      let tw = measureClauseTokenMm(doc, tok, drawSize);
+
+      if (drawX + tw > rightLimit + CLAUSE_WIDTH_EPS_MM) {
+        console.error('[PDF][CLAUSE_WIDTH] token would exceed right margin — recovering to next line', {
+          clauseRef: clauseRefForLog,
+          layoutBlockIdx: lineIdx,
+          drawX: drawX.toFixed(3),
+          tokenWmm: tw.toFixed(3),
+          rightLimitmm: rightLimit.toFixed(3),
+          tokenPreview: pdfDebugPreview(tok.text, 80),
+          linePreview: pdfDebugPreview(lineTextForLog, 200),
+        });
+        logAndAssertVisualLine(drawX - x, lineBuf, lineIdx, scale);
+        lineY += lineHeight;
+        drawX = x;
+        lineBuf = '';
+        tw = measureClauseTokenMm(doc, tok, drawSize);
+      }
+
+      if (drawX + tw > rightLimit + CLAUSE_WIDTH_EPS_MM) {
+        console.error('[PDF][CLAUSE_WIDTH] hard overflow after recovery', {
+          clauseRef: clauseRefForLog,
+          layoutBlockIdx: lineIdx,
+          tokenPreview: pdfDebugPreview(tok.text, 120),
+        });
+      }
+
+      doc.setFontSize(drawSize);
+      doc.setFont('times', tok.bold ? 'bold' : 'normal');
+      doc.text(tok.text, drawX, lineY);
+      lineBuf += tok.text;
+      drawX += tw;
+    }
+
+    logAndAssertVisualLine(drawX - x, lineBuf || lineTextForLog, lineIdx, scale);
+    doc.setFontSize(baseFontSize);
+    lineY += lineHeight;
+  }
+
+  return lineY;
+};
+
 // Wraps resolved client values with bold markers for PDF rendering. Exclusions: unresolved placeholders, empty strings.
 const wrapClientValue = (val) => {
   if (val == null || val === '') return '';
@@ -853,6 +1126,7 @@ const interpolateText = (text, values, options = {}) => {
     professionalExecutorSection: 'professionalExecutorData',
     substituteProfessionalExecutorSection: 'substituteProfessionalExecutorData',
     digitalExecutorsSection: 'digitalExecutorData',
+    digitalExecutorIfNoSection: 'digitalExecutorIfNoData',
     trusteesSection: 'trusteeData',
     substituteTrusteesSection: 'substituteTrusteeData',
     charityBenefitSection: 'charityBenefitDetails',
@@ -942,7 +1216,25 @@ const interpolateText = (text, values, options = {}) => {
         }
         // Fall through to normal array handling
       }
-      
+
+      const personSectionFullDetailsIds = [
+        'executorsSection',
+        'substituteExecutorsSection',
+        'digitalExecutorsSection',
+        'digitalExecutorIfNoSection',
+        'trusteesSection',
+        'substituteTrusteesSection',
+      ];
+      if (personSectionFullDetailsIds.includes(sectionId) && (subField === 'fullDetails' || subField === 'fullList')) {
+        const dataKey = fallbackMap[sectionId];
+        const arr = dataKey ? values[dataKey] : null;
+        if (Array.isArray(arr) && arr.length > 0) {
+          const resolved = arr.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+          if (resolved) return wrapClientValue(resolved);
+        }
+        return '';
+      }
+
       // CRITICAL FIX: Special handling for pet carer sections when using fullDetails
       if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && subField === 'fullDetails') {
         // CRITICAL: Use explicit data keys - DO NOT fall back to generic lookups
@@ -1570,6 +1862,7 @@ const interpolateText = (text, values, options = {}) => {
 export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
   const { isClientPDF = false, formSchema: customSchema } = options || {};
   console.log('[WillTool Flow] PDF generator started', { isClientPDF, hasFormValues: !!formValues, valueKeys: formValues ? Object.keys(formValues).length : 0 });
+  pdfDebugLog('generatePDFWithJSPDF — text logs: dev build, or set globalThis.__PDF_DEBUG__ = true');
   try {
     const schema = customSchema && customSchema.formSections ? customSchema : formSchema;
 
@@ -1626,8 +1919,102 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     // A4: 210mm x 297mm
     // Professional margins: ~20mm
     const margin = 20;
+    pdfDebugLog('page', { pageWidthMm: pageWidth.toFixed(2), pageHeightMm: pageHeight.toFixed(2), margin });
     const lineHeight = 5.5; // Modern tighter line spacing
     let yPos = margin;
+
+    /**
+     * Word-at-a-time wrap: breaks ONLY at spaces — never chops words (jsPDF splitTextToSize
+     * uses splitLongWord which cuts mid-word for long tokens).
+     * Oversized / hyphenated tokens: split only on hyphens into whole chunks; never call splitTextToSize.
+     * Unbreakably long single words: clause bodies use segment-aware layout + emergency line scale; schedules use one line per chunk here.
+     */
+    const wrapPdfLinesWordAware = (text, maxWidthMm, fontSize, fontStyle) => {
+      const t = String(text).replace(/\s+/g, ' ').trim();
+      if (!t) {
+        pdfDebugLog('wrapPdfLinesWordAware: empty input');
+        return [];
+      }
+      doc.setFontSize(fontSize);
+      doc.setFont('times', fontStyle);
+      const safeW = Math.max(8, maxWidthMm - PDF_WRAP_FUDGE_MM);
+
+      const breakOversizedToken = (word) => {
+        if (!word) return [];
+        const wW = doc.getTextWidth(word);
+        if (wW <= safeW) return [word];
+        if (word.includes('-')) {
+          const segs = word.split('-');
+          const out = [];
+          let cur = segs[0];
+          for (let i = 1; i < segs.length; i++) {
+            const joined = `${cur}-${segs[i]}`;
+            if (doc.getTextWidth(joined) <= safeW) {
+              cur = joined;
+            } else {
+              if (cur) out.push(cur);
+              cur = segs[i];
+            }
+          }
+          if (cur) out.push(cur);
+          pdfDebugLog('breakOversizedToken (hyphen split)', {
+            wordMm: wW.toFixed(2),
+            safeWmm: safeW.toFixed(2),
+            pieces: out.length,
+            preview: pdfDebugPreview(word, 80),
+          });
+          return out;
+        }
+        pdfDebugLog('breakOversizedToken (single line — may scale when drawing bold)', {
+          wordMm: wW.toFixed(2),
+          safeWmm: safeW.toFixed(2),
+          preview: pdfDebugPreview(word, 80),
+        });
+        return [word];
+      };
+
+      const words = t.split(' ');
+      const lines = [];
+      let current = '';
+      for (const word of words) {
+        if (!word) continue;
+        const candidate = current ? `${current} ${word}` : word;
+        if (doc.getTextWidth(candidate) <= safeW) {
+          current = candidate;
+          continue;
+        }
+        if (current) {
+          lines.push(current);
+          current = '';
+        }
+        if (doc.getTextWidth(word) <= safeW) {
+          current = word;
+          continue;
+        }
+        const pieces = breakOversizedToken(word);
+        for (let i = 0; i < pieces.length; i++) {
+          if (i < pieces.length - 1) lines.push(pieces[i]);
+          else current = pieces[i];
+        }
+      }
+      if (current) lines.push(current);
+      pdfDebugLog('wrapPdfLinesWordAware', {
+        fontStyle,
+        fontSize,
+        drawableWidthMm: safeW.toFixed(2),
+        wordCount: words.length,
+        lineCount: lines.length,
+        preview: pdfDebugPreview(t, 160),
+      });
+      return lines;
+    };
+
+    /** Plain display strings (clause body, schedules): wrap with normal metrics — bold segments are scaled at draw time. */
+    const wrapPdfLines = (text, maxWidthMm, fontSize) =>
+      wrapPdfLinesWordAware(text, maxWidthMm, fontSize, 'normal');
+
+    const wrapPdfLinesWithFont = (text, maxWidthMm, fontSize, fontStyle) =>
+      wrapPdfLinesWordAware(text, maxWidthMm, fontSize, fontStyle);
 
     // Helper to add new page if needed
     const checkPageBreak = (requiredHeight = lineHeight) => {
@@ -1650,12 +2037,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       } = options;
       
       const actualX = x + indent;
-      const actualMaxWidth = maxWidth - indent;
+      const rawColumnWidth = maxWidth - indent;
+      const wrapWidth = getEffectiveTextWidth(rawColumnWidth);
       
-      // Wrap text
       doc.setFontSize(fontSize);
+      const lines = wrapPdfLinesWithFont(String(text).trim(), wrapWidth, fontSize, bold ? 'bold' : 'normal');
       doc.setFont('times', bold ? 'bold' : 'normal');
-      const lines = doc.splitTextToSize(String(text).trim(), actualMaxWidth);
       
       // Check page break before rendering
       const neededHeight = lines.length * customLineHeight + spacingAfter;
@@ -1671,6 +2058,14 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         currentY += customLineHeight;
       });
       
+      pdfDebugLog('reportLine', {
+        bold,
+        fontSize,
+        lineCount: lines.length,
+        rawColumnWidthmm: rawColumnWidth.toFixed(2),
+        wrapWidthmm: wrapWidth.toFixed(2),
+        preview: pdfDebugPreview(String(text).trim(), 120),
+      });
       // Update global yPos
       yPos = currentY + spacingAfter;
     };
@@ -1684,9 +2079,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         doc.setFont('times', bold ? 'bold' : 'normal');
         doc.setTextColor(0, 0, 0);
         
-        // Calculate available width - ensure text never goes past right margin
-        const availableWidth = maxWidth || (pageWidth - margin - x); // Width from x to right margin
-        const lines = doc.splitTextToSize(safeText, availableWidth);
+        const rawColumnWidth = maxWidth || (pageWidth - margin - x);
+        const wrapWidth = getEffectiveTextWidth(rawColumnWidth);
+        pdfDebugLog('addText:wrap', { bold, align, fontSize, wrapWidthmm: wrapWidth.toFixed(2), preview: pdfDebugPreview(safeText, 120) });
+        const lines = wrapPdfLinesWithFont(safeText, wrapWidth, fontSize, bold ? 'bold' : 'normal');
+        doc.setFont('times', bold ? 'bold' : 'normal');
         const spacing = lineSpacing || (fontSize * 0.45);
         
         let currentY = yPos;
@@ -1708,24 +2105,14 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
             currentY += spacing;
           });
         } else {
-          // Left align - ensure text stays within margins
-          lines.forEach(line => {
-            const lineWidth = doc.getTextWidth(line);
-            const maxX = pageWidth - margin;
-            if (x + lineWidth > maxX) {
-              // Text would overflow, truncate at word boundaries if needed
-              let truncated = line;
-              while (doc.getTextWidth(truncated) > availableWidth && truncated.length > 0) {
-                truncated = truncated.slice(0, -1);
-              }
-              doc.text(truncated || line.substring(0, Math.floor(availableWidth / (fontSize * 0.5))), x, currentY);
-            } else {
-              doc.text(line, x, currentY);
-            }
+          // Left align — word-aware wrap fits the line; do not truncate
+          lines.forEach((line) => {
+            doc.text(line, x, currentY);
             currentY += spacing;
           });
         }
         yPos = currentY;
+        pdfDebugLog('addText:done', { lineCount: lines.length, yPos: yPos.toFixed(2) });
       }
       return yPos;
     };
@@ -1877,47 +2264,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     doc.text('.', margin + doc.getTextWidth('This is the Will of ' + cleanName), yPos);
     yPos += 8;
 
-    // Helper: render text with bold segments (BOLD_START...BOLD_END = client-entered values)
-    const renderTextWithBoldSegments = (doc, text, x, y, availableWidth, lineHeight, fontSize) => {
-      const re = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
-      const displayText = text.replace(re, '');
-      const lines = doc.splitTextToSize(displayText, availableWidth);
-      let displayOffset = 0;
-      let lineY = y;
-      doc.setFontSize(fontSize);
-      let boldDepth = 0;
-      for (const line of lines) {
-        const lineDisplayEnd = displayOffset + line.length;
-        let displayPos = 0;
-        let lineOrig = '';
-        let lineStartBoldDepth = boldDepth;
-        for (let i = 0; i < text.length; i++) {
-          const c = text[i];
-          if (c === BOLD_START || c === BOLD_END) {
-            if (displayOffset <= displayPos && displayPos < lineDisplayEnd) lineOrig += c;
-            if (c === BOLD_START) boldDepth++; else if (c === BOLD_END) boldDepth--;
-          } else {
-            if (displayOffset <= displayPos && displayPos < lineDisplayEnd) lineOrig += c;
-            displayPos++;
-          }
-        }
-        displayOffset = lineDisplayEnd;
-        const splitRe = new RegExp(BOLD_START + '|' + BOLD_END);
-        const parts = lineOrig.split(splitRe);
-        let segX = x;
-        const startBold = lineStartBoldDepth % 2 === 1;
-        for (let j = 0; j < parts.length; j++) {
-          const seg = parts[j];
-          if (!seg) continue;
-          const isBold = startBold ? (j % 2 === 0) : (j % 2 === 1);
-          doc.setFont('times', isBold ? 'bold' : 'normal');
-          doc.text(seg, segX, lineY);
-          segX += doc.getTextWidth(seg);
-        }
-        lineY += lineHeight;
-      }
-      return lineY;
-    };
+    // Clause bodies: segment-aware wrap + draw (measured token widths; no plain-text pre-wrap).
 
     // Helper function for hanging indent clause rendering (supports bold client-entered values)
     // number: use "1.1", "2.3" etc for sub-paragraphs; null = render unnumbered (single-paragraph section)
@@ -1935,15 +2282,28 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     }) => {
       const hasNumber = number != null && number !== '';
       const textX = hasNumber ? margin + numColW : margin;
-      const availableWidth = pageWidth - margin - (hasNumber ? numColW : 0);
+      const rawColumnWidth = pageWidth - textX - margin;
+      const availableWidth = getEffectiveTextWidth(rawColumnWidth);
 
       doc.setFont('times', 'normal');
       doc.setFontSize(fontSize);
-      const re = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
-      const displayText = text.replace(re, '');
-      const lines = doc.splitTextToSize(displayText, availableWidth);
+      const clauseText = collapseWhitespaceForPdf(text);
+      const maxWidthMm = Math.max(8, availableWidth);
+      const layoutWidthMm = Math.max(6, maxWidthMm - CLAUSE_COLUMN_SAFETY_MM);
+      const tokens = flattenToWordTokens(tokenizeMarkedString(clauseText));
+      const lineBlocks = layoutSegmentAwareLines(doc, tokens, layoutWidthMm, fontSize);
+      pdfDebugLog('renderNumberedClause', {
+        number: number ?? '(none)',
+        lineCount: lineBlocks.length,
+        rawColumnWidthmm: rawColumnWidth.toFixed(2),
+        effectiveWidthmm: availableWidth.toFixed(2),
+        maxWidthMm: maxWidthMm.toFixed(2),
+        layoutWidthMm: layoutWidthMm.toFixed(2),
+        fontSize,
+        textPreview: pdfDebugPreview(clauseText.replace(new RegExp(BOLD_START + '|' + BOLD_END, 'g'), ''), 180),
+      });
 
-      const neededHeight = Math.max(lines.length, 1) * lineHeight + spacingAfter;
+      const neededHeight = Math.max(lineBlocks.length, 1) * lineHeight + spacingAfter;
       if (currentYPos + neededHeight > pageHeight - margin) {
         doc.addPage();
         currentYPos = margin;
@@ -1955,7 +2315,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         doc.text(`${number}.`, margin, currentYPos);
       }
 
-      const finalY = renderTextWithBoldSegments(doc, text, textX, currentYPos, availableWidth, lineHeight, fontSize);
+      const clauseRefForLog = number != null && number !== '' ? String(number) : '(unnumbered)';
+      const finalY = drawSegmentAwareClauseLines(
+        doc,
+        lineBlocks,
+        textX,
+        currentYPos,
+        layoutWidthMm,
+        lineHeight,
+        fontSize,
+        clauseRefForLog
+      );
       return finalY + spacingAfter;
     };
 
@@ -2003,6 +2373,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     
     // Legacy clause builder disabled (shared builder used above)
     if (false) {
+      const seenClauses = new Set();
+      let hasPersonalPossessionsClause = false;
+      const PERSONAL_POSSESSIONS_PATTERN = /\bpersonal\s+possessions?\b/i;
       schema.formSections.forEach((section) => {
         if (!section || !section.fields) return;
 
@@ -2810,7 +3183,6 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           spacingAfter: 6
         });
         
-        const availableWidth = pageWidth - (margin * 2) - 10;
         itemsToDisplay.forEach((item) => {
           console.log(`[PDF VALIDATION REPORT] Rendering item:`, {
             section: item.section,
@@ -2863,7 +3235,6 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           spacingAfter: 6
         });
         
-        const availableWidth = pageWidth - (margin * 2) - 10;
         placeholders.forEach((item) => {
           const itemText = `- ${item.section}: ${item.field}`;
           reportLine(itemText, {
@@ -3105,10 +3476,13 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       
       // Apply comprehensive text normalization FIRST (fixes punctuation, grammar, duplication)
       processedClauseText = normalizeClauseText(processedClauseText);
-      
+
       // Apply final standardization and sanitization
       processedClauseText = sanitizeUnprofessionalContent(processedClauseText);
       processedClauseText = standardizeAristoneName(processedClauseText);
+
+      // Final PDF-only cleanup (duplicated fragments / bad lead-ins) after all text transforms
+      processedClauseText = finalizeClauseTextForPdf(processedClauseText);
       
       // Clean whitespace for hanging indent (remove newlines, normalize spaces)
       processedClauseText = String(processedClauseText).replace(/\s*\n\s*/g, ' ').trim();
@@ -3179,18 +3553,32 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         checkPageBreak(lineHeight * 2);
         doc.setFont('times', 'normal');
         doc.setFontSize(11.5);
-        const availableWidth = pageWidth - (margin * 2);
-        const displayRe = new RegExp(BOLD_START + '|' + BOLD_END, 'g');
-        const displayText = processedClauseText.replace(displayRe, '');
-        const lines = doc.splitTextToSize(displayText, availableWidth);
+        const shortClauseTextX = margin;
+        const rawColumnWidth = pageWidth - shortClauseTextX - margin;
+        const availableWidth = getEffectiveTextWidth(rawColumnWidth);
+        const shortClauseText = collapseWhitespaceForPdf(processedClauseText);
+        const maxWidthMm = Math.max(8, availableWidth);
+        const layoutWidthMm = Math.max(6, maxWidthMm - CLAUSE_COLUMN_SAFETY_MM);
+        const shortTokens = flattenToWordTokens(tokenizeMarkedString(shortClauseText));
+        const shortLineBlocks = layoutSegmentAwareLines(doc, shortTokens, layoutWidthMm, 11.5);
 
-        const neededHeight = lines.length * 5.5 + 6;
+        const neededHeight = shortLineBlocks.length * 5.5 + 6;
         if (yPos + neededHeight > pageHeight - margin) {
           doc.addPage();
           yPos = margin;
         }
 
-        yPos = renderTextWithBoldSegments(doc, processedClauseText, margin, yPos, availableWidth, 5.5, 11.5) + 6;
+        yPos =
+          drawSegmentAwareClauseLines(
+            doc,
+            shortLineBlocks,
+            shortClauseTextX,
+            yPos,
+            layoutWidthMm,
+            5.5,
+            11.5,
+            '(short)'
+          ) + 6;
       }
     });
     
@@ -3307,7 +3695,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         
         doc.setFontSize(11.5);
         doc.setFont('times', 'normal');
-        const availableWidth = pageWidth - (margin * 2);
+        const scheduleBodyTextX = margin;
+        const rawColumnWidth = pageWidth - scheduleBodyTextX - margin;
+        const availableWidth = getEffectiveTextWidth(rawColumnWidth);
         
         // Extract schedule number from scheduleName (e.g., "Schedule 2177354" -> "2177354")
         const scheduleNumMatch = scheduleName.match(/\d+/);
@@ -3407,8 +3797,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         if (scheduleData && typeof scheduleData === 'string' && scheduleData.trim()) {
           console.log(`[PDF SCHEDULE] ✅ Schedule content found, length: ${scheduleData.length} characters`);
           console.log(`[PDF SCHEDULE] Rendering schedule content starting at yPos: ${yPos.toFixed(1)}`);
+          const scheduleLines = wrapPdfLines(scheduleData, availableWidth, 11.5);
           doc.setFont('times', 'bold'); // Schedule content is client-entered
-          const scheduleLines = doc.splitTextToSize(scheduleData, availableWidth);
           console.log(`[PDF SCHEDULE] Schedule content split into ${scheduleLines.length} lines`);
           let lineY = yPos;
           let pageBreaksAdded = 0;
@@ -3440,8 +3830,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           doc.text(`[MISSING: ${legalScheduleName} content]`, margin, yPos);
           doc.setTextColor(0, 0, 0);
           yPos += 10;
+          const stubLines = wrapPdfLines('This schedule is referenced in the Will but the content has not been provided.', availableWidth, 11.5);
           doc.setFont('times', 'normal');
-          const stubLines = doc.splitTextToSize('This schedule is referenced in the Will but the content has not been provided.', availableWidth);
           let lineY = yPos;
           stubLines.forEach(line => {
             // Check for page break before each line

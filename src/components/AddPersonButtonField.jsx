@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, CheckCircle2, Trash2 } from 'lucide-react';
 import PersonRecordModal from './PersonRecordModal.jsx';
-import { formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
+import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
 
 const LOG =
@@ -63,14 +63,23 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
       <button
         type="button"
         data-field-id={field.id}
+        aria-label={`${field.label} — ${ADD_PERSON_FIELDS_HINT}`}
         onClick={() => {
           logPerson('add_button_open_modal', { targetFieldId, fieldId: field.id });
           setModalOpen(true);
         }}
-        className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transform hover:scale-105 active:scale-95"
+        className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-3 sm:px-6 rounded-xl shadow-lg transition-all duration-300 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2 sm:gap-3 text-left min-h-[44px] transform hover:scale-[1.02] active:scale-95 w-full sm:w-auto"
       >
-        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-        <span>{field.label}</span>
+        <Plus
+          className="w-5 h-5 shrink-0 mt-0.5 group-hover:rotate-90 transition-transform duration-300"
+          aria-hidden
+        />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="leading-snug">{field.label}</span>
+          <span className="text-xs font-normal opacity-90 leading-tight wrap-break-word">
+            {ADD_PERSON_FIELDS_HINT}
+          </span>
+        </span>
       </button>
 
       <PersonRecordModal

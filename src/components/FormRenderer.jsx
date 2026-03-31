@@ -362,15 +362,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     formValues?.professionalExecutorSelection,
   ]);
 
-  // Aristone as executor: Estate Overview covers fees + mandatory ack; hide duplicate remuneration control and set Will clause for PDF.
+  // Professional remuneration acknowledgement should only be shown when Aristone is selected.
+  // If Aristone is not selected, clear the acknowledgement value.
   useEffect(() => {
     const aristoneAsExecutor =
       formValues?.chooseAristoneExecutor === 'Aristone' ||
       (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
-    if (!aristoneAsExecutor) return;
     setFormValues((prev) => {
-      if (prev.includeProfessionalRemuneration === 'Yes') return prev;
-      return { ...prev, includeProfessionalRemuneration: 'Yes' };
+      if (aristoneAsExecutor) return prev;
+      if (prev.includeProfessionalRemuneration == null) return prev;
+      return { ...prev, includeProfessionalRemuneration: null };
     });
   }, [
     formValues?.chooseAristoneExecutor,
@@ -685,6 +686,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       professionalExecutorSection: 'professionalExecutorData',
       substituteProfessionalExecutorSection: 'substituteProfessionalExecutorData',
       digitalExecutorsSection: 'digitalExecutorData',
+      digitalExecutorIfNoSection: 'digitalExecutorIfNoData',
       trusteesSection: 'trusteeData',
       substituteTrusteesSection: 'substituteTrusteeData',
       charityBenefitSection: 'charityBenefitDetails'
@@ -768,7 +770,25 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           // Fall through to normal array handling
         }
-        
+
+        const personSectionFullDetailsIds = [
+          'executorsSection',
+          'substituteExecutorsSection',
+          'digitalExecutorsSection',
+          'digitalExecutorIfNoSection',
+          'trusteesSection',
+          'substituteTrusteesSection',
+        ];
+        if (personSectionFullDetailsIds.includes(sectionId) && (subField === 'fullDetails' || subField === 'fullList')) {
+          const dataKey = fallbackMap[sectionId];
+          const arr = dataKey ? values[dataKey] : null;
+          if (Array.isArray(arr) && arr.length > 0) {
+            const resolved = arr.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+            if (resolved) return resolved;
+          }
+          return '';
+        }
+
         // CRITICAL FIX: Special handling for pet carer sections and separate trustees when using fullDetails
         if ((sectionId === 'petCarerSection' || sectionId === 'substitutePetCarerSection' || sectionId === 'separateTrusteesSection') && subField === 'fullDetails') {
           // CRITICAL: Use explicit data keys - DO NOT fall back to generic lookups
@@ -3882,13 +3902,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;
                   }
-                  // Professional remuneration: Estate Overview covers fees when Aristone is executor — hide duplicate control (PDF still uses includeProfessionalRemuneration via auto-set).
+                  // Professional remuneration acknowledgement: show only after Aristone is selected.
                   if (field.id === 'includeProfessionalRemuneration') {
                     const aristoneExecutor =
                       formValues?.chooseAristoneExecutor === 'Aristone' ||
                       (formValues?.appointProfessionalExecutor === 'Yes' &&
                         formValues?.professionalExecutorSelection === 'Aristone');
-                    if (aristoneExecutor) return null;
+                    if (!aristoneExecutor) return null;
                   }
                   // Skip fields that shouldn't be shown (conditions not met)
                   if (field.conditions && !evaluateFieldConditions(field)) {

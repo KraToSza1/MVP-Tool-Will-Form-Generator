@@ -181,8 +181,9 @@ export function trimPersonRecord(draft) {
 export function validatePersonRecordMin(o) {
   const fn = trim(o.firstName);
   const ln = trim(o.lastName);
-  const ka = trim(o.knownAs);
-  return !!(fn || ln || ka);
+  const a1 = trim(o.address1);
+  const pc = trim(o.postcode);
+  return !!(fn && ln) && !!(a1 || pc);
 }
 
 /**

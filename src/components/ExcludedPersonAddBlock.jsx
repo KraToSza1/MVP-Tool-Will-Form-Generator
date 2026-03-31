@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, CheckCircle2, Info } from 'lucide-react';
-import { formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
+import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
 
@@ -56,14 +56,20 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
       <button
         type="button"
         data-field-id={field.id}
+        aria-label={`${field.label} — ${ADD_PERSON_FIELDS_HINT}`}
         onClick={() => {
           logPerson('excluded_open_modal', { fieldId: field.id });
           setModalOpen(true);
         }}
-        className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-3 rounded-xl shadow-lg transition-all duration-300 font-medium flex items-center gap-2"
+        className="group bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-3 sm:px-6 rounded-xl shadow-lg transition-all duration-300 font-medium flex items-start gap-2 sm:gap-3 text-left min-h-[44px] w-full sm:w-auto"
       >
-        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-        <span>{field.label}</span>
+        <Plus className="w-5 h-5 shrink-0 mt-0.5 group-hover:rotate-90 transition-transform duration-300" aria-hidden />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="leading-snug">{field.label}</span>
+          <span className="text-xs font-normal opacity-90 leading-tight wrap-break-word">
+            {ADD_PERSON_FIELDS_HINT}
+          </span>
+        </span>
       </button>
 
       <PersonRecordModal
@@ -106,8 +112,8 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
       <p className="mt-3 text-xs text-gray-600 flex items-start gap-2">
         <Info size={14} className="mt-0.5 shrink-0" />
         <span>
-          Use the same full detail as other roles. If this person appears elsewhere, pick them from &quot;Same person or
-          new&quot; in the modal to avoid retyping.
+          Same fields as other add-person steps: title, full name and address only. If this person is already on the
+          form, choose them under &quot;Same person or new&quot; to copy details.
         </span>
       </p>
     </div>
