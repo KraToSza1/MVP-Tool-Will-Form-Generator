@@ -74,6 +74,10 @@ import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js
 import { submitMatterFromDraft } from '../lib/matters.js';
 import { ID_VERIFICATION_DOC_KEYS, getMissingIdVerificationDocs, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
 import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
+import {
+  formatAppointmentPersonListForClause,
+  formatProfessionalOtherDetailsForClause,
+} from '../utils/appointmentPersonFormat.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -771,6 +775,25 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Fall through to normal array handling
         }
 
+        if (
+          ['professionalExecutorSelection', 'substituteProfessionalExecutorSelection',
+            'professionalTrusteeSelection', 'substituteProfessionalTrusteeSelection'].includes(sectionId) &&
+          (subField === 'fullDetails' || subField === 'fullList')
+        ) {
+          const selectionValue = values[sectionId];
+          if (selectionValue === 'Aristone') {
+            return 'Aristone Solicitors, SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
+          }
+          if (selectionValue === 'Other') {
+            const otherDetailsField = sectionId.replace('Selection', 'OtherDetails');
+            const otherDetails = values[otherDetailsField];
+            if (otherDetails && String(otherDetails).trim()) {
+              return formatProfessionalOtherDetailsForClause(String(otherDetails));
+            }
+          }
+          return '';
+        }
+
         const personSectionFullDetailsIds = [
           'executorsSection',
           'substituteExecutorsSection',
@@ -783,7 +806,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           const dataKey = fallbackMap[sectionId];
           const arr = dataKey ? values[dataKey] : null;
           if (Array.isArray(arr) && arr.length > 0) {
-            const resolved = arr.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+            const resolved = formatAppointmentPersonListForClause(arr);
             if (resolved) return resolved;
           }
           return '';

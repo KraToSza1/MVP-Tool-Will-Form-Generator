@@ -3,6 +3,10 @@ import formSchema from '../data/Complete-WillSuite-Form-Data.json';
 import { buildClauses } from '../utils/buildClauses.js';
 import { CLIENT_VISIBLE_MAX_SECTION_INDEX } from '../constants/clientMode.js';
 import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
+import {
+  formatAppointmentPersonListForClause,
+  formatProfessionalOtherDetailsForClause,
+} from '../utils/appointmentPersonFormat.js';
 
 /** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
 const pdfDebugEnabled = () =>
@@ -1229,7 +1233,7 @@ const interpolateText = (text, values, options = {}) => {
         const dataKey = fallbackMap[sectionId];
         const arr = dataKey ? values[dataKey] : null;
         if (Array.isArray(arr) && arr.length > 0) {
-          const resolved = arr.map(formatExcludedPersonForClause).filter(Boolean).join('; ');
+          const resolved = formatAppointmentPersonListForClause(arr);
           if (resolved) return wrapClientValue(resolved);
         }
         return '';
@@ -1540,8 +1544,9 @@ const interpolateText = (text, values, options = {}) => {
       } else if (selectionValue === 'Other') {
         const otherDetailsField = sectionId.replace('Selection', 'OtherDetails');
         const otherDetails = values[otherDetailsField];
-        if (otherDetails && otherDetails.trim()) {
-          return wrapClientValue(otherDetails.trim());
+        if (otherDetails && String(otherDetails).trim()) {
+          const cleaned = formatProfessionalOtherDetailsForClause(String(otherDetails));
+          if (cleaned) return wrapClientValue(cleaned);
         }
       }
       
