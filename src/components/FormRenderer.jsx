@@ -66,7 +66,7 @@ import {
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
   SOLICITOR_INTAKE_ONLY_SECTION_TITLE,
   SOLICITOR_INTAKE_ONLY_FIELD_IDS,
-  isEstateOverviewIntakeApplicable,
+  isEstateOverviewStandaloneSectionVisible,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
@@ -288,24 +288,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Client mode: hide Testamentary Capacity + Estate Overview. Solicitor mode: Estate Overview (assets & liabilities) only when Aristone is executor; it is solicitor intake only and excluded from the Will (excludeFromWill on fields).
+  // Testamentary Capacity: solicitors only. Standalone "Estate Overview (Optional)" step only when Aristone is chosen via the professional path (quick Aristone uses the inline block under Who are the Executors?).
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
-    const hideForClient = (s) =>
-      s.formSection !== TESTAMENTARY_CAPACITY_SECTION_TITLE &&
-      s.formSection !== SOLICITOR_INTAKE_ONLY_SECTION_TITLE;
-    let sections;
-    if (solicitorMode) {
-      sections = formData.formSections.filter((s) => {
-        if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) {
-          return isEstateOverviewIntakeApplicable(formValues, true);
-        }
-        return true;
-      });
-    } else {
-      sections = formData.formSections.filter(hideForClient);
-    }
-    return sections;
+    return formData.formSections.filter((s) => {
+      if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
+      if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) {
+        return isEstateOverviewStandaloneSectionVisible(formValues);
+      }
+      return true;
+    });
   }, [solicitorMode, formData?.formSections, formValues]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
@@ -1591,26 +1583,28 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     DEBUG_LOGS&&console.log('[VALIDATION CHECK] ========== VALIDATING SECTION ==========');
     DEBUG_LOGS&&console.log('[VALIDATION CHECK] Current section:', currentSection?.formSection);
     DEBUG_LOGS&&console.log('[VALIDATION CHECK] Total fields to check:', currentSection?.fields?.length);
-    
-    const result = currentSection.fields.every(field => {
+
+    const checkField = (field) => {
       DEBUG_LOGS&&console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
-      
+
       if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
         return true;
       }
 
-      // Skip fields that shouldn't be shown (conditions not met)
       if (field.conditions && !evaluateFieldConditions(field)) {
         DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (conditions not met)`);
-        return true; // Field is hidden, so it's "valid"
+        return true;
       }
-      
-      // Skip hidden, button, and display fields
+
       if (['button', 'hidden', 'display'].includes(field.type)) {
         DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (type: ${field.type})`);
         return true;
       }
-      
+
+      if (field.type === 'section' && field.subFields) {
+        return field.subFields.every(checkField);
+      }
+
       if (field.required) {
         let isValid = false;
         if (field.type === 'checkboxGroup') {
@@ -1625,12 +1619,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
         }
         return isValid;
-      } else {
-        DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
       }
+      DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
       return true;
-    });
-    
+    };
+
+    const result = currentSection.fields.every(checkField);
+
     if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
   }, [currentSection, formValues, evaluateFieldConditions, solicitorMode]);
@@ -1640,36 +1635,28 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return formData.formSections.every((section) => {
         if (
           section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
-          !isEstateOverviewIntakeApplicable(formValues, solicitorMode)
+          !isEstateOverviewStandaloneSectionVisible(formValues)
         ) {
           return true;
         }
-        return section.fields.every(field => {
+        const fieldFullyCompleted = (field) => {
           if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
-          if (!evaluateFieldConditions(field)) return true;
+          if (field.conditions && !evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
-          if (field.required) {
-            if (field.type === 'checkboxGroup') {
-              return Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
-            }
-            if (field.type === 'section' && field.subFields) {
-              const hasRequiredSubFieldFilled = field.subFields.some(subField => {
-                if (!evaluateFieldConditions(subField)) return false;
-                return subField.required && !!formValues[subField.id];
-              });
-              const hasNoRequiredSubFields = field.subFields.every(subField =>
-                !subField.required || !evaluateFieldConditions(subField)
-              );
-              return hasRequiredSubFieldFilled || hasNoRequiredSubFields;
-            }
-            let isValid = !!formValues[field.id];
-            if ((field.type === 'text' || field.type === 'textarea') && typeof formValues[field.id] === 'string') {
-              isValid = formValues[field.id].trim() !== '';
-            }
-            return isValid;
+          if (field.type === 'section' && field.subFields) {
+            return field.subFields.every(fieldFullyCompleted);
           }
-          return true;
-        });
+          if (!field.required) return true;
+          if (field.type === 'checkboxGroup') {
+            return Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          }
+          if (field.type === 'text' || field.type === 'textarea') {
+            const val = formValues[field.id];
+            return typeof val === 'string' && val.trim() !== '';
+          }
+          return !!formValues[field.id];
+        };
+        return section.fields.every(fieldFullyCompleted);
       });
     } catch (error) {
       console.error('[FORM] Error checking form completion:', error);
@@ -1688,54 +1675,39 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     }
     
     const issues = [];
-    
-    currentSection.fields.forEach((field, index) => {
-      if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Checking field ${index + 1}/${currentSection.fields.length}:`, field.id, field.label, 'required:', field.required);
+
+    const collectFromField = (field) => {
+      if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Checking field:`, field.id, field.label, 'required:', field.required);
 
       if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
         return;
       }
-      
-      // Skip fields that shouldn't be shown (conditions not met)
+
       if (field.conditions && !evaluateFieldConditions(field)) {
         if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} skipped - conditions not met`);
         return;
       }
-      
-      // Skip hidden, button, and display fields
+
       if (['button', 'hidden', 'display'].includes(field.type)) {
         if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} skipped - type: ${field.type}`);
         return;
       }
-      
-      // Check required fields
+
+      if (field.type === 'section' && field.subFields) {
+        field.subFields.forEach(collectFromField);
+        return;
+      }
+
       if (field.required) {
         let isInvalid = false;
         let issueMessage = '';
-        
+
         if (field.type === 'checkboxGroup') {
           const hasSelection = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
           if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] CheckboxGroup ${field.id} - hasSelection:`, hasSelection);
           if (!hasSelection) {
             isInvalid = true;
             issueMessage = 'Please select at least one option';
-          }
-        } else if (field.type === 'section' && field.subFields) {
-          // For sections, check if at least one required subfield is filled
-          const hasRequiredSubFieldFilled = field.subFields.some(subField => {
-            if (!evaluateFieldConditions(subField)) return false;
-            if (subField.required) {
-              return !!formValues[subField.id];
-            }
-            return false;
-          });
-          const hasNoRequiredSubFields = field.subFields.every(subField => 
-            !subField.required || !evaluateFieldConditions(subField)
-          );
-          if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Section ${field.id} - hasRequiredSubFieldFilled:`, hasRequiredSubFieldFilled, 'hasNoRequiredSubFields:', hasNoRequiredSubFields);
-          if (!hasRequiredSubFieldFilled && !hasNoRequiredSubFields) {
-            isInvalid = true;
-            issueMessage = 'Please complete at least one required field in this section';
           }
         } else {
           const value = formValues[field.id];
@@ -1746,7 +1718,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             issueMessage = 'This field is required';
           }
         }
-        
+
         if (isInvalid) {
           if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] ❌ ISSUE FOUND: ${field.label} (${field.id}) - ${issueMessage}`);
           issues.push({
@@ -1755,13 +1727,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             message: issueMessage,
             type: 'required'
           });
-        } else {
-          if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] ✅ Field ${field.id} is valid`);
+        } else if (isDev) {
+          DEBUG_LOGS&&console.log(`[VALIDATION] ✅ Field ${field.id} is valid`);
         }
-      } else {
-        if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} is not required - skipping`);
+      } else if (isDev) {
+        DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} is not required - skipping`);
       }
-    });
+    };
+
+    currentSection.fields.forEach(collectFromField);
     
     if (isDev) {
       DEBUG_LOGS&&console.log('[VALIDATION] Total issues collected:', issues.length);
@@ -2484,7 +2458,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(dummyData).length} fields (client mode — Estate Overview & solicitor-only steps omitted). For Estate Overview and full solicitor intake, open the solicitor or matter questionnaire.`
+            ? `Filled ${Object.keys(dummyData).length} fields (client mode — standalone Estate Overview demo data and solicitor-only steps omitted from autofill; if you use Quick Aristone on Trustees/Executors, fill estate questions there manually).`
             : `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 5000
       });
@@ -2549,13 +2523,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
         if (
           section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
-          !isEstateOverviewIntakeApplicable(formValues, solicitorMode)
+          !isEstateOverviewStandaloneSectionVisible(formValues)
         ) {
           DEBUG_LOGS&&console.log(`[COMPLETION %] Section "${section.formSection}" - SKIPPED (not applicable)`);
           return;
         }
 
-        section.fields.forEach(field => {
+        const accumulateCompletion = (field) => {
           if (field.conditions && !evaluateFieldConditions(field)) {
             DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (conditions not met)`);
             return;
@@ -2564,42 +2538,31 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (type: ${field.type})`);
             return;
           }
-          
-          if (field.required) {
-            totalRequired++;
-            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
-            
-            if (field.type === 'checkboxGroup') {
-              const isCompleted = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
-              if (isCompleted) {
-                completedRequired++;
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (checkbox) - COMPLETED (completed now: ${completedRequired})`);
-              } else {
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (checkbox) - NOT completed`);
-              }
-            } else if (field.type === 'section' && field.subFields) {
-              const hasRequiredSubFieldFilled = field.subFields.some(subField => {
-                if (!evaluateFieldConditions(subField)) return false;
-                if (subField.required) return !!formValues[subField.id];
-                return false;
-              });
-              if (hasRequiredSubFieldFilled) {
-                completedRequired++;
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (section) - COMPLETED (completed now: ${completedRequired})`);
-              } else {
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (section) - NOT completed`);
-              }
-            } else {
-              const isCompleted = !!formValues[field.id];
-              if (isCompleted) {
-                completedRequired++;
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (${field.type}) - COMPLETED (completed now: ${completedRequired})`);
-              } else {
-                DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" (${field.type}) - NOT completed`);
-              }
-            }
+          if (field.type === 'section' && field.subFields) {
+            field.subFields.forEach(accumulateCompletion);
+            return;
           }
-        });
+          if (!field.required) return;
+          totalRequired++;
+          DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
+          let isCompleted = false;
+          if (field.type === 'checkboxGroup') {
+            isCompleted = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          } else if (field.type === 'text' || field.type === 'textarea') {
+            const val = formValues[field.id];
+            isCompleted = typeof val === 'string' && val.trim() !== '';
+          } else {
+            isCompleted = !!formValues[field.id];
+          }
+          if (isCompleted) {
+            completedRequired++;
+            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - COMPLETED (completed now: ${completedRequired})`);
+          } else {
+            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - NOT completed`);
+          }
+        };
+
+        section.fields.forEach(accumulateCompletion);
       });
 
       const percent = totalRequired > 0 ? Math.round((completedRequired / totalRequired) * 100) : 0;

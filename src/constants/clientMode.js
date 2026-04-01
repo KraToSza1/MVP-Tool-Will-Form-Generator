@@ -7,7 +7,7 @@
 /** Section title used to hide intake-only block from clients (must match form JSON). */
 export const TESTAMENTARY_CAPACITY_SECTION_TITLE = 'Testamentary Capacity';
 
-/** Solicitor-only intake (not shown to clients; excluded from will via excludeFromWill on fields). */
+/** Standalone sidebar step title (must match form JSON). Shown only for professional-path Aristone; quick Aristone uses inline estate under Trustees/Executors. Fields use excludeFromWill. */
 export const SOLICITOR_INTAKE_ONLY_SECTION_TITLE = 'Estate Overview (Optional)';
 
 /**
@@ -26,12 +26,21 @@ export function isAristoneExecutorSelected(formValues) {
   return false;
 }
 
-/** Estate Overview (assets & liabilities) appears only for solicitors and only when Aristone is executor. */
-export function isEstateOverviewIntakeApplicable(formValues, solicitorMode) {
-  return !!solicitorMode && isAristoneExecutorSelected(formValues);
+/**
+ * Standalone sidebar step "Estate Overview (Optional)" — shown when Aristone is chosen via the
+ * professional-executor path (not the quick pick). Quick pick Aristone uses the inline block under
+ * Who are the Executors? so the same field IDs are not duplicated.
+ */
+export function isEstateOverviewStandaloneSectionVisible(formValues) {
+  if (!formValues || typeof formValues !== 'object') return false;
+  if (formValues.chooseAristoneExecutor === 'Aristone') return false;
+  return (
+    formValues.appointProfessionalExecutor === 'Yes' &&
+    formValues.professionalExecutorSelection === 'Aristone'
+  );
 }
 
-/** Field IDs in Estate Overview + fees ack — strip from client autofill / client state (must match form JSON). */
+/** Field IDs for estate intake (inline + standalone share these IDs) — strip from client autofill demo (must match form JSON). */
 export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
   'estateOverviewIntro',
   'aristoneProfessionalFeesNotice',
