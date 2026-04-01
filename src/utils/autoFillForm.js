@@ -10,8 +10,13 @@ const ARISTONE_EXECUTOR_LINE =
   'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
 
 /**
+ * Suffix for generated demo prose. Do not use `[` or `]` here — PDF completeness checks treat
+ * square brackets as unresolved placeholders.
+ */
+const DEMO_TEXT_TAG = ' — Will Tool demo data';
+
+/**
  * Distinct demo identities so every role is visibly different in the UI (names, emails, phones, streets).
- * Tag suffix "(demo autofill)" makes test data obvious in lists and PDFs.
  * Update this block when refreshing public demo names (keep one coherent "family" for clauses).
  */
 const DEMO = {
@@ -139,14 +144,48 @@ const DEMO = {
 };
 
 /**
+ * Estate Overview (Optional) — solicitor intake only. Used by autofill so checkbox/radio/text stay consistent
+ * (including "Other" assets so the conditional other-assets field is visible).
+ */
+const ESTATE_DEMO = {
+  assetTypes: [
+    'PropertyUK',
+    'PropertyOverseas',
+    'Cash',
+    'Savings',
+    'Investments',
+    'Pensions',
+    'Business',
+    'PersonalItems',
+    'LifeInsurance',
+    'Digital',
+    'Other',
+  ],
+  liabilityTypes: ['Mortgage', 'PersonalLoans', 'CreditCards', 'Tax'],
+  feesAck: ['ack'],
+  grossRange: 'Range500_1m',
+  liabilityRange: 'Range100_250',
+  propertyRange: 'Range500_1m',
+  assetOther: `Overseas rental (France); classic car collection.${DEMO_TEXT_TAG}`,
+  additionalNotes:
+    'Autofill test: approximate figures for solicitor review only; not for the Will text.',
+};
+
+/**
  * Final pass: contactRegistry + rich person rows matching PersonRecordModal / PDF (objects with _personRecordId).
  * Runs after specialFields / unlock / missing-id defaults so demo data always wins for people arrays.
  */
 function applyRichPersonDemoOverrides(dummyData) {
   let seq = 0;
+  /** Rich rows aligned with PersonRecordModal (title, name, address + intake fields). */
   const row = (fields) => ({
-    _personRecordId: `autofill-demo-${++seq}`,
+    middleName: '',
+    gender: 'Male',
+    dateOfBirth: '15/06/1975',
+    occupation: 'Professional (demo autofill)',
+    relationship: 'Friend',
     ...fields,
+    _personRecordId: `autofill-demo-${++seq}`,
   });
   const ts = new Date().toISOString();
 
@@ -243,6 +282,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Mr',
       firstName: 'Theo',
       lastName: 'Marsh',
+      gender: 'Male',
+      dateOfBirth: '20/04/1979',
       mobile: '07700999112',
       email: 'theo.marsh.demo@example.com',
       address1: '9 Substitute Street',
@@ -268,6 +309,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Dana',
       lastName: 'Reyes',
+      gender: 'Female',
+      dateOfBirth: '03/09/1982',
       mobile: '07700111120',
       email: 'dana.reyes.demo@example.com',
       address1: '9 Digital Drive',
@@ -280,11 +323,30 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationship: 'Friend',
     }),
   ];
+  dummyData.digitalExecutorIfNoData = [
+    row({
+      title: 'Mr',
+      firstName: 'Alex',
+      lastName: 'Kent',
+      gender: 'Male',
+      dateOfBirth: '22/11/1972',
+      mobile: '07700111125',
+      email: 'alex.kent.digital.demo@example.com',
+      address1: '21 Backup Digital Lane',
+      address2: 'Bromley',
+      address3: 'London',
+      postcode: 'BR1 3DG',
+      occupation: 'Systems administrator (demo autofill)',
+      relationship: 'Friend',
+    }),
+  ];
   dummyData.trusteeData = [
     row({
       title: 'Ms',
       firstName: 'Tracy',
       lastName: 'Okonkwo',
+      gender: 'Female',
+      dateOfBirth: '18/01/1976',
       mobile: '07700111121',
       email: 'tracy.okonkwo.demo@example.com',
       address1: '10 Trustee Terrace',
@@ -294,6 +356,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       occupation: 'Accountant (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
     }),
   ];
   dummyData.substituteTrusteeData = [
@@ -301,6 +364,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Uma',
       lastName: 'Patel',
+      gender: 'Female',
+      dateOfBirth: '07/12/1979',
       mobile: '07700111122',
       email: 'uma.patel.demo@example.com',
       address1: '11 Trustee Terrace',
@@ -310,6 +375,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       occupation: 'Solicitor (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Sister',
     }),
   ];
   dummyData.witness1Data = [
@@ -317,6 +383,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Wendy',
       lastName: 'Wainwright',
+      gender: 'Female',
+      dateOfBirth: '30/04/1968',
       mobile: '07700111130',
       email: 'wendy.w.demo@example.com',
       address1: '11 Witness-One Way',
@@ -326,6 +394,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       occupation: 'Solicitor (demo W1)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
     }),
   ];
   dummyData.witness2Data = [
@@ -333,6 +402,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Mr',
       firstName: 'Winston',
       lastName: 'White',
+      gender: 'Male',
+      dateOfBirth: '12/02/1970',
       mobile: '07700111131',
       email: 'winston.w.demo@example.com',
       address1: '22 Witness-Two Road',
@@ -342,6 +413,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       occupation: 'Teacher (demo W2)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
     }),
   ];
   dummyData.excludedPersonData = [
@@ -349,13 +421,17 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Mr',
       firstName: 'Evan',
       lastName: 'Excluded',
+      middleName: '',
       knownAs: '',
+      gender: 'Male',
+      dateOfBirth: '25/11/1988',
       address1: '99 Excluded Lane',
       address2: 'Tooting',
       address3: 'London',
       postcode: 'SW17 9EX',
       mobile: '07700111140',
       email: 'evan.excluded.demo@example.com',
+      occupation: 'Consultant (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Former partner',
@@ -366,14 +442,18 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Chloe',
       lastName: 'Chattels',
+      gender: 'Female',
+      dateOfBirth: '05/05/1985',
       mobile: '07700111141',
       email: 'chloe.chattels.demo@example.com',
       address1: '12 Chattels Close',
       address2: 'Richmond',
       address3: 'Surrey',
       postcode: 'TW9 1CH',
+      occupation: 'Designer (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Friend',
     }),
   ];
   dummyData.debtorData = [
@@ -381,14 +461,18 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Mr',
       firstName: 'Darren',
       lastName: 'Debtor',
+      gender: 'Male',
+      dateOfBirth: '14/08/1974',
       mobile: '07700111142',
       email: 'darren.debtor.demo@example.com',
       address1: '13 Debtor Street',
       address2: 'Wimbledon',
       address3: 'London',
       postcode: 'SW19 1DB',
+      occupation: 'Contractor (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Former colleague',
     }),
   ];
   dummyData.signingOnBehalfData = [
@@ -396,12 +480,15 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Sally',
       lastName: 'Signer',
+      gender: 'Female',
+      dateOfBirth: '03/11/1965',
       mobile: '07700111143',
       email: 'sally.signer.demo@example.com',
       address1: '14 Signer Place',
       address2: 'Hammersmith',
       address3: 'London',
       postcode: 'W6 1SG',
+      occupation: 'Attorney (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Attorney',
@@ -412,23 +499,70 @@ function applyRichPersonDemoOverrides(dummyData) {
       title: 'Ms',
       firstName: 'Ingrid',
       lastName: 'Interpreter',
+      gender: 'Female',
+      dateOfBirth: '19/07/1980',
       mobile: '07700111144',
       email: 'ingrid.interpreter.demo@example.com',
       address1: '15 Interpreter Inn',
       address2: 'Acton',
       address3: 'London',
       postcode: 'W3 1IN',
+      occupation: 'Interpreter (demo autofill)',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Friend',
     }),
   ];
 
-  dummyData.petCarerData = [{ ...DEMO.petCarer, _personRecordId: `autofill-demo-${++seq}` }];
-  dummyData.substitutePetCarerData = [{ ...DEMO.petCarerSub, _personRecordId: `autofill-demo-${++seq}` }];
+  dummyData.petCarerData = [
+    row({
+      ...DEMO.petCarer,
+      middleName: '',
+      occupation: 'Retail manager (demo autofill)',
+  }),
+  ];
+  dummyData.substitutePetCarerData = [
+    row({
+      ...DEMO.petCarerSub,
+      middleName: '',
+      occupation: 'Engineer (demo autofill)',
+    }),
+  ];
   dummyData.separateTrusteeData = [
-    { ...DEMO.flitTrusteeA, _personRecordId: `autofill-demo-${++seq}` },
-    { ...DEMO.flitTrusteeB, _personRecordId: `autofill-demo-${++seq}` },
+    row({
+      title: DEMO.flitTrusteeA.title,
+      firstName: DEMO.flitTrusteeA.firstName,
+      middleName: '',
+      lastName: DEMO.flitTrusteeA.lastName,
+      gender: DEMO.flitTrusteeA.gender,
+      dateOfBirth: DEMO.flitTrusteeA.dateOfBirth,
+      mobile: DEMO.flitTrusteeA.mobile,
+      email: DEMO.flitTrusteeA.email,
+      address1: DEMO.flitTrusteeA.address1,
+      address2: DEMO.flitTrusteeA.address2,
+      address3: DEMO.flitTrusteeA.address3,
+      postcode: DEMO.flitTrusteeA.postcode,
+      occupation: 'Director (demo autofill)',
+      relationship: DEMO.flitTrusteeA.relationship,
+      relationshipToTestator: DEMO.flitTrusteeA.relationshipToTestator,
+    }),
+    row({
+      title: DEMO.flitTrusteeB.title,
+      firstName: DEMO.flitTrusteeB.firstName,
+      middleName: '',
+      lastName: DEMO.flitTrusteeB.lastName,
+      gender: DEMO.flitTrusteeB.gender,
+      dateOfBirth: DEMO.flitTrusteeB.dateOfBirth,
+      mobile: DEMO.flitTrusteeB.mobile,
+      email: DEMO.flitTrusteeB.email,
+      address1: DEMO.flitTrusteeB.address1,
+      address2: DEMO.flitTrusteeB.address2,
+      address3: DEMO.flitTrusteeB.address3,
+      postcode: DEMO.flitTrusteeB.postcode,
+      occupation: 'Analyst (demo autofill)',
+      relationship: DEMO.flitTrusteeB.relationship,
+      relationshipToTestator: DEMO.flitTrusteeB.relationshipToTestator,
+    }),
   ];
 
   if (dummyData.nationalityCountry == null || dummyData.nationalityCountry === '' || dummyData.nationalityCountry === 'Standard value') {
@@ -448,6 +582,12 @@ function applyRichPersonDemoOverrides(dummyData) {
 }
 
 export const generateDummyFormData = (formData) => {
+  if (import.meta.env.DEV) {
+    console.log(
+      '[AUTOFILL GENERATE] start — this runs only when FormRenderer autofill is triggered (home / or matter form). It does not run from /solicitor dashboard matters list.',
+      { phase: 'autofill_generate_start' },
+    );
+  }
   console.log('[AUTOFILL GENERATE] ========== GENERATING DUMMY DATA ==========');
   const dummyData = {};
 
@@ -559,9 +699,9 @@ export const generateDummyFormData = (formData) => {
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
     gender: 'Male',
     executorAgeClause: '25',
-    estateGrossValueRange: 'Range500_1m',
-    estateLiabilityValueRange: 'Range100_250',
-    estatePropertyValueRange: 'Range500_1m',
+    estateGrossValueRange: ESTATE_DEMO.grossRange,
+    estateLiabilityValueRange: ESTATE_DEMO.liabilityRange,
+    estatePropertyValueRange: ESTATE_DEMO.propertyRange,
     partnerTitle: 'Mrs',
     partnerGender: 'Female',
   };
@@ -632,7 +772,7 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? '5000' : '100000';
         if (field.id === 'specificOrgansToDonate') return 'kidneys, liver, and corneas';
         if (field.id === 'specificOrgansToExclude') return 'heart';
-        if (field.id === 'estateAssetOther') return 'Overseas rental (approx.)';
+        if (field.id === 'estateAssetOther') return ESTATE_DEMO.assetOther;
         if (field.id === 'minimumCharityAmountValue') return '50000';
         if (field.id === 'stepProvisionToExcludeOne') return '1';
         if (field.id === 'stepProvisionsToExcludeMultiple') return '1, 2 & 3';
@@ -641,36 +781,38 @@ export const generateDummyFormData = (formData) => {
       case 'textarea':
         if (field.id.includes('charity') || field.id === 'charityBenefitDetails') return 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)';
         if (field.id.includes('monetaryGiftsDetails')) {
-          return `I give £25,000 to my son ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to my daughter ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21. [demo autofill — distinct beneficiaries]`;
+          return `I give £25,000 to my son ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to my daughter ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21.${DEMO_TEXT_TAG}`;
         }
         if (field.id.includes('specificGiftsDetails')) {
-          return `I give my grandfather's gold pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}. I give my oil paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+          return `I give my grandfather's gold pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}. I give my oil paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`;
         }
-        if (field.id.includes('propertyGiftsDetails')) return `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely. [demo autofill]`;
+        if (field.id.includes('propertyGiftsDetails')) {
+          return `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely.${DEMO_TEXT_TAG}`;
+        }
         if (field.id.includes('propertyTrustDetails')) return `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`;
         if (field.id.includes('propertyTrustTerms')) return 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.';
         if (field.id.includes('bprTrustDetails')) return 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.';
         if (field.id.includes('bprTrustTerms')) return 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.';
         if (field.id.includes('furtherResidualGiftsDetails')) {
-          return `If any of the above gifts fail, I give the failed share equally to my siblings ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}. [demo autofill]`;
+          return `If any of the above gifts fail, I give the failed share equally to my siblings ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}.${DEMO_TEXT_TAG}`;
         }
         if (field.id.includes('residualGiftsDetails')) {
-          return `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+          return `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`;
         }
         if (field.id.includes('specifyLoansGiftsText')) {
-          return `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase. [demo autofill]`;
+          return `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase.${DEMO_TEXT_TAG}`;
         }
         if (field.id.includes('lifeTenantDetails')) return `My wife ${DEMO.partner.fullName}`;
         if (field.id.includes('beneficiariesDetails')) {
           return `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`;
         }
         if (field.id.includes('trustEndDistributionDetails')) {
-          return `Upon the death of the life tenant, the trust passes equally to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`;
+          return `Upon the death of the life tenant, the trust passes equally to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`;
         }
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
-        if (field.id === 'estateAdditionalNotes') return 'Autofill test: approximate figures for solicitor review only; not for the Will text.';
+        if (field.id === 'estateAdditionalNotes') return ESTATE_DEMO.additionalNotes;
         return `Please provide details for ${field.label || field.id}.`;
 
       case 'date':
@@ -691,13 +833,9 @@ export const generateDummyFormData = (formData) => {
         if (field.id === 'organPurposeGroup') {
           return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
         }
-        if (field.id === 'aristoneProfessionalFeesAck') return ['ack'];
-        if (field.id === 'estateAssetTypes') {
-          return ['PropertyUK', 'PropertyOverseas', 'Cash', 'Savings', 'Investments', 'Pensions', 'Business'];
-        }
-        if (field.id === 'estateLiabilityTypes') {
-          return ['Mortgage', 'CreditCards', 'Tax'];
-        }
+        if (field.id === 'aristoneProfessionalFeesAck') return [...ESTATE_DEMO.feesAck];
+        if (field.id === 'estateAssetTypes') return [...ESTATE_DEMO.assetTypes];
+        if (field.id === 'estateLiabilityTypes') return [...ESTATE_DEMO.liabilityTypes];
         return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
 
       default:
@@ -746,6 +884,10 @@ export const generateDummyFormData = (formData) => {
             }
             else if (sub.id === 'digitalExecutorData') {
               dummyData[sub.id] = [DEMO.digitalExecutor];
+              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
+            }
+            else if (sub.id === 'digitalExecutorIfNoData') {
+              dummyData[sub.id] = ['Alex Kent — Digital executor if no (demo autofill)'];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
             else if (sub.id === 'substituteExecutorData') {
@@ -873,6 +1015,7 @@ export const generateDummyFormData = (formData) => {
     witness2Data: [DEMO.witness2],
     excludedPersonData: [DEMO.excluded],
     digitalExecutorData: [DEMO.digitalExecutor],
+    digitalExecutorIfNoData: ['Alex Kent — Digital executor if no (demo autofill)'],
     separateTrusteeData: [{ ...DEMO.flitTrusteeA }, { ...DEMO.flitTrusteeB }],
     chattelRecipientData: [DEMO.chattelRecipient],
     debtorData: [DEMO.debtor],
@@ -930,20 +1073,20 @@ export const generateDummyFormData = (formData) => {
     witness2Phone: '020 7002 0002',
     witness2Occupation: 'Teacher (demo W2)',
 
-    monetaryGiftsDetails: `I give £25,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21. [demo autofill]`,
-    specificGiftsDetails: `Pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}; paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
-    propertyGiftsDetails: `I give my property at ${DEMO.testator.address1} to ${DEMO.partner.fullName} absolutely. [demo autofill]`,
+    monetaryGiftsDetails: `I give £25,000 to my son ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to my daughter ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21.${DEMO_TEXT_TAG}`,
+    specificGiftsDetails: `I give my grandfather's gold pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}. I give my oil paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
+    propertyGiftsDetails: `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely.${DEMO_TEXT_TAG}`,
     propertyTrustDetails: `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`,
     propertyTrustTerms: 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.',
     bprTrustDetails: 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.',
     bprTrustTerms: 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.',
-    furtherResidualGiftsDetails: `If gifts fail, failed share to ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}. [demo autofill]`,
-    residualGiftsDetails: `50% residue to ${DEMO.partner.fullName}, 25% ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
-    specifyLoansGiftsText: `Loan £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} (Jan 2022). [demo autofill]`,
+    furtherResidualGiftsDetails: `If any of the above gifts fail, I give the failed share equally to my siblings ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}.${DEMO_TEXT_TAG}`,
+    residualGiftsDetails: `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
+    specifyLoansGiftsText: `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase.${DEMO_TEXT_TAG}`,
     charityBenefitDetails: 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)',
     lifeTenantDetails: `My wife ${DEMO.partner.fullName}`,
     beneficiariesDetails: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
-    trustEndDistributionDetails: `Trust ends: equal split to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}. [demo autofill]`,
+    trustEndDistributionDetails: `Upon the death of the life tenant, the trust passes equally to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
     funeralWishes: 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.',
     otherFuneralRequirements: 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.',
     physicalHealthDescription: 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.',
@@ -965,13 +1108,14 @@ export const generateDummyFormData = (formData) => {
     stepProvisionToExcludeOne: '1',
     stepProvisionsToExcludeMultiple: '1, 2 & 3',
     executorSpecifyAge: 25,
-    aristoneProfessionalFeesAck: ['ack'],
-    estateAssetTypes: ['PropertyUK', 'PropertyOverseas', 'Cash', 'Savings', 'Investments', 'Pensions', 'Business'],
-    estateLiabilityTypes: ['Mortgage', 'CreditCards', 'Tax'],
-    estateGrossValueRange: 'Range500_1m',
-    estateLiabilityValueRange: 'Range100_250',
-    estatePropertyValueRange: 'Range500_1m',
-    estateAdditionalNotes: 'Autofill test: approximate figures for solicitor review only; not for the Will text.',
+    aristoneProfessionalFeesAck: [...ESTATE_DEMO.feesAck],
+    estateAssetTypes: [...ESTATE_DEMO.assetTypes],
+    estateLiabilityTypes: [...ESTATE_DEMO.liabilityTypes],
+    estateGrossValueRange: ESTATE_DEMO.grossRange,
+    estateLiabilityValueRange: ESTATE_DEMO.liabilityRange,
+    estatePropertyValueRange: ESTATE_DEMO.propertyRange,
+    estateAssetOther: ESTATE_DEMO.assetOther,
+    estateAdditionalNotes: ESTATE_DEMO.additionalNotes,
   };
 
   console.log('[AUTOFILL GENERATE] 🔄 Applying special fields...');
@@ -1031,7 +1175,15 @@ export const generateDummyFormData = (formData) => {
     else if (id.includes('postcode')) defaultVal = DEMO.testator.postcode;
     else if (id.includes('date') || id.includes('Date')) defaultVal = new Date().toISOString().split('T')[0];
     else if (id.includes('amount') || id.includes('Amount')) defaultVal = '25000';
-    else if (id.includes('Details') || id.includes('details')) defaultVal = 'Please provide details as required for this field. [demo autofill]';
+    else if (id === 'aristoneProfessionalFeesAck') defaultVal = [...ESTATE_DEMO.feesAck];
+    else if (id === 'estateAssetTypes') defaultVal = [...ESTATE_DEMO.assetTypes];
+    else if (id === 'estateLiabilityTypes') defaultVal = [...ESTATE_DEMO.liabilityTypes];
+    else if (id === 'estateGrossValueRange') defaultVal = ESTATE_DEMO.grossRange;
+    else if (id === 'estateLiabilityValueRange') defaultVal = ESTATE_DEMO.liabilityRange;
+    else if (id === 'estatePropertyValueRange') defaultVal = ESTATE_DEMO.propertyRange;
+    else if (id === 'estateAssetOther') defaultVal = ESTATE_DEMO.assetOther;
+    else if (id === 'estateAdditionalNotes') defaultVal = ESTATE_DEMO.additionalNotes;
+    else if (id.includes('Details') || id.includes('details')) defaultVal = `Please provide details as required for this field.${DEMO_TEXT_TAG}`;
     dummyData[id] = defaultVal;
   });
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);

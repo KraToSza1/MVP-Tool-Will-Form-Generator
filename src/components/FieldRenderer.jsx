@@ -806,6 +806,25 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
   if (field.type === 'display') {
     DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
+
+    if (field.id?.startsWith('estateStep') && field.id?.endsWith('Heading')) {
+      return (
+        <div className="mt-6 mb-2 border-b border-slate-200 dark:border-slate-600 pb-2 min-w-0">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 break-words">
+            {field.text}
+          </h3>
+        </div>
+      );
+    }
+
+    if (field.id === 'digitalExecutorStatusDisplay') {
+      const data = formValues.digitalExecutorData;
+      if (Array.isArray(data) && data.length > 0) return null;
+    }
+    if (field.id === 'digitalExecutorIfNoStatusDisplay') {
+      const data = formValues.digitalExecutorIfNoData;
+      if (Array.isArray(data) && data.length > 0) return null;
+    }
     
     if (field.id === 'aristoneProfessionalFeesNotice') {
       return (

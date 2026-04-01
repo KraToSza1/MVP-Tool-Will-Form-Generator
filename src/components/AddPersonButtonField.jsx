@@ -63,7 +63,7 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
       <button
         type="button"
         data-field-id={field.id}
-        aria-label={`${field.label} — ${ADD_PERSON_FIELDS_HINT}`}
+        aria-label={ADD_PERSON_FIELDS_HINT ? `${field.label} — ${ADD_PERSON_FIELDS_HINT}` : field.label}
         onClick={() => {
           logPerson('add_button_open_modal', { targetFieldId, fieldId: field.id });
           setModalOpen(true);
@@ -76,9 +76,11 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
         />
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="leading-snug">{field.label}</span>
-          <span className="text-xs font-normal opacity-90 leading-tight wrap-break-word">
-            {ADD_PERSON_FIELDS_HINT}
-          </span>
+          {ADD_PERSON_FIELDS_HINT ? (
+            <span className="text-xs font-normal opacity-90 leading-tight wrap-break-word">
+              {ADD_PERSON_FIELDS_HINT}
+            </span>
+          ) : null}
         </span>
       </button>
 

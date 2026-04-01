@@ -112,8 +112,8 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
       <p className="mt-3 text-xs text-gray-600 flex items-start gap-2">
         <Info size={14} className="mt-0.5 shrink-0" />
         <span>
-          Same fields as other add-person steps: title, full name and address only. If this person is already on the
-          form, choose them under &quot;Same person or new&quot; to copy details.
+          If this person is already on the form, choose them under &quot;Same person or new&quot; in the add-person
+          dialog to copy details.
         </span>
       </p>
     </div>

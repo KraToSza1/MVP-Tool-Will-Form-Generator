@@ -38,14 +38,26 @@ export default function SolicitorLoginPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     const emailTrimmed = email.trim();
+    const uiT0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    console.log('[WillTool Auth UI] form submit start', {
+      email: emailTrimmed ? `${emailTrimmed.slice(0, 2)}***` : '(empty)',
+      rememberEmail,
+    });
     setSubmitting(true);
     setAdminFixSql(null);
     let result;
     try {
       // Timeouts are handled inside signInSolicitor (can exceed 45s when it retries once + profile fetch).
       result = await signIn({ email: emailTrimmed, password });
+      const uiMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - uiT0;
+      console.log('[WillTool Auth UI] signIn promise settled', {
+        uiTotalMs: Math.round(uiMs),
+        hasError: !!result?.error,
+        code: result?.code ?? null,
+      });
     } catch (err) {
-      console.error('[Solicitor Login] signIn threw', err);
+      const uiMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - uiT0;
+      console.error('[WillTool Auth UI] signIn threw', err, { uiTotalMs: Math.round(uiMs) });
       const isTimeout = err?.message === 'Sign-in timed out';
       const inIframe = typeof window !== 'undefined' && window.self !== window.top;
       toast.error('Sign-in failed', {
@@ -60,7 +72,12 @@ export default function SolicitorLoginPage() {
       return;
     }
     setSubmitting(false);
-    console.log('[Solicitor Login] signIn returned', { hasError: !!result?.error, error: result?.error, hasProfile: !!result?.profile, role: result?.profile?.role });
+    console.log('[WillTool Auth UI] signIn result (post-try)', {
+      hasError: !!result?.error,
+      error: result?.error,
+      hasProfile: !!result?.profile,
+      role: result?.profile?.role,
+    });
 
     if (result?.error) {
       const isNotConfigured = result.error === 'Supabase not configured';

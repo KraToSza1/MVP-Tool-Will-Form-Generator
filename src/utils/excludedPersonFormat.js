@@ -9,7 +9,11 @@ export function normalizeCountySpellingInLine(s) {
   return String(s).replace(/\bBedforshire\b/gi, 'Bedfordshire');
 }
 
-/** Field config: title, full name, and address only (add-person flows + excluded persons). */
+/**
+ * Field config: title, full name, and address only (add-person flows + excluded persons).
+ * Intake may still collect occupation, gender, relationship etc. on those rows; Will/PDF clauses use
+ * {@link formatExcludedPersonForClause} / appointment formatters so only these fields affect output.
+ */
 export const EXCLUDED_PERSON_FIELD_SPECS = [
   { key: 'title', label: 'Title', type: 'text', placeholder: 'e.g. Mr, Ms, Dr' },
   { key: 'firstName', label: 'First name', type: 'text' },

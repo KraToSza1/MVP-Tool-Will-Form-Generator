@@ -66,6 +66,7 @@ import {
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
   SOLICITOR_INTAKE_ONLY_SECTION_TITLE,
   SOLICITOR_INTAKE_ONLY_FIELD_IDS,
+  isEstateOverviewIntakeApplicable,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
@@ -287,7 +288,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Client mode: hide Testamentary Capacity + solicitor-only intake (e.g. Estate Overview). Solicitors: Estate Overview only when Aristone is executor.
+  // Client mode: hide Testamentary Capacity + Estate Overview. Solicitor mode: Estate Overview (assets & liabilities) only when Aristone is executor; it is solicitor intake only and excluded from the Will (excludeFromWill on fields).
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
     const hideForClient = (s) =>
@@ -295,25 +296,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       s.formSection !== SOLICITOR_INTAKE_ONLY_SECTION_TITLE;
     let sections;
     if (solicitorMode) {
-      sections = formData.formSections;
+      sections = formData.formSections.filter((s) => {
+        if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) {
+          return isEstateOverviewIntakeApplicable(formValues, true);
+        }
+        return true;
+      });
     } else {
       sections = formData.formSections.filter(hideForClient);
     }
-    if (!solicitorMode) return sections;
-    const aristoneExecutor =
-      formValues?.chooseAristoneExecutor === 'Aristone' ||
-      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
-    return sections.filter((s) => {
-      if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) return aristoneExecutor;
-      return true;
-    });
-  }, [
-    solicitorMode,
-    formData?.formSections,
-    formValues?.chooseAristoneExecutor,
-    formValues?.appointProfessionalExecutor,
-    formValues?.professionalExecutorSelection,
-  ]);
+    return sections;
+  }, [solicitorMode, formData?.formSections, formValues]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
   useEffect(() => {
@@ -797,10 +790,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         const personSectionFullDetailsIds = [
           'executorsSection',
           'substituteExecutorsSection',
+          'guardiansSection',
+          'substituteGuardiansSection',
           'digitalExecutorsSection',
           'digitalExecutorIfNoSection',
           'trusteesSection',
           'substituteTrusteesSection',
+          'signingOnBehalfSection',
+          'interpreterSection',
+          'chattelRecipientsSection',
+          'debtorsSection',
+          'debtsReleasedSection',
+          'professionalTrusteesSection',
+          'substituteProfessionalTrusteesSection',
         ];
         if (personSectionFullDetailsIds.includes(sectionId) && (subField === 'fullDetails' || subField === 'fullList')) {
           const dataKey = fallbackMap[sectionId];
@@ -1635,8 +1637,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   const isFormFullyCompleted = () => {
     try {
-      return formData.formSections.every((section) =>
-        section.fields.every(field => {
+      return formData.formSections.every((section) => {
+        if (
+          section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
+          !isEstateOverviewIntakeApplicable(formValues, solicitorMode)
+        ) {
+          return true;
+        }
+        return section.fields.every(field => {
           if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
           if (!evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
@@ -1661,8 +1669,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             return isValid;
           }
           return true;
-        })
-      );
+        });
+      });
     } catch (error) {
       console.error('[FORM] Error checking form completion:', error);
       return true;
@@ -2476,7 +2484,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(dummyData).length} fields (client mode — Estate Overview & solicitor-only steps omitted). For full intake test use /solicitor with Aristone executor.`
+            ? `Filled ${Object.keys(dummyData).length} fields (client mode — Estate Overview & solicitor-only steps omitted). For Estate Overview and full solicitor intake, open the solicitor or matter questionnaire.`
             : `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 5000
       });
@@ -2538,7 +2546,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       formData.formSections.forEach((section, sectionIndex) => {
         DEBUG_LOGS&&console.log(`[COMPLETION %] Section ${sectionIndex + 1}: "${section.formSection}"`);
-        
+
+        if (
+          section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
+          !isEstateOverviewIntakeApplicable(formValues, solicitorMode)
+        ) {
+          DEBUG_LOGS&&console.log(`[COMPLETION %] Section "${section.formSection}" - SKIPPED (not applicable)`);
+          return;
+        }
+
         section.fields.forEach(field => {
           if (field.conditions && !evaluateFieldConditions(field)) {
             DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (conditions not met)`);
@@ -2592,7 +2608,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     };
 
     calculateCompletion();
-  }, [formValues, evaluateFieldConditions]);
+  }, [formValues, evaluateFieldConditions, solicitorMode]);
 
   // Process modal fields and convert them to structured data arrays
   // CRITICAL FIX: Separate useEffect to ALWAYS clean up string entries, independent of modal field processing

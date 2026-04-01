@@ -1,9 +1,38 @@
 import { EXCLUDED_PERSON_FIELD_SPECS, formatExcludedPersonForClause } from './excludedPersonFormat.js';
 
-export const PERSON_RECORD_SPECS = EXCLUDED_PERSON_FIELD_SPECS;
+/**
+ * Intake-only fields: stored on the person row and in the contact registry for solicitors.
+ * {@link formatExcludedPersonForClause} / appointment clause formatters ignore these for Will/PDF wording.
+ */
+export const PERSON_INTAKE_EXTRA_SPECS = [
+  { key: 'dateOfBirth', label: 'Date of birth', type: 'text', placeholder: 'dd/mm/yyyy' },
+  {
+    key: 'gender',
+    label: 'Gender',
+    type: 'select',
+    options: [
+      { value: '', label: 'Select…' },
+      { value: 'Male', label: 'Male' },
+      { value: 'Female', label: 'Female' },
+      { value: 'Other', label: 'Other' },
+    ],
+  },
+  { key: 'occupation', label: 'Occupation', type: 'text', placeholder: 'e.g. Teacher, Retired' },
+  {
+    key: 'relationship',
+    label: 'Relationship to testator',
+    type: 'text',
+    placeholder: 'e.g. Friend, sibling, child',
+  },
+  { key: 'mobile', label: 'Mobile', type: 'text', placeholder: 'Optional' },
+  { key: 'email', label: 'Email', type: 'text', placeholder: 'Optional' },
+];
 
-/** Subtitle for add-person buttons and related UI (matches modal fields). */
-export const ADD_PERSON_FIELDS_HINT = 'Title, full name & address only';
+/** All fields shown in PersonRecordModal (identity + intake). */
+export const PERSON_RECORD_SPECS = [...EXCLUDED_PERSON_FIELD_SPECS, ...PERSON_INTAKE_EXTRA_SPECS];
+
+/** Optional subtitle under add-person buttons (empty = label only). */
+export const ADD_PERSON_FIELDS_HINT = '';
 
 export function emptyPersonRecord() {
   return Object.fromEntries(PERSON_RECORD_SPECS.map((s) => [s.key, '']));

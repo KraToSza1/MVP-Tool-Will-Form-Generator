@@ -10,11 +10,38 @@ export const TESTAMENTARY_CAPACITY_SECTION_TITLE = 'Testamentary Capacity';
 /** Solicitor-only intake (not shown to clients; excluded from will via excludeFromWill on fields). */
 export const SOLICITOR_INTAKE_ONLY_SECTION_TITLE = 'Estate Overview (Optional)';
 
+/**
+ * True when Aristone Solicitors is the executor: quick pick (chooseAristoneExecutor === 'Aristone')
+ * or professional executor path (appointProfessionalExecutor + professionalExecutorSelection === 'Aristone').
+ */
+export function isAristoneExecutorSelected(formValues) {
+  if (!formValues || typeof formValues !== 'object') return false;
+  if (formValues.chooseAristoneExecutor === 'Aristone') return true;
+  if (
+    formValues.appointProfessionalExecutor === 'Yes' &&
+    formValues.professionalExecutorSelection === 'Aristone'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Estate Overview (assets & liabilities) appears only for solicitors and only when Aristone is executor. */
+export function isEstateOverviewIntakeApplicable(formValues, solicitorMode) {
+  return !!solicitorMode && isAristoneExecutorSelected(formValues);
+}
+
 /** Field IDs in Estate Overview + fees ack — strip from client autofill / client state (must match form JSON). */
 export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
   'estateOverviewIntro',
   'aristoneProfessionalFeesNotice',
   'aristoneProfessionalFeesAck',
+  'estateStep1Heading',
+  'estateStep2Heading',
+  'estateStep3Heading',
+  'estateStep4Heading',
+  'estateStep5Heading',
+  'estateStep6Heading',
   'estateAssetTypes',
   'estateAssetOther',
   'estateLiabilityTypes',

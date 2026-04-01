@@ -1,13 +1,33 @@
-import React from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { BriefcaseBusiness, FileEdit, Home, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import ThemeToggleButton from '../ThemeToggleButton.jsx';
+import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
 
 export default function SolicitorLayout() {
   const { profile, signOut } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    mattersLoadTrace('SolicitorLayout mounted / route changed', {
+      pathname: location.pathname,
+      note: 'Child route (e.g. index dashboard) runs its own data effects here.',
+    });
+  }, [location.pathname]);
   const { isDark } = useTheme();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   const shellClass = isDark
     ? 'min-h-dvh bg-slate-950 text-slate-100 transition-colors'
@@ -39,11 +59,12 @@ export default function SolicitorLayout() {
             </div>
             <button
               type="button"
-              onClick={() => signOut()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 sm:px-4 py-2 text-sm font-medium hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[44px] min-w-[44px] sm:min-w-0"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 sm:px-4 py-2 text-sm font-medium hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[44px] min-w-[44px] sm:min-w-0 disabled:opacity-60 disabled:cursor-wait"
             >
               <LogOut size={16} />
-              <span className="sm:inline">Sign out</span>
+              <span className="sm:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span>
             </button>
           </div>
         </div>

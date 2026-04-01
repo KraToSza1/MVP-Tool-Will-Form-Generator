@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getFormDefinition } from '../lib/formDefinition.js';
+import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 import { qLog } from '../lib/questionnaireLog.js';
 import staticFormData from '../data/Complete-WillSuite-Form-Data.json';
 
@@ -22,7 +23,10 @@ export function FormDefinitionProvider({ children }) {
   const refresh = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
     qLog('refresh_start', { silent });
-    if (!silent) setLoading(true);
+    if (!silent) {
+      mattersLoadTrace('FormDefinition refresh start (parallel with matters list — same tab network)', {});
+      setLoading(true);
+    }
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     try {
       const { data, error } = await getFormDefinition();
@@ -59,9 +63,16 @@ export function FormDefinitionProvider({ children }) {
       setIsCustom(true);
     } catch (e) {
       qLog('refresh_failed', { silent, message: e?.message || String(e) });
+      if (!silent) {
+        mattersLoadTrace('FormDefinition refresh FAILED', { message: e?.message || String(e) });
+      }
       throw e;
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) {
+        const ms = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+        mattersLoadTrace('FormDefinition refresh finished (questionnaire JSON)', { getMs: ms });
+        setLoading(false);
+      }
     }
   }, []);
 

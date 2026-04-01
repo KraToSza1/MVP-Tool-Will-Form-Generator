@@ -1146,6 +1146,12 @@
             ]
           },
           {
+            "id": "estateStep1Heading",
+            "type": "display",
+            "text": "Step 1: Asset Types (Checkboxes)",
+            "excludeFromWill": true
+          },
+          {
             "id": "estateAssetTypes",
             "type": "checkboxGroup",
             "label": "What types of assets do you have? (Select all that apply)",
@@ -1176,6 +1182,12 @@
             ]
           },
           {
+            "id": "estateStep2Heading",
+            "type": "display",
+            "text": "Step 2: Liability Types (Checkboxes)",
+            "excludeFromWill": true
+          },
+          {
             "id": "estateLiabilityTypes",
             "type": "checkboxGroup",
             "label": "Do you have any outstanding liabilities? (Select all that apply)",
@@ -1190,6 +1202,12 @@
               { "id": "OtherDebts", "label": "Other debts", "value": "OtherDebts" },
               { "id": "NoLiabilities", "label": "No liabilities", "value": "NoLiabilities" }
             ]
+          },
+          {
+            "id": "estateStep3Heading",
+            "type": "display",
+            "text": "Step 3: Estate Value (Range)",
+            "excludeFromWill": true
           },
           {
             "id": "estateGrossValueRange",
@@ -1209,6 +1227,12 @@
             "value": null
           },
           {
+            "id": "estateStep4Heading",
+            "type": "display",
+            "text": "Step 4: Liability Value (Range)",
+            "excludeFromWill": true
+          },
+          {
             "id": "estateLiabilityValueRange",
             "type": "radio",
             "label": "What is the approximate total value of your liabilities?",
@@ -1222,6 +1246,12 @@
               { "value": "PreferNotToSayLiab", "label": "Prefer not to say" }
             ],
             "value": null
+          },
+          {
+            "id": "estateStep5Heading",
+            "type": "display",
+            "text": "Step 5: Property Value (Conditional — shown only if property is selected above)",
+            "excludeFromWill": true
           },
           {
             "id": "estatePropertyValueRange",
@@ -1248,9 +1278,16 @@
             ]
           },
           {
+            "id": "estateStep6Heading",
+            "type": "display",
+            "text": "Step 6: Additional Notes (Optional)",
+            "excludeFromWill": true
+          },
+          {
             "id": "estateAdditionalNotes",
             "type": "textarea",
-            "label": "Additional notes (optional)",
+            "label": "Additional Notes (Optional)",
+            "placeholder": "Free text for the solicitor. Not included in the Will.",
             "value": "",
             "excludeFromWill": true
           }

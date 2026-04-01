@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
 
 const FALLBACK_DELAY_MS = 6000;
 
@@ -14,6 +15,21 @@ export default function ProtectedRoute() {
     const t = setTimeout(() => setShowFallback(true), FALLBACK_DELAY_MS);
     return () => clearTimeout(t);
   }, [loading]);
+
+  useEffect(() => {
+    mattersLoadTrace('ProtectedRoute', {
+      path: location.pathname,
+      authLoading: loading,
+      isAuthenticated,
+      isStaff,
+      rendersOutlet: !loading && isAuthenticated && isStaff,
+      note: loading
+        ? 'Blocking — showing "Loading solicitor workspace" (dashboard / matters list not mounted).'
+        : !isAuthenticated || !isStaff
+          ? 'Redirecting to login.'
+          : 'Rendering solicitor routes (e.g. dashboard — may show "Loading matters…").',
+    });
+  }, [loading, isAuthenticated, isStaff, location.pathname]);
 
   if (loading) {
     return (

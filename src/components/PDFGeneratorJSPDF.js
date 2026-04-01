@@ -1224,10 +1224,19 @@ const interpolateText = (text, values, options = {}) => {
       const personSectionFullDetailsIds = [
         'executorsSection',
         'substituteExecutorsSection',
+        'guardiansSection',
+        'substituteGuardiansSection',
         'digitalExecutorsSection',
         'digitalExecutorIfNoSection',
         'trusteesSection',
         'substituteTrusteesSection',
+        'signingOnBehalfSection',
+        'interpreterSection',
+        'chattelRecipientsSection',
+        'debtorsSection',
+        'debtsReleasedSection',
+        'professionalTrusteesSection',
+        'substituteProfessionalTrusteesSection',
       ];
       if (personSectionFullDetailsIds.includes(sectionId) && (subField === 'fullDetails' || subField === 'fullList')) {
         const dataKey = fallbackMap[sectionId];
@@ -2334,6 +2343,37 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       return finalY + spacingAfter;
     };
 
+    /** Vertical space (mm) for section title line only (must match yPos += after doc.text). */
+    const SECTION_TITLE_BLOCK_MM = 8;
+
+    /**
+     * Match renderNumberedClause layout math so we can reserve space before drawing a section title
+     * (avoids orphan headings when the clause body is moved to the next page).
+     */
+    const estimateNumberedClauseBodyHeightMm = (text, number, fontSize = 11.5, lh = 5.5, spacingAfter = 6, numColW = 12) => {
+      const hasNumber = number != null && number !== '';
+      const textX = hasNumber ? margin + numColW : margin;
+      const rawColumnWidth = pageWidth - textX - margin;
+      const availableWidth = getEffectiveTextWidth(rawColumnWidth);
+      const clauseText = collapseWhitespaceForPdf(text);
+      const maxWidthMm = Math.max(8, availableWidth);
+      const layoutWidthMm = Math.max(6, maxWidthMm - CLAUSE_COLUMN_SAFETY_MM);
+      const tokens = flattenToWordTokens(tokenizeMarkedString(clauseText));
+      const lineBlocks = layoutSegmentAwareLines(doc, tokens, layoutWidthMm, fontSize);
+      return Math.max(lineBlocks.length, 1) * lh + spacingAfter;
+    };
+
+    const estimateShortClauseBodyHeightMm = (text, fontSize = 11.5) => {
+      const rawColumnWidth = pageWidth - margin - margin;
+      const availableWidth = getEffectiveTextWidth(rawColumnWidth);
+      const maxWidthMm = Math.max(8, availableWidth);
+      const layoutWidthMm = Math.max(6, maxWidthMm - CLAUSE_COLUMN_SAFETY_MM);
+      const shortClauseText = collapseWhitespaceForPdf(text);
+      const shortTokens = flattenToWordTokens(tokenizeMarkedString(shortClauseText));
+      const shortLineBlocks = layoutSegmentAwareLines(doc, shortTokens, layoutWidthMm, fontSize);
+      return shortLineBlocks.length * 5.5 + 6;
+    };
+
     // Helper to add DRAFT watermark to a page
     const addDraftWatermark = (doc, pageNum) => {
       doc.setPage(pageNum);
@@ -3378,32 +3418,29 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       sectionParaCount.set(label, (sectionParaCount.get(label) || 0) + 1);
     });
     
-    // 1. SECTION HEADERS: Render section header when section changes (numbered, bold, visually distinct)
+    // 1. SECTION HEADERS: Render section header when section changes (numbered, bold, visually distinct).
+    // Header is emitted AFTER clause text is finalized so we can measure body height and keep the title
+    // with its first clause on the same page (avoids orphan headings at the foot of a page).
     let lastSection = null;
+    let lastEmittedSectionHeader = null;
     let sectionNumber = 0;
     const sectionParaIndex = new Map(); // paraIndex per section (1-based)
 
     // Render will clauses with hanging indent (number and text on same line)
     let clauseNumber = 1;
     willClauses.forEach((clause) => {
-      // Emit section header before first clause of each new section
-      if (clause.sectionLabel && clause.sectionLabel !== lastSection) {
-        lastSection = clause.sectionLabel;
-        sectionNumber++;
-        sectionParaIndex.set(lastSection, 0); // reset para index for new section
-        checkPageBreak(lineHeight * 3);
-        doc.setFont('times', 'bold');
-        doc.setFontSize(12);
-        doc.text(`${sectionNumber}. ${clause.sectionLabel}`, margin, yPos);
-        yPos += 8;
-        doc.setFont('times', 'normal');
-        doc.setFontSize(11.5);
-      }
       // CRITICAL FIX: Skip clauses with unresolved markers - they should have been blocked in buildClauses.js
       // This is a safety net in case any somehow got through
       if (/\{\{field:[^}]+\}\}/.test(clause.text)) {
         console.error(`[PDF RENDER] ❌ CRITICAL: Skipping clause with unresolved markers (should have been blocked in buildClauses): "${clause.text.substring(0, 100)}"`);
         return; // Skip this clause entirely - do not render it
+      }
+
+      // Advance section numbering when this clause starts a new form section (header drawn later, after text is laid out)
+      if (clause.sectionLabel && clause.sectionLabel !== lastSection) {
+        lastSection = clause.sectionLabel;
+        sectionNumber++;
+        sectionParaIndex.set(lastSection, 0);
       }
       
       // DO NOT skip clauses - render everything, even if incomplete
@@ -3532,6 +3569,21 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       if (!processedClauseText || processedClauseText.trim() === '') {
         processedClauseText = '[MISSING: clause content]';
       }
+
+      const tryEmitSectionHeader = (bodyHeightMm) => {
+        if (!clause.sectionLabel || clause.sectionLabel === lastEmittedSectionHeader) return;
+        if (yPos + SECTION_TITLE_BLOCK_MM + bodyHeightMm > pageHeight - margin) {
+          doc.addPage();
+          yPos = margin;
+        }
+        doc.setFont('times', 'bold');
+        doc.setFontSize(12);
+        doc.text(`${sectionNumber}. ${clause.sectionLabel}`, margin, yPos);
+        yPos += SECTION_TITLE_BLOCK_MM;
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11.5);
+        lastEmittedSectionHeader = clause.sectionLabel;
+      };
       
       // Only number substantive clauses (length > 20 characters or contains content)
       // Mariyam's numbering: sub-number (1.1, 1.2) only if section has >1 paragraph; else no sub-number
@@ -3540,6 +3592,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         const idx = (sectionParaIndex.get(lastSection || '') || 0) + 1;
         sectionParaIndex.set(lastSection || '', idx);
         const displayNumber = paraCount > 1 ? `${sectionNumber}.${idx}` : null;
+        const numberedBodyHeightMm = estimateNumberedClauseBodyHeightMm(processedClauseText, displayNumber);
+        tryEmitSectionHeader(numberedBodyHeightMm);
         yPos = renderNumberedClause(doc, {
           number: displayNumber,
           text: processedClauseText,
@@ -3555,7 +3609,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         clauseNumber++;
       } else {
         // Short clauses (like headings) render without numbering
-        checkPageBreak(lineHeight * 2);
+        const shortBodyHeightMm = estimateShortClauseBodyHeightMm(processedClauseText);
+        tryEmitSectionHeader(shortBodyHeightMm);
         doc.setFont('times', 'normal');
         doc.setFontSize(11.5);
         const shortClauseTextX = margin;
@@ -3566,12 +3621,6 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         const layoutWidthMm = Math.max(6, maxWidthMm - CLAUSE_COLUMN_SAFETY_MM);
         const shortTokens = flattenToWordTokens(tokenizeMarkedString(shortClauseText));
         const shortLineBlocks = layoutSegmentAwareLines(doc, shortTokens, layoutWidthMm, 11.5);
-
-        const neededHeight = shortLineBlocks.length * 5.5 + 6;
-        if (yPos + neededHeight > pageHeight - margin) {
-          doc.addPage();
-          yPos = margin;
-        }
 
         yPos =
           drawSegmentAwareClauseLines(

@@ -1,6 +1,9 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 import { primeFormDefinitionSessionUserId } from './formDefinition.js';
 
+/** Set for the duration of signInSolicitor — used for nested timing logs */
+let activeAuthPipelineStart = null;
+
 /** Safe for console: which Supabase project the browser is using (compare to dashboard URL). */
 function getSupabaseProjectHost() {
   try {
@@ -21,6 +24,26 @@ function maskEmail(email) {
   return `${visible}***${domain}`;
 }
 
+function nowPerfMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+/** Browser hints when diagnosing slow auth (network / tab throttling). */
+function getAuthEnvironmentSnapshot() {
+  if (typeof window === 'undefined') return {};
+  const nav = navigator;
+  const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
+  return {
+    onLine: nav.onLine,
+    visibilityState: typeof document !== 'undefined' ? document.visibilityState : undefined,
+    iframe: window.self !== window.top,
+    connectionEffectiveType: conn?.effectiveType ?? null,
+    connectionDownlink: conn?.downlink ?? null,
+    connectionRtt: conn?.rtt ?? null,
+    saveData: conn?.saveData ?? null,
+  };
+}
+
 /** Structured pipeline logs — filter console by: WillTool Auth */
 function authLog(phase, detail) {
   const ctx = typeof window !== 'undefined' && window.self !== window.top ? 'iframe' : 'top-level';
@@ -29,6 +52,19 @@ function authLog(phase, detail) {
   } else {
     console.log(`[WillTool Auth] ${phase}`, { context: ctx });
   }
+}
+
+/** Timing: stepMs = since last mark, totalMs = since pipeline start */
+function authLogTiming(phase, pipelineStart, lastMark) {
+  const t = nowPerfMs();
+  const stepMs = lastMark != null ? Math.round(t - lastMark) : null;
+  const totalMs = pipelineStart != null ? Math.round(t - pipelineStart) : null;
+  authLog(phase, {
+    ...(stepMs != null ? { stepMs } : {}),
+    ...(totalMs != null ? { totalMs } : {}),
+    env: getAuthEnvironmentSnapshot(),
+  });
+  return t;
 }
 
 function authError(phase, err) {
@@ -44,11 +80,15 @@ async function fetchProfileRow(userId) {
     return { profile: null, error: null };
   }
 
+  const q0 = nowPerfMs();
+  authLog('profiles.select HTTP start', { userId });
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userId)
     .maybeSingle();
+  const qMs = Math.round(nowPerfMs() - q0);
+  authLog('profiles.select HTTP done', { userId, queryMs: qMs });
 
   if (error) {
     authError('profiles.select failed', error);
@@ -60,6 +100,7 @@ async function fetchProfileRow(userId) {
     hasRow: !!data,
     role: data?.role ?? null,
     email: data?.email ? maskEmail(data.email) : null,
+    queryMs: qMs,
   });
   primeFormDefinitionSessionUserId(userId);
   return { profile: data ?? null, error: null };
@@ -77,7 +118,9 @@ export async function getCurrentSession() {
   }
 
   try {
+    const g0 = nowPerfMs();
     const { data, error } = await supabase.auth.getSession();
+    authLog('getCurrentSession: getSession completed', { ms: Math.round(nowPerfMs() - g0) });
     if (error) {
       console.error('[Solicitor Login] getSession error:', error);
       return { session: null, user: null, profile: null, error: error.message };
@@ -111,36 +154,62 @@ function withTimeout(promise, ms, message = 'Sign-in timed out') {
 }
 
 async function signInWithPasswordOnce(email, password) {
+  const t0 = nowPerfMs();
+  authLog('signInWithPassword: inner await start', {
+    timeoutCapMs: SIGN_IN_TIMEOUT_MS,
+    elapsedSincePipelineStartMs:
+      activeAuthPipelineStart != null ? Math.round(t0 - activeAuthPipelineStart) : undefined,
+  });
   const result = await withTimeout(
     supabase.auth.signInWithPassword({ email, password }),
     SIGN_IN_TIMEOUT_MS
   );
+  authLog('signInWithPassword: inner await done', {
+    innerMs: Math.round(nowPerfMs() - t0),
+    hasError: !!result?.error,
+    hasSession: !!result?.data?.session,
+  });
   return result;
 }
 
 export async function signInSolicitor({ email, password }) {
+  const pipelineStart = nowPerfMs();
+  activeAuthPipelineStart = pipelineStart;
+  let lastMark = pipelineStart;
+  const mark = (phase) => {
+    lastMark = authLogTiming(phase, pipelineStart, lastMark);
+  };
+
   const host = getSupabaseProjectHost();
   authLog('pipeline start', {
     supabaseHost: host,
     email: maskEmail(email),
     hasPassword: !!password,
     supabaseConfigured: isSupabaseConfigured(),
+    t0: 0,
+    env: getAuthEnvironmentSnapshot(),
   });
 
   if (!isSupabaseConfigured()) {
     authError('abort: Supabase client missing', new Error('Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'));
+    activeAuthPipelineStart = null;
     return { error: 'Supabase not configured' };
   }
 
   let data, error;
   try {
-    authLog('step 1/4: auth.signInWithPassword (request)', {});
+    authLog('step 1/4: auth.signInWithPassword (request)', {
+      sincePipelineMs: Math.round(nowPerfMs() - pipelineStart),
+    });
     const result = await signInWithPasswordOnce(email, password);
+    mark('step 1/4: auth.signInWithPassword (resolved)');
     data = result.data;
     error = result.error;
   } catch (err) {
     if (err?.message === 'Sign-in timed out') {
-      authLog('step 1 retry: first attempt timed out, retrying once', {});
+      authLog('step 1 retry: first attempt timed out, retrying once', {
+        sincePipelineMs: Math.round(nowPerfMs() - pipelineStart),
+      });
       try {
         const retry = await signInWithPasswordOnce(email, password);
         data = retry.data;
@@ -148,20 +217,24 @@ export async function signInSolicitor({ email, password }) {
       } catch (err2) {
         if (err2?.message === 'Sign-in timed out') {
           authError('step 1 FAILED: timeout after retry', err2);
+          activeAuthPipelineStart = null;
           return {
             error:
               'Sign-in timed out. Your browser may be limiting the embedded page — try opening the Will Tool in a full tab (use “Open solicitor login in new tab” on the login page), or check your connection.',
           };
         }
+        activeAuthPipelineStart = null;
         throw err2;
       }
     } else {
+      activeAuthPipelineStart = null;
       throw err;
     }
   }
 
   if (error) {
     authError('step 1 FAILED: auth.signInWithPassword', error);
+    activeAuthPipelineStart = null;
     authLog('hint: invalid_credentials = wrong password or email not in THIS project; confirm VITE_SUPABASE_URL host matches Supabase dashboard', {
       supabaseHost: host,
     });
@@ -171,15 +244,19 @@ export async function signInSolicitor({ email, password }) {
   authLog('step 1 OK: password accepted by Supabase Auth', {
     userId: data.user?.id,
     emailFromAuth: data.user?.email ? maskEmail(data.user.email) : null,
+    sincePipelineMs: Math.round(nowPerfMs() - pipelineStart),
   });
 
   // Ensure JWT is applied before RLS-protected queries (helps iframe / storage edge cases)
   if (data.session?.access_token && data.session?.refresh_token) {
     authLog('step 2/4: auth.setSession (apply JWT for RLS)', { hasAccessToken: true });
+    const set0 = nowPerfMs();
     const { data: sessData, error: setErr } = await supabase.auth.setSession({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
     });
+    authLog('step 2/4: setSession await finished', { setSessionMs: Math.round(nowPerfMs() - set0) });
+    mark('step 2/4: setSession marked');
     if (setErr) {
       authError('step 2 WARNING: setSession', setErr);
     } else {
@@ -190,7 +267,7 @@ export async function signInSolicitor({ email, password }) {
   }
 
   const userId = data.user?.id ?? null;
-  authLog('step 3/4: public.profiles SELECT', { userId });
+  authLog('step 3/4: public.profiles SELECT', { userId, sincePipelineMs: Math.round(nowPerfMs() - pipelineStart) });
   let profile = null;
   if (userId) {
     try {
@@ -200,8 +277,10 @@ export async function signInSolicitor({ email, password }) {
         'Profile lookup timed out'
       );
 
+      mark('step 3/4: profile fetch completed');
       if (fetchResult.error) {
         authError('step 3 FAILED: profiles SELECT', fetchResult.error);
+        activeAuthPipelineStart = null;
         return {
           code: 'profile_fetch_failed',
           error:
@@ -217,7 +296,9 @@ export async function signInSolicitor({ email, password }) {
       // auth.users row exists but public.profiles row missing (trigger/backfill gap) — sync once via RPC
       if (!profile) {
         authLog('step 3b: no profile row — calling RPC ensure_profile_from_auth', { userId });
+        const rpc0 = nowPerfMs();
         const { error: rpcError } = await supabase.rpc('ensure_profile_from_auth');
+        authLog('step 3b: RPC ensure_profile_from_auth finished', { rpcMs: Math.round(nowPerfMs() - rpc0) });
         if (rpcError) {
           authError('step 3b FAILED: RPC ensure_profile_from_auth (run migration 20260327120000 if missing)', rpcError);
         } else {
@@ -225,6 +306,7 @@ export async function signInSolicitor({ email, password }) {
           fetchResult = await fetchProfileRow(userId);
           if (fetchResult.error) {
             authError('step 3 FAILED: profiles SELECT after RPC', fetchResult.error);
+            activeAuthPipelineStart = null;
             return {
               code: 'profile_fetch_failed',
               error:
@@ -239,6 +321,7 @@ export async function signInSolicitor({ email, password }) {
       }
     } catch (err) {
       authError('step 3 FAILED: exception during profile load', err);
+      activeAuthPipelineStart = null;
       return {
         error:
           'Signed in but could not load your staff profile in time. Refresh the page, or open the Will Tool in a new tab and try again.',
@@ -254,6 +337,7 @@ export async function signInSolicitor({ email, password }) {
       supabaseHost: getSupabaseProjectHost(),
       hint: 'Insert row in public.profiles for this user id, or fix RPC',
     });
+    activeAuthPipelineStart = null;
     return {
       code: 'no_staff_profile',
       error:
@@ -268,17 +352,24 @@ export async function signInSolicitor({ email, password }) {
     userId,
     role: profile.role,
     email: maskEmail(profile.email || ''),
+    totalPipelineMs: Math.round(nowPerfMs() - pipelineStart),
   });
+  activeAuthPipelineStart = null;
   return { session: data.session ?? null, user: data.user ?? null, profile };
 }
 
 export async function signOutSolicitor() {
-  if (!supabase) return;
+  if (!supabase) {
+    authLog('signOut: no Supabase client (UI should still clear session)', {});
+    return { ok: true };
+  }
+  authLog('signOut: calling supabase.auth.signOut', {});
   const { error } = await supabase.auth.signOut();
   if (error) {
-    console.error('[auth] signOut error:', error);
+    authError('signOut failed', error);
     return { error: error.message };
   }
+  authLog('signOut: supabase.auth.signOut completed', {});
   return { ok: true };
 }
 
@@ -287,9 +378,17 @@ export function subscribeToAuthChanges(callback) {
     return () => {};
   }
 
-  const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const t0 = nowPerfMs();
+    authLog('onAuthStateChange', { event, hasSession: !!session });
     const user = session?.user ?? null;
+    const p0 = nowPerfMs();
     const profile = user ? await getProfile(user.id) : null;
+    authLog('onAuthStateChange: getProfile done', {
+      ms: Math.round(nowPerfMs() - p0),
+      sinceEventMs: Math.round(nowPerfMs() - t0),
+      hasProfile: !!profile,
+    });
     callback({ session: session ?? null, user, profile });
   });
 

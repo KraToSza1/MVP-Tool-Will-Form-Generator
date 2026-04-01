@@ -113,7 +113,7 @@ export default function PersonRecordModal({
           <div className="min-w-0">
             <p id="person-record-modal-title" className="flex items-center gap-2 text-base font-semibold text-slate-100">
               <User className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden />
-              <span>Title, full name & address</span>
+              <span>Add person</span>
             </p>
             {contextLabel ? (
               <p className="mt-0.5 text-xs text-slate-400">For: {contextLabel}</p>
@@ -149,8 +149,8 @@ export default function PersonRecordModal({
           <p className="flex gap-2 text-xs text-slate-400">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" aria-hidden />
             <span>
-              We only collect title, full name and address. You can copy from someone you already entered, then edit.
-              First name, last name, and at least address line 1 or postcode are required.
+              You can copy from someone you already entered, then edit. First name, last name, and at least address line
+              1 or postcode are required.
             </span>
           </p>
 
@@ -158,14 +158,30 @@ export default function PersonRecordModal({
             {PERSON_RECORD_SPECS.map((spec, i) => (
               <label key={spec.key} className="block text-sm">
                 <span className="text-slate-400">{spec.label}</span>
-                <input
-                  ref={i === 0 ? firstInputRef : undefined}
-                  type="text"
-                  value={draft[spec.key] ?? ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, [spec.key]: e.target.value }))}
-                  placeholder={spec.placeholder || ''}
-                  className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                {spec.type === 'select' ? (
+                  <select
+                    ref={i === 0 ? firstInputRef : undefined}
+                    value={draft[spec.key] ?? ''}
+                    onChange={(e) => setDraft((d) => ({ ...d, [spec.key]: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                  >
+                    {(spec.options || []).map((opt) => (
+                      <option key={opt.value || 'empty'} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    ref={i === 0 ? firstInputRef : undefined}
+                    type="text"
+                    value={draft[spec.key] ?? ''}
+                    onChange={(e) => setDraft((d) => ({ ...d, [spec.key]: e.target.value }))}
+                    placeholder={spec.placeholder || ''}
+                    autoComplete="off"
+                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                  />
+                )}
               </label>
             ))}
           </div>

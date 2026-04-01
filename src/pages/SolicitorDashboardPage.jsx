@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, ShieldAlert, ClipboardCheck, BriefcaseBusiness, FileClock, Inbox, ExternalLink, Copy, ChevronDown, ChevronRight, HelpCircle, FilterX, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { getPartnerShortLabel } from '../lib/partnerIntakeSummary.js';
 import { OUTSTANDING_CATEGORY, getMatterOutstandingCategories, isMatterIdVerificationOutstanding, isMatterTestamentaryCapacityOutstanding } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
+import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All matters' },
@@ -76,6 +77,8 @@ function getMatterDisplayData(matter) {
 
 export default function SolicitorDashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const mattersLoadRunRef = useRef(0);
+  const pageMountT0 = useRef(typeof performance !== 'undefined' ? performance.now() : 0);
   const [matters, setMatters] = useState([]);
   const [allMattersForStats, setAllMattersForStats] = useState([]);
   const [search, setSearch] = useState('');
@@ -87,6 +90,28 @@ export default function SolicitorDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [matterToDelete, setMatterToDelete] = useState(null);
+
+  useEffect(() => {
+    mattersLoadTrace('SolicitorDashboardPage mounted', {
+      sinceNavigationMs:
+        pageMountT0.current && typeof performance !== 'undefined'
+          ? Math.round(performance.now() - pageMountT0.current)
+          : 0,
+    });
+  }, []);
+
+  useEffect(() => {
+    mattersLoadTrace('Dashboard "Loading matters…" visibility', {
+      authLoading,
+      mattersRowLoading: loading,
+      showsLoadingMattersBanner: loading,
+      meaning: authLoading
+        ? 'Unusual: auth still loading on dashboard (ProtectedRoute normally blocks until auth is ready).'
+        : loading
+          ? 'Normal: waiting for both listMatters requests (filtered + stats_all) or StrictMode double-fetch.'
+          : 'Table can render — Supabase listMatters finished.',
+    });
+  }, [authLoading, loading]);
 
   const handleConfirmDelete = async () => {
     if (!matterToDelete) return;
@@ -107,31 +132,104 @@ export default function SolicitorDashboardPage() {
 
   useEffect(() => {
     // Wait for auth session (Safari/Chrome): avoid querying before Supabase session is ready (was showing 0 matters).
-    if (authLoading) return;
+    if (authLoading) {
+      mattersLoadTrace('matters load effect: SKIP (auth still loading)', {
+        note: 'listMatters will not run until authLoading is false.',
+      });
+      return;
+    }
+
+    const run = ++mattersLoadRunRef.current;
+    const effectStarted = typeof performance !== 'undefined' ? performance.now() : 0;
+    mattersLoadTrace('matters load effect: START — scheduling two parallel listMatters', {
+      run,
+      strictModeNote: import.meta.env.DEV
+        ? 'React StrictMode may run this effect twice in dev — duplicate logs and timings are expected.'
+        : null,
+      filters: { search, status, assignedOnly, sortBy },
+      userId: user?.id ? `${String(user.id).slice(0, 8)}…` : null,
+    });
 
     let active = true;
     queueMicrotask(() => {
       if (active) setLoading(true);
     });
-    Promise.all([
-      listMatters({ search, status, assignedOnly, userId: user?.id, sortBy }),
-      listMatters({ search: '', status: 'all', assignedOnly: false, userId: user?.id, sortBy: 'last_activity_at' }),
-    ]).then(([filteredResult, allResult]) => {
-      if (!active) return;
-      if (filteredResult.error) {
-        toast.error('Could not load matters', { description: filteredResult.error });
-        setMatters([]);
-      } else {
-        setMatters(filteredResult.data || []);
+
+    const tFiltered = typeof performance !== 'undefined' ? performance.now() : 0;
+    const pFiltered = listMatters(
+      { search, status, assignedOnly, userId: user?.id, sortBy },
+      'dashboard_filtered',
+    ).then((r) => {
+      if (typeof performance !== 'undefined') {
+        mattersLoadTrace('listMatters returned (first of two)', {
+          run,
+          label: 'dashboard_filtered',
+          elapsedMs: Math.round(performance.now() - tFiltered),
+          error: r.error || null,
+          rowCount: r.data?.length ?? 0,
+        });
       }
-      if (!allResult.error) {
-        setAllMattersForStats(allResult.data || []);
-      }
-      setLoading(false);
+      return r;
     });
+
+    const tAll = typeof performance !== 'undefined' ? performance.now() : 0;
+    const pAll = listMatters(
+      { search: '', status: 'all', assignedOnly: false, userId: user?.id, sortBy: 'last_activity_at' },
+      'dashboard_stats_all',
+    ).then((r) => {
+      if (typeof performance !== 'undefined') {
+        mattersLoadTrace('listMatters returned (second of two)', {
+          run,
+          label: 'dashboard_stats_all',
+          elapsedMs: Math.round(performance.now() - tAll),
+          error: r.error || null,
+          rowCount: r.data?.length ?? 0,
+        });
+      }
+      return r;
+    });
+
+    Promise.all([pFiltered, pAll])
+      .then(([filteredResult, allResult]) => {
+        if (!active) {
+          mattersLoadTrace('matters load effect: IGNORED (stale run — cleanup ran)', { run });
+          return;
+        }
+        const totalMs =
+          effectStarted && typeof performance !== 'undefined'
+            ? Math.round(performance.now() - effectStarted)
+            : 0;
+        mattersLoadTrace('matters load effect: BOTH requests settled — setLoading(false) next', {
+          run,
+          wallClockSinceEffectMs: totalMs,
+          filteredError: filteredResult.error || null,
+          allError: allResult.error || null,
+          filteredCount: filteredResult.data?.length ?? 0,
+          allCount: allResult.data?.length ?? 0,
+        });
+        if (filteredResult.error) {
+          toast.error('Could not load matters', { description: filteredResult.error });
+          setMatters([]);
+        } else {
+          setMatters(filteredResult.data || []);
+        }
+        if (!allResult.error) {
+          setAllMattersForStats(allResult.data || []);
+        }
+        setLoading(false);
+        mattersLoadTrace('Dashboard UI: loading hidden — matters table should render', { run });
+      })
+      .catch((err) => {
+        console.error('[WillTool Matters Load] matters effect: unexpected rejection', { run, err });
+        if (active) {
+          setLoading(false);
+          toast.error('Could not load matters', { description: err?.message || 'Unexpected error' });
+        }
+      });
 
     return () => {
       active = false;
+      mattersLoadTrace('matters load effect: CLEANUP (deps changed or unmount)', { run });
     };
   }, [assignedOnly, authLoading, search, sortBy, status, user?.id]);
 

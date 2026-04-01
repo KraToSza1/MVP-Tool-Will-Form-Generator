@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
+import { mattersLoadTrace } from './mattersLoadTrace.js';
 import { buildClientSnapshot, buildMatterPayload, mergeMatterPayloads } from './formPayload.js';
 import { compressIdentityVerification } from './compressIdImages.js';
 
@@ -254,15 +255,38 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
   return { matterId: data };
 }
 
-export async function listMatters({ search = '', status = 'all', assignedOnly = false, userId = null, sortBy = 'last_activity_at' } = {}) {
+/**
+ * @param {object} options - filters and sort
+ * @param {string} [debugLabel] - label for timing logs (e.g. dashboard_filtered vs dashboard_stats_all)
+ */
+export async function listMatters(
+  { search = '', status = 'all', assignedOnly = false, userId = null, sortBy = 'last_activity_at' } = {},
+  debugLabel = 'listMatters',
+) {
   if (!supabase) {
+    mattersLoadTrace('listMatters: aborted — no Supabase client', { label: debugLabel });
     console.warn('[WillTool Flow] listMatters: Supabase not configured');
     return { data: [], error: 'Supabase not configured' };
   }
 
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const orderColumn = sortBy === 'submitted_at' ? 'submitted_at' : 'last_activity_at';
   const ascending = false; // newest first for both
-  console.log('[WillTool Flow] Solicitor listing matters', { status, search: search || '(none)', assignedOnly, sortBy: orderColumn, phase: 'solicitor_list' });
+  mattersLoadTrace('listMatters: Supabase query starting', {
+    label: debugLabel,
+    status,
+    orderColumn,
+  });
+  console.log('[WillTool Flow] listMatters: request start', {
+    label: debugLabel,
+    status,
+    search: search || '(none)',
+    assignedOnly,
+    sortBy: orderColumn,
+    userId: userId ? `${String(userId).slice(0, 8)}…` : null,
+    phase: 'solicitor_list_start',
+    t0Ms: t0 ? Math.round(t0) : 0,
+  });
 
   let query = supabase
     .from('matters')
@@ -287,13 +311,53 @@ export async function listMatters({ search = '', status = 'all', assignedOnly = 
   }
 
   const { data, error } = await query;
+  const elapsedMs = t0 && typeof performance !== 'undefined' ? Math.round(performance.now() - t0) : 0;
+
   if (error) {
-    console.error('[WillTool Flow] listMatters: error', error.message, error);
+    mattersLoadTrace('listMatters: Supabase ERROR', {
+      label: debugLabel,
+      elapsedMs,
+      message: error.message,
+      code: error.code,
+    });
+    console.error('[WillTool Flow] listMatters: error', {
+      label: debugLabel,
+      elapsedMs,
+      message: error.message,
+      code: error.code,
+      phase: 'solicitor_list_error',
+    });
     return { data: [], error: error.message };
   }
 
   const list = data ?? [];
-  console.log('[WillTool Flow] Solicitor matters loaded', { count: list.length, matters: list.length ? list.map(m => ({ id: m.id, ref: m.client_reference, status: m.status })) : [], phase: 'solicitor_list_done' });
+  /** Avoid huge JSON.stringify on very large lists (would skew “slow load” timings). */
+  let approxPayloadBytes = null;
+  if (list.length <= 100) {
+    try {
+      approxPayloadBytes = safeJsonByteLength(list);
+    } catch {
+      approxPayloadBytes = -1;
+    }
+  }
+
+  console.log('[WillTool Flow] listMatters: request done', {
+    label: debugLabel,
+    count: list.length,
+    elapsedMs,
+    approxPayloadBytes: approxPayloadBytes ?? 'skipped_large_list',
+    sample: list.length
+      ? list.slice(0, 5).map((m) => ({ id: m.id, ref: m.client_reference, status: m.status }))
+      : [],
+    phase: 'solicitor_list_done',
+  });
+  mattersLoadTrace('listMatters: Supabase query finished', {
+    label: debugLabel,
+    elapsedMs,
+    rowCount: list.length,
+    approxPayloadBytes: approxPayloadBytes ?? 'skipped_large_list',
+    note: 'Large payloads (client_payload/solicitor_payload per row) increase download and parse time.',
+  });
   return { data: list };
 }
 
