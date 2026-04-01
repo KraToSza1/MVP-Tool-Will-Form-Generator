@@ -869,7 +869,7 @@
                 {
                     "id": "estateAssetTypes",
                     "type": "checkboxGroup",
-                    "label": "What types of assets do you have? (Select all that apply)",
+                    "label": "What assets do you have? (Select all that apply)",
                     "excludeFromWill": true,
                     "options": [
                         {
@@ -1093,7 +1093,7 @@
                 {
                     "id": "estatePropertyValueRange",
                     "type": "radio",
-                    "label": "What is the approximate total value of your property?",
+                    "label": "What is the approximate value of your property?",
                     "excludeFromWill": true,
                     "options": [
                         {
@@ -1187,7 +1187,7 @@
                             "options": [
                                 {
                                     "value": "Aristone",
-                                    "label": "🥇 Aristone Solicitors (Professional - Recommended)",
+                                    "label": "🥇 Aristone Solicitors (Professional)",
                                     "willClauseText": "Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG"
                                 },
                                 {
@@ -1220,7 +1220,7 @@
                 {
                     "id": "aristoneProfessionalFeesNotice",
                     "type": "display",
-                    "text": "If you request Aristone Solicitors to act, professional fees will apply.\n\nIf you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our website.",
+                    "text": "If you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our website.",
                     "excludeFromWill": true,
                     "conditions": [
                         {

@@ -159,38 +159,52 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     }
   };
 
+  /** Fallback when `evaluateFieldConditions` is not passed (tests / rare paths). Keep in sync with FormRenderer. */
   const evaluateConditions = (fieldToCheck) => {
     const conditions = fieldToCheck?.conditions;
     if (!conditions) return true;
-    
+
     DEBUG_LOGS&&console.log(`[CONDITION CHECK] Evaluating conditions for field "${fieldToCheck.id}" (${fieldToCheck.label}):`, conditions);
-    
+
     const evalClause = (clause) => {
+      if (!clause) return false;
+      if ((clause.operator === 'AND' || clause.operator === 'OR') && clause.clauses) {
+        const results = clause.clauses.map(evalClause);
+        return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
+      }
+      if (!clause.field) return false;
       const value = formValues[clause.field];
       DEBUG_LOGS&&console.log(`[CONDITION] Checking clause - Field: ${clause.field}, Value: ${value}, Expected: ${clause.value}, Operator: ${clause.operator}`);
-      
+
       if (clause.operator === 'eq') return value === clause.value;
       if (clause.operator === 'ne') return value !== clause.value;
       if (clause.operator === 'includes') {
         return Array.isArray(value) && value.includes(clause.value);
       }
-      if (clause.operator === 'in') return clause.value.includes(value);
-      if (clause.operator === 'AND' || clause.operator === 'OR') {
-        const results = clause.clauses.map(evalClause);
-        return clause.operator === 'AND' ? results.every(Boolean) : results.some(Boolean);
+      if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
+      if (clause.operator === 'arrayLengthGte') {
+        return Array.isArray(value) && value.length >= Number(clause.value ?? 0);
       }
       return false;
     };
-    
-    const result = Array.isArray(conditions) 
+
+    const result = Array.isArray(conditions)
       ? (fieldToCheck?.conditionLogic === 'OR' ? conditions.some(evalClause) : conditions.every(evalClause))
       : evalClause(conditions);
-      
+
     DEBUG_LOGS&&console.log(`[CONDITION RESULT] Field "${fieldToCheck.id}" condition result:`, result);
     return result;
   };
 
-  if (field.conditions && !evaluateConditions(field)) {
+  const passesFieldConditions = (fieldToCheck) => {
+    if (!fieldToCheck?.conditions) return true;
+    if (typeof evaluateFieldConditions === 'function') {
+      return evaluateFieldConditions(fieldToCheck);
+    }
+    return evaluateConditions(fieldToCheck);
+  };
+
+  if (field.conditions && !passesFieldConditions(field)) {
     DEBUG_LOGS&&console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
     return null;
   } else if (field.conditions) {
@@ -573,13 +587,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             aria-live="polite"
             className="mb-3 min-w-0 rounded-lg border-2 border-indigo-400/70 bg-indigo-50/95 px-3 py-3 text-sm shadow-sm break-words dark:border-indigo-400/80 dark:bg-slate-800/95 dark:text-slate-100"
           >
-            <p className="font-semibold text-slate-900 dark:text-slate-50">
-              You qualify for the professional executor recommendation
-            </p>
-            <p className="mt-1.5 text-slate-700 dark:text-slate-300 leading-snug">
-              Your Estate Overview answers meet the criteria we use (broadly over £50,000 gross and a net positive
-              position compared to your liability band). Aristone Solicitors is highlighted below as a suitable
-              option — you may still choose &quot;Add Individual Executor&quot; if you prefer.
+            <p className="text-slate-800 dark:text-slate-100 leading-snug">
+              Based on the information you&apos;ve provided, your estate may benefit from professional administration.
             </p>
           </div>
         )}
@@ -596,7 +605,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               field.id === 'chooseAristoneExecutor' && opt.value === 'Aristone' && showAristoneEstateRecommendation;
             const optionLabel =
               recommendAristoneExecutor
-                ? '🥇 Aristone Solicitors (You qualify — recommended for estates like yours)'
+                ? '🥇 Aristone Solicitors (Recommended for estates like yours)'
                 : opt.label;
             return (
             <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border ${
@@ -892,9 +901,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     if (field.id === 'aristoneProfessionalFeesNotice') {
       return (
         <div className="rounded-lg border border-slate-600 bg-slate-800/90 p-4 my-4 text-sm text-slate-100 dark:border-slate-500">
-          <p className="mb-2 leading-relaxed">
-            If you request Aristone Solicitors to act, professional fees will apply.
-          </p>
           <p className="leading-relaxed">
             If you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our{' '}
             <a

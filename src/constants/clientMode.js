@@ -59,7 +59,7 @@ let _lastEstateRecLogKey = '';
 
 function buildEstateRecommendationLogSummary(state) {
   if (state.eligible) {
-    return 'QUALIFIED — on Trustees/Executors: show "You qualify" panel + highlighted Aristone option';
+    return 'QUALIFIED — on Trustees/Executors: show estate recommendation panel + highlighted Aristone option';
   }
   if (
     !(state.grossKey || '').trim() &&
