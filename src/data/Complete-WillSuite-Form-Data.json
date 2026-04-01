@@ -1144,8 +1144,19 @@
                     "id": "estateAdditionalNotes",
                     "type": "textarea",
                     "label": "Is there anything else we should know about your estate? (Optional)",
-                    "placeholder": "Free text for the solicitor. Not included in the Will.",
+                    "placeholder": "You can add any helpful background information about your estate or wishes here. For example, any specific concerns, guidance on how you would like your estate handled, or matters you would like taken into account. These may also be included separately in something called a letter of wishes, which is a non-binding document used to guide your executors on your preferences.",
                     "value": "",
+                    "excludeFromWill": true
+                }
+            ]
+        },
+        {
+            "formSection": "Choosing your executors",
+            "fields": [
+                {
+                    "id": "choosingExecutorsIntro",
+                    "type": "display",
+                    "text": "Your executor is responsible for managing your estate, including dealing with assets, liabilities, and distributing your estate in accordance with your Will.\n\nFamily or friends are often appointed for simpler estates. However, where an estate includes property, higher value assets, or more complex arrangements, a professional executor is often chosen to ensure everything is handled correctly and efficiently.\n\nAristone Solicitors can act as your executor, ensuring your estate is handled professionally and in accordance with your wishes.\n\nYou will be able to choose your executors in the next step.",
                     "excludeFromWill": true
                 }
             ]
@@ -1209,7 +1220,7 @@
                 {
                     "id": "aristoneProfessionalFeesNotice",
                     "type": "display",
-                    "text": "If you instruct Aristone Solicitors as professional executor, their fees will be charged in line with the firm’s terms of engagement. This notice is for intake only and does not form part of your Will.",
+                    "text": "If you request Aristone Solicitors to act, professional fees will apply.\n\nIf you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our website.",
                     "excludeFromWill": true,
                     "conditions": [
                         {
@@ -1242,7 +1253,7 @@
                 {
                     "id": "aristoneProfessionalFeesAck",
                     "type": "checkboxGroup",
-                    "label": "Professional fees",
+                    "label": "",
                     "required": true,
                     "excludeFromWill": true,
                     "conditions": [
@@ -1279,6 +1290,25 @@
                             "value": "ack"
                         }
                     ]
+                },
+                {
+                    "id": "executorIndividualAgeFlow",
+                    "type": "display",
+                    "text": "",
+                    "excludeFromWill": true,
+                    "conditions": [
+                        {
+                            "field": "chooseAristoneExecutor",
+                            "operator": "eq",
+                            "value": "Individual"
+                        },
+                        {
+                            "field": "executorData",
+                            "operator": "arrayLengthGte",
+                            "value": 1
+                        }
+                    ],
+                    "conditionLogic": "AND"
                 },
                 {
                     "id": "substituteExecutorsSection",
@@ -1473,39 +1503,10 @@
                     ]
                 },
                 {
-                    "id": "includeProfessionalRemuneration",
+                    "id": "digitalAssetsWantManagement",
                     "type": "radio",
-                    "label": "Include the standard professional trustee remuneration clause in your Will:",
-                    "options": [
-                        {
-                            "value": "Yes",
-                            "label": "I understand and agree",
-                            "willClauseText": "Any of my Trustees who is a professional person shall be entitled to charge and be paid all usual professional or other proper fees for business done, services rendered or time spent personally or by their firm in the administration of my estate, including acts which a trustee not engaged in any profession or business could have done personally."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "appointDigitalAssetsExecutor",
-                    "type": "radio",
-                    "label": "Should the Executors be appointed to look after any digital assets / online accounts?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I specifically authorize my Executors to access, handle, distribute and dispose of my digital assets in accordance with this Will. Digital assets include but are not limited to email accounts, social media accounts, digital files, cryptocurrencies, and other online accounts."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "appointSeparateDigitalExecutor",
-                    "type": "radio",
-                    "label": "Would you like to appoint separate digital Executors?",
+                    "label": "Do you want someone to manage your digital assets and online accounts after your death?",
+                    "infoText": "Digital assets include things like email accounts, social media accounts, cryptocurrencies, online bank accounts, and online subscriptions or income-generating accounts.",
                     "options": [
                         {
                             "value": "No",
@@ -1516,10 +1517,27 @@
                             "label": "Yes"
                         }
                     ],
+                    "value": null
+                },
+                {
+                    "id": "digitalAssetsWhoManages",
+                    "type": "radio",
+                    "label": "Who should be responsible for managing your digital assets?",
+                    "options": [
+                        {
+                            "value": "MyExecutors",
+                            "label": "My executors",
+                            "willClauseText": "I specifically authorize my Executors to access, handle, distribute and dispose of my digital assets in accordance with this Will. Digital assets include but are not limited to email accounts, social media accounts, digital files, cryptocurrencies, and other online accounts."
+                        },
+                        {
+                            "value": "SomeoneElse",
+                            "label": "Someone else"
+                        }
+                    ],
                     "value": null,
                     "conditions": [
                         {
-                            "field": "appointDigitalAssetsExecutor",
+                            "field": "digitalAssetsWantManagement",
                             "operator": "eq",
                             "value": "Yes"
                         }
@@ -1528,21 +1546,21 @@
                 {
                     "id": "digitalExecutorsSection",
                     "type": "section",
-                    "label": "Who are the digital Executors?",
+                    "label": "Who would you like to appoint?",
                     "willClauseText": "I appoint {{field:digitalExecutorsSection:fullDetails}} solely for the purpose of dealing with my digital assets, including accessing, managing, and distributing these assets according to my wishes.",
                     "conditions": [
                         {
                             "operator": "AND",
                             "clauses": [
                                 {
-                                    "field": "appointDigitalAssetsExecutor",
+                                    "field": "digitalAssetsWantManagement",
                                     "operator": "eq",
                                     "value": "Yes"
                                 },
                                 {
-                                    "field": "appointSeparateDigitalExecutor",
+                                    "field": "digitalAssetsWhoManages",
                                     "operator": "eq",
-                                    "value": "Yes"
+                                    "value": "SomeoneElse"
                                 }
                             ]
                         }
@@ -1561,38 +1579,6 @@
                         },
                         {
                             "id": "digitalExecutorData",
-                            "type": "hidden",
-                            "value": null
-                        }
-                    ]
-                },
-                {
-                    "id": "digitalExecutorIfNoSection",
-                    "type": "section",
-                    "label": "Who should be appointed to deal with your digital assets?",
-                    "infoText": "You chose not to authorise your general executors for digital assets. Name the person you wish to appoint for this purpose.",
-                    "willClauseText": "I appoint {{field:digitalExecutorIfNoSection:fullDetails}} solely for the purpose of dealing with my digital assets, including accessing, managing, and distributing these assets according to my wishes.",
-                    "conditions": [
-                        {
-                            "field": "appointDigitalAssetsExecutor",
-                            "operator": "eq",
-                            "value": "No"
-                        }
-                    ],
-                    "subFields": [
-                        {
-                            "id": "digitalExecutorIfNoStatusDisplay",
-                            "type": "display",
-                            "text": "No digital executor has been specified."
-                        },
-                        {
-                            "id": "addDigitalExecutorIfNoButton",
-                            "type": "button",
-                            "label": "Add Digital Executor",
-                            "action": "openAddForm"
-                        },
-                        {
-                            "id": "digitalExecutorIfNoData",
                             "type": "hidden",
                             "value": null
                         }
@@ -1858,51 +1844,6 @@
                             "id": "substituteProfessionalTrusteeData",
                             "type": "hidden",
                             "value": null
-                        }
-                    ]
-                },
-                {
-                    "id": "executorAgeClause",
-                    "type": "radio",
-                    "label": "Do you want to set a minimum age for your executors or trustees to act?",
-                    "options": [
-                        {
-                            "value": "None",
-                            "label": "None (default → 18 applies automatically)"
-                        },
-                        {
-                            "value": "21",
-                            "label": "21",
-                            "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 21 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed."
-                        },
-                        {
-                            "value": "23",
-                            "label": "23",
-                            "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 23 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed."
-                        },
-                        {
-                            "value": "25",
-                            "label": "25",
-                            "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of 25 years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed."
-                        },
-                        {
-                            "value": "Other",
-                            "label": "Other (input)"
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "executorSpecifyAge",
-                    "type": "number",
-                    "label": "Specify age",
-                    "value": "",
-                    "willClauseText": "My Executors and trustees acting under this Will shall only be eligible to act if all appointed Executors in that class have attained the age of {{field:executorSpecifyAge:value}} years at the time of my death. This age restriction does not apply to any professional firm or corporate Executor or Trustee I have appointed.",
-                    "conditions": [
-                        {
-                            "field": "executorAgeClause",
-                            "operator": "eq",
-                            "value": "Other"
                         }
                     ]
                 },

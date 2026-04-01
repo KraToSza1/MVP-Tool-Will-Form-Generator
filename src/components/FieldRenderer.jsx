@@ -52,6 +52,7 @@ import {
 } from '../utils/ukValidations';
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
 import AddPersonButtonField from './AddPersonButtonField.jsx';
+import ExecutorIndividualAgeFlow from './ExecutorIndividualAgeFlow.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 
 let _datePickerPromise;
@@ -695,20 +696,22 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     
     return (
       <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
-        <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
-          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
-            {FieldIcon}
-          </div>
-          <span className="break-words">{field.label}</span>
-          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
-        </label>
+        {(field.label != null && String(field.label).trim() !== '') && (
+          <label className="block font-semibold text-gray-800 dark:text-slate-100 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+            <div className="p-1.5 bg-indigo-100 dark:bg-slate-700 rounded-lg text-indigo-600 dark:text-indigo-300 flex-shrink-0">
+              {FieldIcon}
+            </div>
+            <span className="break-words">{field.label}</span>
+            {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
+          </label>
+        )}
         {field.infoText && (
-          <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
+          <p className="text-xs text-gray-600 dark:text-slate-400 mb-1.5 italic flex items-start gap-2">
             <Info size={14} className="mt-0.5 flex-shrink-0" />
             <span>{field.infoText}</span>
           </p>
         )}
-        <div className="mt-2 flex flex-col space-y-1">
+        <div className={`flex flex-col space-y-1 ${field.label != null && String(field.label).trim() !== '' ? 'mt-2' : ''}`}>
           {field.options.map((opt) => {
             const optValue = (opt.value !== undefined && opt.value !== false && opt.value !== null && opt.value !== '')
               ? opt.value
@@ -837,6 +840,36 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   if (field.type === 'display') {
     DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
 
+    if (field.id === 'executorIndividualAgeFlow') {
+      return (
+        <ExecutorIndividualAgeFlow formValues={formValues} setFormValues={setFormValues} />
+      );
+    }
+
+    if (field.id === 'estateOverviewIntro') {
+      return (
+        <div className="rounded-lg border border-blue-200 bg-blue-100 p-3 my-4 text-sm text-blue-900 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-100">
+          {field.text}
+        </div>
+      );
+    }
+
+    if (field.id === 'choosingExecutorsIntro') {
+      const paras = String(field.text || '')
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-4 sm:p-6 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100 space-y-4 min-w-0">
+          {paras.map((p, i) => (
+            <p key={i} className="leading-relaxed break-words">
+              {p}
+            </p>
+          ))}
+        </div>
+      );
+    }
+
     if (field.id?.startsWith('estateStep') && field.id?.endsWith('Heading')) {
       return (
         <div className="mt-6 mb-2 border-b border-slate-200 dark:border-slate-600 pb-2 min-w-0">
@@ -858,16 +891,22 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     
     if (field.id === 'aristoneProfessionalFeesNotice') {
       return (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 my-4 text-sm text-gray-800">
-          <p className="mb-2">If you request Aristone Solicitors to act, professional fees will apply.</p>
-          <a
-            href="https://aristonesolicitors.co.uk/about-aristone/our-prices/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-700 underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
-          >
-            https://aristonesolicitors.co.uk/about-aristone/our-prices/
-          </a>
+        <div className="rounded-lg border border-slate-600 bg-slate-800/90 p-4 my-4 text-sm text-slate-100 dark:border-slate-500">
+          <p className="mb-2 leading-relaxed">
+            If you request Aristone Solicitors to act, professional fees will apply.
+          </p>
+          <p className="leading-relaxed">
+            If you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our{' '}
+            <a
+              href="https://aristonesolicitors.co.uk/about-aristone/our-prices/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-300 underline font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 rounded break-all"
+            >
+              website
+            </a>
+            .
+          </p>
         </div>
       );
     }

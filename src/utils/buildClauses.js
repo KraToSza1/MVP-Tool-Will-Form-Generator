@@ -197,6 +197,9 @@ export const buildClauses = ({
       if (!Array.isArray(clause.value)) return value === clause.value;
       return clause.value.includes(value);
     }
+    if (clause.operator === 'arrayLengthGte') {
+      return Array.isArray(value) && value.length >= Number(clause.value ?? 0);
+    }
     return false;
   };
 
@@ -371,8 +374,8 @@ export const buildClauses = ({
             formValues: {
               chooseAristoneExecutor: formValues.chooseAristoneExecutor,
               chooseAristoneSubstituteExecutor: formValues.chooseAristoneSubstituteExecutor,
-              appointDigitalAssetsExecutor: formValues.appointDigitalAssetsExecutor,
-              appointSeparateDigitalExecutor: formValues.appointSeparateDigitalExecutor,
+              digitalAssetsWantManagement: formValues.digitalAssetsWantManagement,
+              digitalAssetsWhoManages: formValues.digitalAssetsWhoManages,
               executorData: formValues.executorData,
               substituteExecutorData: formValues.substituteExecutorData,
               digitalExecutorData: formValues.digitalExecutorData,
@@ -532,6 +535,22 @@ export const buildClauses = ({
       }
     });
   });
+
+  const execAgeCompiled = String(formValues.executorIndividualActingAgeClause || '').trim();
+  if (execAgeCompiled) {
+    const normalized = execAgeCompiled.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      clauses.push({
+        id: 'Trustees/Executors-executorIndividualActingAgeClause-compiled',
+        title: 'Executor acting age',
+        section: 'Trustees/Executors',
+        text: execAgeCompiled,
+        missingFields: [],
+        incomplete: false
+      });
+    }
+  }
 
   return clauses;
 };

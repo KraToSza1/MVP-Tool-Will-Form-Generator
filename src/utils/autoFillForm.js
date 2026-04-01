@@ -326,23 +326,6 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationship: 'Friend',
     }),
   ];
-  dummyData.digitalExecutorIfNoData = [
-    row({
-      title: 'Mr',
-      firstName: 'Alex',
-      lastName: 'Kent',
-      gender: 'Male',
-      dateOfBirth: '22/11/1972',
-      mobile: '07700111125',
-      email: 'alex.kent.digital.demo@example.com',
-      address1: '21 Backup Digital Lane',
-      address2: 'Bromley',
-      address3: 'London',
-      postcode: 'BR1 3DG',
-      occupation: 'Systems administrator (demo autofill)',
-      relationship: 'Friend',
-    }),
-  ];
   dummyData.trusteeData = [
     row({
       title: 'Ms',
@@ -645,9 +628,8 @@ export const generateDummyFormData = (formData) => {
     appointProfessionalExecutor: 'Yes',
     professionalExecutorSelection: 'Aristone',
     substituteProfessionalExecutorSelection: 'Aristone',
-    includeProfessionalRemuneration: 'Yes',
-    appointDigitalAssetsExecutor: 'Yes',
-    appointSeparateDigitalExecutor: 'Yes',
+    digitalAssetsWantManagement: 'Yes',
+    digitalAssetsWhoManages: 'MyExecutors',
     appointDifferentTrustees: 'No',
     includeBPRTrust: 'Yes',
     leaveMoneyGifts: 'Yes',
@@ -701,7 +683,6 @@ export const generateDummyFormData = (formData) => {
     powerToRevokeLifeInterest: 'Yes',
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
     gender: 'Male',
-    executorAgeClause: '25',
     estateGrossValueRange: ESTATE_DEMO.grossRange,
     estateLiabilityValueRange: ESTATE_DEMO.liabilityRange,
     estatePropertyValueRange: ESTATE_DEMO.propertyRange,
@@ -889,10 +870,6 @@ export const generateDummyFormData = (formData) => {
               dummyData[sub.id] = [DEMO.digitalExecutor];
               console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
             }
-            else if (sub.id === 'digitalExecutorIfNoData') {
-              dummyData[sub.id] = ['Alex Kent — Digital executor if no (demo autofill)'];
-              console.log(`[AUTOFILL GENERATE] ✅ Set ${sub.id} = array with 1 item`);
-            }
             else if (sub.id === 'substituteExecutorData') {
               dummyData[sub.id] =
                 dummyData.chooseAristoneSubstituteExecutor === 'Aristone'
@@ -1018,7 +995,6 @@ export const generateDummyFormData = (formData) => {
     witness2Data: [DEMO.witness2],
     excludedPersonData: [DEMO.excluded],
     digitalExecutorData: [DEMO.digitalExecutor],
-    digitalExecutorIfNoData: ['Alex Kent — Digital executor if no (demo autofill)'],
     separateTrusteeData: [{ ...DEMO.flitTrusteeA }, { ...DEMO.flitTrusteeB }],
     chattelRecipientData: [DEMO.chattelRecipient],
     debtorData: [DEMO.debtor],

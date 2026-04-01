@@ -357,23 +357,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     formValues?.professionalExecutorSelection,
   ]);
 
-  // Professional remuneration acknowledgement should only be shown when Aristone is selected.
-  // If Aristone is not selected, clear the acknowledgement value.
-  useEffect(() => {
-    const aristoneAsExecutor =
-      formValues?.chooseAristoneExecutor === 'Aristone' ||
-      (formValues?.appointProfessionalExecutor === 'Yes' && formValues?.professionalExecutorSelection === 'Aristone');
-    setFormValues((prev) => {
-      if (aristoneAsExecutor) return prev;
-      if (prev.includeProfessionalRemuneration == null) return prev;
-      return { ...prev, includeProfessionalRemuneration: null };
-    });
-  }, [
-    formValues?.chooseAristoneExecutor,
-    formValues?.appointProfessionalExecutor,
-    formValues?.professionalExecutorSelection,
-  ]);
-
   /** Index in full formData.formSections for the visible step (stable when TC is filtered by title). */
   const actualSectionIndex = useMemo(() => {
     if (solicitorMode) {
@@ -1550,6 +1533,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return Array.isArray(value) && value.includes(clause.value);
       }
       if (clause.operator === 'in') return Array.isArray(clause.value) ? clause.value.includes(value) : value === clause.value;
+      if (clause.operator === 'arrayLengthGte') {
+        return Array.isArray(value) && value.length >= Number(clause.value ?? 0);
+      }
       return false;
     };
     
@@ -3891,7 +3877,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <div className="p-2 bg-indigo-100 rounded-lg">
                   <FileText className="w-5 h-5 text-indigo-600" />
                 </div>
-                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800">
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-slate-100">
                   {currentSection.formSection}
                 </h2>
               </div>
@@ -3901,14 +3887,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
                   if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;
-                  }
-                  // Professional remuneration acknowledgement: show only after Aristone is selected.
-                  if (field.id === 'includeProfessionalRemuneration') {
-                    const aristoneExecutor =
-                      formValues?.chooseAristoneExecutor === 'Aristone' ||
-                      (formValues?.appointProfessionalExecutor === 'Yes' &&
-                        formValues?.professionalExecutorSelection === 'Aristone');
-                    if (!aristoneExecutor) return null;
                   }
                   // Skip fields that shouldn't be shown (conditions not met)
                   if (field.conditions && !evaluateFieldConditions(field)) {
@@ -4986,7 +4964,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             
                             // CRITICAL FIX: If findFieldIdByLabel returned a digital executor, business trustee, or separateTrusteesSection field but we're looking for FLIT trustees, override it
                             if (isSearchingForSeparateTrustees && (
-                              labelMatchId === 'appointSeparateDigitalExecutor' || 
+                              labelMatchId === 'digitalAssetsWhoManages' ||
                               labelMatchId === 'appointSeparateBusinessTrustee' ||
                               labelMatchId === 'separateTrusteesSection'
                             )) {
