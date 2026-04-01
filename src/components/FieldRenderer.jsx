@@ -52,6 +52,7 @@ import {
 } from '../utils/ukValidations';
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
 import AddPersonButtonField from './AddPersonButtonField.jsx';
+import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 
 let _datePickerPromise;
 async function loadDatePicker() {
@@ -546,7 +547,10 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   if (field.type === 'radio' && field.options) {
     DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
-    
+    const estateRecForExecutor =
+      field.id === 'chooseAristoneExecutor' ? getAristoneEstateRecommendationState(formValues) : null;
+    const showAristoneEstateRecommendation = estateRecForExecutor?.eligible === true;
+
     return (
       <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
         <label className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
@@ -562,6 +566,22 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             <span>{field.infoText}</span>
           </p>
         )}
+        {field.id === 'chooseAristoneExecutor' && showAristoneEstateRecommendation && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mb-3 min-w-0 rounded-lg border-2 border-indigo-400/70 bg-indigo-50/95 px-3 py-3 text-sm shadow-sm break-words dark:border-indigo-400/80 dark:bg-slate-800/95 dark:text-slate-100"
+          >
+            <p className="font-semibold text-slate-900 dark:text-slate-50">
+              You qualify for the professional executor recommendation
+            </p>
+            <p className="mt-1.5 text-slate-700 dark:text-slate-300 leading-snug">
+              Your Estate Overview answers meet the criteria we use (broadly over £50,000 gross and a net positive
+              position compared to your liability band). Aristone Solicitors is highlighted below as a suitable
+              option — you may still choose &quot;Add Individual Executor&quot; if you prefer.
+            </p>
+          </div>
+        )}
         <div className={`mt-2 ${field.id === 'title' ? 'flex flex-wrap gap-2' : 'space-y-1'}`}>
           {field.options.map((opt) => {
             const aristoneIsExecutor =
@@ -571,11 +591,21 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               (field.id === 'professionalTrusteeSelection' || field.id === 'substituteProfessionalTrusteeSelection') &&
               opt.value === 'Aristone' &&
               !aristoneIsExecutor;
+            const recommendAristoneExecutor =
+              field.id === 'chooseAristoneExecutor' && opt.value === 'Aristone' && showAristoneEstateRecommendation;
+            const optionLabel =
+              recommendAristoneExecutor
+                ? '🥇 Aristone Solicitors (You qualify — recommended for estates like yours)'
+                : opt.label;
             return (
-            <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border border-transparent ${
+            <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border ${
+              recommendAristoneExecutor
+                ? 'border-2 border-indigo-400/80 bg-indigo-50/95 shadow-sm dark:border-indigo-400 dark:bg-slate-800/90'
+                : 'border-transparent'
+            } ${
               aristoneTrusteeLocked
                 ? 'cursor-not-allowed opacity-50 pointer-events-none px-2 py-1.5'
-                : `hover:bg-gray-50 cursor-pointer hover:border-indigo-200 ${
+                : `hover:bg-gray-50 cursor-pointer hover:border-indigo-200 dark:hover:bg-slate-800/80 ${
               field.id === 'title' 
                 ? 'px-3 py-2 bg-white shadow-sm hover:shadow-md' 
                 : 'px-2 py-1.5'
@@ -643,7 +673,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                       }));
                     }}
               />
-              <span className={`text-gray-800 ${field.id === 'title' ? '' : 'flex-1'}`}>{opt.label}</span>
+              <span className={`text-gray-800 dark:text-slate-100 ${field.id === 'title' ? '' : 'min-w-0 flex-1 break-words'}`}>{optionLabel}</span>
             </label>
             );
           })}

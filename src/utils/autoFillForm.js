@@ -144,8 +144,11 @@ const DEMO = {
 };
 
 /**
- * Estate Overview (Optional) — solicitor intake only. Used by autofill so checkbox/radio/text stay consistent
+ * Estate Overview — used by autofill so checkbox/radio/text stay consistent
  * (including "Other" assets so the conditional other-assets field is visible).
+ *
+ * Default bands: gross `Range500_1m` vs liabilities `Range100_250` → net-positive over £50k
+ * (`shouldRecommendAristoneFromEstate` / `getAristoneEstateRecommendationState`).
  */
 const ESTATE_DEMO = {
   assetTypes: [

@@ -64,9 +64,8 @@ import {
   isSolicitorMode,
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
-  SOLICITOR_INTAKE_ONLY_SECTION_TITLE,
-  SOLICITOR_INTAKE_ONLY_FIELD_IDS,
-  isEstateOverviewStandaloneSectionVisible,
+  getAristoneEstateRecommendationState,
+  getEstateRecommendationLogSummary,
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
@@ -288,17 +287,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Testamentary Capacity: solicitors only. Standalone "Estate Overview (Optional)" step only when Aristone is chosen via the professional path (quick Aristone uses the inline block under Who are the Executors?).
+  // Testamentary Capacity: solicitors only. Estate Overview is a normal step after Guardians for all users.
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
     return formData.formSections.filter((s) => {
       if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
-      if (s.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE) {
-        return isEstateOverviewStandaloneSectionVisible(formValues);
-      }
       return true;
     });
-  }, [solicitorMode, formData?.formSections, formValues]);
+  }, [solicitorMode, formData?.formSections]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
   useEffect(() => {
@@ -325,6 +321,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return { ...prev, estateLiabilityValueRange: 'None' };
     });
   }, [formValues?.estateLiabilityTypes]);
+
+  // Dev: re-evaluate and log qualification whenever Estate Overview values change (so logs appear while filling that step, not only on Trustees/Executors).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    getAristoneEstateRecommendationState(formValues);
+  }, [
+    formValues?.estateGrossValueRange,
+    formValues?.estateLiabilityValueRange,
+    formValues?.estateLiabilityTypes,
+  ]);
 
   // Aristone not executor: cannot remain selected as professional trustee.
   useEffect(() => {
@@ -1633,12 +1639,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const isFormFullyCompleted = () => {
     try {
       return formData.formSections.every((section) => {
-        if (
-          section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
-          !isEstateOverviewStandaloneSectionVisible(formValues)
-        ) {
-          return true;
-        }
         const fieldFullyCompleted = (field) => {
           if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
           if (field.conditions && !evaluateFieldConditions(field)) return true;
@@ -2390,14 +2390,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
           }
         });
-        SOLICITOR_INTAKE_ONLY_FIELD_IDS.forEach((fieldId) => {
-          if (dummyData[fieldId] !== undefined) {
-            delete dummyData[fieldId];
-            removedCount++;
-            console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor intake field: ${fieldId}`);
-          }
-        });
-        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only / intake-only fields`);
+        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields (Estate Overview demo values are kept for clients)`);
       }
       
       console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
@@ -2422,16 +2415,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         });
       }
       
-      console.log('[FORM AUTO-FILL] 🔄 Updating form values state...');
-      setFormValues(prev => {
-        const merged = { ...prev, ...dummyData };
-        console.log('[FORM AUTO-FILL] ✅ Merged form values:', {
-          previousCount: Object.keys(prev).length,
-          newCount: Object.keys(merged).length,
-          hasSeparateTrusteeData: !!merged.separateTrusteeData
-        });
-        return merged;
+      const mergedForApply = { ...formValues, ...dummyData };
+      console.log('[FORM AUTO-FILL] ✅ Merged form values (preview):', {
+        previousCount: Object.keys(formValues).length,
+        newCount: Object.keys(mergedForApply).length,
+        hasSeparateTrusteeData: !!mergedForApply.separateTrusteeData
       });
+      if (import.meta.env.DEV) {
+        const est = getAristoneEstateRecommendationState(mergedForApply);
+        console.log('[FORM AUTO-FILL] Estate recommendation preview (after merge):', {
+          summary: getEstateRecommendationLogSummary(est),
+          eligible: est.eligible,
+          estateGrossValueRange: est.grossKey,
+          estateLiabilityValueRange: est.liabilityKey,
+          inferredLiabilityFromNoLiabilities: est.inferredLiability,
+          grossMinK: est.grossMin,
+          liabilityMaxK: est.liabMax,
+          netPositiveBands: est.grossMin != null && est.liabMax != null && est.grossMin > est.liabMax,
+          reasons: est.reasons,
+        });
+      }
+
+      console.log('[FORM AUTO-FILL] 🔄 Updating form values state...');
+      setFormValues((prev) => ({ ...prev, ...dummyData }));
       
       console.log('[FORM AUTO-FILL] 💾 Saving to localStorage...');
       try {
@@ -2458,7 +2464,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(dummyData).length} fields (client mode — standalone Estate Overview demo data and solicitor-only steps omitted from autofill; if you use Quick Aristone on Trustees/Executors, fill estate questions there manually).`
+            ? `Filled ${Object.keys(dummyData).length} fields (client mode — includes Estate Overview demo; solicitor-only steps omitted). Open Trustees/Executors to see Aristone recommendation if eligible.`
             : `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 5000
       });
@@ -2520,14 +2526,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       formData.formSections.forEach((section, sectionIndex) => {
         DEBUG_LOGS&&console.log(`[COMPLETION %] Section ${sectionIndex + 1}: "${section.formSection}"`);
-
-        if (
-          section.formSection === SOLICITOR_INTAKE_ONLY_SECTION_TITLE &&
-          !isEstateOverviewStandaloneSectionVisible(formValues)
-        ) {
-          DEBUG_LOGS&&console.log(`[COMPLETION %] Section "${section.formSection}" - SKIPPED (not applicable)`);
-          return;
-        }
 
         const accumulateCompletion = (field) => {
           if (field.conditions && !evaluateFieldConditions(field)) {
