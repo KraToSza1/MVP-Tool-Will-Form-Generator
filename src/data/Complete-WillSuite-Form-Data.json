@@ -857,13 +857,13 @@
                 {
                     "id": "estateOverviewIntro",
                     "type": "display",
-                    "text": "Answer using approximate figures only. This helps us assess whether Aristone may act as executor and, on the next step, whether you qualify for a highlighted professional-executor recommendation (when your answers show a net estate broadly over £50,000 and liabilities lower than your estate band).\n\nComplete this even if you plan to appoint family or friends, or have not yet decided — your choice on Executors stays yours.",
+                    "text": "Answer using approximate figures only.",
                     "excludeFromWill": true
                 },
                 {
                     "id": "estateStep1Heading",
                     "type": "display",
-                    "text": "Step 1: Asset Types (Checkboxes)",
+                    "text": "What assets do you have?",
                     "excludeFromWill": true
                 },
                 {
@@ -947,7 +947,7 @@
                 {
                     "id": "estateStep2Heading",
                     "type": "display",
-                    "text": "Step 2: Liability Types (Checkboxes)",
+                    "text": "Do you have any outstanding liabilities?",
                     "excludeFromWill": true
                 },
                 {
@@ -1001,7 +1001,7 @@
                 {
                     "id": "estateStep3Heading",
                     "type": "display",
-                    "text": "Step 3: Estate Value (Range)",
+                    "text": "What is the approximate value of your estate before deducting liabilities?",
                     "excludeFromWill": true
                 },
                 {
@@ -1048,7 +1048,7 @@
                 {
                     "id": "estateStep4Heading",
                     "type": "display",
-                    "text": "Step 4: Liability Value (Range)",
+                    "text": "What is the approximate total value of your liabilities?",
                     "excludeFromWill": true
                 },
                 {
@@ -1087,7 +1087,7 @@
                 {
                     "id": "estateStep5Heading",
                     "type": "display",
-                    "text": "Step 5: Property Value (Conditional — shown only if property is selected above)",
+                    "text": "What is the approximate value of your property?",
                     "excludeFromWill": true
                 },
                 {
@@ -1141,15 +1141,9 @@
                     ]
                 },
                 {
-                    "id": "estateStep6Heading",
-                    "type": "display",
-                    "text": "Step 6: Additional Notes (Optional)",
-                    "excludeFromWill": true
-                },
-                {
                     "id": "estateAdditionalNotes",
                     "type": "textarea",
-                    "label": "Additional Notes (Optional)",
+                    "label": "Is there anything else we should know about your estate? (Optional)",
                     "placeholder": "Free text for the solicitor. Not included in the Will.",
                     "value": "",
                     "excludeFromWill": true

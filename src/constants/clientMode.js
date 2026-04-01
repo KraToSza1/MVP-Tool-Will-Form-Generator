@@ -273,7 +273,6 @@ export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
   'estateStep3Heading',
   'estateStep4Heading',
   'estateStep5Heading',
-  'estateStep6Heading',
   'estateAssetTypes',
   'estateAssetOther',
   'estateLiabilityTypes',
