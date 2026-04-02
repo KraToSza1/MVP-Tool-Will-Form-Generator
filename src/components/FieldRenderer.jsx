@@ -205,6 +205,12 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   };
 
   if (field.conditions && !passesFieldConditions(field)) {
+    if (field.id === 'executorIndividualAgeFlow') {
+      console.log('[EXECUTOR_AGE_DEBUG] FieldRenderer return null (conditions not met)', {
+        fieldId: field.id,
+        passesFieldConditions: false,
+      });
+    }
     DEBUG_LOGS&&console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
     return null;
   } else if (field.conditions) {
@@ -850,6 +856,10 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
 
     if (field.id === 'executorIndividualAgeFlow') {
+      console.log('[EXECUTOR_AGE_DEBUG] FieldRenderer before ExecutorIndividualAgeFlow render', {
+        fieldId: field.id,
+        passesFieldConditions: passesFieldConditions(field),
+      });
       return (
         <ExecutorIndividualAgeFlow formValues={formValues} setFormValues={setFormValues} />
       );

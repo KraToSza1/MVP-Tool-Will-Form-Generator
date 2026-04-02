@@ -2,15 +2,45 @@
  * UK dd/mm/yyyy DOB → local Date (midnight).
  */
 export function parseUkDate(dobStr) {
-  if (dobStr == null || typeof dobStr !== 'string') return null;
-  const m = String(dobStr).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
+  if (dobStr == null || typeof dobStr !== 'string') {
+    console.log('[EXECUTOR_AGE_DEBUG] parseUkDate', {
+      input: dobStr,
+      parsed: null,
+      failureReason: dobStr == null ? 'null_or_undefined' : 'not_a_string',
+    });
+    return null;
+  }
+  const trimmed = String(dobStr).trim();
+  const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) {
+    console.log('[EXECUTOR_AGE_DEBUG] parseUkDate', {
+      input: dobStr,
+      parsed: null,
+      failureReason: 'no_dd_mm_yyyy_match',
+    });
+    return null;
+  }
   const d = Number(m[1]);
   const mo = Number(m[2]);
   const y = Number(m[3]);
-  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) {
+    console.log('[EXECUTOR_AGE_DEBUG] parseUkDate', {
+      input: dobStr,
+      parsed: null,
+      failureReason: 'component_range_invalid',
+    });
+    return null;
+  }
   const dt = new Date(y, mo - 1, d);
-  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+    console.log('[EXECUTOR_AGE_DEBUG] parseUkDate', {
+      input: dobStr,
+      parsed: null,
+      failureReason: 'date_constructor_invalid',
+    });
+    return null;
+  }
+  console.log('[EXECUTOR_AGE_DEBUG] parseUkDate', { input: dobStr, parsed: dt.toISOString() });
   return dt;
 }
 
@@ -22,6 +52,7 @@ export function getAgeYearsFromDob(dobStr, asOf = new Date()) {
   let age = ref.getFullYear() - birth.getFullYear();
   const m = ref.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age -= 1;
+  console.log('[EXECUTOR_AGE_DEBUG] getAgeYearsFromDob', { input: dobStr, ageYears: age });
   return age;
 }
 

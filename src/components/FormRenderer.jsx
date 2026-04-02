@@ -64,6 +64,7 @@ import {
   isSolicitorMode,
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
+  ESTATE_OVERVIEW_SECTION_TITLE,
   getAristoneEstateRecommendationState,
   getEstateRecommendationLogSummary,
 } from '../constants/clientMode.js';
@@ -287,11 +288,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Testamentary Capacity: solicitors only. Estate Overview is a normal step after Guardians for all users.
+  // Testamentary Capacity: solicitors only. Estate Overview: solicitors only (not gated on Aristone selection).
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
     return formData.formSections.filter((s) => {
       if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
+      if (s.formSection === ESTATE_OVERVIEW_SECTION_TITLE && !solicitorMode) return false;
       return true;
     });
   }, [solicitorMode, formData?.formSections]);
@@ -1564,7 +1566,31 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         howResidueDistributed: formValues.howResidueDistributed
       });
     }
-    
+
+    if (field.id === 'executorIndividualAgeFlow') {
+      const clauseResults = Array.isArray(field.conditions)
+        ? field.conditions.map((clause) => {
+            const single = evalClause(clause);
+            const actual = clause.field ? formValues[clause.field] : undefined;
+            return {
+              field: clause.field,
+              operator: clause.operator,
+              expectedValue: clause.value,
+              actualValue: actual,
+              clausePass: single,
+            };
+          })
+        : [];
+      console.log('[EXECUTOR_AGE_DEBUG] evaluateFieldConditions', {
+        fieldId: field.id,
+        conditionLogic: field.conditionLogic,
+        chooseAristoneExecutor: formValues.chooseAristoneExecutor,
+        executorDataArrayLength: Array.isArray(formValues.executorData) ? formValues.executorData.length : null,
+        clauseResults,
+        finalPassFail: result,
+      });
+    }
+
     return result;
   }, [formValues]);
 
@@ -2389,6 +2415,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT,
         sampleFields: Object.keys(dummyData).slice(0, 8)
       });
+
+      console.log('[EXECUTOR_AGE_DEBUG] autofill run', {
+        when: 'after dummyData generated (before setState)',
+        solicitorMode: !isClient,
+        chooseAristoneExecutor: dummyData.chooseAristoneExecutor,
+        executorDataIsArray: Array.isArray(dummyData.executorData),
+        executorDataLength: Array.isArray(dummyData.executorData) ? dummyData.executorData.length : null,
+      });
+      if (Array.isArray(dummyData.executorData)) {
+        dummyData.executorData.forEach((row, i) => {
+          const keys = row && typeof row === 'object' && !Array.isArray(row) ? Object.keys(row) : null;
+          console.log('[EXECUTOR_AGE_DEBUG] autofill executorData row', {
+            index: i,
+            typeofRow: typeof row,
+            keys,
+            nameFields:
+              row && typeof row === 'object' && !Array.isArray(row)
+                ? { title: row.title, firstName: row.firstName, lastName: row.lastName }
+                : null,
+            dateOfBirth: row && typeof row === 'object' && !Array.isArray(row) ? row.dateOfBirth : undefined,
+          });
+        });
+      }
       
       if (dummyData.separateTrusteeData) {
         console.log('[FORM AUTO-FILL] 🔍 Separate trustee data details:', {
@@ -2477,7 +2526,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
       toast.error('Auto-fill failed', { description: error.message });
     }
-  }, [buildClauseDebugExport, formValues, visibleSections]);
+  }, [buildClauseDebugExport, formValues, visibleSections, solicitorMode]);
 
   // Expose auto-fill function to window for console access
   useEffect(() => {

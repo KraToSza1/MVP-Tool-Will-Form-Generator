@@ -1298,11 +1298,6 @@
                     "excludeFromWill": true,
                     "conditions": [
                         {
-                            "field": "chooseAristoneExecutor",
-                            "operator": "eq",
-                            "value": "Individual"
-                        },
-                        {
                             "field": "executorData",
                             "operator": "arrayLengthGte",
                             "value": 1

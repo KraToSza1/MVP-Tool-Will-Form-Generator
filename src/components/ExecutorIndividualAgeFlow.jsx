@@ -166,7 +166,39 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
     return allAnswered && !anyoneCanAct;
   }, [relevant, entries, anyoneCanAct]);
 
-  if (!relevant.length) return null;
+  useEffect(() => {
+    console.log('[EXECUTOR_AGE_DEBUG] ExecutorIndividualAgeFlow mounted');
+  }, []);
+
+  useEffect(() => {
+    const rowLog = relevant.map((r) => ({
+      displayName: r.name,
+      dob: isRichPersonExecutorRow(r.item) ? r.item.dateOfBirth : null,
+      parsedAge: r.age,
+      tier: tierForAge(r.age) ?? 'invalid',
+    }));
+    console.log('[EXECUTOR_AGE_DEBUG] ExecutorIndividualAgeFlow snapshot', {
+      rawExecutorData: executorData,
+      relevantCount: relevant.length,
+      rows: rowLog,
+      showNoImmediateWarning,
+      anyoneCanAct,
+    });
+  }, [executorData, relevant, entries, showNoImmediateWarning, anyoneCanAct]);
+
+  useEffect(() => {
+    if (showNoImmediateWarning) {
+      console.log('[EXECUTOR_AGE_DEBUG] warning: no executor can act immediately (banner shown)');
+    }
+  }, [showNoImmediateWarning]);
+
+  if (!relevant.length) {
+    console.log('[EXECUTOR_AGE_DEBUG] ExecutorIndividualAgeFlow return null (relevant.length === 0)', {
+      executorDataLength: executorData.length,
+      rawExecutorData: executorData,
+    });
+    return null;
+  }
 
   const setEntry = (index, partial) => {
     setFormValues((prev) => {
@@ -187,6 +219,7 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
     const tier = tierForAge(age);
 
     if (tier === '25plus') {
+      console.log('[EXECUTOR_AGE_DEBUG] renderExecutorBlock return null (25plus)', { index, name, age });
       return null;
     }
 
