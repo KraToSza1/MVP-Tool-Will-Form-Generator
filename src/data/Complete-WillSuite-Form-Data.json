@@ -1504,12 +1504,12 @@
                     "infoText": "Digital assets include things like email accounts, social media accounts, cryptocurrencies, online bank accounts, and online subscriptions or income-generating accounts.",
                     "options": [
                         {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
                             "value": "Yes",
                             "label": "Yes"
+                        },
+                        {
+                            "value": "No",
+                            "label": "No"
                         }
                     ],
                     "value": null
