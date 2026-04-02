@@ -5,6 +5,7 @@
  */
 
 import { CONTACT_REGISTRY_KEY } from '../lib/personRegistry.js';
+import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 
 const ARISTONE_EXECUTOR_LINE =
   'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
@@ -300,7 +301,38 @@ function applyRichPersonDemoOverrides(dummyData) {
     }),
   ];
 
-  dummyData.executorData = [ARISTONE_EXECUTOR_LINE];
+  /** Rich primary executors: ~22yo (1824 age-flow tier) + ~50yo (25+ — no per-row age questions). UK dd/mm/yyyy DOBs for executor age logic. */
+  dummyData.chooseAristoneExecutor = 'Individual';
+  dummyData.executorData = [
+    row({
+      title: 'Mr',
+      firstName: 'David',
+      lastName: 'Day',
+      dateOfBirth: '15/06/2003',
+      address1: '101 Executor Lane',
+      address2: 'Hampstead',
+      address3: 'London',
+      postcode: 'NW3 9EX',
+      mobile: '07700999199',
+      email: 'david.day.demo@example.com',
+      occupation: 'Teacher (demo autofill)',
+      relationship: 'Friend',
+    }),
+    row({
+      title: 'Ms',
+      firstName: 'Laura',
+      lastName: 'Lake',
+      dateOfBirth: '15/06/1975',
+      address1: '102 Executor Lane',
+      address2: 'Hampstead',
+      address3: 'London',
+      postcode: 'NW3 9EY',
+      mobile: '07700999198',
+      email: 'laura.lake.demo@example.com',
+      occupation: 'Accountant (demo autofill)',
+      relationship: 'Sister',
+    }),
+  ];
   dummyData.substituteExecutorData = [ARISTONE_EXECUTOR_LINE];
   dummyData.professionalExecutorData = [ARISTONE_EXECUTOR_LINE];
   dummyData.substituteProfessionalExecutorData = [ARISTONE_EXECUTOR_LINE];
@@ -623,7 +655,8 @@ export const generateDummyFormData = (formData) => {
     foreignWillNotRevoked: 'No',
     willAppliesToUK: 'Yes - England and Wales',
     appointGuardians: 'Yes',
-    chooseAristoneExecutor: 'Aristone',
+    /** Primary executors = individuals (rich rows + DOB) so executor age flow can render; professional Aristone remains via appointProfessionalExecutor below. */
+    chooseAristoneExecutor: 'Individual',
     chooseAristoneSubstituteExecutor: 'Aristone',
     appointProfessionalExecutor: 'Yes',
     professionalExecutorSelection: 'Aristone',
@@ -987,6 +1020,7 @@ export const generateDummyFormData = (formData) => {
   const specialFields = {
     guardianData: [DEMO.guardian1, DEMO.guardian2],
     substituteGuardianData: [DEMO.guardianSub],
+    /** Overwritten by applyRichPersonDemoOverrides with rich rows + Individual quick pick */
     executorData: [ARISTONE_EXECUTOR_LINE],
     substituteExecutorData: [ARISTONE_EXECUTOR_LINE],
     trusteeData: [DEMO.trustee],
@@ -1168,6 +1202,31 @@ export const generateDummyFormData = (formData) => {
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);
 
   applyRichPersonDemoOverrides(dummyData);
+
+  const estRec = getAristoneEstateRecommendationState(dummyData);
+  const ex = dummyData.executorData;
+  console.log('[AUTOFILL_VERIFY] Mariyam harness — estate + executor age', {
+    estateGrossRange: dummyData.estateGrossValueRange,
+    estateLiabilityRange: dummyData.estateLiabilityValueRange,
+    aristoneEstateRecommendationEligible: estRec.eligible,
+    chooseAristoneExecutor: dummyData.chooseAristoneExecutor,
+    appointProfessionalExecutor: dummyData.appointProfessionalExecutor,
+    professionalExecutorSelection: dummyData.professionalExecutorSelection,
+    executorDataRowCount: Array.isArray(ex) ? ex.length : 0,
+    executorRows: Array.isArray(ex)
+      ? ex.map((r, i) => ({
+          index: i,
+          typeof: typeof r,
+          keys: r && typeof r === 'object' && !Array.isArray(r) ? Object.keys(r).slice(0, 14) : null,
+          dateOfBirth: r && typeof r === 'object' ? r.dateOfBirth : undefined,
+          namePreview:
+            r && typeof r === 'object' && !Array.isArray(r)
+              ? [r.title, r.firstName, r.lastName].filter(Boolean).join(' ')
+              : String(r).slice(0, 80),
+        }))
+      : [],
+    note: 'Estate bands should qualify Aristone recommendation on Executors step. Primary executors: rich rows + UK DOB. David ~22 (1824 — age flow radios); Laura 25+ (no age-choice block). Open Trustees/Executors to see ExecutorIndividualAgeFlow.',
+  });
 
   console.log('[AUTOFILL GENERATE] 📊 Final summary:', {
     totalFields: Object.keys(dummyData).length,

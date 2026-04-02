@@ -2404,6 +2404,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         });
         console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields (Estate Overview demo values are kept for clients)`);
       }
+
+      console.log(
+        '[AUTOFILL_VERIFY] Next: solicitor mode → open Trustees/Executors step. Console: filter AUTOFILL_VERIFY or EXECUTOR_AGE_DEBUG or AUTOFILL GENERATE.'
+      );
       
       console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
         totalFields: Object.keys(dummyData).length,

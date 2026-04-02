@@ -378,18 +378,41 @@ export function subscribeToAuthChanges(callback) {
     return () => {};
   }
 
-  const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
     const t0 = nowPerfMs();
     authLog('onAuthStateChange', { event, hasSession: !!session });
     const user = session?.user ?? null;
-    const p0 = nowPerfMs();
-    const profile = user ? await getProfile(user.id) : null;
-    authLog('onAuthStateChange: getProfile done', {
-      ms: Math.round(nowPerfMs() - p0),
-      sinceEventMs: Math.round(nowPerfMs() - t0),
-      hasProfile: !!profile,
+
+    // IMPORTANT: Do not `await` inside this handler. Supabase can hold resolution of
+    // signInWithPassword until the callback completes; if profiles.select hangs (RLS/network),
+    // the login button stays on "Signing in..." forever. Defer profile work to the next tick.
+    queueMicrotask(() => {
+      void (async () => {
+        const p0 = nowPerfMs();
+        let profile = null;
+        if (user?.id) {
+          try {
+            const fetchResult = await withTimeout(
+              fetchProfileRow(user.id),
+              PROFILE_FETCH_TIMEOUT_MS,
+              'Profile lookup timed out'
+            );
+            profile = fetchResult.profile;
+            if (fetchResult.error) {
+              authError('onAuthStateChange: profiles.select failed', fetchResult.error);
+            }
+          } catch (err) {
+            authError('onAuthStateChange: profile fetch exception', err);
+          }
+        }
+        authLog('onAuthStateChange: getProfile done', {
+          ms: Math.round(nowPerfMs() - p0),
+          sinceEventMs: Math.round(nowPerfMs() - t0),
+          hasProfile: !!profile,
+        });
+        callback({ session: session ?? null, user, profile });
+      })();
     });
-    callback({ session: session ?? null, user, profile });
   });
 
   return () => {
