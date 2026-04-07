@@ -865,6 +865,16 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       );
     }
 
+    if (field.id === 'additionalExecutorPowersDivider') {
+      return (
+        <div className="mt-8 mb-2 border-b border-slate-200 dark:border-slate-600 pb-2 min-w-0">
+          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {field.subheading || 'Additional executor powers'}
+          </h3>
+        </div>
+      );
+    }
+
     if (field.id === 'estateOverviewIntro') {
       return (
         <div className="rounded-lg border border-blue-200 bg-blue-100 p-3 my-4 text-sm text-blue-900 dark:border-slate-600 dark:bg-slate-700/80 dark:text-slate-100">

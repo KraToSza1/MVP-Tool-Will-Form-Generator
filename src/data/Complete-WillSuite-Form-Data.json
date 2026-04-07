@@ -1498,6 +1498,13 @@
                     ]
                 },
                 {
+                    "id": "additionalExecutorPowersDivider",
+                    "type": "display",
+                    "text": "",
+                    "excludeFromWill": true,
+                    "subheading": "Additional executor powers"
+                },
+                {
                     "id": "digitalAssetsWantManagement",
                     "type": "radio",
                     "label": "Do you want someone to manage your digital assets and online accounts after your death?",

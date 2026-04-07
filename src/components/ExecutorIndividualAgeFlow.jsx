@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Info } from 'lucide-react';
 import {
   executorDisplayName,
   getAgeYearsFromDob,
@@ -7,17 +7,10 @@ import {
   isRichPersonExecutorRow,
 } from '../utils/executorAgeUtils.js';
 
-const LATER_OPTIONS_1824 = [
-  { value: '21', label: '21' },
-  { value: '23', label: '23' },
-  { value: '25', label: '25' },
-  { value: 'Other', label: 'Other' },
-];
-
-const LATER_OPTIONS_UNDER18 = [
-  { value: '18', label: '18' },
-  ...LATER_OPTIONS_1824,
-];
+function executorFirstName(item) {
+  if (item && typeof item === 'object' && item.firstName) return item.firstName;
+  return executorDisplayName(item);
+}
 
 function emptyStateForTier(tier) {
   return {
@@ -45,7 +38,6 @@ function tierForAge(age) {
   return 'under18';
 }
 
-/** Minimum age at which this executor may act (per user choices). */
 function minimumActingAge(st, tier) {
   if (!st || tier === '25plus') return 18;
   if (st.laterChoice !== 'later') return 18;
@@ -74,6 +66,40 @@ function compileWillClause(executorData, entries) {
   return parts.length ? parts.join(' ') : '';
 }
 
+function validateCustomAge(enteredAge, currentAge, firstName) {
+  if (enteredAge <= (currentAge ?? 0)) {
+    return `The age you've entered is not higher than ${firstName}'s current age. Please enter an age they haven't reached yet.`;
+  }
+  if (enteredAge === 18 && currentAge != null && currentAge < 18) {
+    return 'Age 18 is the default age at which an executor can act. If you\'d like them to act from 18, select "Act immediately" above instead.';
+  }
+  if (enteredAge > 99) {
+    return `Please enter a valid age between ${(currentAge ?? 0) + 1} and 99.`;
+  }
+  return null;
+}
+
+function TooltipTrigger({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="inline-flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 rounded"
+      >
+        <Info className="w-4 h-4 shrink-0" aria-hidden />
+        What happens in the meantime?
+      </button>
+      {open && (
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+          {text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function ExecutorIndividualAgeFlow({ formValues, setFormValues }) {
   const executorData = Array.isArray(formValues.executorData) ? formValues.executorData : [];
   const rawState = formValues.executorIndividualActingAgeState;
@@ -85,6 +111,7 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
         item,
         index,
         name: executorDisplayName(item),
+        firstName: executorFirstName(item),
         age: isRichPersonExecutorRow(item) ? getAgeYearsFromDob(item.dateOfBirth) : null,
         skip: isAristoneExecutorLine(item),
       }))
@@ -150,20 +177,18 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
 
   const showNoImmediateWarning = useMemo(() => {
     if (!relevant.length) return false;
-    const allAnswered = relevant.every((r) => {
-      const st = entries[r.index];
+    return relevant.some((r) => {
       const tier = tierForAge(r.age);
-      if (tier === '25plus') return true;
-      if (r.age == null) return false;
-      if (!st) return false;
-      if (st.laterChoice == null) return false;
+      const st = entries[r.index];
+      if (tier === '25plus') return false;
+      if (r.age != null && r.age < 18) return true;
+      if (!st || st.laterChoice == null) return false;
       if (st.laterChoice === 'later') {
         const minA = minimumActingAge(st, tier);
-        return minA != null;
+        if (minA != null) return !anyoneCanAct;
       }
-      return true;
-    });
-    return allAnswered && !anyoneCanAct;
+      return false;
+    }) && !anyoneCanAct;
   }, [relevant, entries, anyoneCanAct]);
 
   useEffect(() => {
@@ -213,8 +238,10 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
     });
   };
 
+  const allDeferred = executorData.length > 1 && executorData.every((item, idx) => !canThisExecutorActImmediately(item, idx));
+
   const renderExecutorBlock = (row) => {
-    const { index, name, age } = row;
+    const { index, name, firstName, age } = row;
     const st = entries[index] || emptyStateForTier('1824');
     const tier = tierForAge(age);
 
@@ -223,72 +250,103 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
       return null;
     }
 
+    // CHANGE 1: Dynamic intro sentence
+    let introText;
     if (age == null) {
-      return (
-        <div
-          key={index}
-          className="rounded-lg border border-amber-400/60 bg-amber-50/90 p-4 text-sm text-slate-900 dark:border-amber-500/50 dark:bg-slate-800/90 dark:text-slate-100"
-        >
-          <p className="font-medium break-words">{name}</p>
-          <p className="mt-1 text-slate-700 dark:text-slate-300">
-            Add a date of birth for this executor so we can confirm when they may act.
-          </p>
-        </div>
-      );
+      introText = `You can choose whether ${firstName} acts as executor straight away, or only once they reach a certain age.`;
+    } else if (age < 18) {
+      introText = `${firstName} is currently ${age} years old and cannot act as executor until they turn 18. You can choose whether they act from 18, or once they are older.`;
+    } else {
+      introText = `${firstName} is currently ${age} years old. Because they are under 25, you may want to consider when you would like them to be able to act.`;
     }
 
-    const intro1824 = `${name} is currently ${age} years old. By default, they can act as executor from age 18. Would you like them to act from age 18, or only once they reach a later age?`;
-    const introU18 = `${name} is currently ${age} years old. By default, an executor can act from age 18. Would you like them to act from age 18, or only once they reach a later age?`;
+    // CHANGE 2: Dynamic radio labels
+    const immediateLabel = age < 18
+      ? `Act from age 18 — ${firstName} can step in as executor once they turn 18`
+      : `Act immediately — ${firstName} can step in as executor as soon as they are needed`;
+    const deferredLabel = `Wait until they are older — ${firstName} will only be able to act once they reach an age you choose`;
 
-    const laterOptions = tier === 'under18' ? LATER_OPTIONS_UNDER18 : LATER_OPTIONS_1824;
+    // CHANGE 3: Filter age options dynamically
+    const standardAges = [21, 23, 25].filter((a) => a > (age ?? 0));
+    const ageOptions = [
+      ...standardAges.map((a) => ({ value: String(a), label: String(a) })),
+      { value: 'Other', label: 'Other' },
+    ];
 
     const actingNum = parseActingAgeNumber(st.actingAgePreset, st.actingAgeOther);
-    const showExplainUnder =
-      st.laterChoice === 'later' && actingNum != null && age != null && age < actingNum;
+
+    // CHANGE 4: Custom age validation
+    const otherVal = parseInt(String(st.actingAgeOther || '').trim(), 10);
+    const otherError =
+      st.actingAgePreset === 'Other' && st.actingAgeOther !== '' && Number.isFinite(otherVal)
+        ? validateCustomAge(otherVal, age, firstName)
+        : null;
+    const otherValid =
+      st.actingAgePreset === 'Other' && Number.isFinite(otherVal) && !otherError;
+
+    // CHANGE 6: Per-executor warning (shown below age selector)
+    const thisExecutorDeferred = st.laterChoice === 'later' || age < 18;
+    const showBlockWarning = thisExecutorDeferred && !anyoneCanAct && (
+      st.laterChoice === 'later'
+        ? actingNum != null
+        : true
+    );
+
+    const warningText = allDeferred && executorData.length > 1
+      ? 'Heads up: none of your chosen executors could act straight away if needed. You can add another executor, or appoint Aristone Solicitors to act in the meantime.'
+      : `Heads up: with your current setup, no executor could act straight away if needed. To fix this, you can add another executor, or appoint Aristone Solicitors to act alongside ${firstName}.`;
 
     return (
       <div
         key={index}
         className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5 dark:border-slate-600 dark:bg-slate-800/80"
       >
+        {/* CHANGE 1: Intro sentence */}
         <p className="text-sm text-slate-800 dark:text-slate-100 leading-relaxed break-words">
-          {tier === 'under18' ? introU18 : intro1824}
+          {introText}
         </p>
+
+        {/* CHANGE 2: Radio options */}
         <div className="mt-3 space-y-2">
-          {['from18', 'later'].map((v) => (
+          {[
+            { value: 'from18', label: immediateLabel },
+            { value: 'later', label: deferredLabel },
+          ].map((opt) => (
             <label
-              key={v}
+              key={opt.value}
               className="flex cursor-pointer items-start gap-2 rounded-lg border border-transparent px-2 py-2 hover:bg-white/80 dark:hover:bg-slate-700/50"
             >
               <input
                 type="radio"
                 name={`exec-age-${index}-later`}
                 className="accent-indigo-600 mt-1 shrink-0"
-                checked={st.laterChoice === v}
-                onChange={() =>
+                checked={st.laterChoice === opt.value}
+                onChange={() => {
+                  const defaultPreset = opt.value === 'later'
+                    ? (ageOptions.length === 1 ? 'Other' : ageOptions[0].value)
+                    : null;
                   setEntry(index, {
-                    laterChoice: v,
-                    actingAgePreset: v === 'later' ? (tier === 'under18' ? '18' : '21') : null,
+                    laterChoice: opt.value,
+                    actingAgePreset: defaultPreset,
                     actingAgeOther: '',
-                  })
-                }
+                  });
+                }}
               />
               <span className="text-sm text-slate-800 dark:text-slate-100">
-                {v === 'from18'
-                  ? 'They can act from age 18'
-                  : 'They should act only once they reach a later age'}
+                {opt.label}
               </span>
             </label>
           ))}
         </div>
 
+        {/* CHANGE 3: Conditional age selector */}
         {st.laterChoice === 'later' && (
           <div className="mt-4">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100 break-words">
-              At what age would you like {name} to be able to act as executor and administer your estate?
+              At what age would you like {firstName} to be able to act as executor and administer your estate?
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {laterOptions.map((opt) => (
+              {ageOptions.map((opt) => (
                 <label
                   key={opt.value}
                   className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
@@ -304,25 +362,55 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
                 </label>
               ))}
             </div>
+
+            {/* CHANGE 4: Custom age input */}
             {st.actingAgePreset === 'Other' && (
               <div className="mt-3">
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">Age (years)</label>
+                <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  At what age should {firstName} be able to act?
+                </label>
                 <input
                   type="number"
-                  min={1}
-                  max={120}
+                  min={(age ?? 0) + 1}
+                  max={99}
+                  placeholder="Enter an age"
                   className="mt-1 w-full max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   value={st.actingAgeOther || ''}
                   onChange={(e) => setEntry(index, { actingAgeOther: e.target.value })}
                 />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  This must be older than {firstName}&apos;s current age of {age}.
+                </p>
+                {otherError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{otherError}</p>
+                )}
+                {otherValid && (
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 italic">
+                    {firstName} will be able to act as your executor from age {otherVal}.
+                  </p>
+                )}
               </div>
             )}
-            {showExplainUnder && (
-              <p className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                Until they reach that age, they will not be able to act as executor. Any other executor who is able to
-                act may deal with your estate in the meantime.
-              </p>
-            )}
+
+            {/* CHANGE 5: Tooltip for interim explanation */}
+            <TooltipTrigger text="Until they reach that age, they will not be able to act as executor. Any other executor who is able to act may deal with your estate in the meantime." />
+          </div>
+        )}
+
+        {/* CHANGE 6: Warning banner below age selector */}
+        {showBlockWarning && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm text-slate-900 shadow-sm dark:border-amber-400 dark:bg-slate-800 dark:text-slate-50"
+          >
+            <div className="flex gap-2 font-semibold">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+              <span>{warningText}</span>
+            </div>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-800 dark:text-slate-200">
+              <li>Add another individual executor</li>
+              <li>Appoint Aristone Solicitors to act</li>
+            </ul>
           </div>
         )}
       </div>
@@ -332,25 +420,6 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
   return (
     <div className="mb-6 space-y-4" data-field-id="executorIndividualAgeFlow">
       {relevant.map(renderExecutorBlock)}
-
-      {showNoImmediateWarning && (
-        <div
-          role="alert"
-          className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm text-slate-900 shadow-sm dark:border-amber-400 dark:bg-slate-800 dark:text-slate-50"
-        >
-          <div className="flex gap-2 font-semibold">
-            <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-            <span>
-              None of the executors you have chosen would be able to act immediately. You should appoint at least one
-              executor who will be able to act if needed before that time.
-            </span>
-          </div>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-800 dark:text-slate-200">
-            <li>Add another individual executor</li>
-            <li>Appoint Aristone Solicitors to act</li>
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
