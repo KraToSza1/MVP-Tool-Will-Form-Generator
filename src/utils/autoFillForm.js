@@ -152,27 +152,11 @@ const DEMO = {
  * (`shouldRecommendAristoneFromEstate` / `getAristoneEstateRecommendationState`).
  */
 const ESTATE_DEMO = {
-  assetTypes: [
-    'PropertyUK',
-    'PropertyOverseas',
-    'Cash',
-    'Savings',
-    'Investments',
-    'Pensions',
-    'Business',
-    'PersonalItems',
-    'LifeInsurance',
-    'Digital',
-    'Other',
-  ],
-  liabilityTypes: ['Mortgage', 'PersonalLoans', 'CreditCards', 'Tax'],
+  approxValue: '£325,001 – £500,000',
+  approxLiabilities: 'Under £10,000',
+  ownProperty: 'Yes',
+  businessInterests: 'No',
   feesAck: ['ack'],
-  grossRange: 'Range500_1m',
-  liabilityRange: 'Range100_250',
-  propertyRange: 'Range500_1m',
-  assetOther: `Overseas rental (France); classic car collection.${DEMO_TEXT_TAG}`,
-  additionalNotes:
-    'Autofill test: approximate figures for solicitor review only; not for the Will text.',
 };
 
 /**
@@ -716,9 +700,10 @@ export const generateDummyFormData = (formData) => {
     powerToRevokeLifeInterest: 'Yes',
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
     gender: 'Male',
-    estateGrossValueRange: ESTATE_DEMO.grossRange,
-    estateLiabilityValueRange: ESTATE_DEMO.liabilityRange,
-    estatePropertyValueRange: ESTATE_DEMO.propertyRange,
+    estateApproxValue: ESTATE_DEMO.approxValue,
+    estateApproxLiabilities: ESTATE_DEMO.approxLiabilities,
+    estateOwnProperty: ESTATE_DEMO.ownProperty,
+    estateBusinessInterests: ESTATE_DEMO.businessInterests,
     partnerTitle: 'Mrs',
     partnerGender: 'Female',
   };
@@ -735,6 +720,10 @@ export const generateDummyFormData = (formData) => {
     switch (field.type) {
       case 'radio':
       case 'select':
+        if (field.id === 'estateApproxValue') return ESTATE_DEMO.approxValue;
+        if (field.id === 'estateApproxLiabilities') return ESTATE_DEMO.approxLiabilities;
+        if (field.id === 'estateOwnProperty') return ESTATE_DEMO.ownProperty;
+        if (field.id === 'estateBusinessInterests') return ESTATE_DEMO.businessInterests;
         if (field.id === 'partnerTitle') return DEMO.partner.title;
         if (field.id === 'partnerGender') return DEMO.partner.gender;
         if (field.id === 'organDonationPreference') return 'YesButOnly';
@@ -789,7 +778,8 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('amount') || field.id.includes('Amount')) return field.id?.includes('pet') ? '5000' : '100000';
         if (field.id === 'specificOrgansToDonate') return 'kidneys, liver, and corneas';
         if (field.id === 'specificOrgansToExclude') return 'heart';
-        if (field.id === 'estateAssetOther') return ESTATE_DEMO.assetOther;
+        if (field.id === 'estateApproxValue') return ESTATE_DEMO.approxValue;
+        if (field.id === 'estateApproxLiabilities') return ESTATE_DEMO.approxLiabilities;
         if (field.id === 'minimumCharityAmountValue') return '50000';
         if (field.id === 'stepProvisionToExcludeOne') return '1';
         if (field.id === 'stepProvisionsToExcludeMultiple') return '1, 2 & 3';
@@ -829,7 +819,6 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
-        if (field.id === 'estateAdditionalNotes') return ESTATE_DEMO.additionalNotes;
         return `Please provide details for ${field.label || field.id}.`;
 
       case 'date':
@@ -851,8 +840,6 @@ export const generateDummyFormData = (formData) => {
           return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
         }
         if (field.id === 'aristoneProfessionalFeesAck') return [...ESTATE_DEMO.feesAck];
-        if (field.id === 'estateAssetTypes') return [...ESTATE_DEMO.assetTypes];
-        if (field.id === 'estateLiabilityTypes') return [...ESTATE_DEMO.liabilityTypes];
         return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
 
       default:
@@ -1122,13 +1109,10 @@ export const generateDummyFormData = (formData) => {
     stepProvisionsToExcludeMultiple: '1, 2 & 3',
     executorSpecifyAge: 25,
     aristoneProfessionalFeesAck: [...ESTATE_DEMO.feesAck],
-    estateAssetTypes: [...ESTATE_DEMO.assetTypes],
-    estateLiabilityTypes: [...ESTATE_DEMO.liabilityTypes],
-    estateGrossValueRange: ESTATE_DEMO.grossRange,
-    estateLiabilityValueRange: ESTATE_DEMO.liabilityRange,
-    estatePropertyValueRange: ESTATE_DEMO.propertyRange,
-    estateAssetOther: ESTATE_DEMO.assetOther,
-    estateAdditionalNotes: ESTATE_DEMO.additionalNotes,
+    estateApproxValue: ESTATE_DEMO.approxValue,
+    estateApproxLiabilities: ESTATE_DEMO.approxLiabilities,
+    estateOwnProperty: ESTATE_DEMO.ownProperty,
+    estateBusinessInterests: ESTATE_DEMO.businessInterests,
   };
 
   console.log('[AUTOFILL GENERATE] 🔄 Applying special fields...');
@@ -1189,13 +1173,10 @@ export const generateDummyFormData = (formData) => {
     else if (id.includes('date') || id.includes('Date')) defaultVal = new Date().toISOString().split('T')[0];
     else if (id.includes('amount') || id.includes('Amount')) defaultVal = '25000';
     else if (id === 'aristoneProfessionalFeesAck') defaultVal = [...ESTATE_DEMO.feesAck];
-    else if (id === 'estateAssetTypes') defaultVal = [...ESTATE_DEMO.assetTypes];
-    else if (id === 'estateLiabilityTypes') defaultVal = [...ESTATE_DEMO.liabilityTypes];
-    else if (id === 'estateGrossValueRange') defaultVal = ESTATE_DEMO.grossRange;
-    else if (id === 'estateLiabilityValueRange') defaultVal = ESTATE_DEMO.liabilityRange;
-    else if (id === 'estatePropertyValueRange') defaultVal = ESTATE_DEMO.propertyRange;
-    else if (id === 'estateAssetOther') defaultVal = ESTATE_DEMO.assetOther;
-    else if (id === 'estateAdditionalNotes') defaultVal = ESTATE_DEMO.additionalNotes;
+    else if (id === 'estateApproxValue') defaultVal = ESTATE_DEMO.approxValue;
+    else if (id === 'estateApproxLiabilities') defaultVal = ESTATE_DEMO.approxLiabilities;
+    else if (id === 'estateOwnProperty') defaultVal = ESTATE_DEMO.ownProperty;
+    else if (id === 'estateBusinessInterests') defaultVal = ESTATE_DEMO.businessInterests;
     else if (id.includes('Details') || id.includes('details')) defaultVal = `Please provide details as required for this field.${DEMO_TEXT_TAG}`;
     dummyData[id] = defaultVal;
   });
@@ -1206,8 +1187,8 @@ export const generateDummyFormData = (formData) => {
   const estRec = getAristoneEstateRecommendationState(dummyData);
   const ex = dummyData.executorData;
   console.log('[AUTOFILL_VERIFY] Mariyam harness — estate + executor age', {
-    estateGrossRange: dummyData.estateGrossValueRange,
-    estateLiabilityRange: dummyData.estateLiabilityValueRange,
+    estateApproxValue: dummyData.estateApproxValue,
+    estateApproxLiabilities: dummyData.estateApproxLiabilities,
     aristoneEstateRecommendationEligible: estRec.eligible,
     chooseAristoneExecutor: dummyData.chooseAristoneExecutor,
     appointProfessionalExecutor: dummyData.appointProfessionalExecutor,

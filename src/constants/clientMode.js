@@ -29,26 +29,22 @@ export function isAristoneExecutorSelected(formValues) {
   return false;
 }
 
-/** Ordinal min of gross estate band (£ thousands, lower bound of range). */
-const ESTATE_GROSS_MIN_K = {
-  Under50k: 0,
-  Range50_150: 50,
-  Range150_325: 150,
-  Range325_500: 325,
-  Range500_1m: 500,
-  Range1m_2m: 1000,
-  Over2m: 2000,
-  PreferNotToSayGross: null,
+/** Band rank for estate value (new simplified Estate Overview). */
+const ESTATE_BANDS = {
+  'Under £50,000': 0,
+  '£50,000 – £150,000': 1,
+  '£150,001 – £325,000': 2,
+  '£325,001 – £500,000': 3,
+  'Over £500,000': 4,
 };
 
-/** Ordinal max of total liabilities band (£ thousands, upper bound of range). */
-const LIABILITY_MAX_K = {
-  None: 0,
-  Under25k: 25,
-  Range25_100: 100,
-  Range100_250: 250,
-  Over250k: 999999,
-  PreferNotToSayLiab: null,
+/** Band rank for liabilities (new simplified Estate Overview). */
+const LIABILITY_BANDS = {
+  'None': 0,
+  'Under £10,000': 1,
+  '£10,000 – £50,000': 2,
+  '£50,001 – £150,000': 3,
+  'Over £150,000': 4,
 };
 
 /** Extra-verbose logs (same dedupe key) — optional on top of dev logs. */
@@ -66,7 +62,7 @@ function buildEstateRecommendationLogSummary(state) {
     !(state.liabilityKey || '').trim() &&
     !state.inferredLiability
   ) {
-    return 'INCOMPLETE — select gross estate (step 3); liabilities (step 4) or tick "No liabilities" (step 2)';
+    return 'INCOMPLETE — select estate value and liabilities on Estate Overview';
   }
   const tip = (state.reasons || []).filter(Boolean).pop();
   return tip ? `NOT_QUALIFIED — ${tip}` : 'NOT_QUALIFIED';
@@ -111,6 +107,7 @@ function maybeLogEstateRecommendation(state) {
 
 /**
  * Full breakdown for Aristone executor recommendation (Estate Overview → Trustees/Executors messaging).
+ * Uses simplified band-ranking: recommend when estate ≥ £50k AND liabilities band is strictly lower.
  * In **development**, deduped `[EstateRecommendation]` logs are emitted when the result changes.
  * Set `VITE_DEBUG_ESTATE_RECOMMENDATION=true` for an additional verbose line.
  */
@@ -118,139 +115,56 @@ export function getAristoneEstateRecommendationState(formValues) {
   const reasons = [];
 
   if (!formValues || typeof formValues !== 'object') {
-    const state = {
-      eligible: false,
-      grossKey: '',
-      liabilityKey: '',
-      inferredLiability: false,
-      grossMin: null,
-      liabMax: null,
-      reasons: ['No form values.'],
-    };
+    const state = { eligible: false, grossKey: '', liabilityKey: '', inferredLiability: false, grossMin: null, liabMax: null, reasons: ['No form values.'] };
     maybeLogEstateRecommendation(state);
     return state;
   }
 
-  const rawG = formValues.estateGrossValueRange;
-  const rawL = formValues.estateLiabilityValueRange;
-  let grossKey = typeof rawG === 'string' ? rawG.trim() : rawG != null ? String(rawG).trim() : '';
-  let liabilityKey = typeof rawL === 'string' ? rawL.trim() : rawL != null ? String(rawL).trim() : '';
-
-  let inferredLiability = false;
-  if (
-    !liabilityKey &&
-    Array.isArray(formValues.estateLiabilityTypes) &&
-    formValues.estateLiabilityTypes.includes('NoLiabilities')
-  ) {
-    liabilityKey = 'None';
-    inferredLiability = true;
-    reasons.push('Liability value band inferred as "None" because "No liabilities" is selected in step 2.');
-  }
+  const rawG = formValues.estateApproxValue;
+  const rawL = formValues.estateApproxLiabilities;
+  const grossKey = typeof rawG === 'string' ? rawG.trim() : '';
+  const liabilityKey = typeof rawL === 'string' ? rawL.trim() : '';
 
   if (!grossKey) {
-    reasons.push('Select an approximate gross estate value (step 3).');
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin: null,
-      liabMax: null,
-      reasons,
-    };
+    reasons.push('Select an approximate estate value.');
+    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: null, liabMax: null, reasons };
     maybeLogEstateRecommendation(state);
     return state;
   }
 
-  const grossMin = ESTATE_GROSS_MIN_K[grossKey];
-  if (grossMin == null) {
-    reasons.push('Gross estate is "Prefer not to say" or unknown — recommendation hidden.');
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin: null,
-      liabMax: null,
-      reasons,
-    };
+  const eRank = ESTATE_BANDS[grossKey];
+  if (eRank == null) {
+    reasons.push('Estate value not recognised — recommendation hidden.');
+    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: null, liabMax: null, reasons };
     maybeLogEstateRecommendation(state);
     return state;
   }
 
   if (!liabilityKey) {
-    reasons.push('Select an approximate total liabilities value (step 4), or choose "No liabilities" in step 2.');
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin,
-      liabMax: null,
-      reasons,
-    };
+    reasons.push('Select approximate liabilities.');
+    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: null, reasons };
     maybeLogEstateRecommendation(state);
     return state;
   }
 
-  const liabMax = LIABILITY_MAX_K[liabilityKey];
-  if (liabMax == null) {
-    reasons.push('Liabilities are "Prefer not to say" — recommendation hidden.');
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin,
-      liabMax: null,
-      reasons,
-    };
+  const lRank = LIABILITY_BANDS[liabilityKey];
+  if (lRank == null) {
+    reasons.push('Liabilities value not recognised — recommendation hidden.');
+    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: null, reasons };
     maybeLogEstateRecommendation(state);
     return state;
   }
 
-  if (grossMin < 50) {
-    reasons.push('Gross estate band is below £50,000 — no professional recommendation.');
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin,
-      liabMax,
-      reasons,
-    };
-    maybeLogEstateRecommendation(state);
-    return state;
+  const eligible = eRank >= 1 && lRank < eRank;
+  if (eligible) {
+    reasons.push('Estate ≥ £50k with liabilities in a lower band — showing Aristone recommendation.');
+  } else if (eRank < 1) {
+    reasons.push('Estate under £50k — no professional recommendation.');
+  } else {
+    reasons.push('Liabilities band same or higher than estate — no recommendation.');
   }
 
-  if (grossMin <= liabMax) {
-    reasons.push(
-      'Net position is not positive at band level (gross lower bound must exceed liabilities upper bound).'
-    );
-    const state = {
-      eligible: false,
-      grossKey,
-      liabilityKey,
-      inferredLiability,
-      grossMin,
-      liabMax,
-      reasons,
-    };
-    maybeLogEstateRecommendation(state);
-    return state;
-  }
-
-  reasons.push('Net positive estate over £50k — showing Aristone recommendation on Executors.');
-  const state = {
-    eligible: true,
-    grossKey,
-    liabilityKey,
-    inferredLiability,
-    grossMin,
-    liabMax,
-    reasons,
-  };
+  const state = { eligible, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: lRank, reasons };
   maybeLogEstateRecommendation(state);
   return state;
 }
@@ -263,23 +177,15 @@ export function shouldRecommendAristoneFromEstate(formValues) {
   return getAristoneEstateRecommendationState(formValues).eligible;
 }
 
-/** Field IDs for estate intake (must match form JSON). Legacy name — no longer stripped from client autofill. */
+/** Field IDs for estate intake (must match form JSON). */
 export const SOLICITOR_INTAKE_ONLY_FIELD_IDS = new Set([
   'estateOverviewIntro',
+  'estateApproxValue',
+  'estateApproxLiabilities',
+  'estateOwnProperty',
+  'estateBusinessInterests',
   'aristoneProfessionalFeesNotice',
   'aristoneProfessionalFeesAck',
-  'estateStep1Heading',
-  'estateStep2Heading',
-  'estateStep3Heading',
-  'estateStep4Heading',
-  'estateStep5Heading',
-  'estateAssetTypes',
-  'estateAssetOther',
-  'estateLiabilityTypes',
-  'estateGrossValueRange',
-  'estateLiabilityValueRange',
-  'estatePropertyValueRange',
-  'estateAdditionalNotes',
 ]);
 
 // Legacy default index when the section title is not found (factory order; keep in sync with Complete-WillSuite-Form-Data.json)

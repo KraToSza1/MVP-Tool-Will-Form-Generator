@@ -64,7 +64,6 @@ import {
   isSolicitorMode,
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
-  ESTATE_OVERVIEW_SECTION_TITLE,
   getAristoneEstateRecommendationState,
   getEstateRecommendationLogSummary,
 } from '../constants/clientMode.js';
@@ -288,12 +287,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Testamentary Capacity: solicitors only. Estate Overview: solicitors only (not gated on Aristone selection).
+  // Testamentary Capacity: solicitors only. Estate Overview: visible to ALL users.
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
     return formData.formSections.filter((s) => {
       if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
-      if (s.formSection === ESTATE_OVERVIEW_SECTION_TITLE && !solicitorMode) return false;
       return true;
     });
   }, [solicitorMode, formData?.formSections]);
@@ -314,24 +312,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     formValues?.professionalExecutorSelection,
   ]);
 
-  // Estate intake: "No liabilities" → liability value range "None".
-  useEffect(() => {
-    const types = formValues?.estateLiabilityTypes;
-    if (!Array.isArray(types) || !types.includes('NoLiabilities')) return;
-    setFormValues((prev) => {
-      if (prev.estateLiabilityValueRange === 'None') return prev;
-      return { ...prev, estateLiabilityValueRange: 'None' };
-    });
-  }, [formValues?.estateLiabilityTypes]);
-
-  // Dev: re-evaluate and log qualification whenever Estate Overview values change (so logs appear while filling that step, not only on Trustees/Executors).
+  // Dev: re-evaluate and log qualification whenever Estate Overview values change.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     getAristoneEstateRecommendationState(formValues);
   }, [
-    formValues?.estateGrossValueRange,
-    formValues?.estateLiabilityValueRange,
-    formValues?.estateLiabilityTypes,
+    formValues?.estateApproxValue,
+    formValues?.estateApproxLiabilities,
   ]);
 
   // Aristone not executor: cannot remain selected as professional trustee.
@@ -2465,8 +2452,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         console.log('[FORM AUTO-FILL] Estate recommendation preview (after merge):', {
           summary: getEstateRecommendationLogSummary(est),
           eligible: est.eligible,
-          estateGrossValueRange: est.grossKey,
-          estateLiabilityValueRange: est.liabilityKey,
+          estateApproxValue: est.grossKey,
+          estateApproxLiabilities: est.liabilityKey,
           inferredLiabilityFromNoLiabilities: est.inferredLiability,
           grossMinK: est.grossMin,
           liabilityMaxK: est.liabMax,

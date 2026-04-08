@@ -565,6 +565,50 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     );
   }
 
+  if (field.type === 'select' && field.options) {
+    const FieldIcon = getFieldIcon(field.type, field.id);
+    return (
+      <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>
+        <label htmlFor={field.id} className="block font-semibold text-gray-800 mb-1.5 sm:mb-2 flex items-center gap-2 text-sm sm:text-base">
+          <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-600 flex-shrink-0">
+            {FieldIcon}
+          </div>
+          <span className="break-words min-w-0">{field.label}</span>
+          {field.required && <span className="text-red-500 ml-1 flex-shrink-0" title="Required">*</span>}
+        </label>
+        {field.infoText && (
+          <p className="text-xs text-gray-600 mb-1.5 italic flex items-start gap-2">
+            <Info size={14} className="mt-0.5 flex-shrink-0" />
+            <span>{field.infoText}</span>
+          </p>
+        )}
+        <select
+          id={field.id}
+          name={field.id}
+          value={formValues[field.id] || ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            setFormValues((prev) => ({ ...prev, [field.id]: v || null }));
+          }}
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all min-h-[44px] dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100"
+          aria-required={field.required || false}
+          aria-invalid={!!validationErrors[field.id]}
+          aria-describedby={validationErrors[field.id] ? `${field.id}-error` : undefined}
+        >
+          {field.options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {validationErrors[field.id] && (
+          <p id={`${field.id}-error`} className="text-xs text-red-500 mt-1.5 flex items-center gap-2" role="alert" aria-live="polite">
+            <AlertCircle size={14} aria-hidden="true" />
+            <span>{validationErrors[field.id]}</span>
+          </p>
+        )}
+      </div>
+    );
+  }
+
   if (field.type === 'radio' && field.options) {
     DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
@@ -609,10 +653,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               !aristoneIsExecutor;
             const recommendAristoneExecutor =
               field.id === 'chooseAristoneExecutor' && opt.value === 'Aristone' && showAristoneEstateRecommendation;
-            const optionLabel =
-              recommendAristoneExecutor
-                ? '🥇 Aristone Solicitors (Recommended for estates like yours)'
-                : opt.label;
+            const optionLabel = opt.label;
             return (
             <label key={opt.value} className={`flex items-center gap-2 rounded-lg transition-colors duration-200 border ${
               recommendAristoneExecutor
@@ -689,7 +730,15 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                       }));
                     }}
               />
-              <span className={`text-gray-800 dark:text-slate-100 ${field.id === 'title' ? '' : 'min-w-0 flex-1 break-words'}`}>{optionLabel}</span>
+              <span className={`text-gray-800 dark:text-slate-100 ${field.id === 'title' ? '' : 'min-w-0 flex-1 break-words'}`}>
+                {optionLabel}
+                {recommendAristoneExecutor && (
+                  <>
+                    <span className="ml-2 inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-semibold text-white dark:bg-indigo-500">Recommended</span>
+                    <span className="block text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Recommended for estates like yours</span>
+                  </>
+                )}
+              </span>
             </label>
             );
           })}
@@ -734,54 +783,29 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             const isChecked = Array.isArray(formValues[field.id])
               ? formValues[field.id].includes(optValue)
               : false;
-            const liabilitySelected = Array.isArray(formValues[field.id]) ? formValues[field.id] : [];
-            const NO_L = 'NoLiabilities';
-            const isNoLiabilitiesField = field.id === 'estateLiabilityTypes';
-            const disabledByOther =
-              isNoLiabilitiesField && optValue === NO_L && liabilitySelected.some((v) => v !== NO_L);
-            const disabledByNoOnly =
-              isNoLiabilitiesField && optValue !== NO_L && liabilitySelected.includes(NO_L);
-
             return (
               <label
                 key={optValue || opt.id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors duration-200 border border-transparent ${
-                  disabledByOther || disabledByNoOnly
-                    ? 'cursor-not-allowed opacity-50'
-                    : 'cursor-pointer hover:bg-gray-50 hover:border-indigo-200'
-                }`}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors duration-200 border border-transparent cursor-pointer hover:bg-gray-50 hover:border-indigo-200"
               >
                 <input
                   type="checkbox"
                   className="accent-indigo-600 w-4 h-4"
-                  disabled={disabledByOther || disabledByNoOnly}
                   checked={isChecked}
                   onChange={(e) => {
                     let newValue = Array.isArray(formValues[field.id])
                       ? [...formValues[field.id]]
                       : [];
                     DEBUG_LOGS&&console.log(`[CHECKBOX CHANGE] Field "${field.id}" (${field.label}) - Option "${optValue}" ${e.target.checked ? 'CHECKED' : 'UNCHECKED'}`);
-                    
-                    if (field.id === 'estateLiabilityTypes') {
-                      const NO = 'NoLiabilities';
-                      if (e.target.checked && optValue === NO) {
-                        newValue = [NO];
-                      } else if (e.target.checked) {
-                        newValue = newValue.filter((v) => v !== NO);
-                        if (!newValue.includes(optValue)) newValue.push(optValue);
-                      } else {
-                        const index = newValue.indexOf(optValue);
-                        if (index > -1) newValue.splice(index, 1);
-                      }
-                    } else if (e.target.checked) {
+
+                    if (e.target.checked) {
                       newValue.push(optValue);
                     } else {
                       const index = newValue.indexOf(optValue);
                       if (index > -1) newValue.splice(index, 1);
                     }
                     DEBUG_LOGS&&console.log(`[CHECKBOX RESULT] Field "${field.id}" new value:`, newValue);
-                    
-                    // Clear validation errors when selection is made
+
                     if (newValue.length > 0 || !field.required) {
                       setValidationErrors((prev) => {
                         const newErrors = { ...prev };
@@ -791,18 +815,12 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
                     } else if (field.required && newValue.length === 0) {
                       setValidationErrors((prev) => ({ ...prev, [field.id]: `This field is required. Please select at least one option.` }));
                     }
-                    
+
                     logFormChange(field.id, newValue);
-                    setFormValues((prev) => {
-                      const next = {
-                        ...prev,
-                        [field.id]: newValue,
-                      };
-                      if (field.id === 'estateLiabilityTypes' && newValue.includes('NoLiabilities')) {
-                        next.estateLiabilityValueRange = 'None';
-                      }
-                      return next;
-                    });
+                    setFormValues((prev) => ({
+                      ...prev,
+                      [field.id]: newValue,
+                    }));
                   }}
                 />
                 <span className="text-gray-800 flex-1">{opt.label}</span>

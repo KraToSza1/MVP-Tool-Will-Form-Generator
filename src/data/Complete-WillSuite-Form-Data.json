@@ -857,296 +857,64 @@
                 {
                     "id": "estateOverviewIntro",
                     "type": "display",
-                    "text": "Answer using approximate figures only.",
+                    "text": "To help us understand your estate, please answer the following questions using approximate figures.",
                     "excludeFromWill": true
                 },
                 {
-                    "id": "estateStep1Heading",
-                    "type": "display",
-                    "text": "What assets do you have?",
-                    "excludeFromWill": true
-                },
-                {
-                    "id": "estateAssetTypes",
-                    "type": "checkboxGroup",
-                    "label": "What assets do you have? (Select all that apply)",
+                    "id": "estateApproxValue",
+                    "type": "select",
+                    "label": "Approximate estate value",
+                    "required": true,
                     "excludeFromWill": true,
                     "options": [
-                        {
-                            "id": "PropertyUK",
-                            "label": "Property (UK)",
-                            "value": "PropertyUK"
-                        },
-                        {
-                            "id": "PropertyOverseas",
-                            "label": "Property (overseas)",
-                            "value": "PropertyOverseas"
-                        },
-                        {
-                            "id": "Cash",
-                            "label": "Cash / bank accounts",
-                            "value": "Cash"
-                        },
-                        {
-                            "id": "Savings",
-                            "label": "Savings (including ISAs)",
-                            "value": "Savings"
-                        },
-                        {
-                            "id": "Investments",
-                            "label": "Investments (shares, funds, bonds, etc.)",
-                            "value": "Investments"
-                        },
-                        {
-                            "id": "Pensions",
-                            "label": "Pension(s)",
-                            "value": "Pensions"
-                        },
-                        {
-                            "id": "Business",
-                            "label": "Business interests / shares in a company",
-                            "value": "Business"
-                        },
-                        {
-                            "id": "PersonalItems",
-                            "label": "Valuable personal items (e.g. jewellery, art, vehicles)",
-                            "value": "PersonalItems"
-                        },
-                        {
-                            "id": "LifeInsurance",
-                            "label": "Life insurance",
-                            "value": "LifeInsurance"
-                        },
-                        {
-                            "id": "Digital",
-                            "label": "Digital assets / online income-generating assets",
-                            "value": "Digital"
-                        },
-                        {
-                            "id": "Other",
-                            "label": "Other",
-                            "value": "Other"
-                        }
-                    ]
-                },
-                {
-                    "id": "estateAssetOther",
-                    "type": "text",
-                    "label": "Please specify (other assets)",
-                    "placeholder": "Brief description",
-                    "value": "",
-                    "excludeFromWill": true,
-                    "conditions": [
-                        {
-                            "field": "estateAssetTypes",
-                            "operator": "includes",
-                            "value": "Other"
-                        }
-                    ]
-                },
-                {
-                    "id": "estateStep2Heading",
-                    "type": "display",
-                    "text": "Do you have any outstanding liabilities?",
-                    "excludeFromWill": true
-                },
-                {
-                    "id": "estateLiabilityTypes",
-                    "type": "checkboxGroup",
-                    "label": "Do you have any outstanding liabilities? (Select all that apply)",
-                    "excludeFromWill": true,
-                    "options": [
-                        {
-                            "id": "Mortgage",
-                            "label": "Mortgage",
-                            "value": "Mortgage"
-                        },
-                        {
-                            "id": "PersonalLoans",
-                            "label": "Personal loans",
-                            "value": "PersonalLoans"
-                        },
-                        {
-                            "id": "CreditCards",
-                            "label": "Credit cards",
-                            "value": "CreditCards"
-                        },
-                        {
-                            "id": "BusinessLiabilities",
-                            "label": "Business liabilities",
-                            "value": "BusinessLiabilities"
-                        },
-                        {
-                            "id": "Tax",
-                            "label": "Tax liabilities",
-                            "value": "Tax"
-                        },
-                        {
-                            "id": "HirePurchase",
-                            "label": "Hire purchase / car finance",
-                            "value": "HirePurchase"
-                        },
-                        {
-                            "id": "OtherDebts",
-                            "label": "Other debts",
-                            "value": "OtherDebts"
-                        },
-                        {
-                            "id": "NoLiabilities",
-                            "label": "No liabilities",
-                            "value": "NoLiabilities"
-                        }
-                    ]
-                },
-                {
-                    "id": "estateStep3Heading",
-                    "type": "display",
-                    "text": "What is the approximate value of your estate before deducting liabilities?",
-                    "excludeFromWill": true
-                },
-                {
-                    "id": "estateGrossValueRange",
-                    "type": "radio",
-                    "label": "What is the approximate value of your estate before deducting liabilities?",
-                    "excludeFromWill": true,
-                    "options": [
-                        {
-                            "value": "Under50k",
-                            "label": "Under £50,000"
-                        },
-                        {
-                            "value": "Range50_150",
-                            "label": "£50,000 – £150,000"
-                        },
-                        {
-                            "value": "Range150_325",
-                            "label": "£150,001 – £325,000"
-                        },
-                        {
-                            "value": "Range325_500",
-                            "label": "£325,001 – £500,000"
-                        },
-                        {
-                            "value": "Range500_1m",
-                            "label": "£500,001 – £1 million"
-                        },
-                        {
-                            "value": "Range1m_2m",
-                            "label": "£1 million – £2 million"
-                        },
-                        {
-                            "value": "Over2m",
-                            "label": "Over £2 million"
-                        },
-                        {
-                            "value": "PreferNotToSayGross",
-                            "label": "Prefer not to say"
-                        }
+                        { "value": "", "label": "Please select…" },
+                        { "value": "Under £50,000", "label": "Under £50,000" },
+                        { "value": "£50,000 – £150,000", "label": "£50,000 – £150,000" },
+                        { "value": "£150,001 – £325,000", "label": "£150,001 – £325,000" },
+                        { "value": "£325,001 – £500,000", "label": "£325,001 – £500,000" },
+                        { "value": "Over £500,000", "label": "Over £500,000" }
                     ],
                     "value": null
                 },
                 {
-                    "id": "estateStep4Heading",
-                    "type": "display",
-                    "text": "What is the approximate total value of your liabilities?",
-                    "excludeFromWill": true
-                },
-                {
-                    "id": "estateLiabilityValueRange",
-                    "type": "radio",
-                    "label": "What is the approximate total value of your liabilities?",
+                    "id": "estateApproxLiabilities",
+                    "type": "select",
+                    "label": "Approximate liabilities",
+                    "required": true,
                     "excludeFromWill": true,
                     "options": [
-                        {
-                            "value": "None",
-                            "label": "None"
-                        },
-                        {
-                            "value": "Under25k",
-                            "label": "Under £25,000"
-                        },
-                        {
-                            "value": "Range25_100",
-                            "label": "£25,000 – £100,000"
-                        },
-                        {
-                            "value": "Range100_250",
-                            "label": "£100,001 – £250,000"
-                        },
-                        {
-                            "value": "Over250k",
-                            "label": "Over £250,000"
-                        },
-                        {
-                            "value": "PreferNotToSayLiab",
-                            "label": "Prefer not to say"
-                        }
+                        { "value": "", "label": "Please select…" },
+                        { "value": "None", "label": "None" },
+                        { "value": "Under £10,000", "label": "Under £10,000" },
+                        { "value": "£10,000 – £50,000", "label": "£10,000 – £50,000" },
+                        { "value": "£50,001 – £150,000", "label": "£50,001 – £150,000" },
+                        { "value": "Over £150,000", "label": "Over £150,000" }
                     ],
                     "value": null
                 },
                 {
-                    "id": "estateStep5Heading",
-                    "type": "display",
-                    "text": "What is the approximate value of your property?",
-                    "excludeFromWill": true
-                },
-                {
-                    "id": "estatePropertyValueRange",
+                    "id": "estateOwnProperty",
                     "type": "radio",
-                    "label": "What is the approximate value of your property?",
+                    "label": "Do you own property?",
+                    "required": false,
                     "excludeFromWill": true,
                     "options": [
-                        {
-                            "value": "Under150k",
-                            "label": "Under £150,000"
-                        },
-                        {
-                            "value": "Range150_300",
-                            "label": "£150,000 – £300,000"
-                        },
-                        {
-                            "value": "Range300_500",
-                            "label": "£300,001 – £500,000"
-                        },
-                        {
-                            "value": "Range500_1m",
-                            "label": "£500,001 – £1 million"
-                        },
-                        {
-                            "value": "Over1m",
-                            "label": "Over £1 million"
-                        },
-                        {
-                            "value": "PreferNotToSayProp",
-                            "label": "Prefer not to say"
-                        }
+                        { "value": "Yes", "label": "Yes" },
+                        { "value": "No", "label": "No" }
                     ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "operator": "OR",
-                            "clauses": [
-                                {
-                                    "field": "estateAssetTypes",
-                                    "operator": "includes",
-                                    "value": "PropertyUK"
-                                },
-                                {
-                                    "field": "estateAssetTypes",
-                                    "operator": "includes",
-                                    "value": "PropertyOverseas"
-                                }
-                            ]
-                        }
-                    ]
+                    "value": null
                 },
                 {
-                    "id": "estateAdditionalNotes",
-                    "type": "textarea",
-                    "label": "Is there anything else we should know about your estate? (Optional)",
-                    "placeholder": "You can add any helpful background information about your estate or wishes here. For example, any specific concerns, guidance on how you would like your estate handled, or matters you would like taken into account. These may also be included separately in something called a letter of wishes, which is a non-binding document used to guide your executors on your preferences.",
-                    "value": "",
-                    "excludeFromWill": true
+                    "id": "estateBusinessInterests",
+                    "type": "radio",
+                    "label": "Do you have any business interests?",
+                    "required": false,
+                    "excludeFromWill": true,
+                    "options": [
+                        { "value": "Yes", "label": "Yes" },
+                        { "value": "No", "label": "No" }
+                    ],
+                    "value": null
                 }
             ]
         },
