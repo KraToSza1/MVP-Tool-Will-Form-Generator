@@ -1471,49 +1471,61 @@ export default function QuestionnaireEditorPage() {
         >
           <div className={`questionnaire-version-history-header flex flex-wrap items-center gap-2 ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
             <History size={18} className={`shrink-0 questionnaire-version-history-icon ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
-            <span className="font-semibold">Version history (Supabase)</span>
+            <span className="font-semibold">Backups &amp; restore</span>
             {revisionsLoading && <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Loading…</span>}
           </div>
-          <p className={`questionnaire-version-history-desc mt-1 text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Last 50 published snapshots (oldest are trimmed automatically when you save). Restoring replaces the live questionnaire for all clients. Delete removes a snapshot from history only—it does not change the current published form.
+          <p className={`questionnaire-version-history-desc mt-1.5 text-sm leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            Every time you save, a backup is created automatically. You can go back to any previous version at any time.
           </p>
-          <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-sm">
+          <div className={`mt-3 rounded-lg border p-3 text-xs ${isDark ? 'border-slate-600/60 bg-slate-900/40 text-slate-400' : 'border-slate-200 bg-white text-slate-600'}`}>
+            <p><strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>Restore</strong> — replaces the live questionnaire with that version. Clients will see the restored version.</p>
+            <p className="mt-1"><strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>Delete</strong> — removes the backup from history only. Does not change the live questionnaire.</p>
+          </div>
+          <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto text-sm">
             {revisions.length === 0 && !revisionsLoading && (
-              <li className={`questionnaire-version-history-empty ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                No history yet — history is recorded when you save (after migrations are applied).
+              <li className={`questionnaire-version-history-empty rounded-lg border p-3 text-center ${isDark ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+                No backups yet. A backup will appear here after you save for the first time.
               </li>
             )}
-            {revisions.map((r) => (
-              <li
-                key={r.id}
-                className={`questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${isDark ? 'border-slate-600 bg-slate-900/60' : 'border-slate-200 bg-white'}`}
-              >
-                <span className={`min-w-0 flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  {formatSavedTime(new Date(r.created_at)) || r.created_at} · {r.source}
-                  {typeof r.payloadBytes === 'number' ? ` · ~${r.payloadBytes} bytes` : ''}
-                </span>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={loading || restoreBusyId === r.id || deleteBusyId === r.id}
-                    onClick={() => handleRestoreRevision(r.id)}
-                    className={`questionnaire-revision-restore rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-indigo-500/50 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-50'}`}
-                  >
-                    {restoreBusyId === r.id ? 'Restoring…' : 'Restore'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading || deleteBusyId === r.id || restoreBusyId === r.id}
-                    onClick={() => handleDeleteRevision(r.id)}
-                    className={`questionnaire-revision-delete inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-red-500/40 bg-red-950/30 text-red-300 hover:bg-red-950/50' : 'border-red-200 bg-white text-red-700 hover:bg-red-50'}`}
-                    aria-label="Delete snapshot from history"
-                  >
-                    <Trash2 size={12} aria-hidden />
-                    {deleteBusyId === r.id ? 'Removing…' : 'Delete'}
-                  </button>
-                </div>
-              </li>
-            ))}
+            {revisions.map((r, rIdx) => {
+              const sourceLabel = r.source === 'save' ? 'Saved' : r.source === 'restore' ? 'Restored' : r.source;
+              return (
+                <li
+                  key={r.id}
+                  className={`questionnaire-revision-row flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2.5 ${isDark ? 'border-slate-600 bg-slate-900/60' : 'border-slate-200 bg-white'}`}
+                >
+                  <span className={`min-w-0 flex-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    {rIdx === 0 && (
+                      <span className={`mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-emerald-900/50 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+                        Latest
+                      </span>
+                    )}
+                    {formatSavedTime(new Date(r.created_at)) || r.created_at}
+                    <span className={`ml-1.5 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>· {sourceLabel}</span>
+                  </span>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={loading || restoreBusyId === r.id || deleteBusyId === r.id}
+                      onClick={() => handleRestoreRevision(r.id)}
+                      className={`questionnaire-revision-restore rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${isDark ? 'border-indigo-500/50 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-indigo-300 bg-white text-indigo-800 hover:bg-indigo-50'}`}
+                    >
+                      {restoreBusyId === r.id ? 'Restoring…' : 'Restore this version'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loading || deleteBusyId === r.id || restoreBusyId === r.id}
+                      onClick={() => handleDeleteRevision(r.id)}
+                      className={`questionnaire-revision-delete inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium disabled:opacity-50 ${isDark ? 'border-red-500/40 bg-red-950/30 text-red-300 hover:bg-red-950/50' : 'border-red-200 bg-white text-red-700 hover:bg-red-50'}`}
+                      aria-label="Delete backup"
+                    >
+                      <Trash2 size={12} aria-hidden />
+                      {deleteBusyId === r.id ? 'Removing…' : 'Delete'}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
 
