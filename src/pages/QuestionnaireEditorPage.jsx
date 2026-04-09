@@ -749,6 +749,7 @@ export default function QuestionnaireEditorPage() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [editingPersonFieldKey, setEditingPersonFieldKey] = useState(null);
   const [personFieldsExpanded, setPersonFieldsExpanded] = useState(false);
+  const [expandedSubFields, setExpandedSubFields] = useState(() => new Set());
 
   const openConfirm = useCallback((config) => {
     setConfirmDialog({
@@ -820,6 +821,31 @@ export default function QuestionnaireEditorPage() {
     setDirty(true);
     qLog('dirty_set', { reason: 'section_title_edit' });
     setEditingSectionIndex(null);
+  }, []);
+
+  const updateSubField = useCallback((sectionIndex, fieldIndex, subFieldIndex, updatedSubField) => {
+    qLog('subfield_edit_apply', { sectionIndex, fieldIndex, subFieldIndex, subFieldId: updatedSubField?.id });
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const parentField = next.formSections[sectionIndex]?.fields?.[fieldIndex];
+      if (parentField?.subFields?.[subFieldIndex]) {
+        parentField.subFields[subFieldIndex] = { ...parentField.subFields[subFieldIndex], ...updatedSubField };
+      }
+      return next;
+    });
+    setDirty(true);
+    qLog('dirty_set', { reason: 'subfield_edit_apply' });
+    setEditingField(null);
+  }, []);
+
+  const toggleSubFieldVisibility = useCallback((sectionIndex, fieldIndex, subFieldIndex) => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const sf = next.formSections[sectionIndex]?.fields?.[fieldIndex]?.subFields?.[subFieldIndex];
+      if (sf) sf._hiddenFromClient = !sf._hiddenFromClient;
+      return next;
+    });
+    setDirty(true);
   }, []);
 
   const updateField = useCallback((sectionIndex, fieldIndex, updatedField) => {
@@ -1770,11 +1796,16 @@ export default function QuestionnaireEditorPage() {
                     </button>
                   )}
                   <ul className="space-y-1">
-                    {(section.fields || []).map((field, fIdx) => (
+                    {(section.fields || []).map((field, fIdx) => {
+                      const subFieldKey = `${sIdx}-${fIdx}`;
+                      const hasSubFields = field.type === 'section' && Array.isArray(field.subFields) && field.subFields.length > 0;
+                      const subFieldsOpen = expandedSubFields.has(subFieldKey);
+                      return (
                       <li
                         key={field.id || fIdx}
-                        className={`questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${field._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
+                        className={`questionnaire-field-item rounded-lg border text-sm shadow-sm ${field._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
                       >
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                         <span className={`min-w-0 questionnaire-field-text ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
                           <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{field.id}</span>
                           <span className="mx-2">·</span>
@@ -1786,6 +1817,11 @@ export default function QuestionnaireEditorPage() {
                               Alert / Info
                             </span>
                           )}
+                          {hasSubFields && (
+                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-violet-900/50 text-violet-300' : 'bg-violet-100 text-violet-600'}`}>
+                              {field.subFields.length} sub-fields
+                            </span>
+                          )}
                           {field._hiddenFromClient && (
                             <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
                               Hidden
@@ -1793,6 +1829,17 @@ export default function QuestionnaireEditorPage() {
                           )}
                         </span>
                         <div className="flex shrink-0 flex-wrap items-center gap-1">
+                          {hasSubFields && (
+                            <button
+                              type="button"
+                              title={subFieldsOpen ? 'Collapse sub-fields' : 'Expand sub-fields'}
+                              onClick={() => setExpandedSubFields((prev) => { const n = new Set(prev); if (n.has(subFieldKey)) n.delete(subFieldKey); else n.add(subFieldKey); return n; })}
+                              className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium ${isDark ? 'border-violet-500/40 text-violet-300 hover:bg-violet-950/50' : 'border-violet-200 text-violet-600 hover:bg-violet-50'}`}
+                            >
+                              {subFieldsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                              <span className="hidden sm:inline">Fields</span>
+                            </button>
+                          )}
                           {showAdvanced && (
                             <>
                               <button
@@ -1855,8 +1902,55 @@ export default function QuestionnaireEditorPage() {
                             Edit
                           </button>
                         </div>
+                        </div>
+                        {hasSubFields && subFieldsOpen && (
+                          <ul className={`mx-3 mb-2 space-y-1 rounded-lg border p-2 ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-violet-100 bg-violet-50/40'}`}>
+                            {field.subFields.map((sf, sfIdx) => (
+                              <li
+                                key={sf.id || sfIdx}
+                                className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${sf._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'border-slate-700 bg-slate-900/80' : 'border-stone-100 bg-white'}`}
+                              >
+                                <span className={`min-w-0 ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
+                                  <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{sf.id}</span>
+                                  <span className="mx-1.5">·</span>
+                                  {sf.type === 'display'
+                                    ? (sf.label || (sf.text ? (sf.text.length > 50 ? sf.text.slice(0, 50) + '…' : sf.text) : '(info)'))
+                                    : (sf.label || '(no label)')}
+                                  {sf._hiddenFromClient && (
+                                    <span className={`ml-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>Hidden</span>
+                                  )}
+                                </span>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    title={sf._hiddenFromClient ? 'Hidden — click to show' : 'Visible — click to hide'}
+                                    onClick={() => toggleSubFieldVisibility(sIdx, fIdx, sfIdx)}
+                                    disabled={loading || saving}
+                                    className={`rounded-lg border px-1.5 py-1 disabled:opacity-50 ${
+                                      sf._hiddenFromClient
+                                        ? isDark ? 'border-orange-500/40 text-orange-300' : 'border-orange-300 text-orange-700'
+                                        : isDark ? 'border-slate-600 text-slate-400' : 'border-slate-200 text-slate-500'
+                                    }`}
+                                  >
+                                    {sf._hiddenFromClient ? <EyeOff size={10} /> : <Eye size={10} />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx, subFieldIndex: sfIdx, field: sf })}
+                                    disabled={loading || saving}
+                                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold disabled:opacity-50 ${isDark ? 'border-indigo-500/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-transparent text-indigo-600 hover:bg-indigo-50'}`}
+                                  >
+                                    <Edit3 size={10} />
+                                    Edit
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 </div>
               )}
@@ -1950,10 +2044,14 @@ export default function QuestionnaireEditorPage() {
 
       {editingField && (
         <FieldEditModal
-          key={`${editingField.sectionIndex}-${editingField.fieldIndex}-${editingField.field.id}`}
+          key={`${editingField.sectionIndex}-${editingField.fieldIndex}-${editingField.subFieldIndex ?? 'top'}-${editingField.field.id}`}
           field={editingField.field}
           onClose={() => setEditingField(null)}
-          onSave={(updated) => updateField(editingField.sectionIndex, editingField.fieldIndex, updated)}
+          onSave={(updated) =>
+            editingField.subFieldIndex != null
+              ? updateSubField(editingField.sectionIndex, editingField.fieldIndex, editingField.subFieldIndex, updated)
+              : updateField(editingField.sectionIndex, editingField.fieldIndex, updated)
+          }
         />
       )}
       {editingSectionIndex !== null && (

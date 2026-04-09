@@ -54,6 +54,21 @@ export function mergeFormDefinitions(remote, bundle) {
     }
   }
 
+  // Strip fields from the remote that were intentionally removed from the bundle.
+  // Collect every field id in the bundle (top-level only, matching the merge granularity).
+  const allBundleFieldIds = new Set();
+  bundle.formSections.forEach((s) =>
+    (s.fields || []).forEach((f) => { if (f.id) allBundleFieldIds.add(f.id); })
+  );
+  for (const sec of merged.formSections) {
+    if (!Array.isArray(sec.fields)) continue;
+    sec.fields = sec.fields.filter((f) => {
+      if (!f.id) return true;
+      if (f.id.startsWith('custom_')) return true;
+      return allBundleFieldIds.has(f.id);
+    });
+  }
+
   merged._schemaRevision = Math.max(
     Number(remote._schemaRevision) || 0,
     Number(bundle._schemaRevision) || 0

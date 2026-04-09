@@ -298,9 +298,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       })
       .map((s) => {
         if (solicitorMode || !Array.isArray(s.fields)) return s;
-        const visibleFields = s.fields.filter((f) => !f._hiddenFromClient);
-        if (visibleFields.length === s.fields.length) return s;
-        return { ...s, fields: visibleFields };
+        let changed = false;
+        const visibleFields = s.fields
+          .filter((f) => { if (f._hiddenFromClient) { changed = true; return false; } return true; })
+          .map((f) => {
+            if (f.type === 'section' && Array.isArray(f.subFields)) {
+              const visibleSub = f.subFields.filter((sf) => !sf._hiddenFromClient);
+              if (visibleSub.length !== f.subFields.length) { changed = true; return { ...f, subFields: visibleSub }; }
+            }
+            return f;
+          });
+        return changed ? { ...s, fields: visibleFields } : s;
       });
   }, [solicitorMode, formData?.formSections]);
 
