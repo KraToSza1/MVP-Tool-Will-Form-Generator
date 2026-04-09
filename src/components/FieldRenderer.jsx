@@ -988,7 +988,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               <span className="font-semibold">Executors Added:</span>
               <span className="font-bold">{executorData.length} executor(s)</span>
             </div>
-            <p className="text-xs mt-1 opacity-75">{executorData.join(', ')}</p>
+            <p className="text-xs mt-1 opacity-75">{executorData.map((e) => typeof e === 'string' ? e : [e.title, e.firstName, e.lastName].filter(Boolean).join(' ') || '—').join(', ')}</p>
           </div>
         );
       } else {
@@ -1024,7 +1024,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               <span className="font-semibold">Substitute Executors Added:</span>
               <span className="font-bold">{substituteExecutorData.length} substitute(s)</span>
             </div>
-            <p className="text-xs mt-1 opacity-75">{substituteExecutorData.join(', ')}</p>
+            <p className="text-xs mt-1 opacity-75">{substituteExecutorData.map((e) => typeof e === 'string' ? e : [e.title, e.firstName, e.lastName].filter(Boolean).join(' ') || '—').join(', ')}</p>
           </div>
         );
       } else {
