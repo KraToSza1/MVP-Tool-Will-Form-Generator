@@ -7,6 +7,8 @@ import {
   ChevronRight,
   ChevronUp,
   Edit3,
+  Eye,
+  EyeOff,
   Save,
   FileText,
   History,
@@ -1035,6 +1037,30 @@ export default function QuestionnaireEditorPage() {
     [definition.formSections, openConfirm]
   );
 
+  const toggleFieldVisibility = useCallback((sectionIndex, fieldIndex) => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const field = next.formSections[sectionIndex]?.fields?.[fieldIndex];
+      if (!field) return d;
+      field._hiddenFromClient = !field._hiddenFromClient;
+      return next;
+    });
+    setDirty(true);
+    qLog('field_visibility_toggle', { sectionIndex, fieldIndex });
+  }, []);
+
+  const toggleSectionVisibility = useCallback((sectionIndex) => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      const section = next.formSections[sectionIndex];
+      if (!section) return d;
+      section._hiddenFromClient = !section._hiddenFromClient;
+      return next;
+    });
+    setDirty(true);
+    qLog('section_visibility_toggle', { sectionIndex });
+  }, []);
+
   /** Post-save reload uses the same transport as reads; cap so "Saving…" never hangs if a client stalls. */
   const REFRESH_AFTER_SAVE_CAP_MS = 22_000;
 
@@ -1490,11 +1516,18 @@ export default function QuestionnaireEditorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(sIdx)}
-                  className={`flex min-w-0 flex-1 items-center gap-2 text-left font-medium questionnaire-section-title ${isDark ? 'text-slate-100' : 'text-stone-900'}`}
+                  className={`flex min-w-0 flex-1 items-center gap-2 text-left font-medium questionnaire-section-title ${section._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'text-slate-100' : 'text-stone-900'}`}
                 >
                   {expandedSections.has(sIdx) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   <FileText size={16} className={`questionnaire-section-icon shrink-0 ${isDark ? 'text-amber-400/90' : 'text-amber-700'}`} />
-                  <span className="min-w-0 break-words">{section.formSection || `Section ${sIdx + 1}`}</span>
+                  <span className="min-w-0 break-words">
+                    {section.formSection || `Section ${sIdx + 1}`}
+                    {section._hiddenFromClient && (
+                      <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
+                        Hidden from clients
+                      </span>
+                    )}
+                  </span>
                 </button>
                 <div className="flex flex-wrap items-center gap-1">
                   {showAdvanced && (
@@ -1570,6 +1603,24 @@ export default function QuestionnaireEditorPage() {
                   )}
                   <button
                     type="button"
+                    title={section._hiddenFromClient ? 'Hidden from clients — click to show' : 'Visible to clients — click to hide'}
+                    onClick={() => toggleSectionVisibility(sIdx)}
+                    disabled={loading || saving}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                      section._hiddenFromClient
+                        ? isDark
+                          ? 'border-orange-500/40 bg-orange-950/40 text-orange-300 hover:bg-orange-950/60'
+                          : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                        : isDark
+                          ? 'border-slate-500 bg-slate-800/60 text-slate-300 hover:bg-slate-700'
+                          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {section._hiddenFromClient ? <EyeOff size={13} /> : <Eye size={13} />}
+                    <span className="hidden sm:inline">{section._hiddenFromClient ? 'Hidden' : 'Visible'}</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setEditingSectionIndex(sIdx)}
                     disabled={loading || saving}
                     className={`questionnaire-edit-section-btn shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-indigo-500/45 bg-indigo-950/50 text-indigo-100 hover:bg-indigo-900/60 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-[#161b30]' : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 focus:ring-amber-400 focus:ring-offset-1'}`}
@@ -1597,12 +1648,17 @@ export default function QuestionnaireEditorPage() {
                     {(section.fields || []).map((field, fIdx) => (
                       <li
                         key={field.id || fIdx}
-                        className={`questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
+                        className={`questionnaire-field-item flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${field._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
                       >
                         <span className={`min-w-0 questionnaire-field-text ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
                           <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{field.id}</span>
                           <span className="mx-2">·</span>
                           {field.label || '(no label)'}
+                          {field._hiddenFromClient && (
+                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
+                              Hidden
+                            </span>
+                          )}
                         </span>
                         <div className="flex shrink-0 flex-wrap items-center gap-1">
                           {showAdvanced && (
@@ -1640,6 +1696,23 @@ export default function QuestionnaireEditorPage() {
                               <span className="hidden sm:inline">Remove</span>
                             </button>
                           )}
+                          <button
+                            type="button"
+                            title={field._hiddenFromClient ? 'Hidden from clients — click to show' : 'Visible to clients — click to hide'}
+                            onClick={() => toggleFieldVisibility(sIdx, fIdx)}
+                            disabled={loading || saving}
+                            className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                              field._hiddenFromClient
+                                ? isDark
+                                  ? 'border-orange-500/40 bg-orange-950/40 text-orange-300 hover:bg-orange-950/60'
+                                  : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                                : isDark
+                                  ? 'border-slate-600 text-slate-400 hover:bg-slate-700'
+                                  : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                            }`}
+                          >
+                            {field._hiddenFromClient ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
                           <button
                             type="button"
                             onClick={() => setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx, field })}

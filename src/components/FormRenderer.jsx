@@ -287,13 +287,21 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Testamentary Capacity: solicitors only. Estate Overview: visible to ALL users.
+  // Testamentary Capacity: solicitors only. Hidden sections/fields: solicitors see everything, clients don't.
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
-    return formData.formSections.filter((s) => {
-      if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
-      return true;
-    });
+    return formData.formSections
+      .filter((s) => {
+        if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
+        if (s._hiddenFromClient && !solicitorMode) return false;
+        return true;
+      })
+      .map((s) => {
+        if (solicitorMode || !Array.isArray(s.fields)) return s;
+        const visibleFields = s.fields.filter((f) => !f._hiddenFromClient);
+        if (visibleFields.length === s.fields.length) return s;
+        return { ...s, fields: visibleFields };
+      });
   }, [solicitorMode, formData?.formSections]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
