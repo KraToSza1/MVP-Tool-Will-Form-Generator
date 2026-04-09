@@ -115,7 +115,17 @@ export function getAristoneEstateRecommendationState(formValues) {
   const reasons = [];
 
   if (!formValues || typeof formValues !== 'object') {
-    const state = { eligible: false, grossKey: '', liabilityKey: '', inferredLiability: false, grossMin: null, liabMax: null, reasons: ['No form values.'] };
+    const state = {
+      eligible: false,
+      grossKey: '',
+      liabilityKey: '',
+      ownProperty: null,
+      businessInterests: null,
+      inferredLiability: false,
+      grossMin: null,
+      liabMax: null,
+      reasons: ['No form values.'],
+    };
     maybeLogEstateRecommendation(state);
     return state;
   }
@@ -124,47 +134,42 @@ export function getAristoneEstateRecommendationState(formValues) {
   const rawL = formValues.estateApproxLiabilities;
   const grossKey = typeof rawG === 'string' ? rawG.trim() : '';
   const liabilityKey = typeof rawL === 'string' ? rawL.trim() : '';
+  const ownProperty = formValues.estateOwnProperty ?? null;
+  const businessInterests = formValues.estateBusinessInterests ?? null;
 
-  if (!grossKey) {
-    reasons.push('Select an approximate estate value.');
-    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: null, liabMax: null, reasons };
-    maybeLogEstateRecommendation(state);
-    return state;
-  }
+  const eRank = ESTATE_BANDS[grossKey] ?? null;
+  const lRank = LIABILITY_BANDS[liabilityKey] ?? null;
 
-  const eRank = ESTATE_BANDS[grossKey];
-  if (eRank == null) {
-    reasons.push('Estate value not recognised — recommendation hidden.');
-    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: null, liabMax: null, reasons };
-    maybeLogEstateRecommendation(state);
-    return state;
-  }
+  const estateQualifies = eRank != null && eRank >= 1;
+  const propertyQualifies = ownProperty === 'Yes';
+  const businessQualifies = businessInterests === 'Yes';
 
-  if (!liabilityKey) {
-    reasons.push('Select approximate liabilities.');
-    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: null, reasons };
-    maybeLogEstateRecommendation(state);
-    return state;
-  }
+  const eligible = estateQualifies || propertyQualifies || businessQualifies;
 
-  const lRank = LIABILITY_BANDS[liabilityKey];
-  if (lRank == null) {
-    reasons.push('Liabilities value not recognised — recommendation hidden.');
-    const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: null, reasons };
-    maybeLogEstateRecommendation(state);
-    return state;
-  }
-
-  const eligible = eRank >= 1 && lRank < eRank;
   if (eligible) {
-    reasons.push('Estate ≥ £50k with liabilities in a lower band — showing Aristone recommendation.');
-  } else if (eRank < 1) {
-    reasons.push('Estate under £50k — no professional recommendation.');
+    if (estateQualifies) reasons.push(`Estate ≥ £50k (${grossKey}) — professional administration recommended.`);
+    if (propertyQualifies) reasons.push('Property owned — professional administration recommended.');
+    if (businessQualifies) reasons.push('Business interests present — professional administration recommended.');
   } else {
-    reasons.push('Liabilities band same or higher than estate — no recommendation.');
+    if (!grossKey) reasons.push('No estate value selected.');
+    else if (!estateQualifies) reasons.push(`Estate under £50k (${grossKey}) — no estate signal.`);
+    if (ownProperty !== 'Yes') reasons.push(`Property: ${ownProperty ?? 'not answered'} — no property signal.`);
+    if (businessInterests !== 'Yes') reasons.push(`Business interests: ${businessInterests ?? 'not answered'} — no business signal.`);
+    reasons.push('No qualifying signals — recommendation not shown.');
   }
 
-  const state = { eligible, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: lRank, reasons };
+  const state = {
+    eligible,
+    grossKey,
+    liabilityKey,
+    ownProperty,
+    businessInterests,
+    inferredLiability: false,
+    grossMin: eRank,
+    liabMax: lRank,
+    reasons,
+  };
+
   maybeLogEstateRecommendation(state);
   return state;
 }
