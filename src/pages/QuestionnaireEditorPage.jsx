@@ -195,7 +195,9 @@ function CustomFieldInputs({
 
 function FieldEditModal({ field, onClose, onSave }) {
   const isCustom = field.id?.startsWith?.('custom_');
+  const isDisplay = field.type === 'display';
   const [label, setLabel] = useState(field.label || '');
+  const [displayText, setDisplayText] = useState(field.text ?? '');
   const [placeholder, setPlaceholder] = useState(field.placeholder ?? '');
   const [infoText, setInfoText] = useState(field.infoText ?? '');
   const [required, setRequired] = useState(!!field.required);
@@ -240,6 +242,9 @@ function FieldEditModal({ field, onClose, onSave }) {
     }
 
     const next = { ...field, label, placeholder: placeholder || undefined, infoText: infoText || undefined };
+    if (isDisplay) {
+      next.text = displayText;
+    }
     if (field.type === 'textarea' && typeof rows === 'number' && rows > 0) {
       next.rows = rows;
     }
@@ -260,11 +265,24 @@ function FieldEditModal({ field, onClose, onSave }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
-        <h3 className="text-lg font-semibold text-slate-900">Edit question</h3>
+        <h3 className="text-lg font-semibold text-slate-900">{isDisplay ? 'Edit alert / info message' : 'Edit question'}</h3>
         <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
         <div className="mt-4 space-y-4">
+          {isDisplay && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Message text</label>
+              <p className="mt-0.5 text-xs text-slate-500">This is the text displayed to the client as an informational message or alert.</p>
+              <textarea
+                value={displayText}
+                onChange={(e) => setDisplayText(e.target.value)}
+                rows={5}
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                placeholder="Enter the message to display..."
+              />
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-slate-700">Question / label</label>
+            <label className="block text-sm font-medium text-slate-700">{isDisplay ? 'Heading / label (optional)' : 'Question / label'}</label>
             <input
               type="text"
               value={label}
@@ -1760,7 +1778,14 @@ export default function QuestionnaireEditorPage() {
                         <span className={`min-w-0 questionnaire-field-text ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
                           <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{field.id}</span>
                           <span className="mx-2">·</span>
-                          {field.label || '(no label)'}
+                          {field.type === 'display'
+                            ? (field.label || (field.text ? (field.text.length > 60 ? field.text.slice(0, 60) + '…' : field.text) : '(info/alert message)'))
+                            : (field.label || '(no label)')}
+                          {field.type === 'display' && (
+                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'}`}>
+                              Alert / Info
+                            </span>
+                          )}
                           {field._hiddenFromClient && (
                             <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
                               Hidden

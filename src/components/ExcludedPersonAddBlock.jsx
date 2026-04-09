@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, CheckCircle2, Info } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Info, Pencil } from 'lucide-react';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
@@ -20,6 +20,7 @@ function logPerson(...args) {
 export default function ExcludedPersonAddBlock({ field, formValues, setFormValues }) {
   const targetFieldId = 'excludedPersonData';
   const [modalOpen, setModalOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null);
 
   const existingItems = Array.isArray(formValues[targetFieldId])
     ? formValues[targetFieldId]
@@ -49,6 +50,24 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
     const updatedItems = existingItems.filter((_, i) => i !== indexToRemove);
     logPerson('excluded_person_remove', { index: indexToRemove });
     setFormValues((prev) => ({ ...prev, [targetFieldId]: updatedItems.length ? updatedItems : [] }));
+  };
+
+  const handleEditSave = (row) => {
+    logPerson('excluded_person_edit_save', { index: editIndex });
+    setFormValues((prev) => {
+      const prevItems = Array.isArray(prev[targetFieldId])
+        ? [...prev[targetFieldId]]
+        : prev[targetFieldId]
+          ? [prev[targetFieldId]]
+          : [];
+      if (editIndex != null && editIndex < prevItems.length) {
+        prevItems[editIndex] = row;
+      }
+      let next = { ...prev, [targetFieldId]: prevItems };
+      next = upsertRegistryContact(next, row);
+      return next;
+    });
+    setEditIndex(null);
   };
 
   return (
@@ -81,6 +100,16 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
         targetFieldId={targetFieldId}
       />
 
+      <PersonRecordModal
+        open={editIndex != null}
+        onClose={() => setEditIndex(null)}
+        onSave={handleEditSave}
+        formValues={formValues}
+        contextLabel={`Edit — ${field.label || 'Excluded person'}`}
+        targetFieldId={targetFieldId}
+        initialData={editIndex != null ? existingItems[editIndex] : undefined}
+      />
+
       {existingItems.length > 0 && (
         <div className="add-item-list mt-3 space-y-2">
           <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
@@ -95,14 +124,26 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
                 className="add-item-list-item flex items-center justify-between gap-2 bg-white border border-gray-300 rounded-xl px-4 py-3 shadow-sm"
               >
                 <span className="text-gray-800 text-sm wrap-break-word flex-1">{displayText}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemove(index)}
-                  className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg"
-                  title="Remove"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="shrink-0 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditIndex(index)}
+                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-1.5 text-xs font-medium"
+                    title="Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(index)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-all duration-300 flex items-center gap-1.5 text-xs font-medium"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Remove</span>
+                  </button>
+                </div>
               </div>
             );
           })}

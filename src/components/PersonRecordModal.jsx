@@ -27,6 +27,7 @@ export default function PersonRecordModal({
   formValues,
   contextLabel,
   targetFieldId,
+  initialData,
 }) {
   const { formData } = useFormDefinition();
   const personSpecs = useMemo(() => getMergedPersonSpecs(formData?._personFieldOverrides), [formData?._personFieldOverrides]);
@@ -36,6 +37,8 @@ export default function PersonRecordModal({
   const firstInputRef = useRef(null);
   const wasOpenRef = useRef(false);
 
+  const isEditMode = initialData != null && typeof initialData === 'object';
+
   useEffect(() => {
     const justOpened = open && !wasOpenRef.current;
     wasOpenRef.current = open;
@@ -44,10 +47,16 @@ export default function PersonRecordModal({
       contextLabel,
       targetFieldId,
       candidateCount: candidates.length,
+      isEdit: isEditMode,
     });
-    setSourceId('__new__');
-    setDraft(emptyPersonRecord());
-  }, [open, contextLabel, targetFieldId, candidates]);
+    if (isEditMode) {
+      setSourceId('__new__');
+      setDraft({ ...emptyPersonRecord(), ...pickPersonFieldsForModal(initialData) });
+    } else {
+      setSourceId('__new__');
+      setDraft(emptyPersonRecord());
+    }
+  }, [open, contextLabel, targetFieldId, candidates, isEditMode, initialData]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,7 +125,7 @@ export default function PersonRecordModal({
           <div className="min-w-0">
             <p id="person-record-modal-title" className="flex items-center gap-2 text-base font-semibold text-slate-100">
               <User className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden />
-              <span>Add person</span>
+              <span>{isEditMode ? 'Edit person' : 'Add person'}</span>
             </p>
             {contextLabel ? (
               <p className="mt-0.5 text-xs text-slate-400">For: {contextLabel}</p>
@@ -133,27 +142,30 @@ export default function PersonRecordModal({
         </div>
 
         <div className="space-y-4 px-4 py-4 sm:px-5">
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Same person or new</span>
-            <select
-              value={sourceId}
-              onChange={(e) => applySource(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="__new__">Enter a new person</option>
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isEditMode && (
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Same person or new</span>
+              <select
+                value={sourceId}
+                onChange={(e) => applySource(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="__new__">Enter a new person</option>
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <p className="flex gap-2 text-xs text-slate-400">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" aria-hidden />
             <span>
-              You can copy from someone you already entered, then edit. First name, last name, and at least address line
-              1 or postcode are required.
+              {isEditMode
+                ? 'Update the details below and save. First name, last name, and at least address line 1 or postcode are required.'
+                : 'You can copy from someone you already entered, then edit. First name, last name, and at least address line 1 or postcode are required.'}
             </span>
           </p>
 
@@ -204,7 +216,7 @@ export default function PersonRecordModal({
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
             <Check className="h-4 w-4" aria-hidden />
-            Add person
+            {isEditMode ? 'Save changes' : 'Add person'}
           </button>
         </div>
       </div>
