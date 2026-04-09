@@ -152,8 +152,8 @@ const DEMO = {
  * (`shouldRecommendAristoneFromEstate` / `getAristoneEstateRecommendationState`).
  */
 const ESTATE_DEMO = {
-  approxValue: '£325,001 – £500,000',
-  approxLiabilities: 'Under £10,000',
+  approxValue: '£1,000,001 – £3,000,000',
+  approxLiabilities: 'Under £50,000',
   ownProperty: 'Yes',
   businessInterests: 'No',
   feesAck: ['ack'],

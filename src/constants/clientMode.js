@@ -32,19 +32,22 @@ export function isAristoneExecutorSelected(formValues) {
 /** Band rank for estate value (new simplified Estate Overview). */
 const ESTATE_BANDS = {
   'Under £50,000': 0,
-  '£50,000 – £150,000': 1,
-  '£150,001 – £325,000': 2,
-  '£325,001 – £500,000': 3,
-  'Over £500,000': 4,
+  '£50,000 – £325,000': 1,
+  '£325,001 – £650,000': 2,
+  '£650,001 – £1,000,000': 3,
+  '£1,000,001 – £3,000,000': 4,
+  '£3,000,001 – £5,000,000': 5,
+  'Over £5,000,000': 6,
 };
 
 /** Band rank for liabilities (new simplified Estate Overview). */
 const LIABILITY_BANDS = {
   'None': 0,
-  'Under £10,000': 1,
-  '£10,000 – £50,000': 2,
-  '£50,001 – £150,000': 3,
-  'Over £150,000': 4,
+  'Under £50,000': 1,
+  '£50,001 – £325,000': 2,
+  '£325,001 – £650,000': 3,
+  '£650,001 – £1,000,000': 4,
+  'Over £1,000,000': 5,
 };
 
 /** Extra-verbose logs (same dedupe key) — optional on top of dev logs. */
