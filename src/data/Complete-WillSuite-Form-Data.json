@@ -1033,6 +1033,20 @@
                     "conditionLogic": "AND"
                 },
                 {
+                    "id": "substituteExecutorRecommendation",
+                    "type": "display",
+                    "text": "We recommend that you also appoint a substitute executor. If your chosen executor is unable or unwilling to act when the time comes, a substitute ensures your estate is still handled by someone you trust. You can do this in the section below.",
+                    "excludeFromWill": true,
+                    "conditions": [
+                        {
+                            "field": "executorData",
+                            "operator": "arrayLengthGte",
+                            "value": 1
+                        }
+                    ],
+                    "conditionLogic": "AND"
+                },
+                {
                     "id": "substituteExecutorsSection",
                     "type": "section",
                     "label": "Who are the substitute Executors?",
