@@ -38,6 +38,28 @@ export function emptyPersonRecord() {
   return Object.fromEntries(PERSON_RECORD_SPECS.map((s) => [s.key, '']));
 }
 
+/**
+ * Merge hardcoded person specs with solicitor overrides from the form definition.
+ * Overrides can change label, placeholder, and hidden status per field key.
+ * @param {Record<string, {label?: string, placeholder?: string, hidden?: boolean}>} [overrides]
+ * @returns {Array} Merged specs (hidden fields filtered out).
+ */
+export function getMergedPersonSpecs(overrides) {
+  if (!overrides || typeof overrides !== 'object') return PERSON_RECORD_SPECS;
+  return PERSON_RECORD_SPECS
+    .map((spec) => {
+      const o = overrides[spec.key];
+      if (!o) return spec;
+      return {
+        ...spec,
+        label: o.label ?? spec.label,
+        placeholder: o.placeholder ?? spec.placeholder,
+        ...(o.hidden != null ? { _hiddenFromClient: !!o.hidden } : {}),
+      };
+    })
+    .filter((spec) => !spec._hiddenFromClient);
+}
+
 /** Keep only fields shown in the person modal (prefill from registry may carry legacy keys). */
 export function pickPersonFieldsForModal(data) {
   if (!data || typeof data !== 'object') return {};

@@ -17,6 +17,7 @@ import {
   Undo2,
   Layers,
   GripVertical,
+  User,
 } from 'lucide-react';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import {
@@ -36,6 +37,7 @@ import {
   mergeCustomFieldEdit,
   optionsToMultiline,
 } from '../utils/customFieldBuilder.js';
+import { PERSON_RECORD_SPECS } from '../utils/personRecordSpecs.js';
 
 /** Browsers may show a generic “leave site?” dialog; this string is used where a custom line still appears. */
 const LEAVE_PAGE_UNSAVED_MSG =
@@ -618,6 +620,74 @@ function AddFieldModal({ onClose, onConfirm }) {
   );
 }
 
+function PersonFieldEditModal({ fieldKey, currentOverride, defaultSpec, onClose, onSave }) {
+  const [label, setLabel] = useState(currentOverride?.label ?? defaultSpec?.label ?? '');
+  const [placeholder, setPlaceholder] = useState(currentOverride?.placeholder ?? defaultSpec?.placeholder ?? '');
+  const [hidden, setHidden] = useState(!!currentOverride?.hidden);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
+        <h3 className="text-lg font-semibold text-slate-900">Edit contact field</h3>
+        <p className="mt-1 text-xs text-slate-500">Field key: {fieldKey} · Type: {defaultSpec?.type || 'text'}</p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Label (shown to user)</label>
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder={defaultSpec?.label || ''}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Placeholder (optional)</label>
+            <input
+              type="text"
+              value={placeholder}
+              onChange={(e) => setPlaceholder(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              placeholder={defaultSpec?.placeholder || ''}
+            />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              checked={hidden}
+              onChange={(e) => setHidden(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Hide this field from clients
+          </label>
+        </div>
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
+          Changes apply to every add-person form (executors, guardians, trustees, spouse, etc.). Click <strong className="font-semibold text-slate-800">Save questionnaire</strong> to publish.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onSave(fieldKey, {
+                label: label.trim() || defaultSpec?.label || fieldKey,
+                placeholder: placeholder.trim() || undefined,
+                hidden,
+              });
+              onClose();
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          >
+            Apply changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const LAST_SAVED_STORAGE_KEY = 'will-tool-questionnaire-last-saved';
 
 function loadLastSavedFromSession() {
@@ -659,6 +729,8 @@ export default function QuestionnaireEditorPage() {
   const [addFieldModalSectionIndex, setAddFieldModalSectionIndex] = useState(null);
   const [dragFromIndex, setDragFromIndex] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [editingPersonFieldKey, setEditingPersonFieldKey] = useState(null);
+  const [personFieldsExpanded, setPersonFieldsExpanded] = useState(false);
 
   const openConfirm = useCallback((config) => {
     setConfirmDialog({
@@ -1059,6 +1131,29 @@ export default function QuestionnaireEditorPage() {
     });
     setDirty(true);
     qLog('section_visibility_toggle', { sectionIndex });
+  }, []);
+
+  const savePersonFieldOverride = useCallback((fieldKey, override) => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      next._personFieldOverrides = next._personFieldOverrides || {};
+      next._personFieldOverrides[fieldKey] = override;
+      return next;
+    });
+    setDirty(true);
+    qLog('person_field_override', { fieldKey });
+  }, []);
+
+  const togglePersonFieldVisibility = useCallback((fieldKey) => {
+    setDefinition((d) => {
+      const next = deepClone(d);
+      next._personFieldOverrides = next._personFieldOverrides || {};
+      const current = next._personFieldOverrides[fieldKey] || {};
+      next._personFieldOverrides[fieldKey] = { ...current, hidden: !current.hidden };
+      return next;
+    });
+    setDirty(true);
+    qLog('person_field_visibility_toggle', { fieldKey });
   }, []);
 
   /** Post-save reload uses the same transport as reads; cap so "Saving…" never hangs if a client stalls. */
@@ -1731,7 +1826,90 @@ export default function QuestionnaireEditorPage() {
             </div>
           ))}
         </div>
+
+        <div className={`mt-8 rounded-xl border p-4 ${isDark ? 'border-slate-600 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
+          <button
+            type="button"
+            onClick={() => setPersonFieldsExpanded((v) => !v)}
+            className={`flex w-full items-center gap-2 text-left font-semibold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}
+          >
+            {personFieldsExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            <User size={16} className={isDark ? 'text-indigo-400' : 'text-indigo-600'} />
+            Contact / person fields
+            <span className={`ml-2 text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              (spouse, executors, guardians, trustees)
+            </span>
+          </button>
+          <p className={`mt-1 ml-9 text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            These fields appear every time someone adds a person. Edit labels, placeholders, or hide fields clients don't need to fill in.
+          </p>
+
+          {personFieldsExpanded && (
+            <ul className="mt-4 space-y-1">
+              {PERSON_RECORD_SPECS.map((spec) => {
+                const override = definition._personFieldOverrides?.[spec.key];
+                const isHidden = !!override?.hidden;
+                const displayLabel = override?.label || spec.label;
+                return (
+                  <li
+                    key={spec.key}
+                    className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${isHidden ? 'opacity-50' : ''} ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
+                  >
+                    <span className={`min-w-0 ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
+                      <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{spec.key}</span>
+                      <span className="mx-2">·</span>
+                      {displayLabel}
+                      {isHidden && (
+                        <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
+                          Hidden
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        title={isHidden ? 'Hidden from clients — click to show' : 'Visible to clients — click to hide'}
+                        onClick={() => togglePersonFieldVisibility(spec.key)}
+                        disabled={loading || saving}
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium disabled:opacity-50 ${
+                          isHidden
+                            ? isDark
+                              ? 'border-orange-500/40 bg-orange-950/40 text-orange-300 hover:bg-orange-950/60'
+                              : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                            : isDark
+                              ? 'border-slate-600 text-slate-400 hover:bg-slate-700'
+                              : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        {isHidden ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPersonFieldKey(spec.key)}
+                        disabled={loading || saving}
+                        className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${isDark ? 'border-indigo-500/40 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50' : 'border-transparent text-indigo-600 hover:bg-indigo-50'}`}
+                      >
+                        <Edit3 size={12} />
+                        Edit
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
+
+      {editingPersonFieldKey && (
+        <PersonFieldEditModal
+          fieldKey={editingPersonFieldKey}
+          currentOverride={definition._personFieldOverrides?.[editingPersonFieldKey]}
+          defaultSpec={PERSON_RECORD_SPECS.find((s) => s.key === editingPersonFieldKey)}
+          onClose={() => setEditingPersonFieldKey(null)}
+          onSave={savePersonFieldOverride}
+        />
+      )}
 
       {editingField && (
         <FieldEditModal

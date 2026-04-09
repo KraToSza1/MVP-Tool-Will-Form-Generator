@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { User, X, Check, Info } from 'lucide-react';
-import { PERSON_RECORD_SPECS, emptyPersonRecord, pickPersonFieldsForModal } from '../utils/personRecordSpecs.js';
+import { PERSON_RECORD_SPECS, emptyPersonRecord, pickPersonFieldsForModal, getMergedPersonSpecs } from '../utils/personRecordSpecs.js';
 import {
   getContactCandidates,
   finalizePersonRecordForSave,
   validatePersonRecordMin,
 } from '../lib/personRegistry.js';
+import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 
 const LOG =
   typeof import.meta !== 'undefined' &&
@@ -27,6 +28,8 @@ export default function PersonRecordModal({
   contextLabel,
   targetFieldId,
 }) {
+  const { formData } = useFormDefinition();
+  const personSpecs = useMemo(() => getMergedPersonSpecs(formData?._personFieldOverrides), [formData?._personFieldOverrides]);
   const candidates = useMemo(() => getContactCandidates(formValues || {}), [formValues]);
   const [sourceId, setSourceId] = useState('__new__');
   const [draft, setDraft] = useState(() => emptyPersonRecord());
@@ -155,7 +158,7 @@ export default function PersonRecordModal({
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {PERSON_RECORD_SPECS.map((spec, i) => (
+            {personSpecs.map((spec, i) => (
               <label key={spec.key} className="block text-sm">
                 <span className="text-slate-400">{spec.label}</span>
                 {spec.type === 'select' ? (
