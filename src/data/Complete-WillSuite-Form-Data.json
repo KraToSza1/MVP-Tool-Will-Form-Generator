@@ -238,50 +238,6 @@
                     "value": null
                 },
                 {
-                    "id": "partnerFullName",
-                    "type": "text",
-                    "label": "Partner's Full Name",
-                    "placeholder": "e.g., John David Smith",
-                    "infoText": "Enter the name as it should appear in the Will. It should match the partner details below (title and names).",
-                    "required": true,
-                    "conditions": [
-                        {
-                            "field": "maritalStatus",
-                            "operator": "in",
-                            "value": [
-                                "Civil Partnership",
-                                "Married",
-                                "Cohabiting"
-                            ]
-                        },
-                        {
-                            "operator": "AND",
-                            "clauses": [
-                                {
-                                    "field": "maritalStatus",
-                                    "operator": "in",
-                                    "value": [
-                                        "Single",
-                                        "Widowed",
-                                        "Divorced"
-                                    ]
-                                },
-                                {
-                                    "field": "contemplation",
-                                    "operator": "in",
-                                    "value": [
-                                        "Contemplation of Civil Partnership",
-                                        "Contemplation of Marriage",
-                                        "Either"
-                                    ]
-                                }
-                            ]
-                        }
-                    ],
-                    "conditionLogic": "OR",
-                    "value": ""
-                },
-                {
                     "id": "contemplation",
                     "type": "radio",
                     "label": "Is the Testator making this Will in contemplation of marriage or civil partnership?",
