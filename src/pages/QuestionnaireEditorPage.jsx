@@ -640,7 +640,7 @@ function formatSavedTime(date) {
 
 export default function QuestionnaireEditorPage() {
   const { isDark } = useTheme();
-  const { formData, loading, refresh } = useFormDefinition();
+  const { formData, loading, refresh, isCustom } = useFormDefinition();
   const [definition, setDefinition] = useState(() => deepClone(formData));
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(loadLastSavedFromSession);
@@ -1230,6 +1230,46 @@ export default function QuestionnaireEditorPage() {
           role="status"
         >
           Loading the saved questionnaire…
+        </div>
+      )}
+
+      {!loading && (
+        <div
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${
+            isCustom
+              ? isDark
+                ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-200'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+              : isDark
+                ? 'border-amber-500/40 bg-amber-950/30 text-amber-200'
+                : 'border-amber-300 bg-amber-50 text-amber-800'
+          }`}
+          role="status"
+        >
+          <span
+            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+              isCustom
+                ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]'
+                : 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.5)]'
+            }`}
+            aria-hidden
+          />
+          <span>
+            {isCustom ? (
+              <>
+                <strong className="font-semibold">Your customised questionnaire is active.</strong>{' '}
+                Changes you save here are permanent and will not be overwritten by developer updates.
+                {lastSavedLabel && (
+                  <span className={isDark ? 'text-emerald-300/70' : 'text-emerald-600'}> · Last published: {lastSavedLabel}</span>
+                )}
+              </>
+            ) : (
+              <>
+                <strong className="font-semibold">Using the default questionnaire.</strong>{' '}
+                Edit and save to create your own version — it will persist across all future updates.
+              </>
+            )}
+          </span>
         </div>
       )}
 

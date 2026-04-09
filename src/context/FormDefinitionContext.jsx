@@ -3,6 +3,7 @@ import { getFormDefinition } from '../lib/formDefinition.js';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 import { qLog } from '../lib/questionnaireLog.js';
 import staticFormData from '../data/Complete-WillSuite-Form-Data.json';
+import { mergeFormDefinitions } from '../utils/mergeFormDefinitions.js';
 
 const FormDefinitionContext = createContext({
   formData: staticFormData,
@@ -38,28 +39,20 @@ export function FormDefinitionProvider({ children }) {
         return;
       }
       /*
-       * Supabase `form_definitions` replaces the bundled questionnaire at runtime.
-       * If the DB row is older than this deploy's bundle (no/missing _schemaRevision), clients
-       * would see stale questions — "changes disappeared" after a publish or session change.
+       * Supabase always wins when it has valid data — solicitor edits persist
+       * across code deploys. Any sections or fields added by a developer in the
+       * bundled JSON that are missing from Supabase are merged in automatically.
        */
-      const bundledRev = Number(staticFormData._schemaRevision) || 0;
-      const remoteRev = Number(data._schemaRevision) || 0;
-      if (remoteRev < bundledRev) {
-        qLog('refresh_complete', {
-          silent,
-          isCustom: false,
-          usedStatic: true,
-          reason: 'remote_questionnaire_older_than_bundle',
-          bundledRev,
-          remoteRev,
-          getMs: ms,
-        });
-        setFormData(staticFormData);
-        setIsCustom(false);
-        return;
-      }
-      qLog('refresh_complete', { silent, isCustom: true, sectionCount: data.formSections?.length, getMs: ms });
-      setFormData(data);
+      const merged = mergeFormDefinitions(data, staticFormData);
+      qLog('refresh_complete', {
+        silent,
+        isCustom: true,
+        sectionCount: merged.formSections?.length,
+        remoteSections: data.formSections?.length,
+        bundleSections: staticFormData.formSections?.length,
+        getMs: ms,
+      });
+      setFormData(merged);
       setIsCustom(true);
     } catch (e) {
       qLog('refresh_failed', { silent, message: e?.message || String(e) });
