@@ -873,6 +873,8 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   if (field.type === 'display') {
     DEBUG_LOGS&&console.log(`[DISPLAY FIELD] Field "${field.id}" (${field.label}) - Displaying text: "${field.text?.substring(0, 50)}..."`);
 
+    if (field.id === 'inlineSubstituteExecutorPrompt') return null;
+
     if (field.id === 'executorIndividualAgeFlow') {
       console.log('[EXECUTOR_AGE_DEBUG] FieldRenderer before ExecutorIndividualAgeFlow render', {
         fieldId: field.id,

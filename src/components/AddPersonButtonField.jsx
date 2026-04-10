@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, CheckCircle2, Trash2, Pencil, Info, ShieldCheck } from 'lucide-react';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
+import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 
 const LOG =
   typeof import.meta !== 'undefined' &&
@@ -177,9 +178,27 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
 }
 
 function InlineSubstituteExecutor({ formValues, setFormValues }) {
+  const { formData } = useFormDefinition();
   const [modalOpen, setModalOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
   const subTargetId = 'substituteExecutorData';
+
+  const promptField = useMemo(() => {
+    if (!formData?.formSections) return null;
+    for (const sec of formData.formSections) {
+      for (const f of sec.fields || []) {
+        if (f.id === 'inlineSubstituteExecutorPrompt') return f;
+        if (f.subFields) {
+          const sf = f.subFields.find((s) => s.id === 'inlineSubstituteExecutorPrompt');
+          if (sf) return sf;
+        }
+      }
+    }
+    return null;
+  }, [formData]);
+
+  const promptTitle = promptField?.label || 'Substitute Executor';
+  const promptText = promptField?.text || 'If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.';
 
   const items = Array.isArray(formValues[subTargetId])
     ? formValues[subTargetId]
@@ -221,8 +240,8 @@ function InlineSubstituteExecutor({ formValues, setFormValues }) {
       <div className="flex items-start gap-2 mb-2">
         <ShieldCheck className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5" aria-hidden />
         <div>
-          <p className="font-semibold text-sm text-indigo-700 dark:text-indigo-300">Substitute Executor</p>
-          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.</p>
+          <p className="font-semibold text-sm text-indigo-700 dark:text-indigo-300">{promptTitle}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{promptText}</p>
         </div>
       </div>
 

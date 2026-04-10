@@ -941,6 +941,21 @@
                             "id": "executorData",
                             "type": "hidden",
                             "value": null
+                        },
+                        {
+                            "id": "inlineSubstituteExecutorPrompt",
+                            "type": "display",
+                            "label": "Substitute Executor",
+                            "text": "If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.",
+                            "excludeFromWill": true,
+                            "conditions": [
+                                {
+                                    "field": "executorData",
+                                    "operator": "arrayLengthGte",
+                                    "value": 1
+                                }
+                            ],
+                            "conditionLogic": "AND"
                         }
                     ]
                 },
