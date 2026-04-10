@@ -1051,6 +1051,14 @@
                     "type": "section",
                     "label": "Who are the substitute Executors?",
                     "willClauseText": "If any of my appointed Executors is unable or unwilling to serve, I appoint {{field:substituteExecutorsSection:fullDetails}} to serve as substitute Executor(s) and Trustee(s) with the same powers and responsibilities.",
+                    "conditions": [
+                        {
+                            "field": "executorData",
+                            "operator": "arrayLengthGte",
+                            "value": 1
+                        }
+                    ],
+                    "conditionLogic": "AND",
                     "subFields": [
                         {
                             "id": "substituteExecutorStatusDisplay",
