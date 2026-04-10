@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CheckCircle2, Trash2, Pencil } from 'lucide-react';
+import { Plus, CheckCircle2, Trash2, Pencil, Info } from 'lucide-react';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
@@ -167,6 +167,17 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
               </div>
             </div>
           ))}
+          {targetFieldId === 'executorData' && (
+            <div className="mt-3 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3 text-sm text-slate-800 dark:border-indigo-500/50 dark:bg-slate-800/90 dark:text-slate-100">
+              <div className="flex gap-2 items-start">
+                <Info className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5" aria-hidden />
+                <div>
+                  <p className="font-semibold text-indigo-700 dark:text-indigo-300 mb-0.5">Substitute executor recommended</p>
+                  <p className="leading-relaxed text-xs">We recommend you also appoint a substitute executor below. If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1044,20 +1044,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       return null;
     }
     
-    if (field.id === 'substituteExecutorRecommendation') {
-      return (
-        <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 p-4 my-4 text-sm text-slate-800 shadow-sm dark:border-indigo-500/50 dark:bg-slate-800/90 dark:text-slate-100">
-          <div className="flex gap-2 items-start">
-            <Info className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5" aria-hidden />
-            <div>
-              <p className="font-semibold text-indigo-700 dark:text-indigo-300 mb-1">Substitute executor recommended</p>
-              <p className="leading-relaxed">{field.text}</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     // Regular display field
     return (
       <div className="bg-blue-100 text-blue-900 rounded p-3 my-4 text-sm">
