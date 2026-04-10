@@ -2533,7 +2533,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
       toast.error('Auto-fill failed', { description: error.message });
     }
-  }, [buildClauseDebugExport, formValues, visibleSections, solicitorMode]);
+  }, [buildClauseDebugExport, formData, formValues, setFormValues, visibleSections, solicitorMode]);
 
   // Expose auto-fill function to window for console access
   useEffect(() => {
