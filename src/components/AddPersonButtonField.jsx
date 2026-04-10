@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CheckCircle2, Trash2, Pencil, Info } from 'lucide-react';
+import { Plus, CheckCircle2, Trash2, Pencil, Info, ShieldCheck } from 'lucide-react';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
@@ -168,16 +168,116 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
             </div>
           ))}
           {targetFieldId === 'executorData' && (
-            <div className="mt-3 rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3 text-sm text-slate-800 dark:border-indigo-500/50 dark:bg-slate-800/90 dark:text-slate-100">
-              <div className="flex gap-2 items-start">
-                <Info className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5" aria-hidden />
-                <div>
-                  <p className="font-semibold text-indigo-700 dark:text-indigo-300 mb-0.5">Substitute executor recommended</p>
-                  <p className="leading-relaxed text-xs">We recommend you also appoint a substitute executor below. If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.</p>
-                </div>
+            <InlineSubstituteExecutor formValues={formValues} setFormValues={setFormValues} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineSubstituteExecutor({ formValues, setFormValues }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null);
+  const subTargetId = 'substituteExecutorData';
+
+  const items = Array.isArray(formValues[subTargetId])
+    ? formValues[subTargetId]
+    : formValues[subTargetId] ? [formValues[subTargetId]] : [];
+
+  const handleSave = (row) => {
+    setFormValues((prev) => {
+      const prevItems = Array.isArray(prev[subTargetId]) ? prev[subTargetId] : prev[subTargetId] ? [prev[subTargetId]] : [];
+      let next = { ...prev, [subTargetId]: [...prevItems, row] };
+      next = upsertRegistryContact(next, row);
+      return next;
+    });
+  };
+
+  const handleRemove = (idx) => {
+    const updated = items.filter((_, i) => i !== idx);
+    setFormValues((prev) => ({ ...prev, [subTargetId]: updated.length ? updated : [] }));
+  };
+
+  const handleEditSave = (row) => {
+    setFormValues((prev) => {
+      const prevItems = Array.isArray(prev[subTargetId]) ? [...prev[subTargetId]] : prev[subTargetId] ? [prev[subTargetId]] : [];
+      if (editIndex != null && editIndex < prevItems.length) prevItems[editIndex] = row;
+      let next = { ...prev, [subTargetId]: prevItems };
+      next = upsertRegistryContact(next, row);
+      return next;
+    });
+    setEditIndex(null);
+  };
+
+  const displayLine = (item) => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object') return formatPersonRecordForClause(item) || '—';
+    return String(item ?? '');
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/60 p-3 sm:p-4 dark:border-indigo-500/40 dark:bg-slate-800/80">
+      <div className="flex items-start gap-2 mb-2">
+        <ShieldCheck className="w-5 h-5 shrink-0 text-indigo-600 dark:text-indigo-400 mt-0.5" aria-hidden />
+        <div>
+          <p className="font-semibold text-sm text-indigo-700 dark:text-indigo-300">Substitute Executor</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">If your chosen executor is unable or unwilling to act, a substitute ensures your estate is still handled by someone you trust.</p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className="group bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-xl shadow transition-all duration-300 font-medium flex items-center gap-2 text-sm min-h-[44px] w-full sm:w-auto"
+      >
+        <Plus className="w-4 h-4 shrink-0 group-hover:rotate-90 transition-transform duration-300" aria-hidden />
+        Add Substitute Executor
+      </button>
+
+      <PersonRecordModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+        formValues={formValues}
+        contextLabel="Substitute Executor"
+        targetFieldId={subTargetId}
+      />
+
+      <PersonRecordModal
+        open={editIndex != null}
+        onClose={() => setEditIndex(null)}
+        onSave={handleEditSave}
+        formValues={formValues}
+        contextLabel="Edit — Substitute Executor"
+        targetFieldId={subTargetId}
+        initialData={editIndex != null ? items[editIndex] : undefined}
+      />
+
+      {items.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-green-500" />
+            Substitute ({items.length}):
+          </p>
+          {items.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm text-sm dark:bg-slate-900 dark:border-slate-600">
+              <span className="text-gray-800 dark:text-slate-200 flex-1 flex items-start gap-2 text-xs">
+                <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center text-violet-700 dark:text-violet-300 text-[10px] font-bold shrink-0">{idx + 1}</span>
+                <span className="wrap-break-word min-w-0">{displayLine(item)}</span>
+              </span>
+              <div className="ml-2 flex shrink-0 items-center gap-1">
+                <button type="button" onClick={() => setEditIndex(idx)} className="text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1" title="Edit">
+                  <Pencil className="w-3 h-3" />
+                  <span className="hidden sm:inline">Edit</span>
+                </button>
+                <button type="button" onClick={() => handleRemove(idx)} className="text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1" title="Remove">
+                  <Trash2 className="w-3 h-3" />
+                  <span className="hidden sm:inline">Remove</span>
+                </button>
               </div>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
