@@ -3,6 +3,7 @@ import { Plus, Trash2, CheckCircle2, Info, Pencil } from 'lucide-react';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import PersonRecordModal from './PersonRecordModal.jsx';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
+import { toast } from 'sonner';
 
 const TRACE = import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
 
@@ -28,9 +29,23 @@ export default function ExcludedPersonAddBlock({ field, formValues, setFormValue
       ? [formValues[targetFieldId]]
       : [];
 
+  const isDuplicateEntry = (row, items) => {
+    const fp = [row.firstName, row.lastName, row.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|');
+    if (!fp.replace(/\|/g, '')) return false;
+    return items.some((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const efp = [item.firstName, item.lastName, item.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|');
+      return efp === fp;
+    });
+  };
+
   const handleSave = (record) => {
     const hasAny = Object.keys(record).some((k) => !k.startsWith('_') && String(record[k] ?? '').trim() !== '');
     if (!hasAny) return;
+    if (isDuplicateEntry(record, existingItems)) {
+      toast.error('This person has already been added', { description: 'You can edit the existing entry instead.' });
+      return;
+    }
     logPerson('excluded_person_add', { count: existingItems.length + 1 });
     if (TRACE) console.log('[ExcludedPersonAddBlock] add', { count: existingItems.length + 1 });
     setFormValues((prev) => {

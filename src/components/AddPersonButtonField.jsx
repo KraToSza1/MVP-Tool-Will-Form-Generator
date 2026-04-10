@@ -4,6 +4,7 @@ import PersonRecordModal from './PersonRecordModal.jsx';
 import { ADD_PERSON_FIELDS_HINT, formatPersonRecordForClause } from '../utils/personRecordSpecs.js';
 import { upsertRegistryContact } from '../lib/personRegistry.js';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
+import { toast } from 'sonner';
 
 const LOG =
   typeof import.meta !== 'undefined' &&
@@ -36,7 +37,21 @@ export default function AddPersonButtonField({ field, formValues, setFormValues 
     return String(item ?? '');
   };
 
+  const isDuplicateEntry = (row, items) => {
+    const fp = [row.firstName, row.lastName, row.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|');
+    if (!fp.replace(/\|/g, '')) return false;
+    return items.some((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const efp = [item.firstName, item.lastName, item.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|');
+      return efp === fp;
+    });
+  };
+
   const handleSave = (row) => {
+    if (isDuplicateEntry(row, existingItems)) {
+      toast.error('This person has already been added', { description: 'You can edit the existing entry instead.' });
+      return;
+    }
     logPerson('add_button_save', { targetFieldId, label: field.label, newIndex: existingItems.length });
     setFormValues((prev) => {
       const prevItems = Array.isArray(prev[targetFieldId])
@@ -204,7 +219,20 @@ function InlineSubstituteExecutor({ formValues, setFormValues }) {
     ? formValues[subTargetId]
     : formValues[subTargetId] ? [formValues[subTargetId]] : [];
 
+  const isDupSub = (row) => {
+    const fp = [row.firstName, row.lastName, row.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|');
+    if (!fp.replace(/\|/g, '')) return false;
+    return items.some((item) => {
+      if (!item || typeof item !== 'object') return false;
+      return [item.firstName, item.lastName, item.dateOfBirth].map((v) => (v || '').toString().trim().toLowerCase()).join('|') === fp;
+    });
+  };
+
   const handleSave = (row) => {
+    if (isDupSub(row)) {
+      toast.error('This person has already been added', { description: 'You can edit the existing entry instead.' });
+      return;
+    }
     setFormValues((prev) => {
       const prevItems = Array.isArray(prev[subTargetId]) ? prev[subTargetId] : prev[subTargetId] ? [prev[subTargetId]] : [];
       let next = { ...prev, [subTargetId]: [...prevItems, row] };
