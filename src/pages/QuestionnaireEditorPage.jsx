@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -193,7 +193,91 @@ function CustomFieldInputs({
   );
 }
 
+function collectAllFields(definition) {
+  const result = [];
+  if (!definition?.formSections) return result;
+  for (const sec of definition.formSections) {
+    for (const f of sec.fields || []) {
+      if (f.id) result.push(f);
+      if (f.subFields) {
+        for (const sf of f.subFields) {
+          if (sf.id) result.push(sf);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function ConditionEditor({ conditions, conditionLogic, onChange, allFields }) {
+  const rows = Array.isArray(conditions) ? conditions.filter((c) => c.field) : [];
+  const logic = conditionLogic || 'AND';
+
+  const fieldOptions = allFields
+    .filter((f) => f.type === 'radio' || f.type === 'checkboxGroup' || f.type === 'text' || f.type === 'select' || f.type === 'hidden')
+    .map((f) => ({ id: f.id, label: f.label || f.id, options: f.options }));
+
+  const addRow = () => onChange([...rows, { field: '', operator: 'eq', value: '' }], logic);
+  const removeRow = (i) => { const next = rows.filter((_, idx) => idx !== i); onChange(next, logic); };
+  const updateRow = (i, patch) => { const next = rows.map((r, idx) => idx === i ? { ...r, ...patch } : r); onChange(next, logic); };
+
+  const selectedFieldOptions = (fieldId) => {
+    const f = fieldOptions.find((o) => o.id === fieldId);
+    return Array.isArray(f?.options) ? f.options : [];
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-slate-700">Show this field when…</label>
+        {rows.length > 1 && (
+          <select value={logic} onChange={(e) => onChange(rows, e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700">
+            <option value="AND">ALL conditions match</option>
+            <option value="OR">ANY condition matches</option>
+          </select>
+        )}
+      </div>
+      {rows.length === 0 && (
+        <p className="text-xs text-slate-500 italic">No conditions — this field is always visible.</p>
+      )}
+      {rows.map((row, i) => {
+        const opts = selectedFieldOptions(row.field);
+        return (
+          <div key={i} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <select value={row.field} onChange={(e) => updateRow(i, { field: e.target.value, value: '' })} className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
+              <option value="">— select field —</option>
+              {fieldOptions.map((fo) => <option key={fo.id} value={fo.id}>{fo.id} · {fo.label}</option>)}
+            </select>
+            <select value={row.operator} onChange={(e) => updateRow(i, { operator: e.target.value })} className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
+              <option value="eq">equals</option>
+              <option value="ne">not equal</option>
+              <option value="in">is one of</option>
+              <option value="arrayLengthGte">has ≥</option>
+            </select>
+            {opts.length > 0 ? (
+              <select value={row.value ?? ''} onChange={(e) => updateRow(i, { value: e.target.value })} className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
+                <option value="">— value —</option>
+                {opts.map((o) => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}
+              </select>
+            ) : (
+              <input type="text" value={row.value ?? ''} onChange={(e) => updateRow(i, { value: e.target.value })} placeholder="value" className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800" />
+            )}
+            <button type="button" onClick={() => removeRow(i)} className="shrink-0 rounded p-1 text-red-500 hover:bg-red-50" title="Remove condition">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        );
+      })}
+      <button type="button" onClick={addRow} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+        <Plus size={12} /> Add condition
+      </button>
+    </div>
+  );
+}
+
 function FieldEditModal({ field, onClose, onSave }) {
+  const { formData } = useFormDefinition();
+  const allFields = useMemo(() => collectAllFields(formData), [formData]);
   const isCustom = field.id?.startsWith?.('custom_');
   const isDisplay = field.type === 'display';
   const [label, setLabel] = useState(field.label || '');
@@ -202,6 +286,8 @@ function FieldEditModal({ field, onClose, onSave }) {
   const [infoText, setInfoText] = useState(field.infoText ?? '');
   const [required, setRequired] = useState(!!field.required);
   const [rows, setRows] = useState(field.rows || 4);
+  const [conditions, setConditions] = useState(() => Array.isArray(field.conditions) ? field.conditions.filter((c) => c.field) : []);
+  const [conditionLogic, setConditionLogic] = useState(field.conditionLogic || 'AND');
   const [optionLabels, setOptionLabels] = useState(
     Array.isArray(field.options)
       ? field.options.map((o) => o.label ?? o.value ?? '')
@@ -211,10 +297,22 @@ function FieldEditModal({ field, onClose, onSave }) {
     Array.isArray(field.options) ? optionsToMultiline(field.options) : ''
   );
 
+  const applyConditions = (next) => {
+    const validConditions = conditions.filter((c) => c.field && c.operator);
+    if (validConditions.length > 0) {
+      next.conditions = validConditions;
+      next.conditionLogic = conditionLogic;
+    } else {
+      delete next.conditions;
+      delete next.conditionLogic;
+    }
+    return next;
+  };
+
   const handleSave = () => {
     if (isCustom && (field.type === 'radio' || field.type === 'checkboxGroup')) {
       try {
-        const next = mergeCustomFieldEdit(field, { label, infoText, required, optionsText });
+        const next = applyConditions(mergeCustomFieldEdit(field, { label, infoText, required, optionsText }));
         onSave(next);
       } catch (e) {
         toast.error(e.message || 'Invalid options');
@@ -225,13 +323,13 @@ function FieldEditModal({ field, onClose, onSave }) {
     }
     if (isCustom) {
       try {
-        const next = mergeCustomFieldEdit(field, {
+        const next = applyConditions(mergeCustomFieldEdit(field, {
           label,
           placeholder,
           infoText,
           required,
           rows: field.type === 'textarea' ? rows : undefined,
-        });
+        }));
         onSave(next);
       } catch (e) {
         toast.error(e.message || 'Could not update field');
@@ -251,6 +349,7 @@ function FieldEditModal({ field, onClose, onSave }) {
     if (Array.isArray(field.options) && optionLabels.length === field.options.length) {
       next.options = field.options.map((o, i) => ({ ...o, label: optionLabels[i] ?? o.label ?? o.value }));
     }
+    applyConditions(next);
     onSave(next);
     onClose();
   };
@@ -373,6 +472,12 @@ function FieldEditModal({ field, onClose, onSave }) {
               </div>
             </div>
           )}
+          <ConditionEditor
+            conditions={conditions}
+            conditionLogic={conditionLogic}
+            onChange={(c, l) => { setConditions(c); setConditionLogic(l); }}
+            allFields={allFields}
+          />
         </div>
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 questionnaire-modal-hint">
           This updates your draft on this page only. When you are done, click <strong className="font-semibold text-slate-800">Save questionnaire</strong> at the top (or the bar at the bottom) so clients see the changes.
@@ -1827,6 +1932,11 @@ export default function QuestionnaireEditorPage() {
                               Hidden
                             </span>
                           )}
+                          {Array.isArray(field.conditions) && field.conditions.length > 0 && (
+                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
+                              Conditional
+                            </span>
+                          )}
                         </span>
                         <div className="flex shrink-0 flex-wrap items-center gap-1">
                           {hasSubFields && (
@@ -1918,6 +2028,9 @@ export default function QuestionnaireEditorPage() {
                                     : (sf.label || '(no label)')}
                                   {sf._hiddenFromClient && (
                                     <span className={`ml-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>Hidden</span>
+                                  )}
+                                  {Array.isArray(sf.conditions) && sf.conditions.length > 0 && (
+                                    <span className={`ml-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-amber-900/50 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>Conditional</span>
                                   )}
                                 </span>
                                 <div className="flex shrink-0 items-center gap-1">
