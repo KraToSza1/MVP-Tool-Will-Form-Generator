@@ -44,9 +44,22 @@ export function parseUkDate(dobStr) {
   return dt;
 }
 
+function parseIsoDate(dobStr) {
+  if (dobStr == null || typeof dobStr !== 'string') return null;
+  const m = dobStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
+}
+
 /** Age in whole years as of reference date (default: today, local). */
 export function getAgeYearsFromDob(dobStr, asOf = new Date()) {
-  const birth = parseUkDate(dobStr);
+  const birth = parseUkDate(dobStr) || parseIsoDate(dobStr);
   if (!birth) return null;
   const ref = asOf instanceof Date ? asOf : new Date(asOf);
   let age = ref.getFullYear() - birth.getFullYear();
