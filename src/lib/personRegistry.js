@@ -47,7 +47,13 @@ export function upsertRegistryContact(prevFormValues, personRecord) {
     if (k.startsWith('_')) continue;
     entry[k] = personRecord[k];
   }
-  const reg = ensureContactRegistry(prevFormValues).filter((e) => e && e.id !== id);
+  const fp = personFingerprint(entry);
+  const reg = ensureContactRegistry(prevFormValues).filter((e) => {
+    if (!e) return false;
+    if (e.id === id) return false;
+    if (fp && personFingerprint(e) === fp) return false;
+    return true;
+  });
   reg.push(entry);
   logPerson('registry_upsert', { id, registrySize: reg.length });
   return {
@@ -63,6 +69,15 @@ function labelFromData(data) {
   if (data.knownAs) return trim(data.knownAs);
   if (data.fullName) return trim(data.fullName);
   return '(unnamed)';
+}
+
+function personFingerprint(data) {
+  if (!data || typeof data !== 'object') return '';
+  return [
+    trim(data.firstName),
+    trim(data.lastName),
+    trim(data.dateOfBirth),
+  ].join('|').toLowerCase();
 }
 
 function buildTestatorRecord(payload) {
@@ -127,13 +142,17 @@ export function getContactCandidates(formValues) {
   if (!formValues || typeof formValues !== 'object') return [];
 
   const out = [];
-  const seen = new Set();
+  const seenIds = new Set();
+  const seenFingerprints = new Set();
 
   const push = (id, label, source, data) => {
     if (!data || typeof data !== 'object') return;
-    const key = `${source}:${id}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    const idKey = `${source}:${id}`;
+    if (seenIds.has(idKey)) return;
+    seenIds.add(idKey);
+    const fp = personFingerprint(data);
+    if (fp && seenFingerprints.has(fp)) return;
+    if (fp) seenFingerprints.add(fp);
     out.push({ id, label, source, data: { ...data } });
   };
 
