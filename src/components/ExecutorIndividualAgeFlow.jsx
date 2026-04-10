@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import {
   executorDisplayName,
   getAgeYearsFromDob,
@@ -97,6 +97,117 @@ function TooltipTrigger({ text }) {
         </p>
       )}
     </div>
+  );
+}
+
+const ARISTONE_SUB_LINE =
+  'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
+
+function UnderageWarningBox({ show, warningText, firstName, permittedAge, formValues, setFormValues }) {
+  const [feesOpen, setFeesOpen] = useState(false);
+  const [acked, setAcked] = useState(false);
+
+  const aristoneAppointed =
+    formValues.chooseAristoneSubstituteExecutor === 'Aristone' &&
+    Array.isArray(formValues.substituteExecutorData) &&
+    formValues.substituteExecutorData.some((d) => typeof d === 'string' && /aristone/i.test(d));
+
+  const handleConfirm = useCallback(() => {
+    setFormValues((prev) => ({
+      ...prev,
+      chooseAristoneSubstituteExecutor: 'Aristone',
+      substituteExecutorData: [ARISTONE_SUB_LINE],
+    }));
+    setFeesOpen(false);
+    setAcked(false);
+  }, [setFormValues]);
+
+  if (aristoneAppointed) {
+    return (
+      <div
+        role="status"
+        className="mt-4 rounded-xl border-2 border-green-500 bg-green-50 p-4 text-sm text-green-900 shadow-sm dark:border-green-400 dark:bg-slate-800 dark:text-green-100"
+      >
+        <div className="flex gap-2 items-start">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-green-600 dark:text-green-400 mt-0.5" aria-hidden />
+          <p className="leading-relaxed">
+            ✅ Aristone Solicitors will act as your executor until {firstName} reaches age {permittedAge}. They will then hand over to {firstName} automatically. Your estate is fully covered in the meantime.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!show) return null;
+
+  return (
+    <>
+      <div
+        role="alert"
+        className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm text-slate-900 shadow-sm dark:border-amber-400 dark:bg-slate-800 dark:text-slate-50"
+      >
+        <div className="flex gap-2 items-start">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden />
+          <p className="leading-relaxed">{warningText}</p>
+        </div>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => { setFeesOpen(true); setAcked(false); }}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] dark:bg-indigo-600 dark:hover:bg-indigo-700"
+          >
+            ✅ Appoint Aristone Solicitors to act in the meantime (Recommended)
+          </button>
+        </div>
+      </div>
+
+      {feesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Professional fees acknowledgement">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-600 dark:bg-slate-900">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Professional Fees Notice</h3>
+            <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm text-slate-800 leading-relaxed dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+              <p>
+                If you appoint Aristone Solicitors, professional fees will apply. You can view our current pricing on our{' '}
+                <a
+                  href="https://aristonesolicitors.co.uk/about-aristone/our-prices/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 underline font-medium dark:text-indigo-400"
+                >
+                  website
+                </a>.
+              </p>
+            </div>
+            <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-slate-800 dark:text-slate-200">
+              <input
+                type="checkbox"
+                checked={acked}
+                onChange={(e) => setAcked(e.target.checked)}
+                className="mt-0.5 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 shrink-0"
+              />
+              <span>I understand and agree</span>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setFeesOpen(false); setAcked(false); }}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!acked}
+                onClick={handleConfirm}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -292,9 +403,8 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
         : true
     );
 
-    const warningText = allDeferred && executorData.length > 1
-      ? 'Heads up: none of your chosen executors could act straight away if needed. You can add another executor, or appoint Aristone Solicitors to act in the meantime.'
-      : `Heads up: with your current setup, no executor could act straight away if needed. To fix this, you can add another executor, or appoint Aristone Solicitors to act alongside ${firstName}.`;
+    const permittedAge = actingNum ?? 18;
+    const warningText = `⚠️ Heads up: ${firstName} is currently ${age} years old and cannot act as your executor straight away. Until they reach age ${permittedAge} your estate would have nobody legally able to carry out your wishes. You can scroll up to add another individual executor, or appoint Aristone Solicitors to act in the meantime.`;
 
     return (
       <div
@@ -397,22 +507,15 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
           </div>
         )}
 
-        {/* CHANGE 6: Warning banner below age selector */}
-        {showBlockWarning && (
-          <div
-            role="alert"
-            className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm text-slate-900 shadow-sm dark:border-amber-400 dark:bg-slate-800 dark:text-slate-50"
-          >
-            <div className="flex gap-2 font-semibold">
-              <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-              <span>{warningText}</span>
-            </div>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-800 dark:text-slate-200">
-              <li>Add another individual executor</li>
-              <li>Appoint Aristone Solicitors to act</li>
-            </ul>
-          </div>
-        )}
+        {/* Warning banner / green confirmation for underage executor */}
+        <UnderageWarningBox
+          show={showBlockWarning}
+          warningText={warningText}
+          firstName={firstName}
+          permittedAge={permittedAge}
+          formValues={formValues}
+          setFormValues={setFormValues}
+        />
       </div>
     );
   };
