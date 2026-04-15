@@ -10,6 +10,7 @@ import SolicitorDashboardPage from "./pages/SolicitorDashboardPage.jsx";
 import MatterDetailPage from "./pages/MatterDetailPage.jsx";
 import MatterEditorPage from "./pages/MatterEditorPage.jsx";
 import QuestionnaireEditorPage from "./pages/QuestionnaireEditorPage.jsx";
+import GuardianFlowDemoPage from "./pages/GuardianFlowDemoPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
@@ -70,6 +71,7 @@ export default function App() {
     <FormDefinitionProvider>
       <Routes>
         <Route path="/" element={<PublicShell />} />
+        <Route path="/dev/guardian-flow" element={<GuardianFlowDemoPage />} />
         <Route path="/solicitor/login" element={<SolicitorLoginPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/solicitor" element={<SolicitorLayout />}>
