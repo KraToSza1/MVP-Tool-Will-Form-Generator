@@ -29,9 +29,12 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { toast } from 'sonner';
 import { getContactCandidates } from '../lib/personRegistry.js';
 import {
   GUARDIAN_FLOW_MODAL_EMPTY,
+  dedupeGuardianFlowPersonList,
+  guardianFlowPersonIsDuplicate,
   normalizeSourceToGuardianModalForm,
 } from '../utils/guardianFlowSync.js';
 
@@ -679,8 +682,20 @@ function GuardianList({ guardians, onChange, addLabel = 'Add Guardian', formValu
 
   const handleSave = (formData) => {
     if (modal.mode === 'add') {
+      if (guardianFlowPersonIsDuplicate(formData, guardians)) {
+        toast.warning('Already in this list', {
+          description: 'That person matches a guardian you already added (same name and address).',
+        });
+        return;
+      }
       onChange([...guardians, formData]);
     } else {
+      if (guardianFlowPersonIsDuplicate(formData, guardians, { excludeIndex: modal.index })) {
+        toast.warning('Duplicate guardian', {
+          description: 'Another entry in this list already has the same name and address.',
+        });
+        return;
+      }
       const updated = [...guardians];
       updated[modal.index] = formData;
       onChange(updated);
@@ -830,16 +845,32 @@ export default function GuardianFlow({
   }, [isEmbedded, embeddedOption]);
 
   const handleComplete = () => {
-    const flow = { sameGuardians, children, childrenConfirmed };
     const resolved = isEmbedded
       ? mapAppointToGuardianFlowOption(appointGuardiansValue)
       : standaloneOption;
+
+    const sameDeduped = dedupeGuardianFlowPersonList(sameGuardians);
+    const childrenDeduped = children.map((ch) => ({
+      ...ch,
+      guardians: dedupeGuardianFlowPersonList(Array.isArray(ch.guardians) ? ch.guardians : []),
+    }));
+
+    const childGuardianCount = (chs) =>
+      (chs || []).reduce((n, ch) => n + (Array.isArray(ch.guardians) ? ch.guardians.length : 0), 0);
+    if (sameDeduped.length < sameGuardians.length || childGuardianCount(childrenDeduped) < childGuardianCount(children)) {
+      toast.info('Duplicate guardians removed', {
+        description: 'The same person was listed more than once; only one copy is kept when saving.',
+      });
+    }
+
+    const flow = { sameGuardians: sameDeduped, children: childrenDeduped, childrenConfirmed };
+
     if (resolved === 'no') {
       onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], childrenConfirmed: false } });
     } else if (resolved === 'yes_same') {
-      onComplete?.({ guardianOption: 'yes_same', guardians: sameGuardians, _flowState: flow });
+      onComplete?.({ guardianOption: 'yes_same', guardians: sameDeduped, _flowState: flow });
     } else if (resolved === 'yes_different') {
-      onComplete?.({ guardianOption: 'yes_different', children, _flowState: flow });
+      onComplete?.({ guardianOption: 'yes_different', children: childrenDeduped, _flowState: flow });
     } else if (import.meta.env.DEV) {
       console.warn('[GuardianFlow] Save ignored: could not map appointGuardians', {
         appointGuardiansValue,

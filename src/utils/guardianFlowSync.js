@@ -73,6 +73,68 @@ export function normalizeSourceToGuardianModalForm(raw) {
   };
 }
 
+function normPersonKey(s) {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function normPostcodeKey(pc) {
+  return String(pc ?? '').replace(/\s+/g, '').toUpperCase();
+}
+
+/**
+ * Stable identity fingerprint for GuardianFlow person rows (modal shape or appointment rows).
+ * Same person re-added from the registry or typed twice should match.
+ */
+export function guardianFlowPersonFingerprint(p) {
+  if (!p || typeof p !== 'object') return '';
+  const fn = normPersonKey(p.firstName);
+  const ln = normPersonKey(p.lastName);
+  if (!fn || !ln) return '';
+  const mn = normPersonKey(p.middleNames ?? p.middleName);
+  const a1 = normPersonKey(p.addressLine1 ?? p.address1);
+  const town = normPersonKey(p.town ?? p.address3);
+  const pc = normPostcodeKey(p.postcode);
+  return `${fn}|${ln}|${mn}|${a1}|${town}|${pc}`;
+}
+
+/**
+ * @param {Record<string, unknown>} newPerson
+ * @param {unknown[]} list
+ * @param {{ excludeIndex?: number }} [opts] excludeIndex: when editing, ignore that row
+ */
+export function guardianFlowPersonIsDuplicate(newPerson, list, opts = {}) {
+  const { excludeIndex = -1 } = opts;
+  const fp = guardianFlowPersonFingerprint(newPerson);
+  if (!fp || !Array.isArray(list)) return false;
+  return list.some((row, i) => {
+    if (i === excludeIndex) return false;
+    if (!row || typeof row !== 'object') return false;
+    return guardianFlowPersonFingerprint(row) === fp;
+  });
+}
+
+/** Keep first occurrence of each fingerprint; rows without a usable fingerprint are kept. */
+export function dedupeGuardianFlowPersonList(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue;
+    const fp = guardianFlowPersonFingerprint(row);
+    if (!fp) {
+      out.push(row);
+      continue;
+    }
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    out.push(row);
+  }
+  return out;
+}
+
 const GENDER_MAP = {
   male: 'Male',
   female: 'Female',
