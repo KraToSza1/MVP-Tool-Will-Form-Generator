@@ -29,6 +29,11 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { getContactCandidates } from '../lib/personRegistry.js';
+import {
+  GUARDIAN_FLOW_MODAL_EMPTY,
+  normalizeSourceToGuardianModalForm,
+} from '../utils/guardianFlowSync.js';
 
 const YES_DIFFERENT = 'Yes, but appoint different guardians for children';
 
@@ -406,6 +411,8 @@ function buildGuardianFlowStyles(C) {
     },
     fieldInput: {
       width: '100%',
+      minWidth: 0,
+      minHeight: 44,
       padding: '9px 12px',
       border: `1.5px solid ${C.border}`,
       borderRadius: 8,
@@ -418,6 +425,8 @@ function buildGuardianFlowStyles(C) {
     },
     fieldSelect: {
       width: '100%',
+      minWidth: 0,
+      minHeight: 44,
       padding: '9px 12px',
       border: `1.5px solid ${C.border}`,
       borderRadius: 8,
@@ -472,27 +481,31 @@ function useGuardianFlowTheme() {
   return useContext(GuardianFlowThemeContext);
 }
 
-const emptyPerson = {
-  title: '',
-  firstName: '',
-  middleNames: '',
-  lastName: '',
-  addressLine1: '',
-  addressLine2: '',
-  town: '',
-  postcode: '',
-  dob: '',
-  gender: '',
-  occupation: '',
-  relationship: '',
-  mobile: '',
-  email: '',
-};
-
-function PersonModal({ modalTitle, initial, onSave, onClose }) {
+function PersonModal({ modalTitle, initial, onSave, onClose, formValues }) {
   const { S } = useGuardianFlowTheme();
-  const [form, setForm] = useState(initial ? { ...initial } : { ...emptyPerson });
+  const candidates = useMemo(() => getContactCandidates(formValues || {}), [formValues]);
+  const [sourceId, setSourceId] = useState('__new__');
+  const [form, setForm] = useState(() =>
+    initial ? normalizeSourceToGuardianModalForm(initial) : { ...GUARDIAN_FLOW_MODAL_EMPTY }
+  );
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  useEffect(() => {
+    setSourceId('__new__');
+    setForm(initial ? normalizeSourceToGuardianModalForm(initial) : { ...GUARDIAN_FLOW_MODAL_EMPTY });
+  }, [initial, modalTitle]);
+
+  const applySource = (id) => {
+    setSourceId(id);
+    if (id === '__new__') {
+      setForm({ ...GUARDIAN_FLOW_MODAL_EMPTY });
+      return;
+    }
+    const c = candidates.find((x) => x.id === id);
+    if (c?.data) {
+      setForm(normalizeSourceToGuardianModalForm(c.data));
+    }
+  };
 
   const isValid =
     form.firstName.trim() &&
@@ -526,6 +539,28 @@ function PersonModal({ modalTitle, initial, onSave, onClose }) {
             ✕
           </button>
         </div>
+
+        {!initial && (
+          <div style={{ ...S.fieldGroup, marginBottom: 16 }}>
+            <label style={S.fieldLabel}>Same person or new</label>
+            <select
+              style={S.fieldSelect}
+              value={sourceId}
+              onChange={(e) => applySource(e.target.value)}
+              aria-label="Prefill from an existing person or enter new details"
+            >
+              <option value="__new__">Enter a new person</option>
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <p style={{ ...S.requiredNote, marginTop: 8, fontStyle: 'normal' }}>
+              You can copy from someone you already entered, then edit. Required fields must still be completed.
+            </p>
+          </div>
+        )}
 
         <div style={S.formGrid}>
           <Field label="Title" field="title" placeholder="e.g. Mr, Ms, Dr" />
@@ -634,7 +669,7 @@ function ChildModal({ title, initial, onSave, onClose }) {
   );
 }
 
-function GuardianList({ guardians, onChange, addLabel = 'Add Guardian' }) {
+function GuardianList({ guardians, onChange, addLabel = 'Add Guardian', formValues }) {
   const { S } = useGuardianFlowTheme();
   const [modal, setModal] = useState(null);
 
@@ -691,6 +726,7 @@ function GuardianList({ guardians, onChange, addLabel = 'Add Guardian' }) {
         <PersonModal
           modalTitle={modal.mode === 'add' ? 'Add Guardian' : 'Edit Guardian'}
           initial={modal.mode === 'edit' ? guardians[modal.index] : null}
+          formValues={formValues}
           onSave={handleSave}
           onClose={closeModal}
         />
@@ -705,6 +741,7 @@ export default function GuardianFlow({
   appointGuardiansValue,
   initialFlowState = null,
   onFlowStateChange,
+  formValues: formValuesProp,
 }) {
   const isEmbedded = variant === 'embedded';
   const embeddedOption = useMemo(
@@ -865,7 +902,11 @@ export default function GuardianFlow({
           <div style={theme.S.blueCardHelp}>
             This should be someone you trust completely to raise your children. You can appoint more than one person.
           </div>
-          <GuardianList guardians={sameGuardians} onChange={setSameGuardians} />
+          <GuardianList
+            guardians={sameGuardians}
+            onChange={setSameGuardians}
+            formValues={formValuesProp}
+          />
         </div>
       )}
 
@@ -956,6 +997,7 @@ export default function GuardianFlow({
                 guardians={child.guardians}
                 onChange={(g) => updateChildGuardians(i, g)}
                 addLabel={`Add Guardian for ${child.childFirstName}`}
+                formValues={formValuesProp}
               />
             </div>
           ))}

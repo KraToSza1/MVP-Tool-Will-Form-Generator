@@ -3,6 +3,75 @@
  * for per-child guardian appointments (guardianshipDetailsSection:fullDetails).
  */
 import { formatAppointmentPersonListForClause } from './appointmentPersonFormat.js';
+import { pickPersonFieldsForModal } from './personRecordSpecs.js';
+
+/** Empty GuardianFlow `PersonModal` row (single source of truth with GuardianFlow.jsx). */
+export const GUARDIAN_FLOW_MODAL_EMPTY = {
+  title: '',
+  firstName: '',
+  middleNames: '',
+  lastName: '',
+  addressLine1: '',
+  addressLine2: '',
+  town: '',
+  postcode: '',
+  dob: '',
+  gender: '',
+  occupation: '',
+  relationship: '',
+  mobile: '',
+  email: '',
+};
+
+function registryGenderToGuardianModalGender(g) {
+  if (g == null || String(g).trim() === '') return '';
+  const t = String(g).trim();
+  const lower = t.toLowerCase();
+  if (lower === 'male' || t === 'Male') return 'male';
+  if (lower === 'female' || t === 'Female') return 'female';
+  if (lower === 'other' || t === 'Other' || lower === 'non-binary' || lower === 'non_binary') return 'non_binary';
+  if (lower.includes('prefer')) return 'prefer_not_to_say';
+  return 'non_binary';
+}
+
+/**
+ * Normalise registry / *Data person row / existing modal row into GuardianFlow PersonModal shape.
+ * @param {Record<string, unknown>|null|undefined} raw
+ * @returns {typeof GUARDIAN_FLOW_MODAL_EMPTY}
+ */
+export function normalizeSourceToGuardianModalForm(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { ...GUARDIAN_FLOW_MODAL_EMPTY };
+  }
+  const hasFlowShape =
+    Object.prototype.hasOwnProperty.call(raw, 'addressLine1') ||
+    Object.prototype.hasOwnProperty.call(raw, 'middleNames');
+  if (hasFlowShape) {
+    const o = { ...GUARDIAN_FLOW_MODAL_EMPTY };
+    for (const k of Object.keys(GUARDIAN_FLOW_MODAL_EMPTY)) {
+      const v = raw[k];
+      if (v != null && String(v).trim() !== '') o[k] = String(v).trim();
+    }
+    return o;
+  }
+  const p = pickPersonFieldsForModal(raw);
+  return {
+    title: p.title || '',
+    firstName: p.firstName || '',
+    middleNames: p.middleName || '',
+    lastName: p.lastName || '',
+    addressLine1: p.address1 || '',
+    addressLine2: p.address2 || '',
+    town: p.address3 || '',
+    postcode: p.postcode || '',
+    dob: p.dateOfBirth || '',
+    gender: registryGenderToGuardianModalGender(p.gender),
+    occupation: p.occupation || '',
+    relationship: p.relationship || '',
+    mobile: p.mobile || '',
+    email: p.email || '',
+  };
+}
 
 const GENDER_MAP = {
   male: 'Male',

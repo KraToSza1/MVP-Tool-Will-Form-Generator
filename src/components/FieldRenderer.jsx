@@ -253,6 +253,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         ) : null}
         <GuardianFlow
           variant="embedded"
+          formValues={formValues}
           appointGuardiansValue={formValues.appointGuardians}
           initialFlowState={initialFlowState}
           onFlowStateChange={(state) => {
@@ -1501,6 +1502,11 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   if (prevProps.field.type === 'guardianFlow') {
     if (prevProps.formValues.appointGuardians !== nextProps.formValues.appointGuardians) return false;
     if (prevProps.formValues.guardianFlowState !== nextProps.formValues.guardianFlowState) return false;
+    if (prevProps.formValues.contactRegistry !== nextProps.formValues.contactRegistry) return false;
+    if (prevProps.formValues.firstName !== nextProps.formValues.firstName) return false;
+    if (prevProps.formValues.lastName !== nextProps.formValues.lastName) return false;
+    if (prevProps.formValues.guardianData !== nextProps.formValues.guardianData) return false;
+    if (prevProps.formValues.executorData !== nextProps.formValues.executorData) return false;
   }
   if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;
   if (prevProps.setFormValues !== nextProps.setFormValues) return false;
