@@ -831,12 +831,21 @@ export default function GuardianFlow({
 
   const handleComplete = () => {
     const flow = { sameGuardians, children, childrenConfirmed };
-    if (option === 'no') {
+    const resolved = isEmbedded
+      ? mapAppointToGuardianFlowOption(appointGuardiansValue)
+      : standaloneOption;
+    if (resolved === 'no') {
       onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], childrenConfirmed: false } });
-    } else if (option === 'yes_same') {
+    } else if (resolved === 'yes_same') {
       onComplete?.({ guardianOption: 'yes_same', guardians: sameGuardians, _flowState: flow });
-    } else if (option === 'yes_different') {
+    } else if (resolved === 'yes_different') {
       onComplete?.({ guardianOption: 'yes_different', children, _flowState: flow });
+    } else if (import.meta.env.DEV) {
+      console.warn('[GuardianFlow] Save ignored: could not map appointGuardians', {
+        appointGuardiansValue,
+        resolved,
+        isEmbedded,
+      });
     }
   };
 

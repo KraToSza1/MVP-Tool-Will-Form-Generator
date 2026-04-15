@@ -53,6 +53,7 @@ import {
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
 import AddPersonButtonField from './AddPersonButtonField.jsx';
 import ExecutorIndividualAgeFlow from './ExecutorIndividualAgeFlow.jsx';
+import { toast } from 'sonner';
 import GuardianFlow from './GuardianFlow.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 import { mapGuardianFlowCompletionToFormValues } from '../utils/guardianFlowSync.js';
@@ -270,6 +271,9 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
               ...patch,
               guardianFlowState: JSON.stringify(flow),
             }));
+            toast.success('Guardian details saved', {
+              description: 'Your answers are stored in this draft. You can change them anytime before finishing.',
+            });
           }}
         />
       </div>
@@ -950,6 +954,60 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       );
     }
 
+    if (field.id === 'guardianStatusDisplay') {
+      const gd = formValues.guardianData;
+      const rows = Array.isArray(gd) ? gd.filter(Boolean) : [];
+      const line = (e) =>
+        typeof e === 'string'
+          ? e
+          : [e?.title, e?.firstName, e?.middleName, e?.lastName].filter(Boolean).join(' ').trim() || '—';
+      if (rows.length > 0) {
+        return (
+          <div className="rounded-xl border border-emerald-600/50 bg-emerald-950/40 p-3 my-4 text-sm text-slate-100 dark:border-emerald-700/60 dark:bg-emerald-950/50">
+            <p className="font-semibold text-emerald-100 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+              Guardian(s) on this draft ({rows.length})
+            </p>
+            <p className="mt-1.5 text-xs text-slate-300 break-words">{rows.map(line).join(' · ')}</p>
+          </div>
+        );
+      }
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 my-4 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-200">
+          <p className="font-medium text-slate-800 dark:text-slate-100">No guardian on the draft yet</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            Use the guided flow above or &quot;Add Guardian&quot; below, then press Save guardians to form.
+          </p>
+        </div>
+      );
+    }
+
+    if (field.id === 'substituteGuardianStatusDisplay') {
+      const gd = formValues.substituteGuardianData;
+      const rows = Array.isArray(gd) ? gd.filter(Boolean) : [];
+      const line = (e) =>
+        typeof e === 'string'
+          ? e
+          : [e?.title, e?.firstName, e?.middleName, e?.lastName].filter(Boolean).join(' ').trim() || '—';
+      if (rows.length > 0) {
+        return (
+          <div className="rounded-xl border border-emerald-600/50 bg-emerald-950/40 p-3 my-4 text-sm text-slate-100 dark:border-emerald-700/60 dark:bg-emerald-950/50">
+            <p className="font-semibold text-emerald-100 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+              Substitute guardian(s) ({rows.length})
+            </p>
+            <p className="mt-1.5 text-xs text-slate-300 break-words">{rows.map(line).join(' · ')}</p>
+          </div>
+        );
+      }
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 my-4 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-200">
+          <p className="font-medium text-slate-800 dark:text-slate-100">No substitute guardian on the draft yet</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Add one below if you want a backup guardian.</p>
+        </div>
+      );
+    }
+
     if (field.id === 'choosingExecutorsIntro') {
       const paras = String(field.text || '')
         .split(/\n\n+/)
@@ -1499,14 +1557,9 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   // Re-render if field props or form values change
   if (prevProps.field.id !== nextProps.field.id) return false;
   if (prevProps.field.type !== nextProps.field.type) return false;
+  // Guardian embedded flow uses many slices of formValues + fresh inline callbacks; never skip updates.
   if (prevProps.field.type === 'guardianFlow') {
-    if (prevProps.formValues.appointGuardians !== nextProps.formValues.appointGuardians) return false;
-    if (prevProps.formValues.guardianFlowState !== nextProps.formValues.guardianFlowState) return false;
-    if (prevProps.formValues.contactRegistry !== nextProps.formValues.contactRegistry) return false;
-    if (prevProps.formValues.firstName !== nextProps.formValues.firstName) return false;
-    if (prevProps.formValues.lastName !== nextProps.formValues.lastName) return false;
-    if (prevProps.formValues.guardianData !== nextProps.formValues.guardianData) return false;
-    if (prevProps.formValues.executorData !== nextProps.formValues.executorData) return false;
+    return false;
   }
   if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;
   if (prevProps.setFormValues !== nextProps.setFormValues) return false;
