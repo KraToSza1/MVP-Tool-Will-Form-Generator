@@ -7,6 +7,7 @@ import {
   formatAppointmentPersonListForClause,
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
+import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 
 /** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
 const pdfDebugEnabled = () =>
@@ -1246,6 +1247,11 @@ const interpolateText = (text, values, options = {}) => {
           if (resolved) return wrapClientValue(resolved);
         }
         return '';
+      }
+
+      if (sectionId === 'guardianshipDetailsSection' && (subField === 'fullDetails' || subField === 'fullList')) {
+        const resolved = resolveGuardianshipDetailsDataForClause(values);
+        return resolved ? wrapClientValue(resolved) : '';
       }
 
       // CRITICAL FIX: Special handling for pet carer sections when using fullDetails

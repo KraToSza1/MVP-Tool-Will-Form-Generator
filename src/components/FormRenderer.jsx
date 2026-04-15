@@ -78,6 +78,7 @@ import {
   formatAppointmentPersonListForClause,
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
+import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -798,6 +799,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             if (resolved) return resolved;
           }
           return '';
+        }
+
+        if (sectionId === 'guardianshipDetailsSection' && (subField === 'fullDetails' || subField === 'fullList')) {
+          const resolved = resolveGuardianshipDetailsDataForClause(values);
+          return resolved || '';
         }
 
         // CRITICAL FIX: Special handling for pet carer sections and separate trustees when using fullDetails

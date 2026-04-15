@@ -743,6 +743,29 @@
                     "value": null
                 },
                 {
+                    "id": "guardianGuidedFlow",
+                    "type": "guardianFlow",
+                    "label": "Guardian details (guided)",
+                    "infoText": "Use this guided flow to add guardians. You can still use “Add Guardian” below if you prefer.",
+                    "excludeFromWill": true,
+                    "conditions": [
+                        {
+                            "field": "appointGuardians",
+                            "operator": "in",
+                            "value": [
+                                "Yes",
+                                "Yes, but appoint different guardians for children"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "guardianFlowState",
+                    "type": "hidden",
+                    "value": null,
+                    "excludeFromWill": true
+                },
+                {
                     "id": "guardiansSection",
                     "type": "section",
                     "label": "Who are the guardians?",

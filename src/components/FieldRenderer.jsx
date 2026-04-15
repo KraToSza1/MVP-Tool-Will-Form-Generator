@@ -53,7 +53,9 @@ import {
 import ExcludedPersonAddBlock from './ExcludedPersonAddBlock.jsx';
 import AddPersonButtonField from './AddPersonButtonField.jsx';
 import ExecutorIndividualAgeFlow from './ExecutorIndividualAgeFlow.jsx';
+import GuardianFlow from './GuardianFlow.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
+import { mapGuardianFlowCompletionToFormValues } from '../utils/guardianFlowSync.js';
 
 let _datePickerPromise;
 async function loadDatePicker() {
@@ -227,6 +229,50 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       return <ExcludedPersonAddBlock field={field} formValues={formValues} setFormValues={setFormValues} />;
     }
     return <AddPersonButtonField field={field} formValues={formValues} setFormValues={setFormValues} />;
+  }
+
+  if (field.type === 'guardianFlow') {
+    const initialFlowState = (() => {
+      const raw = formValues.guardianFlowState;
+      if (!raw || typeof raw !== 'string') return null;
+      try {
+        const o = JSON.parse(raw);
+        return o && typeof o === 'object' ? o : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    return (
+      <div className="guardian-flow-embed rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/80 p-2 sm:p-3 min-w-0 max-w-full overflow-x-hidden">
+        {field.label ? (
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2 break-words">{field.label}</p>
+        ) : null}
+        {field.infoText ? (
+          <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 italic break-words">{field.infoText}</p>
+        ) : null}
+        <GuardianFlow
+          variant="embedded"
+          appointGuardiansValue={formValues.appointGuardians}
+          initialFlowState={initialFlowState}
+          onFlowStateChange={(state) => {
+            setFormValues((prev) => ({
+              ...prev,
+              guardianFlowState: JSON.stringify(state),
+            }));
+          }}
+          onComplete={(data) => {
+            const patch = mapGuardianFlowCompletionToFormValues(data, { skipAppointGuardians: true });
+            const flow = data._flowState || { sameGuardians: [], children: [], childrenConfirmed: false };
+            setFormValues((prev) => ({
+              ...prev,
+              ...patch,
+              guardianFlowState: JSON.stringify(flow),
+            }));
+          }}
+        />
+      </div>
+    );
   }
 
   if (field.type === 'text' || field.type === 'number' || field.type === 'currency') {
@@ -1452,6 +1498,10 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   // Re-render if field props or form values change
   if (prevProps.field.id !== nextProps.field.id) return false;
   if (prevProps.field.type !== nextProps.field.type) return false;
+  if (prevProps.field.type === 'guardianFlow') {
+    if (prevProps.formValues.appointGuardians !== nextProps.formValues.appointGuardians) return false;
+    if (prevProps.formValues.guardianFlowState !== nextProps.formValues.guardianFlowState) return false;
+  }
   if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;
   if (prevProps.setFormValues !== nextProps.setFormValues) return false;
   if (prevProps.evaluateFieldConditions !== nextProps.evaluateFieldConditions) return false;

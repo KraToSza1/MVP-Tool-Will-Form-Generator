@@ -21,7 +21,16 @@
  * No external dependencies — React (useState) only.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
+const YES_DIFFERENT = 'Yes, but appoint different guardians for children';
+
+function mapAppointToGuardianFlowOption(appointGuardians) {
+  if (appointGuardians === 'No') return 'no';
+  if (appointGuardians === 'Yes') return 'yes_same';
+  if (appointGuardians === YES_DIFFERENT) return 'yes_different';
+  return null;
+}
 
 // ─── Design tokens (matching your existing site) ──────────────────────────────
 const C = {
@@ -624,12 +633,27 @@ function GuardianList({ guardians, onChange, addLabel = 'Add Guardian' }) {
   );
 }
 
-export default function GuardianFlow({ onComplete }) {
-  const [option, setOption] = useState(null);
+export default function GuardianFlow({
+  onComplete,
+  variant = 'standalone',
+  appointGuardiansValue,
+  initialFlowState = null,
+  onFlowStateChange,
+}) {
+  const isEmbedded = variant === 'embedded';
+  const embeddedOption = useMemo(
+    () => (isEmbedded ? mapAppointToGuardianFlowOption(appointGuardiansValue) : null),
+    [isEmbedded, appointGuardiansValue]
+  );
+
+  const [standaloneOption, setStandaloneOption] = useState(null);
   const [sameGuardians, setSameGuardians] = useState([]);
   const [children, setChildren] = useState([]);
   const [childModal, setChildModal] = useState(null);
   const [childrenConfirmed, setChildrenConfirmed] = useState(false);
+  const hydratedKeyRef = useRef('');
+
+  const option = isEmbedded ? embeddedOption : standaloneOption;
 
   const openAddChild = () => setChildModal({ mode: 'add' });
   const openEditChild = (i) => setChildModal({ mode: 'edit', index: i });
@@ -657,13 +681,53 @@ export default function GuardianFlow({ onComplete }) {
       return updated;
     });
 
+  const flowStateSnapshot = useMemo(
+    () => ({ sameGuardians, children, childrenConfirmed }),
+    [sameGuardians, children, childrenConfirmed]
+  );
+
+  useLayoutEffect(() => {
+    if (!isEmbedded || !initialFlowState) return;
+    const key = JSON.stringify(initialFlowState);
+    if (hydratedKeyRef.current === key) return;
+    hydratedKeyRef.current = key;
+    const snap = initialFlowState;
+    queueMicrotask(() => {
+      if (Array.isArray(snap.sameGuardians)) {
+        setSameGuardians(snap.sameGuardians);
+      }
+      if (Array.isArray(snap.children)) {
+        setChildren(snap.children);
+      }
+      if (typeof snap.childrenConfirmed === 'boolean') {
+        setChildrenConfirmed(snap.childrenConfirmed);
+      }
+    });
+  }, [isEmbedded, initialFlowState]);
+
+  useEffect(() => {
+    if (!isEmbedded || typeof onFlowStateChange !== 'function') return;
+    const t = setTimeout(() => {
+      onFlowStateChange(flowStateSnapshot);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [isEmbedded, onFlowStateChange, flowStateSnapshot]);
+
+  useEffect(() => {
+    if (!isEmbedded) return;
+    if (embeddedOption !== 'yes_different') {
+      queueMicrotask(() => setChildrenConfirmed(false));
+    }
+  }, [isEmbedded, embeddedOption]);
+
   const handleComplete = () => {
+    const flow = { sameGuardians, children, childrenConfirmed };
     if (option === 'no') {
-      onComplete?.({ guardianOption: 'no' });
+      onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], childrenConfirmed: false } });
     } else if (option === 'yes_same') {
-      onComplete?.({ guardianOption: 'yes_same', guardians: sameGuardians });
-    } else {
-      onComplete?.({ guardianOption: 'yes_different', children });
+      onComplete?.({ guardianOption: 'yes_same', guardians: sameGuardians, _flowState: flow });
+    } else if (option === 'yes_different') {
+      onComplete?.({ guardianOption: 'yes_different', children, _flowState: flow });
     }
   };
 
@@ -671,43 +735,56 @@ export default function GuardianFlow({ onComplete }) {
     <div style={S.section} className="min-w-0">
       <div style={S.sectionHeader}>
         <div style={S.sectionIcon}>📄</div>
-        <h2 style={S.sectionTitle}>Guardians</h2>
+        <h2 style={S.sectionTitle}>{isEmbedded ? 'Guardian details' : 'Guardians'}</h2>
       </div>
       <hr style={S.divider} />
 
-      <div style={S.questionRow}>
-        <span style={S.questionIcon}>✏️</span>
-        <p style={S.questionText}>Do you have children under 18 that you would like to appoint a guardian for?</p>
-      </div>
-      <div style={S.helpRow}>
-        <span style={S.helpIcon}>ℹ️</span>
-        <p style={S.helpText}>
-          A guardian is someone who would take legal responsibility for your children if both parents passed away.
-        </p>
-      </div>
+      {!isEmbedded && (
+        <>
+          <div style={S.questionRow}>
+            <span style={S.questionIcon}>✏️</span>
+            <p style={S.questionText}>Do you have children under 18 that you would like to appoint a guardian for?</p>
+          </div>
+          <div style={S.helpRow}>
+            <span style={S.helpIcon}>ℹ️</span>
+            <p style={S.helpText}>
+              A guardian is someone who would take legal responsibility for your children if both parents passed away.
+            </p>
+          </div>
 
-      <div style={S.radioGroup}>
-        {[
-          { value: 'no', label: 'No' },
-          { value: 'yes_same', label: 'Yes' },
-          { value: 'yes_different', label: 'Yes, but I want to appoint different guardians for different children' },
-        ].map((opt) => (
-          <label key={opt.value} style={S.radioLabel}>
-            <input
-              type="radio"
-              style={S.radio}
-              name="guardianOption"
-              value={opt.value}
-              checked={option === opt.value}
-              onChange={() => {
-                setOption(opt.value);
-                setChildrenConfirmed(false);
-              }}
-            />
-            {opt.label}
-          </label>
-        ))}
-      </div>
+          <div style={S.radioGroup}>
+            {[
+              { value: 'no', label: 'No' },
+              { value: 'yes_same', label: 'Yes' },
+              {
+                value: 'yes_different',
+                label: 'Yes, but I want to appoint different guardians for different children',
+              },
+            ].map((opt) => (
+              <label key={opt.value} style={S.radioLabel}>
+                <input
+                  type="radio"
+                  style={S.radio}
+                  name="guardianOption"
+                  value={opt.value}
+                  checked={standaloneOption === opt.value}
+                  onChange={() => {
+                    setStandaloneOption(opt.value);
+                    setChildrenConfirmed(false);
+                  }}
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+
+      {isEmbedded && embeddedOption && (
+        <p style={{ ...S.helpText, marginBottom: 18, fontStyle: 'normal', color: C.textMid }}>
+          Add the people you want as guardian(s). Your answer to the question above controls which steps you see.
+        </p>
+      )}
 
       {option === 'yes_same' && (
         <div style={S.blueCard}>
@@ -819,8 +896,8 @@ export default function GuardianFlow({ onComplete }) {
       {option && (
         <>
           <hr style={S.sectionDivider} />
-          <button type="button" style={S.saveBtn} onClick={handleComplete}>
-            Save and continue →
+          <button type="button" style={S.saveBtn} onClick={handleComplete} className="min-h-[44px]">
+            {isEmbedded ? 'Save guardians to form →' : 'Save and continue →'}
           </button>
         </>
       )}
