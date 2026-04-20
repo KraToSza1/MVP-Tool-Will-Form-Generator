@@ -212,9 +212,14 @@ function UnderageWarningBox({ show, warningText, firstName, permittedAge, formVa
 }
 
 export default function ExecutorIndividualAgeFlow({ formValues, setFormValues }) {
-  const executorData = Array.isArray(formValues.executorData) ? formValues.executorData : [];
-  const rawState = formValues.executorIndividualActingAgeState;
-  const entries = typeof rawState === 'object' && rawState && !Array.isArray(rawState) ? rawState : {};
+  const executorData = useMemo(
+    () => (Array.isArray(formValues.executorData) ? formValues.executorData : []),
+    [formValues.executorData]
+  );
+  const entries = useMemo(() => {
+    const rawState = formValues.executorIndividualActingAgeState;
+    return typeof rawState === 'object' && rawState && !Array.isArray(rawState) ? rawState : {};
+  }, [formValues.executorIndividualActingAgeState]);
 
   const relevant = useMemo(() => {
     return executorData
@@ -263,7 +268,7 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
     });
   }, [executorData, entries, setFormValues]);
 
-  const canThisExecutorActImmediately = (item, index) => {
+  const canThisExecutorActImmediately = useCallback((item, index) => {
     if (isAristoneExecutorLine(item)) return true;
     if (!isRichPersonExecutorRow(item)) return true;
     const age = getAgeYearsFromDob(item.dateOfBirth);
@@ -279,12 +284,12 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
       return minA != null && age >= minA;
     }
     return true;
-  };
+  }, [entries]);
 
   const anyoneCanAct = useMemo(() => {
     if (!executorData.length) return true;
     return executorData.some((item, index) => canThisExecutorActImmediately(item, index));
-  }, [executorData, entries]);
+  }, [executorData, canThisExecutorActImmediately]);
 
   const showNoImmediateWarning = useMemo(() => {
     if (!relevant.length) return false;
@@ -301,10 +306,6 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
       return false;
     }) && !anyoneCanAct;
   }, [relevant, entries, anyoneCanAct]);
-
-  useEffect(() => {
-    console.log('[EXECUTOR_AGE_DEBUG] ExecutorIndividualAgeFlow mounted');
-  }, []);
 
   useEffect(() => {
     const rowLog = relevant.map((r) => ({
@@ -348,8 +349,6 @@ export default function ExecutorIndividualAgeFlow({ formValues, setFormValues })
       return { ...prev, executorIndividualActingAgeState: prevState };
     });
   };
-
-  const allDeferred = executorData.length > 1 && executorData.every((item, idx) => !canThisExecutorActImmediately(item, idx));
 
   const renderExecutorBlock = (row) => {
     const { index, name, firstName, age } = row;

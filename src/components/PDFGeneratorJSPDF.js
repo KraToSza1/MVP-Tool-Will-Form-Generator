@@ -295,11 +295,10 @@ const finalizeClauseTextForPdfPass = (text) => {
 const finalizeClauseTextForPdf = (text) => {
   if (!text || typeof text !== 'string') return text;
   let s = text;
-  let prev = null;
   for (let i = 0; i < 5; i++) {
-    prev = s;
-    s = finalizeClauseTextForPdfPass(s);
-    if (s === prev) break;
+    const next = finalizeClauseTextForPdfPass(s);
+    if (s === next) break;
+    s = next;
   }
   return s;
 };
@@ -374,7 +373,7 @@ const isPlaceholderOrIncomplete = (text) => {
     /placeholder|example/i,             // Placeholder text
     /enter details|enter the/i,         // Template instruction text
     /undefined|null/i,                  // Undefined/null values
-    /^\s*$|^\.+$|^\-+$/,              // Empty content, just dots, or dashes
+    /^\s*$|^\.+$|^[-]+$/,              // Empty content, just dots, or dashes
     /\{\{.*?\}\}/,                     // Unresolved template variables
     /Schedule\s*\d*\s*$/i,             // Unfinished schedule references like "Schedule 2"
     
@@ -389,7 +388,7 @@ const isPlaceholderOrIncomplete = (text) => {
 };
 
 // COMPREHENSIVE Final Export Validation - blocks unprofessional/incomplete Wills
-const validateWillCompleteness = (formValues, willClauses) => {
+const _validateWillCompleteness = (formValues, willClauses) => {
   const errors = [];
   const warnings = [];
   const criticalIssues = [];
@@ -617,7 +616,7 @@ const standardizeAristoneName = (text) => {
 };
 
 // Auto-populate Aristone professional selections
-const getAristoneProfessionalOptions = () => {
+const _getAristoneProfessionalOptions = () => {
   return {
     fullDetails: `${getCanonicalFirmName()}, of [Office Address], Solicitors`,
     firmName: getCanonicalFirmName(),
@@ -664,7 +663,7 @@ const sanitizeUnprofessionalContent = (text) => {
 };
 
 // Generate specific missing data report for user guidance
-const generateMissingDataReport = (formValues, willClauses, criticalIssues = []) => {
+const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []) => {
   const missing = [];
   
   // CRITICAL: Residuary Estate section fields (user's main complaint)
@@ -1578,25 +1577,23 @@ const interpolateText = (text, values, options = {}) => {
         const mappedValues = sectionData
           .map((item) => {
             if (!item || typeof item !== 'object') return '';
-            // Extract specific field based on subField type
-            let fieldValue = '';
             if (subField === 'relationshipList') {
-              fieldValue = item.relationship || item.relationshipToTestator || '';
-            } else if (subField === 'nameList') {
-              // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
-              // CRITICAL FIX: Ensure we have at least firstName OR lastName
+              const fieldValue = item.relationship || item.relationshipToTestator || '';
+              return fieldValue != null ? safeString(String(fieldValue).trim()) : '';
+            }
+            if (subField === 'nameList') {
               const parts = [
                 item.title,
                 item.firstName,
                 item.lastName
               ].filter(Boolean);
-              fieldValue = parts.join(' ');
-              // If name is empty or just whitespace, return empty to mark clause incomplete
+              const fieldValue = parts.join(' ');
               if (!fieldValue || fieldValue.trim() === '') {
                 return '';
               }
-            } else if (subField === 'addressList') {
-              // Format address nicely - at minimum need address1
+              return safeString(String(fieldValue).trim());
+            }
+            if (subField === 'addressList') {
               const addressParts = [
                 item.address1,
                 item.address2,
@@ -1604,19 +1601,17 @@ const interpolateText = (text, values, options = {}) => {
                 item.city,
                 item.postcode
               ].filter(Boolean);
-              fieldValue = addressParts.join(', ');
-              // If address is empty, return empty to mark clause incomplete
+              const fieldValue = addressParts.join(', ');
               if (!fieldValue || fieldValue.trim() === '') {
                 return '';
               }
-            } else {
-              // Fallback to generic subField lookup
-              fieldValue = item[subField] || 
-                item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
-                item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
-                item[subField.toLowerCase()] ||
-                item[subField.toUpperCase()];
+              return safeString(String(fieldValue).trim());
             }
+            const fieldValue = item[subField] ||
+              item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
+              item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
+              item[subField.toLowerCase()] ||
+              item[subField.toUpperCase()];
             return fieldValue != null ? safeString(String(fieldValue).trim()) : '';
           })
           .filter(Boolean);
@@ -1789,7 +1784,7 @@ const interpolateText = (text, values, options = {}) => {
     formattedLoansGifts += '.';
   }
   // If the template has "[as specified: ...]", replace it properly
-  processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, (match) => {
+  processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, () => {
     if (formattedLoansGifts) {
       return `as specified: ${wrapClientValue(formattedLoansGifts)}`;
     }
@@ -2091,7 +2086,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     };
 
     // Helper to add text with proper formatting and width constraints
-    const addText = (text, x, fontSize = 12, bold = false, align = 'left', maxWidth = null, lineSpacing = null) => {
+    const _addText = (text, x, fontSize = 12, bold = false, align = 'left', maxWidth = null, lineSpacing = null) => {
       checkPageBreak(lineHeight);
       const safeText = safeString(text);
       if (safeText) {
@@ -2381,7 +2376,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     };
 
     // Helper to add DRAFT watermark to a page
-    const addDraftWatermark = (doc, pageNum) => {
+    const _addDraftWatermark = (doc, pageNum) => {
       doc.setPage(pageNum);
       doc.setFontSize(48);
       doc.setFont('helvetica', 'bold');
@@ -2423,6 +2418,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     ];
     
     // Legacy clause builder disabled (shared builder used above)
+    // eslint-disable-next-line no-constant-condition -- intentional dead branch kept for reference
     if (false) {
       const seenClauses = new Set();
       let hasPersonalPossessionsClause = false;
@@ -2431,7 +2427,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         if (!section || !section.fields) return;
 
         const processFields = (fields) => {
-          fields.forEach((field, fieldIndex) => {
+          fields.forEach((field) => {
             if (!field) return;
 
             // Skip if conditions not met
@@ -2504,9 +2500,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                   /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
                   /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
                   // "my " followed immediately by punctuation or "from" (empty name)
-                  /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                  /\bmy\s+[.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
                   // "for " followed immediately by punctuation (empty beneficiary)
-                  /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated) ||
+                  /\bupon\s+trust\s+for\s+[.\s]+(?:\.|$)/i.test(interpolated) ||
                   // Pet care specific patterns - "I request that my " followed by "care" or "is unable" without a name
                   (/\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated));
                 
@@ -2612,8 +2608,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                       /\bcare\s+for\s+.*\s+my\s+\./i.test(interpolated) ||
                       /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
                       /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
-                      /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
-                      /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated);
+                      /\bmy\s+[.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+[.\s]+(?:\.|$)/i.test(interpolated);
                     
                     if (hasMissingSubject) {
                       console.warn(`[PDF VALIDATION] ⚠️ Clause contains missing subject (will still render): "${interpolated.substring(0, 100)}"`);
@@ -2750,8 +2746,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                       /\bcare\s+for\s+.*\s+my\s+\./i.test(interpolated) ||
                       /\bunable\s+.*\s+my\s+\./i.test(interpolated) ||
                       /\bupon\s+trust\s+for\s+\./i.test(interpolated) ||
-                      /\bmy\s+[\.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
-                      /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(interpolated) ||
+                      /\bmy\s+[.\s]+(?:from|for|care|unable|provision|This)/i.test(interpolated) ||
+                      /\bupon\s+trust\s+for\s+[.\s]+(?:\.|$)/i.test(interpolated) ||
                       // Pet care specific patterns
                       /\brequest\s+that\s+my\s+(?:care|is\s+unable)/i.test(interpolated) && !/\brequest\s+that\s+my\s+\w+\s+(?:care|is\s+unable)/i.test(interpolated);
                     
@@ -2790,7 +2786,6 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     // ===== PREFLIGHT VALIDATION GATE =====
     // Comprehensive validation before PDF generation - builds missing[] and warnings[]
     const missing = [];
-    const warnings = [];
     const placeholderPatterns = [
       /\btest\s+test/i,              // "test test" or "test test test"
       /\btest\s+test\s+test/i,       // "test test test" explicitly
@@ -2962,7 +2957,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         /\bcare\s+for\s+.*\s+my\s+\./i.test(clause.text) ||
         /\bunable\s+.*\s+my\s+\./i.test(clause.text) ||
         /\bupon\s+trust\s+for\s+\./i.test(clause.text) ||
-        /\bmy\s+[\.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(clause.text);
+        /\bmy\s+[.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(clause.text);
       
       if (hasMissingSubjectInText) {
         const snippet = clause.text.substring(0, 100) + (clause.text.length > 100 ? '...' : '');
@@ -3548,9 +3543,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         /\bunable\s+.*\s+my\s+\./i.test(processedClauseText) ||
         /\bupon\s+trust\s+for\s+\./i.test(processedClauseText) ||
         // "my " followed immediately by punctuation or "from" (empty name)
-        /\bmy\s+[\.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(processedClauseText) ||
+        /\bmy\s+[.\s]{2,}(?:from|for|care|unable|provision|This)/i.test(processedClauseText) ||
         // "for " followed immediately by punctuation (empty beneficiary)  
-        /\bupon\s+trust\s+for\s+[\.\s]+(?:\.|$)/i.test(processedClauseText) ||
+        /\bupon\s+trust\s+for\s+[.\s]+(?:\.|$)/i.test(processedClauseText) ||
         // Double space after "my " indicating missing name
         /\brelease\s+and\s+forgive\s+my\s{2,}from/i.test(processedClauseText) ||
         /\bno\s+provision\s+.*\s+for\s+my\s{2,}\./i.test(processedClauseText);
@@ -3703,7 +3698,6 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         // Check if we need a new page - be lenient: only add new page if we're very close to bottom
         // This allows schedule to appear on same page as last clause whenever possible
         // We only need space for the heading initially - content can flow to next page if needed
-        const headingHeight = 30; // Space for "Schedule X" heading plus spacing
         const availableSpace = pageHeight - margin - yPos;
         console.log(`[PDF SCHEDULE] Available space calculation: pageHeight (${pageHeight}) - margin (${margin}) - yPos (${yPos.toFixed(1)}) = ${availableSpace.toFixed(1)}`);
         console.log(`[PDF SCHEDULE] Threshold check: availableSpace (${availableSpace.toFixed(1)}) < 40? ${availableSpace < 40}`);
@@ -4060,9 +4054,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                 break;
               }
             }
-          } catch (e) {
+          } catch {
             // If parsing fails, check if it's already in DD/MM/YYYY format
-            if (dateValue.match(/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/)) {
+            if (dateValue.match(/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/)) {
               // Validate year in the string
               const yearMatch = dateValue.match(/\d{4}/);
               if (yearMatch) {

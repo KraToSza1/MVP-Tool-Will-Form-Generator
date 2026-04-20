@@ -38,7 +38,7 @@ function getFormData(formDataParam) {
  * @param {Object} [formData] - Optional form definition (uses default if not provided)
  * @returns {Object} Normalized validation issue with navigation fields
  */
-export const normalizeValidationIssue = (issue, formValues = {}, formDataParam) => {
+export const normalizeValidationIssue = (issue, _, formDataParam) => {
   const formData = getFormData(formDataParam);
   // If already normalized, return as-is
   if (issue.targetSectionIndex !== undefined && issue.sectionId) {

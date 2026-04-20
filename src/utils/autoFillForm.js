@@ -850,10 +850,7 @@ export const generateDummyFormData = (formData) => {
   };
 
   // Get value for a field - used in recursive processing
-  const getFieldValue = (field, dummyDataSoFar) => {
-    const values = { ...dummyDataSoFar };
-    const getVal = (k) => values[k];
-
+  const getFieldValue = (field) => {
     if (unlockEverything[field.id] !== undefined) {
       return unlockEverything[field.id];
     }

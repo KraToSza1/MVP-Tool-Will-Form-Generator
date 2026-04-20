@@ -70,7 +70,7 @@ function log(level, message, data = null) {
 }
 
 // Helper function to wait for element
-async function waitForElement(page, selector, timeout = 10000) {
+async function _waitForElement(page, selector, timeout = 10000) {
   try {
     log('DEBUG', `Waiting for element: ${selector}`, { timeout });
     await page.waitForSelector(selector, { timeout, visible: true });
@@ -124,7 +124,7 @@ async function fillInput(page, fieldId, value) {
           return true;
         }
       }
-    } catch (error) {
+    } catch {
       // Try next selector
       continue;
     }
@@ -260,7 +260,6 @@ async function fillDate(page, fieldId, dateValue) {
   ];
   
   let dateInput = null;
-  let usedSelector = null;
   
   for (const sel of selectors) {
     try {
@@ -286,7 +285,6 @@ async function fillDate(page, fieldId, dateValue) {
         
         if (isInContext && isVisible) {
           log('DEBUG', `Found date input with selector: ${sel}`);
-          usedSelector = sel;
           break;
         }
       }
@@ -353,7 +351,7 @@ async function fillDate(page, fieldId, dateValue) {
         await delay(100);
         await page.keyboard.press('Delete');
         await delay(100);
-      } catch (e) {
+      } catch {
         log('DEBUG', 'Method 1 failed, trying method 2');
       }
       
@@ -364,7 +362,7 @@ async function fillDate(page, fieldId, dateValue) {
           el.focus();
         });
         await delay(200);
-      } catch (e) {
+      } catch {
         log('DEBUG', 'Method 2 failed, continuing');
       }
       
@@ -905,7 +903,6 @@ async function navigateThroughForm(page, scenarioData) {
         error: nextError.message, 
         stack: nextError.stack 
       });
-      clicked = false;
     }
     
     if (!clicked) {
@@ -1230,7 +1227,7 @@ async function downloadPDF(page, scenarioName) {
     try {
       const stats = require('fs').statSync(fullPath);
       return { name: f, path: fullPath, mtime: stats.mtime };
-    } catch (e) {
+    } catch {
       return null;
     }
   }).filter(Boolean);
@@ -1285,7 +1282,7 @@ async function runScenario(browser, scenario) {
   log('INFO', `🎬 Running: ${scenario.name}`);
   log('INFO', '='.repeat(60));
   
-  let page = null;
+  let page;
   try {
     log('INFO', '📄 Creating new browser page...');
     page = await browser.newPage();
@@ -1325,7 +1322,6 @@ async function runScenario(browser, scenario) {
     
     // Navigate to dev server
     log('INFO', `🌐 Navigating to ${DEV_SERVER_URL}...`);
-    let navigationSuccess = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         log('DEBUG', `Navigation attempt ${attempt} of 3`);
@@ -1333,7 +1329,6 @@ async function runScenario(browser, scenario) {
           waitUntil: 'domcontentloaded', 
           timeout: 30000 
         });
-        navigationSuccess = true;
         log('SUCCESS', '✓ Navigation completed successfully');
         break;
       } catch (error) {
@@ -1376,7 +1371,7 @@ async function runScenario(browser, scenario) {
             log('DEBUG', `Found Clear Data button with selector: ${selector}`);
             break;
           }
-        } catch (e) {
+        } catch {
           // Continue to next selector
         }
       }
@@ -1394,7 +1389,7 @@ async function runScenario(browser, scenario) {
           const screenshotPath = join(downloadsDir, `page_loaded_${Date.now()}.png`);
           await page.screenshot({ path: screenshotPath, fullPage: true });
           log('DEBUG', `Screenshot saved: ${screenshotPath}`);
-        } catch (e) {
+        } catch {
           // Ignore screenshot errors
         }
       }
@@ -1419,7 +1414,7 @@ async function runScenario(browser, scenario) {
         const screenshotPath = join(downloadsDir, `navigation_error_${Date.now()}.png`);
         await page.screenshot({ path: screenshotPath, fullPage: true });
         log('INFO', `Screenshot saved: ${screenshotPath}`);
-      } catch (e) {
+      } catch {
         // Ignore
       }
       throw navError; // Re-throw to be caught by outer try-catch
@@ -1453,7 +1448,7 @@ async function runScenario(browser, scenario) {
         const screenshotPath = join(downloadsDir, `pdf_error_${Date.now()}.png`);
         await page.screenshot({ path: screenshotPath, fullPage: true });
         log('INFO', `Screenshot saved: ${screenshotPath}`);
-      } catch (e) {
+      } catch {
         // Ignore
       }
       // Don't throw - we still want to show the browser
@@ -1515,7 +1510,6 @@ async function main() {
     });
   } catch (checkError) {
     log('WARN', 'Server check threw error (will continue anyway)', { error: checkError.message });
-    serverRunning = false;
   }
   
   if (!serverRunning) {

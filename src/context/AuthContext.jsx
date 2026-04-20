@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider + hook pattern */
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { signInSolicitor, signOutSolicitor, subscribeToAuthChanges } from '../lib/auth.js';
 import { AuthContext } from './authContext.js';
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
         ? 'While true, ProtectedRoute shows "Loading solicitor workspace" and dashboard does not mount.'
         : 'Auth settled — dashboard can mount and run listMatters.',
     });
-  }, [loading, session?.user?.id, profile?.role]);
+  }, [loading, session?.user, profile?.role]);
 
   /** Clear UI session immediately; then revoke Supabase tokens (listener may also fire). */
   const signOut = useCallback(async () => {
@@ -104,7 +105,7 @@ export function AuthProvider({ children }) {
     isStaff: profile?.role === 'solicitor' || profile?.role === 'admin',
     signIn: signInSolicitor,
     signOut,
-  }), [loading, profile, session, signOut]);
+  }), [loading, profile, session, signOut, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

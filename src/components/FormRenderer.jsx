@@ -333,6 +333,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     getAristoneEstateRecommendationState(formValues);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- estate fields only; full formValues would log on every keystroke
   }, [
     formValues?.estateApproxValue,
     formValues?.estateApproxLiabilities,
@@ -459,7 +460,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       setIsSubmittingMatter(false);
       console.log('[WillTool Flow] client_submit_ui_finally', { ref: referenceNumber, phase: 'client_submit_ui_finally' });
     }
-  }, [referenceNumber, submitCurrentMatter, formValues, currentIndex]);
+  }, [referenceNumber, submitCurrentMatter, formValues, currentIndex, isDev]);
 
   useEffect(() => {
     if (!useExternalPersistence) {
@@ -623,7 +624,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     if (currentIndex === visibleSections.length - 1) {
       import('./PDFGeneratorJSPDF.js').catch(() => {});
     }
-  }, [currentIndex]);
+  }, [currentIndex, visibleSections.length]);
 
   // ---------------------------
   // Text Interpolation Logic
@@ -1164,25 +1165,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           const mappedValues = sectionData
             .map((item) => {
               if (!item || typeof item !== 'object') return '';
-              // Extract specific field based on subField type
-              let fieldValue = '';
               if (subField === 'relationshipList') {
-                fieldValue = item.relationship || item.relationshipToTestator || '';
-              } else if (subField === 'nameList') {
-                // Format name nicely: "Title FirstName LastName" or "FirstName LastName"
-                // CRITICAL FIX: Ensure we have at least firstName OR lastName
+                const fieldValue = item.relationship || item.relationshipToTestator || '';
+                return fieldValue != null ? String(fieldValue).trim() : '';
+              }
+              if (subField === 'nameList') {
                 const parts = [
                   item.title,
                   item.firstName,
                   item.lastName
                 ].filter(Boolean);
-                fieldValue = parts.join(' ');
-                // If name is empty or just whitespace, return empty to mark clause incomplete
+                const fieldValue = parts.join(' ');
                 if (!fieldValue || fieldValue.trim() === '') {
                   return '';
                 }
-              } else if (subField === 'addressList') {
-                // Format address nicely - at minimum need address1
+                return String(fieldValue).trim();
+              }
+              if (subField === 'addressList') {
                 const addressParts = [
                   item.address1,
                   item.address2,
@@ -1190,19 +1189,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   item.city,
                   item.postcode
                 ].filter(Boolean);
-                fieldValue = addressParts.join(', ');
-                // If address is empty, return empty to mark clause incomplete
+                const fieldValue = addressParts.join(', ');
                 if (!fieldValue || fieldValue.trim() === '') {
                   return '';
                 }
-              } else {
-                // Fallback to generic subField lookup
-                fieldValue = item[subField] ||
-                  item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
-                  item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
-                  item[subField.toLowerCase()] ||
-                  item[subField.toUpperCase()];
+                return String(fieldValue).trim();
               }
+              const fieldValue = item[subField] ||
+                item[subField.charAt(0).toLowerCase() + subField.slice(1)] ||
+                item[subField.charAt(0).toUpperCase() + subField.slice(1)] ||
+                item[subField.toLowerCase()] ||
+                item[subField.toUpperCase()];
               return fieldValue != null ? String(fieldValue).trim() : '';
             })
             .filter(Boolean);
@@ -1310,7 +1307,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       formattedLoansGifts += '.';
     }
     // If the template has "[as specified: ...]", replace it properly
-    processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, (match) => {
+    processed = processed.replace(/\[as specified:\s*\[Specific Loans\/Gifts List\]\]/gi, () => {
       if (formattedLoansGifts) {
         return `as specified: ${formattedLoansGifts}`;
       }
@@ -1373,6 +1370,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     return processed;
   };
+
+  const interpolateTextRef = useRef(interpolateText);
+  interpolateTextRef.current = interpolateText;
   
   // Comprehensive text normalization function (shared with PDFGenerator)
   const normalizeClauseText = (text) => {
@@ -1601,7 +1601,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     }
 
     return result;
-  }, [formValues]);
+  }, [formValues, isDev]);
 
   // ---------------------------
   // Validation: Required Fields
@@ -1633,18 +1633,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
 
       if (field.required) {
-        let isValid = false;
         if (field.type === 'checkboxGroup') {
-          isValid = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
+          const isValid = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
           DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (checkbox group) - Selected: ${Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0}, Valid: ${isValid}`);
-        } else if (field.type === 'text' || field.type === 'textarea') {
-          const val = formValues[field.id];
-          isValid = typeof val === 'string' && val.trim() !== '';
-          DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
-        } else {
-          isValid = !!formValues[field.id];
-          DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+          return isValid;
         }
+        if (field.type === 'text' || field.type === 'textarea') {
+          const val = formValues[field.id];
+          const isValid = typeof val === 'string' && val.trim() !== '';
+          DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+          return isValid;
+        }
+        const isValid = !!formValues[field.id];
+        DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
         return isValid;
       }
       DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
@@ -1655,7 +1656,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
-  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode]);
+  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode, isDev]);
 
   const isFormFullyCompleted = () => {
     try {
@@ -1763,7 +1764,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       DEBUG_LOGS&&console.log('[VALIDATION] Issues:', issues);
     }
     return issues;
-  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode]);
+  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode, isDev]);
 
   // ---------------------------
   // Navigation Logic
@@ -2070,7 +2071,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ✅ Found field via case-insensitive search`);
       foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const input = foundField.querySelector('input, textarea, select');
-      const isButton = foundField.tagName === 'BUTTON' || foundField.querySelector('button');
       if (input) {
         setTimeout(() => input.focus(), 500);
       }
@@ -2262,12 +2262,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     console.error(`[SCROLL TO SCHEDULE] ========== FAILED - EXITING ==========`);
   };
 
-  const goBack = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
   const saveDraft = () => {
     DEBUG_LOGS&&console.log('[SAVE DRAFT] ========== MANUAL SAVE DRAFT CLICKED ==========');
     DEBUG_LOGS&&console.log('[SAVE DRAFT] Current form values count:', Object.keys(formValues).length);
@@ -2330,14 +2324,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     toast.success('Form reset', { description: 'All data has been cleared. You can now start fresh.' });
   };
 
-  const getClauseDisplayText = (clause) => {
+  const getClauseDisplayText = useCallback((clause) => {
     if (!clause) return '';
     if (!clause.incomplete) return clause.text || '';
     const fields = Array.isArray(clause.missingFields) && clause.missingFields.length > 0
       ? clause.missingFields.join(', ')
       : 'required fields';
     return `[Incomplete clause — requires user input: ${fields}]`;
-  };
+  }, []);
 
   const buildClauseDebugExport = useCallback((values, previewMaxSectionIndex) => {
     const toHash = (text) => {
@@ -2351,13 +2345,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const preview = buildClauses({
       formValues: values,
       formData,
-      interpolateText,
+      interpolateText: interpolateTextRef.current,
       maxSectionIndex: previewMaxSectionIndex
     });
     const pdf = buildClauses({
       formValues: values,
       formData,
-      interpolateText
+      interpolateText: interpolateTextRef.current
     });
     const mapClause = (c) => {
       const displayText = getClauseDisplayText(c);
@@ -2381,7 +2375,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       pdfClauses,
       diff: { missingInPdf, extraInPdf, orderMismatch }
     };
-  }, [formData, interpolateText, getClauseDisplayText]);
+  }, [formData, getClauseDisplayText]);
 
   // Auto-fill form with dummy data - respects client mode (filters solicitor-only fields)
   const handleAutoFill = useCallback(() => {
@@ -2549,7 +2543,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [handleAutoFill]);
 
   const verifyNoTestPlaceholders = useCallback(() => {
-    const testFields = Object.entries(formValues).filter(([key, val]) => {
+    const testFields = Object.entries(formValues).filter((entry) => {
+      const val = entry[1];
       if (typeof val === 'string') {
         const lowerVal = val.toLowerCase();
         return (lowerVal.includes('test test test') || (lowerVal.includes('test test') && !lowerVal.includes('test@') && !lowerVal.includes('@test'))) && lowerVal.trim() !== 'test@example.com';
@@ -2591,7 +2586,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           if (!field.required) return;
           totalRequired++;
           DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
-          let isCompleted = false;
+          let isCompleted;
           if (field.type === 'checkboxGroup') {
             isCompleted = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
           } else if (field.type === 'text' || field.type === 'textarea') {
@@ -2617,7 +2612,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     };
 
     calculateCompletion();
-  }, [formValues, evaluateFieldConditions, solicitorMode]);
+  }, [formValues, evaluateFieldConditions, solicitorMode, formData]);
 
   // Process modal fields and convert them to structured data arrays
   // CRITICAL FIX: Separate useEffect to ALWAYS clean up string entries, independent of modal field processing
@@ -2763,7 +2758,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     cleanupStringEntries();
     const timer = setTimeout(cleanupStringEntries, 100);
     return () => clearTimeout(timer);
-  }, [formValues.separateTrusteeData, formValues.petCarerData, formValues.substitutePetCarerData]);
+  }, [formValues]);
 
   useEffect(() => {
     const processModalFields = () => {
@@ -3382,7 +3377,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           const pdfModule = await import('./PDFGeneratorJSPDF.js');
           generatePDFWithJSPDF = pdfModule.generatePDFWithJSPDF;
           break;
-        } catch (error) {
+        } catch {
           importAttempts++;
           if (importAttempts > maxRetries) {
             clearTimeout(timeoutId);
@@ -3501,14 +3496,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Extract schedule number from "Schedule 2876070" format
           const scheduleMatch = scheduleText.match(/Schedule\s+(\d+)/i);
           const scheduleNumber = scheduleMatch ? scheduleMatch[1] : scheduleText;
-          
-          
-          // Try to identify which field this schedule belongs to by checking form values
-          let scheduleType = 'Schedule';
-          let userFriendlyMessage = '';
-          let fieldHint = '';
-          let sectionName = '';
-          
+
           // Check which fields are actually missing
           let missingFields = [];
           let targetFieldIds = [];
@@ -3524,6 +3512,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] Property Trust schedule number: "${propertyTrustScheduleNum}", BPR Trust: "${bprTrustScheduleNum}"`);
           DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] Comparing Property Trust: "${propertyTrustScheduleNum}" === "${scheduleNumber}"`);
           
+          let scheduleType;
+          let userFriendlyMessage;
+          let fieldHint;
+          let sectionName;
+
           if (propertyTrustScheduleNum === scheduleNumber || 
               propertyTrustScheduleNum === String(scheduleText).replace(/Schedule\s+/i, '').trim()) {
             DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] ✅ Matched Property Trust schedule ${scheduleNumber}`);
@@ -3609,8 +3602,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
       const filename = `${testatorName}-Last-Will-${currentDate}.pdf`;
 
-      const pdfBlob = doc.output('blob');
-      const pdfDataUri = doc.output('datauristring');
       const pdfArrayBuffer = doc.output('arraybuffer');
 
       // Create a proper PDF blob with explicit MIME type

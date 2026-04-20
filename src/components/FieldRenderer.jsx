@@ -89,16 +89,47 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   const [datePickerOpen, setDatePickerOpen] = useState({});
   const [datePickerManualValue, setDatePickerManualValue] = useState({});
   const sigPadRef = useRef({});
-  const signatureToastShownRef = useRef({});
   const textInputRef = useRef(null);
   const sigContainerRef = useRef(null);
-  const isSignatureField = field?.type === 'signature';
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [modalSignature, setModalSignature] = useState('');
+  const signatureModalRef = useRef(null);
+
+  const dateFieldId = field?.type === 'date' ? field.id : null;
+  const dateFormValue = dateFieldId != null ? (formValues[dateFieldId] ?? '') : '';
+  const currentDisplayValue = useMemo(() => {
+    if (dateFieldId == null) return '';
+    if (!dateFormValue) return '';
+    const s = String(dateFormValue);
+    if (s.match(/^\d{4}-\d{2}-\d{2}$/)) return formatUKDate(s);
+    const isoDate = ukDateToISO(s);
+    if (isoDate) return formatUKDate(isoDate);
+    return s;
+  }, [dateFieldId, dateFormValue]);
 
   useEffect(() => {
     if (field?.type !== 'date') return;
-    const currentValue = formValues[field.id] || '';
-    setDateInputValue(currentValue ? formatUKDate(currentValue) : '');
-  }, [field?.type, field?.id, formValues]);
+    if (dateInputValue !== currentDisplayValue) {
+      setDateInputValue(currentDisplayValue);
+    }
+  }, [field?.type, currentDisplayValue, dateInputValue]);
+
+  useEffect(() => {
+    if (field?.type !== 'signature') {
+      setSignatureModalOpen(false);
+      setModalSignature('');
+    }
+  }, [field?.type, field?.id]);
+
+  useEffect(() => {
+    if (field?.type !== 'signature' || !signatureModalOpen) return;
+    signatureModalRef.current?.focus();
+    const onEsc = (e) => {
+      if (e.key === 'Escape') setSignatureModalOpen(false);
+    };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [field?.type, signatureModalOpen]);
 
   // When any date picker modal is open, lock body scroll so the overlay covers the viewport
   useEffect(() => {
@@ -1161,16 +1192,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
   if (field.type === 'signature') {
     const FieldIcon = getFieldIcon(field.type, field.id);
-    const [signatureModalOpen, setSignatureModalOpen] = useState(false);
-    const [modalSignature, setModalSignature] = useState('');
-    const modalRef = useRef(null);
-    useEffect(() => {
-      if (!signatureModalOpen) return;
-      modalRef.current?.focus();
-      const onEsc = (e) => { if (e.key === 'Escape') setSignatureModalOpen(false); };
-      document.addEventListener('keydown', onEsc);
-      return () => document.removeEventListener('keydown', onEsc);
-    }, [signatureModalOpen]);
     // Canvas aspect ratio matches PDF box (wide format for signatures)
     const isTestator = field.id === 'testatorSignature';
     const canvasWidth = isTestator ? 260 : 220;
@@ -1265,7 +1286,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
         {signatureModalOpen && (
           <div
-            ref={modalRef}
+            ref={signatureModalRef}
             tabIndex={-1}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 outline-none"
             role="dialog"
@@ -1335,29 +1356,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     const isValidDate = dateValue && !isNaN(dateValue.getTime());
     DEBUG_LOGS&&console.log(`[DATE FIELD] Field "${field.id}" (${field.label}) - Current value: "${formValues[field.id] || 'empty'}", Valid date: ${isValidDate}, Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
-    
-    // Initialize and sync dateInputValue with form value
-    const currentDisplayValue = useMemo(() => {
-      if (!formValues[field.id]) return '';
-      if (formValues[field.id].match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // ISO format - convert to UK format for display
-        return formatUKDate(formValues[field.id]);
-      }
-      // Check if it's a valid UK date format
-      const isoDate = ukDateToISO(formValues[field.id]);
-      if (isoDate) {
-        return formatUKDate(isoDate);
-      }
-      // Raw typed value - keep as is for display while typing
-      return formValues[field.id];
-    }, [formValues[field.id]]);
-    
-    // Sync state with computed value
-    useEffect(() => {
-      if (dateInputValue !== currentDisplayValue) {
-        setDateInputValue(currentDisplayValue);
-      }
-    }, [currentDisplayValue]);
 
     return (
       <div className="mb-4 sm:mb-5 group" data-field-id={field.id}>

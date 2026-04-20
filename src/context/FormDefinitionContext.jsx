@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- provider + hook pattern */
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getFormDefinition } from '../lib/formDefinition.js';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
