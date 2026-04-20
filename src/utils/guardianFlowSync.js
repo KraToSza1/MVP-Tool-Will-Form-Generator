@@ -142,6 +142,18 @@ const GENDER_MAP = {
   prefer_not_to_say: '',
 };
 
+/** ISO YYYY-MM-DD → DD/MM/YYYY for clause text; otherwise return trimmed string. */
+function formatDobForClause(dob) {
+  const s = String(dob ?? '').trim();
+  if (!s) return '';
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
+  return s;
+}
+
 /**
  * @param {Record<string, unknown>} p GuardianFlow person row
  * @returns {Record<string, string>|null}
@@ -182,13 +194,40 @@ export function buildGuardianshipDetailsClause(children) {
   for (const ch of children) {
     const fn = String(ch.childFirstName || ch.firstName || '').trim();
     const ln = String(ch.childLastName || ch.lastName || '').trim();
-    const dob = String(ch.dob || ch.dateOfBirth || '').trim();
+    const dob = formatDobForClause(ch.dob || ch.dateOfBirth || '');
     const childLabel = [fn, ln].filter(Boolean).join(' ').trim();
     const guardians = Array.isArray(ch.guardians)
       ? ch.guardians.map(guardianFlowPersonToAppointmentRow).filter(Boolean)
       : [];
     const gPhrase = formatAppointmentPersonListForClause(guardians);
     if (!childLabel || !gPhrase) continue;
+    parts.push(
+      `I appoint ${gPhrase} to be the guardian(s) of ${childLabel}${
+        dob ? ` (date of birth ${dob})` : ''
+      }`
+    );
+  }
+  return parts.join(' ');
+}
+
+/**
+ * When the same guardian(s) apply to every listed child (yes_same), build one sentence per child.
+ * @param {unknown[]} guardians GuardianFlow person rows
+ * @param {Array<Record<string, unknown>>} children children under 18 (names + dob; guardians on each row ignored)
+ * @returns {string}
+ */
+export function buildGuardianshipDetailsClauseSameGuardians(guardians, children) {
+  if (!Array.isArray(children) || children.length === 0) return '';
+  const appointmentRows = (guardians || []).map(guardianFlowPersonToAppointmentRow).filter(Boolean);
+  const gPhrase = formatAppointmentPersonListForClause(appointmentRows);
+  if (!gPhrase) return '';
+  const parts = [];
+  for (const ch of children) {
+    const fn = String(ch.childFirstName || ch.firstName || '').trim();
+    const ln = String(ch.childLastName || ch.lastName || '').trim();
+    const dob = formatDobForClause(ch.dob || ch.dateOfBirth || '');
+    const childLabel = [fn, ln].filter(Boolean).join(' ').trim();
+    if (!childLabel) continue;
     parts.push(
       `I appoint ${gPhrase} to be the guardian(s) of ${childLabel}${
         dob ? ` (date of birth ${dob})` : ''
@@ -236,7 +275,10 @@ export function mapGuardianFlowCompletionToFormValues(data, opts = {}) {
     if (!skipAppointGuardians) out.appointGuardians = 'Yes';
     const rows = (data.guardians || []).map(guardianFlowPersonToAppointmentRow).filter(Boolean);
     out.guardianData = rows;
-    out.guardianshipDetailsData = '';
+    out.guardianshipDetailsData = buildGuardianshipDetailsClauseSameGuardians(
+      data.guardians || [],
+      data.children || []
+    );
   } else if (data.guardianOption === 'yes_different') {
     if (!skipAppointGuardians) out.appointGuardians = 'Yes, but appoint different guardians for children';
     out.guardianData = [];

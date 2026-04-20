@@ -11,9 +11,9 @@
  * onComplete data shape:
  * {
  *   guardianOption: "no" | "yes_same" | "yes_different",
- *   guardians: [ { ...personFields } ],        // if yes_same
- *   children: [                                // if yes_different
- *     { childFirstName, childLastName, dob, guardians: [ { ...personFields } ] }
+ *   guardians: [ { ...personFields } ],        // yes_same — shared guardian(s)
+ *   children: [                                // yes_same & yes_different (under-18s)
+ *     { childFirstName, childLastName, dob, guardians?: [ { ...personFields } ] }
  *   ]
  * }
  *
@@ -45,6 +45,17 @@ function mapAppointToGuardianFlowOption(appointGuardians) {
   if (appointGuardians === 'Yes') return 'yes_same';
   if (appointGuardians === YES_DIFFERENT) return 'yes_different';
   return null;
+}
+
+/** Display child DOB: ISO YYYY-MM-DD → DD/MM/YYYY; otherwise as stored. */
+function formatDob(v) {
+  if (v == null || String(v).trim() === '') return '';
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
+  return String(v).trim();
 }
 
 /** Sync with `html.dark-theme` (solicitor shell + client intake). */
@@ -219,6 +230,32 @@ function buildGuardianFlowStyles(C) {
       marginBottom: 4,
     },
     blueCardHelp: {
+      fontSize: 13,
+      color: C.indigoMid,
+      fontStyle: 'italic',
+      marginBottom: 18,
+    },
+    stepCard: {
+      background: C.indigoLight,
+      border: `2px solid ${C.indigoBorder}`,
+      borderRadius: 12,
+      padding: '24px 20px',
+      marginBottom: 24,
+    },
+    stepLabel: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: C.indigo,
+      marginBottom: 8,
+      letterSpacing: '0.02em',
+    },
+    stepTitle: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: C.indigoDark,
+      marginBottom: 8,
+    },
+    stepHelp: {
       fontSize: 13,
       color: C.indigoMid,
       fontStyle: 'italic',
@@ -574,7 +611,16 @@ function PersonModal({ modalTitle, initial, onSave, onClose, formValues }) {
           <Field label="Address line 2" field="addressLine2" placeholder="Flat, building name, or area" />
           <Field label="Town / city" field="town" placeholder="Town or city" required />
           <Field label="Postcode" field="postcode" placeholder="e.g. SW1A 1AA" required />
-          <Field label="Date of birth" field="dob" placeholder="DD/MM/YYYY" />
+          <div style={{ ...S.fieldGroup, ...S.formGridFull }}>
+            <label style={S.fieldLabel}>Date of birth</label>
+            <input
+              type="date"
+              style={S.fieldInput}
+              value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+            />
+          </div>
           <div style={S.fieldGroup}>
             <label style={S.fieldLabel}>Gender</label>
             <select style={S.fieldSelect} value={form.gender} onChange={set('gender')}>
@@ -617,6 +663,13 @@ function ChildModal({ title, initial, onSave, onClose }) {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const isValid = form.childFirstName.trim() && form.childLastName.trim() && form.dob.trim();
 
+  const dobMax = new Date().toISOString().split('T')[0];
+  const dobMin = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 17);
+    return d.toISOString().split('T')[0];
+  })();
+
   return (
     <div style={S.modalOverlay} role="presentation" onClick={onClose}>
       <div style={S.modalBox} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -648,7 +701,14 @@ function ChildModal({ title, initial, onSave, onClose }) {
           </div>
           <div style={{ ...S.fieldGroup, ...S.formGridFull }}>
             <label style={S.fieldLabel}>Date of birth *</label>
-            <input style={S.fieldInput} placeholder="DD/MM/YYYY" value={form.dob} onChange={set('dob')} />
+            <input
+              type="date"
+              style={S.fieldInput}
+              value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
+              max={dobMax}
+              min={dobMin}
+              onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+            />
           </div>
         </div>
 
@@ -768,8 +828,10 @@ export default function GuardianFlow({
   const [sameGuardians, setSameGuardians] = useState([]);
   const [children, setChildren] = useState([]);
   const [childModal, setChildModal] = useState(null);
-  const [childrenConfirmed, setChildrenConfirmed] = useState(false);
+  /** 1 = add children, 2 = assign guardian(s) */
+  const [step, setStep] = useState(1);
   const hydratedKeyRef = useRef('');
+  const prevEmbeddedOptionRef = useRef(null);
 
   const option = isEmbedded ? embeddedOption : standaloneOption;
 
@@ -806,8 +868,8 @@ export default function GuardianFlow({
     });
 
   const flowStateSnapshot = useMemo(
-    () => ({ sameGuardians, children, childrenConfirmed }),
-    [sameGuardians, children, childrenConfirmed]
+    () => ({ sameGuardians, children, step }),
+    [sameGuardians, children, step]
   );
 
   useLayoutEffect(() => {
@@ -823,8 +885,10 @@ export default function GuardianFlow({
       if (Array.isArray(snap.children)) {
         setChildren(snap.children);
       }
-      if (typeof snap.childrenConfirmed === 'boolean') {
-        setChildrenConfirmed(snap.childrenConfirmed);
+      if (typeof snap.step === 'number' && (snap.step === 1 || snap.step === 2)) {
+        setStep(snap.step);
+      } else if (typeof snap.childrenConfirmed === 'boolean') {
+        setStep(snap.childrenConfirmed ? 2 : 1);
       }
     });
   }, [isEmbedded, initialFlowState]);
@@ -839,8 +903,14 @@ export default function GuardianFlow({
 
   useEffect(() => {
     if (!isEmbedded) return;
-    if (embeddedOption !== 'yes_different') {
-      queueMicrotask(() => setChildrenConfirmed(false));
+    const prev = prevEmbeddedOptionRef.current;
+    prevEmbeddedOptionRef.current = embeddedOption;
+    if (prev !== null && prev !== embeddedOption) {
+      queueMicrotask(() => {
+        setStep(1);
+        setChildren([]);
+        setSameGuardians([]);
+      });
     }
   }, [isEmbedded, embeddedOption]);
 
@@ -863,12 +933,17 @@ export default function GuardianFlow({
       });
     }
 
-    const flow = { sameGuardians: sameDeduped, children: childrenDeduped, childrenConfirmed };
+    const flow = { sameGuardians: sameDeduped, children: childrenDeduped, step };
 
     if (resolved === 'no') {
-      onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], childrenConfirmed: false } });
+      onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], step: 1 } });
     } else if (resolved === 'yes_same') {
-      onComplete?.({ guardianOption: 'yes_same', guardians: sameDeduped, _flowState: flow });
+      onComplete?.({
+        guardianOption: 'yes_same',
+        guardians: sameDeduped,
+        children: childrenDeduped,
+        _flowState: flow,
+      });
     } else if (resolved === 'yes_different') {
       onComplete?.({ guardianOption: 'yes_different', children: childrenDeduped, _flowState: flow });
     } else if (import.meta.env.DEV) {
@@ -905,10 +980,10 @@ export default function GuardianFlow({
           <div style={theme.S.radioGroup}>
             {[
               { value: 'no', label: 'No' },
-              { value: 'yes_same', label: 'Yes' },
+              { value: 'yes_same', label: 'Yes — same guardian(s) for all children' },
               {
                 value: 'yes_different',
-                label: 'Yes, but I want to appoint different guardians for different children',
+                label: 'Yes — I want to appoint different guardians for different children',
               },
             ].map((opt) => (
               <label key={opt.value} style={theme.S.radioLabel}>
@@ -920,7 +995,9 @@ export default function GuardianFlow({
                   checked={standaloneOption === opt.value}
                   onChange={() => {
                     setStandaloneOption(opt.value);
-                    setChildrenConfirmed(false);
+                    setChildren([]);
+                    setSameGuardians([]);
+                    setStep(1);
                   }}
                 />
                 {opt.label}
@@ -930,34 +1007,28 @@ export default function GuardianFlow({
         </>
       )}
 
-      {isEmbedded && embeddedOption && (
-        <p style={{ ...theme.S.helpText, marginBottom: 18, fontStyle: 'normal', color: theme.C.textMid }}>
-          Add the people you want as guardian(s). Your answer to the question above controls which steps you see.
+      {isEmbedded && embeddedOption && embeddedOption !== 'no' && (
+        <p
+          className="break-words text-sm"
+          style={{ ...theme.S.helpText, marginBottom: 18, fontStyle: 'normal', color: theme.C.textMid }}
+        >
+          Add each child under 18, then assign guardian(s). Your answer above controls whether guardians are shared
+          across all children or set per child.
         </p>
       )}
 
-      {option === 'yes_same' && (
-        <div style={theme.S.blueCard}>
-          <div style={theme.S.blueCardTitle}>Who would you like to be your children&apos;s guardian?</div>
-          <div style={theme.S.blueCardHelp}>
-            This should be someone you trust completely to raise your children. You can appoint more than one person.
-          </div>
-          <GuardianList
-            guardians={sameGuardians}
-            onChange={setSameGuardians}
-            formValues={formValuesProp}
-          />
-        </div>
-      )}
-
-      {option === 'yes_different' && !childrenConfirmed && (
-        <div style={theme.S.blueCard}>
-          <div style={theme.S.blueCardTitle}>Tell us about your children under 18</div>
-          <div style={theme.S.blueCardHelp}>
-            Please add each child below. You will then be able to assign a specific guardian to each one.
+      {/* Step 1 (yes_same + yes_different): children */}
+      {(option === 'yes_same' || option === 'yes_different') && step === 1 && (
+        <div style={theme.S.stepCard} className="min-w-0">
+          <div style={theme.S.stepLabel}>Step 1 of 2 — Your children</div>
+          <div style={theme.S.stepTitle}>Add each child under 18</div>
+          <div style={theme.S.stepHelp}>
+            {option === 'yes_same'
+              ? 'Add all children below. On the next step you will choose guardian(s) for all of them.'
+              : 'Add all children below. On the next step you will assign a specific guardian to each one.'}
           </div>
 
-          {children.length === 0 && <div style={theme.S.emptyState}>No children have been added yet.</div>}
+          {children.length === 0 && <div style={theme.S.emptyState}>No children added yet.</div>}
 
           {children.length > 0 && (
             <>
@@ -965,7 +1036,7 @@ export default function GuardianFlow({
               {children.map((c, i) => (
                 <div key={i} style={theme.S.itemRow}>
                   <span className="min-w-0 break-words">
-                    {c.childFirstName} {c.childLastName} — DOB: {c.dob}
+                    {c.childFirstName} {c.childLastName} — DOB: {formatDob(c.dob)}
                   </span>
                   <div style={theme.S.itemActions}>
                     <button type="button" style={theme.S.editBtn} onClick={() => openEditChild(i)}>
@@ -987,14 +1058,15 @@ export default function GuardianFlow({
           {children.length > 0 && (
             <>
               <hr style={theme.S.sectionDivider} />
-              <button type="button" style={theme.S.continueBtn} onClick={() => setChildrenConfirmed(true)}>
-                Continue — assign guardians →
+              <button type="button" style={theme.S.continueBtn} onClick={() => setStep(2)} className="min-h-[44px]">
+                Continue — assign guardian{option === 'yes_different' ? 's' : ''} →
               </button>
             </>
           )}
 
           {childModal && (
             <ChildModal
+              key={childModal.mode === 'edit' ? `child-edit-${childModal.index}` : 'child-add'}
               title={childModal.mode === 'edit' ? 'Edit Child' : 'Add Child'}
               initial={
                 childModal.mode === 'edit'
@@ -1012,12 +1084,54 @@ export default function GuardianFlow({
         </div>
       )}
 
-      {option === 'yes_different' && childrenConfirmed && (
-        <div className="min-w-0">
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, color: theme.C.textDark }}>
-            Now assign a guardian to each child
+      {/* Step 2a: same guardian(s) for all children */}
+      {option === 'yes_same' && step === 2 && (
+        <div style={theme.S.stepCard} className="min-w-0">
+          <div style={theme.S.stepLabel}>Step 2 of 2 — Guardian(s)</div>
+          <div style={theme.S.stepTitle}>Who would you like to be your children&apos;s guardian?</div>
+          <div style={theme.S.stepHelp}>
+            This should be someone you trust completely to raise your children. You can appoint more than one person.
+            These guardian(s) will apply to all {children.length} {children.length === 1 ? 'child' : 'children'}{' '}
+            listed.
           </div>
-          <div style={{ fontSize: 14, color: theme.C.textLight, fontStyle: 'italic', marginBottom: 20 }}>
+
+          <div style={{ marginBottom: 18 }} className="min-w-0">
+            <div style={{ fontSize: 13, fontWeight: 600, color: theme.C.textMid, marginBottom: 8 }}>Applies to:</div>
+            {children.map((c, i) => (
+              <div
+                key={i}
+                style={{
+                  fontSize: 13,
+                  color: theme.C.textMid,
+                  padding: '4px 0',
+                  borderBottom: `1px solid ${theme.C.border}`,
+                }}
+                className="break-words"
+              >
+                {c.childFirstName} {c.childLastName} — DOB: {formatDob(c.dob)}
+              </div>
+            ))}
+          </div>
+
+          <GuardianList
+            guardians={sameGuardians}
+            onChange={setSameGuardians}
+            formValues={formValuesProp}
+          />
+
+          <hr style={theme.S.sectionDivider} />
+          <button type="button" style={theme.S.backBtn} onClick={() => setStep(1)} className="min-h-[44px]">
+            ← Edit children
+          </button>
+        </div>
+      )}
+
+      {/* Step 2b: per-child guardians */}
+      {option === 'yes_different' && step === 2 && (
+        <div style={theme.S.stepCard} className="min-w-0">
+          <div style={theme.S.stepLabel}>Step 2 of 2 — Guardians per child</div>
+          <div style={theme.S.stepTitle}>Assign a guardian to each child</div>
+          <div style={theme.S.stepHelp}>
             For each child below, add the person(s) you would like to be their guardian if both parents passed away.
           </div>
 
@@ -1026,7 +1140,7 @@ export default function GuardianFlow({
               <div style={theme.S.childName}>
                 {child.childFirstName} {child.childLastName}
               </div>
-              <div style={theme.S.childDob}>Date of birth: {child.dob}</div>
+              <div style={theme.S.childDob}>Date of birth: {formatDob(child.dob)}</div>
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: theme.C.textMid }}>
                 Who would you like to be {child.childFirstName}&apos;s guardian?
               </div>
@@ -1042,7 +1156,7 @@ export default function GuardianFlow({
             </div>
           ))}
 
-          <button type="button" style={theme.S.backBtn} onClick={() => setChildrenConfirmed(false)}>
+          <button type="button" style={theme.S.backBtn} onClick={() => setStep(1)} className="min-h-[44px]">
             ← Edit children
           </button>
         </div>

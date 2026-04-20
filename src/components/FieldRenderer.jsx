@@ -265,7 +265,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           }}
           onComplete={(data) => {
             const patch = mapGuardianFlowCompletionToFormValues(data, { skipAppointGuardians: true });
-            const flow = data._flowState || { sameGuardians: [], children: [], childrenConfirmed: false };
+            const flow = data._flowState || { sameGuardians: [], children: [], step: 1 };
             setFormValues((prev) => ({
               ...prev,
               ...patch,
