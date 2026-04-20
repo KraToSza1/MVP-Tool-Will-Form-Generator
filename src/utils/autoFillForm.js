@@ -6,6 +6,14 @@
 
 import { CONTACT_REGISTRY_KEY } from '../lib/personRegistry.js';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
+import {
+  buildGuardianshipDetailsClause,
+  buildGuardianshipDetailsClauseSameGuardians,
+  normalizeSourceToGuardianModalForm,
+} from './guardianFlowSync.js';
+
+/** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
+const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
 
 const ARISTONE_EXECUTOR_LINE =
   'Aristone Limited (trading as Aristone Solicitors), SRA No. 649717, of Ground Floor, 12 Cardiff Road, Luton, LU1 1QG';
@@ -226,45 +234,171 @@ function applyRichPersonDemoOverrides(dummyData) {
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
     },
+    {
+      id: 'demo-reg-catherine-nancy',
+      savedAt: ts,
+      title: 'Mrs',
+      firstName: 'Catherine',
+      middleName: '',
+      lastName: 'Nancy',
+      email: 'catherine.nancy.demo@example.com',
+      mobile: '07700988101',
+      address1: 'Flat 12, Cedar Ridge',
+      address2: '',
+      address3: 'Birmingham',
+      postcode: 'B16 0RP',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Sister (demo guardian)',
+    },
+    {
+      id: 'demo-reg-charlie-nancy',
+      savedAt: ts,
+      title: 'Mr',
+      firstName: 'Charlie',
+      middleName: 'Scott',
+      lastName: 'Nancy',
+      email: 'charlie.nancy.demo@example.com',
+      mobile: '07700988102',
+      address1: 'Flat 12, Cedar Ridge',
+      address2: '',
+      address3: 'Birmingham',
+      postcode: 'B16 0RP',
+      nationalityCountry: 'United Kingdom',
+      countryOfResidence: 'United Kingdom',
+      relationship: 'Brother-in-law (demo guardian)',
+    },
   ];
 
-  dummyData.guardianData = [
-    row({
-      title: 'Mr',
-      firstName: 'Rowan',
-      middleName: 'Kai',
-      lastName: 'Blake',
-      dateOfBirth: '01/06/1981',
-      gender: 'Male',
-      mobile: '07700999110',
-      email: 'rowan.blake.demo@example.com',
-      address1: '7 Guardian Grove',
-      address2: 'Rotherhithe',
-      address3: 'London',
-      postcode: 'SE16 7GG',
-      occupation: 'Teacher (demo autofill)',
-      nationalityCountry: 'United Kingdom',
-      countryOfResidence: 'United Kingdom',
-      relationship: 'Friend',
-    }),
-    row({
-      title: 'Ms',
-      firstName: 'Sienna',
-      lastName: 'Blake',
-      dateOfBirth: '15/08/1983',
-      gender: 'Female',
-      mobile: '07700999111',
-      email: 'sienna.blake.demo@example.com',
-      address1: '8 Guardian Grove',
-      address2: 'Rotherhithe',
-      address3: 'London',
-      postcode: 'SE16 7GH',
-      occupation: 'Architect (demo autofill)',
-      nationalityCountry: 'United Kingdom',
-      countryOfResidence: 'United Kingdom',
-      relationship: 'Friend',
-    }),
+  const guardianRowRowan = row({
+    title: 'Mr',
+    firstName: 'Rowan',
+    middleName: 'Kai',
+    lastName: 'Blake',
+    dateOfBirth: '01/06/1981',
+    gender: 'Male',
+    mobile: '07700999110',
+    email: 'rowan.blake.demo@example.com',
+    address1: '7 Guardian Grove',
+    address2: 'Rotherhithe',
+    address3: 'London',
+    postcode: 'SE16 7GG',
+    occupation: 'Teacher (demo autofill)',
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
+    relationship: 'Friend',
+  });
+  const guardianRowSienna = row({
+    title: 'Ms',
+    firstName: 'Sienna',
+    lastName: 'Blake',
+    dateOfBirth: '15/08/1983',
+    gender: 'Female',
+    mobile: '07700999111',
+    email: 'sienna.blake.demo@example.com',
+    address1: '8 Guardian Grove',
+    address2: 'Rotherhithe',
+    address3: 'London',
+    postcode: 'SE16 7GH',
+    occupation: 'Architect (demo autofill)',
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
+    relationship: 'Friend',
+  });
+  const guardianRowCatherine = row({
+    title: 'Mrs',
+    firstName: 'Catherine',
+    lastName: 'Nancy',
+    dateOfBirth: '11/07/1982',
+    gender: 'Female',
+    mobile: '07700988101',
+    email: 'catherine.nancy.demo@example.com',
+    address1: 'Flat 12, Cedar Ridge',
+    address2: '',
+    address3: 'Birmingham',
+    postcode: 'B16 0RP',
+    occupation: 'Teacher (demo autofill)',
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
+    relationship: 'Sister',
+  });
+  const guardianRowCharlie = row({
+    title: 'Mr',
+    firstName: 'Charlie',
+    middleName: 'Scott',
+    lastName: 'Nancy',
+    dateOfBirth: '03/05/1980',
+    gender: 'Male',
+    mobile: '07700988102',
+    email: 'charlie.nancy.demo@example.com',
+    address1: 'Flat 12, Cedar Ridge',
+    address2: '',
+    address3: 'Birmingham',
+    postcode: 'B16 0RP',
+    occupation: 'Engineer (demo autofill)',
+    nationalityCountry: 'United Kingdom',
+    countryOfResidence: 'United Kingdom',
+    relationship: 'Brother-in-law',
+  });
+
+  const guidedFlowChildrenSame = [
+    {
+      childFirstName: DEMO.children.son.firstName,
+      childLastName: DEMO.children.son.lastName,
+      dob: '2020-03-10',
+      guardians: [],
+    },
+    {
+      childFirstName: DEMO.children.daughter.firstName,
+      childLastName: DEMO.children.daughter.lastName,
+      dob: '2022-01-25',
+      guardians: [],
+    },
   ];
+
+  const guidedFlowChildrenDifferent = [
+    {
+      childFirstName: DEMO.children.son.firstName,
+      childLastName: DEMO.children.son.lastName,
+      dob: '2020-03-10',
+      guardians: [
+        normalizeSourceToGuardianModalForm(guardianRowCatherine),
+        normalizeSourceToGuardianModalForm(guardianRowCharlie),
+      ],
+    },
+    {
+      childFirstName: DEMO.children.daughter.firstName,
+      childLastName: DEMO.children.daughter.lastName,
+      dob: '2022-01-25',
+      guardians: [
+        normalizeSourceToGuardianModalForm(guardianRowRowan),
+        normalizeSourceToGuardianModalForm(guardianRowSienna),
+      ],
+    },
+  ];
+
+  if (dummyData.appointGuardians === APPOINT_GUARDIANS_DIFFERENT) {
+    dummyData.guardianData = [];
+    dummyData.guardianshipDetailsData = buildGuardianshipDetailsClause(guidedFlowChildrenDifferent);
+    dummyData.guardianFlowState = JSON.stringify({
+      sameGuardians: [],
+      children: guidedFlowChildrenDifferent,
+      step: 2,
+    });
+  } else {
+    dummyData.guardianData = [guardianRowRowan, guardianRowSienna];
+    const sameModals = dummyData.guardianData.map((g) => normalizeSourceToGuardianModalForm(g));
+    dummyData.guardianshipDetailsData = buildGuardianshipDetailsClauseSameGuardians(
+      sameModals,
+      guidedFlowChildrenSame,
+    );
+    dummyData.guardianFlowState = JSON.stringify({
+      sameGuardians: sameModals,
+      children: guidedFlowChildrenSame,
+      step: 2,
+    });
+  }
+
   dummyData.substituteGuardianData = [
     row({
       title: 'Mr',
@@ -576,6 +710,12 @@ function applyRichPersonDemoOverrides(dummyData) {
 
   console.log('[AUTOFILL GENERATE] 🧑‍🤝‍🧑 Rich person demo pass:', {
     contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
+    appointGuardians: dummyData.appointGuardians,
+    guardianFlowStateBytes: typeof dummyData.guardianFlowState === 'string' ? dummyData.guardianFlowState.length : 0,
+    guardianshipDetailsPreview:
+      typeof dummyData.guardianshipDetailsData === 'string'
+        ? `${dummyData.guardianshipDetailsData.slice(0, 120)}…`
+        : dummyData.guardianshipDetailsData,
     guardianRows: Array.isArray(dummyData.guardianData) ? dummyData.guardianData.length : 0,
     executorRows: Array.isArray(dummyData.executorData) ? dummyData.executorData.length : 0,
     professionalExecutorRows: Array.isArray(dummyData.professionalExecutorData) ? dummyData.professionalExecutorData.length : 0,
@@ -638,7 +778,8 @@ export const generateDummyFormData = (formData) => {
     testatorUKNationalOrHabitual: 'UK National',
     foreignWillNotRevoked: 'No',
     willAppliesToUK: 'Yes - England and Wales',
-    appointGuardians: 'Yes',
+    /** Exercises GuardianFlow step 1→2 + per-child lists (matches Mariyam review scenario). */
+    appointGuardians: APPOINT_GUARDIANS_DIFFERENT,
     /** Primary executors = individuals (rich rows + DOB) so executor age flow can render; professional Aristone remains via appointProfessionalExecutor below. */
     chooseAristoneExecutor: 'Individual',
     chooseAristoneSubstituteExecutor: 'Aristone',
