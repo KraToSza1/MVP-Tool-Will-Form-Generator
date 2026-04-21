@@ -20,15 +20,8 @@
  * No external dependencies — React (useState) only.
  */
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { getContactCandidates } from '../lib/personRegistry.js';
 import {
@@ -47,6 +40,14 @@ function mapAppointToGuardianFlowOption(appointGuardians) {
   return null;
 }
 
+/** Maps internal flow keys to `appointGuardians` formValues (hidden field). */
+function mapFlowOptionToAppointValue(flowOpt) {
+  if (flowOpt === 'no') return 'No';
+  if (flowOpt === 'yes_same') return 'Yes';
+  if (flowOpt === 'yes_different') return YES_DIFFERENT;
+  return null;
+}
+
 /** Display child DOB: ISO YYYY-MM-DD → DD/MM/YYYY; otherwise as stored. */
 function formatDob(v) {
   if (v == null || String(v).trim() === '') return '';
@@ -58,481 +59,19 @@ function formatDob(v) {
   return String(v).trim();
 }
 
-/** Sync with `html.dark-theme` (solicitor shell + client intake). */
-function useDocumentDarkTheme() {
-  const [dark, setDark] = useState(() =>
-    typeof document !== 'undefined' ? document.documentElement.classList.contains('dark-theme') : false
-  );
-  useEffect(() => {
-    const el = document.documentElement;
-    const sync = () => setDark(el.classList.contains('dark-theme'));
-    sync();
-    const obs = new MutationObserver(sync);
-    obs.observe(el, { attributes: true, attributeFilter: ['class'] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
-
-// ─── Palettes (light = existing Mariyam spec; dark = slate shell + indigo accents) ──
-const PALETTE_LIGHT = {
-  indigo: '#4f46e5',
-  indigoDark: '#3730a3',
-  indigoLight: '#eef2ff',
-  indigoBorder: '#c7d2fe',
-  indigoMid: '#6366f1',
-  textDark: '#111827',
-  textMid: '#374151',
-  textLight: '#6b7280',
-  border: '#e5e7eb',
-  inputBg: '#ffffff',
-  pageBg: '#f9fafb',
-  surface: '#ffffff',
-  emptyStateBg: '#dde4fb',
-  emptyStateFg: '#4338ca',
-  modalOverlay: 'rgba(0,0,0,0.35)',
-  modalShadow: '0 8px 40px rgba(0,0,0,0.18)',
-  backBtnBg: '#e5e7eb',
-  btnOnPrimary: '#ffffff',
-  green: '#16a34a',
-  red: '#ef4444',
-};
-
-const PALETTE_DARK = {
-  indigo: '#6366f1',
-  indigoDark: '#c7d2fe',
-  indigoLight: '#1e293b',
-  indigoBorder: '#475569',
-  indigoMid: '#a5b4fc',
-  textDark: '#f1f5f9',
-  textMid: '#cbd5e1',
-  textLight: '#94a3b8',
-  border: '#475569',
-  inputBg: '#0f172a',
-  pageBg: '#0f172a',
-  surface: '#1e293b',
-  emptyStateBg: 'rgba(51, 65, 85, 0.65)',
-  emptyStateFg: '#c7d2fe',
-  modalOverlay: 'rgba(0,0,0,0.65)',
-  modalShadow: '0 16px 48px rgba(0,0,0,0.5)',
-  backBtnBg: '#334155',
-  btnOnPrimary: '#f8fafc',
-  green: '#4ade80',
-  red: '#f87171',
-};
-
-function buildGuardianFlowStyles(C) {
-  const btnText = C.btnOnPrimary;
-  return {
-    section: {
-      fontFamily: "'Inter', 'Segoe UI', sans-serif",
-      maxWidth: 700,
-      margin: '0 auto',
-      padding: '32px 24px',
-      background: C.pageBg,
-      color: C.textDark,
-    },
-    sectionHeader: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 16,
-    },
-    sectionIcon: {
-      background: C.indigoLight,
-      borderRadius: 8,
-      width: 36,
-      height: 36,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: 18,
-    },
-    sectionTitle: {
-      fontSize: 24,
-      fontWeight: 700,
-      color: C.textDark,
-      margin: 0,
-    },
-    divider: {
-      border: 'none',
-      borderTop: `2px solid ${C.indigo}`,
-      margin: '0 0 28px 0',
-    },
-    questionRow: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: 10,
-      marginBottom: 6,
-    },
-    questionIcon: {
-      color: C.indigo,
-      fontSize: 18,
-      marginTop: 1,
-      flexShrink: 0,
-    },
-    questionText: {
-      fontSize: 16,
-      fontWeight: 700,
-      color: C.textDark,
-      margin: 0,
-    },
-    helpRow: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: 8,
-      marginBottom: 20,
-    },
-    helpIcon: {
-      color: C.textLight,
-      fontSize: 15,
-      flexShrink: 0,
-      marginTop: 1,
-    },
-    helpText: {
-      fontSize: 14,
-      color: C.textLight,
-      fontStyle: 'italic',
-      margin: 0,
-    },
-    radioGroup: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 16,
-      marginBottom: 28,
-    },
-    radioLabel: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      fontSize: 15,
-      color: C.textDark,
-      cursor: 'pointer',
-    },
-    radio: {
-      width: 20,
-      height: 20,
-      accentColor: C.indigo,
-      cursor: 'pointer',
-      flexShrink: 0,
-    },
-    blueCard: {
-      background: C.indigoLight,
-      border: `2px solid ${C.indigoBorder}`,
-      borderRadius: 12,
-      padding: '24px 20px',
-      marginBottom: 24,
-    },
-    blueCardTitle: {
-      fontSize: 16,
-      fontWeight: 700,
-      color: C.indigoDark,
-      marginBottom: 4,
-    },
-    blueCardHelp: {
-      fontSize: 13,
-      color: C.indigoMid,
-      fontStyle: 'italic',
-      marginBottom: 18,
-    },
-    stepCard: {
-      background: C.indigoLight,
-      border: `2px solid ${C.indigoBorder}`,
-      borderRadius: 12,
-      padding: '24px 20px',
-      marginBottom: 24,
-    },
-    stepLabel: {
-      fontSize: 12,
-      fontWeight: 700,
-      color: C.indigo,
-      marginBottom: 8,
-      letterSpacing: '0.02em',
-    },
-    stepTitle: {
-      fontSize: 16,
-      fontWeight: 700,
-      color: C.indigoDark,
-      marginBottom: 8,
-    },
-    stepHelp: {
-      fontSize: 13,
-      color: C.indigoMid,
-      fontStyle: 'italic',
-      marginBottom: 18,
-    },
-    emptyState: {
-      background: C.emptyStateBg,
-      borderRadius: 8,
-      padding: '12px 16px',
-      fontSize: 14,
-      color: C.emptyStateFg,
-      marginBottom: 14,
-    },
-    itemRow: {
-      background: C.surface,
-      border: `1px solid ${C.indigoBorder}`,
-      borderRadius: 8,
-      padding: '12px 16px',
-      marginBottom: 10,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      fontSize: 14,
-      color: C.textMid,
-      gap: 8,
-    },
-    itemActions: {
-      display: 'flex',
-      gap: 14,
-      flexShrink: 0,
-    },
-    editBtn: {
-      color: C.indigoMid,
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: 13,
-      fontWeight: 600,
-      padding: 0,
-    },
-    removeBtn: {
-      color: C.red,
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: 13,
-      fontWeight: 600,
-      padding: 0,
-    },
-    addedLabel: {
-      fontSize: 13,
-      fontWeight: 700,
-      color: C.green,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 10,
-    },
-    addBtn: {
-      background: C.indigo,
-      color: btnText,
-      border: 'none',
-      borderRadius: 8,
-      padding: '10px 18px',
-      fontSize: 14,
-      fontWeight: 600,
-      cursor: 'pointer',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 4,
-    },
-    continueBtn: {
-      background: C.indigo,
-      color: btnText,
-      border: 'none',
-      borderRadius: 8,
-      padding: '11px 24px',
-      fontSize: 14,
-      fontWeight: 700,
-      cursor: 'pointer',
-      marginTop: 8,
-    },
-    backBtn: {
-      background: C.backBtnBg,
-      color: C.textMid,
-      border: 'none',
-      borderRadius: 8,
-      padding: '11px 24px',
-      fontSize: 14,
-      fontWeight: 700,
-      cursor: 'pointer',
-      marginTop: 8,
-      marginRight: 12,
-    },
-    saveBtn: {
-      background: C.indigo,
-      color: btnText,
-      border: 'none',
-      borderRadius: 8,
-      padding: '12px 28px',
-      fontSize: 15,
-      fontWeight: 700,
-      cursor: 'pointer',
-      marginTop: 4,
-    },
-    sectionDivider: {
-      border: 'none',
-      borderTop: `1.5px solid ${C.border}`,
-      margin: '24px 0',
-    },
-    childBlock: {
-      background: C.surface,
-      border: `1.5px solid ${C.indigoBorder}`,
-      borderRadius: 12,
-      padding: '20px',
-      marginBottom: 20,
-    },
-    childName: {
-      fontSize: 15,
-      fontWeight: 700,
-      color: C.indigoDark,
-      marginBottom: 2,
-    },
-    childDob: {
-      fontSize: 13,
-      color: C.textLight,
-      marginBottom: 14,
-    },
-    modalOverlay: {
-      position: 'fixed',
-      inset: 0,
-      background: C.modalOverlay,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: 16,
-    },
-    modalBox: {
-      background: C.surface,
-      border: `1px solid ${C.border}`,
-      borderRadius: 16,
-      padding: '28px 24px',
-      width: '100%',
-      maxWidth: 640,
-      boxShadow: C.modalShadow,
-      maxHeight: '90vh',
-      overflowY: 'auto',
-      color: C.textDark,
-    },
-    modalHeader: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 24,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: 700,
-      color: C.textDark,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      margin: 0,
-    },
-    closeBtn: {
-      background: 'none',
-      border: 'none',
-      color: C.textLight,
-      fontSize: 20,
-      cursor: 'pointer',
-      lineHeight: 1,
-      padding: 0,
-    },
-    formGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-      gap: '16px 20px',
-    },
-    formGridFull: {
-      gridColumn: '1 / -1',
-    },
-    fieldGroup: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 5,
-    },
-    fieldLabel: {
-      fontSize: 13,
-      fontWeight: 600,
-      color: C.textMid,
-    },
-    fieldInput: {
-      width: '100%',
-      minWidth: 0,
-      minHeight: 44,
-      padding: '9px 12px',
-      border: `1.5px solid ${C.border}`,
-      borderRadius: 8,
-      fontSize: 14,
-      outline: 'none',
-      boxSizing: 'border-box',
-      background: C.inputBg,
-      color: C.textDark,
-      transition: 'border-color 0.15s',
-    },
-    fieldSelect: {
-      width: '100%',
-      minWidth: 0,
-      minHeight: 44,
-      padding: '9px 12px',
-      border: `1.5px solid ${C.border}`,
-      borderRadius: 8,
-      fontSize: 14,
-      outline: 'none',
-      boxSizing: 'border-box',
-      background: C.inputBg,
-      color: C.textDark,
-      cursor: 'pointer',
-    },
-    modalActions: {
-      display: 'flex',
-      justifyContent: 'flex-end',
-      gap: 12,
-      marginTop: 28,
-    },
-    modalCancelBtn: {
-      background: C.surface,
-      color: C.textMid,
-      border: `1.5px solid ${C.border}`,
-      borderRadius: 8,
-      padding: '10px 20px',
-      fontSize: 14,
-      fontWeight: 600,
-      cursor: 'pointer',
-    },
-    modalApplyBtn: {
-      background: C.indigo,
-      color: btnText,
-      border: 'none',
-      borderRadius: 8,
-      padding: '10px 20px',
-      fontSize: 14,
-      fontWeight: 600,
-      cursor: 'pointer',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-    },
-    requiredNote: {
-      fontSize: 12,
-      color: C.textLight,
-      marginTop: 14,
-    },
-  };
-}
-
-const DEFAULT_THEME = { C: PALETTE_LIGHT, S: buildGuardianFlowStyles(PALETTE_LIGHT) };
-const GuardianFlowThemeContext = createContext(DEFAULT_THEME);
-
-function useGuardianFlowTheme() {
-  return useContext(GuardianFlowThemeContext);
-}
-
-function PersonModal({ modalTitle, initial, onSave, onClose, formValues }) {
-  const { S } = useGuardianFlowTheme();
+function PersonModal({ modalTitle, subtitle, initial, onSave, onClose, formValues }) {
   const candidates = useMemo(() => getContactCandidates(formValues || {}), [formValues]);
   const [sourceId, setSourceId] = useState('__new__');
   const [form, setForm] = useState(() =>
     initial ? normalizeSourceToGuardianModalForm(initial) : { ...GUARDIAN_FLOW_MODAL_EMPTY }
   );
+  const [showErrors, setShowErrors] = useState(false);
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
   useEffect(() => {
     setSourceId('__new__');
     setForm(initial ? normalizeSourceToGuardianModalForm(initial) : { ...GUARDIAN_FLOW_MODAL_EMPTY });
+    setShowErrors(false);
   }, [initial, modalTitle]);
 
   const applySource = (id) => {
@@ -547,121 +86,301 @@ function PersonModal({ modalTitle, initial, onSave, onClose, formValues }) {
     }
   };
 
-  const isValid =
-    form.firstName.trim() &&
-    form.lastName.trim() &&
-    form.addressLine1.trim() &&
-    form.town.trim() &&
-    form.postcode.trim();
+  const hasAddress = !!(form.addressLine1.trim() || form.postcode.trim());
+  const isValid = !!(form.firstName.trim() && form.lastName.trim() && hasAddress);
 
-  const Field = ({ label, field, placeholder, type = 'text', fullWidth = false, required = false }) => (
-    <div style={{ ...S.fieldGroup, ...(fullWidth ? S.formGridFull : {}) }}>
-      <label style={S.fieldLabel}>
-        {label}
-        {required ? ' *' : ''}
-      </label>
-      <input
-        style={S.fieldInput}
-        type={type}
-        placeholder={placeholder}
-        value={form[field]}
-        onChange={set(field)}
-      />
-    </div>
-  );
+  const errFirst = showErrors && !form.firstName.trim();
+  const errLast = showErrors && !form.lastName.trim();
+  const errAddr = showErrors && !hasAddress;
 
-  return (
-    <div style={S.modalOverlay} role="presentation" onClick={onClose}>
-      <div style={S.modalBox} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <h3 style={S.modalTitle}>👤 {modalTitle}</h3>
-          <button type="button" style={S.closeBtn} onClick={onClose} aria-label="Close">
-            ✕
+  const trySave = () => {
+    setShowErrors(true);
+    if (!isValid) return;
+    onSave(form);
+  };
+
+  const sub = subtitle || modalTitle || 'Add person';
+
+  return createPortal(
+    <div className="grd-modal-overlay grd-modal-open" role="presentation" onClick={onClose}>
+      <div className="grd-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="grd-modal-header">
+          <div className="grd-modal-header-left">
+            <div className="grd-modal-header-icon" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="grd-modal-title">Add person</p>
+              <p className="grd-modal-subtitle break-words">{sub}</p>
+            </div>
+          </div>
+          <button type="button" className="grd-modal-close" onClick={onClose} aria-label="Close">
+            &times;
           </button>
         </div>
 
-        {!initial && (
-          <div style={{ ...S.fieldGroup, marginBottom: 16 }}>
-            <label style={S.fieldLabel}>Same person or new</label>
-            <select
-              style={S.fieldSelect}
-              value={sourceId}
-              onChange={(e) => applySource(e.target.value)}
-              aria-label="Prefill from an existing person or enter new details"
-            >
-              <option value="__new__">Enter a new person</option>
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <p style={{ ...S.requiredNote, marginTop: 8, fontStyle: 'normal' }}>
-              You can copy from someone you already entered, then edit. Required fields must still be completed.
-            </p>
-          </div>
-        )}
+        <div className="grd-modal-body">
+          {!initial && (
+            <>
+              <p className="grd-modal-section-label">Same person or new</p>
+              <select
+                className="grd-modal-select"
+                value={sourceId}
+                onChange={(e) => applySource(e.target.value)}
+                aria-label="Prefill from an existing person or enter new details"
+              >
+                <option value="__new__">Enter a new person</option>
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <div className="grd-modal-info-row">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <p>
+                  You can copy from someone you already entered, then edit. First name, last name, and at least address
+                  line 1 or postcode are required.
+                </p>
+              </div>
+            </>
+          )}
 
-        <div style={S.formGrid}>
-          <Field label="Title" field="title" placeholder="e.g. Mr, Ms, Dr" />
-          <Field label="First name" field="firstName" placeholder="e.g. John" required />
-          <Field label="Middle name(s)" field="middleNames" placeholder="Leave blank if not applicable" />
-          <Field label="Last name" field="lastName" placeholder="e.g. Smith" required />
-          <Field label="Address line 1" field="addressLine1" placeholder="House number and street" required />
-          <Field label="Address line 2" field="addressLine2" placeholder="Flat, building name, or area" />
-          <Field label="Town / city" field="town" placeholder="Town or city" required />
-          <Field label="Postcode" field="postcode" placeholder="e.g. SW1A 1AA" required />
-          <div style={{ ...S.fieldGroup, ...S.formGridFull }}>
-            <label style={S.fieldLabel}>Date of birth</label>
-            <input
-              type="date"
-              style={S.fieldInput}
-              value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
-              max={new Date().toISOString().split('T')[0]}
-              onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
-            />
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-title">
+                Title
+              </label>
+              <input
+                id="gf-m-title"
+                className="grd-modal-input"
+                type="text"
+                placeholder="e.g. Mr, Ms, Dr"
+                value={form.title}
+                onChange={set('title')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-fn">
+                First name <span className="grd-modal-required">*</span>
+              </label>
+              <input
+                id="gf-m-fn"
+                className={`grd-modal-input${errFirst ? ' grd-modal-input-error' : ''}`}
+                type="text"
+                placeholder="e.g. John"
+                value={form.firstName}
+                onChange={set('firstName')}
+              />
+              <span className={`grd-modal-error-text${errFirst ? ' grd-modal-error-visible' : ''}`}>First name is required</span>
+            </div>
           </div>
-          <div style={S.fieldGroup}>
-            <label style={S.fieldLabel}>Gender</label>
-            <select style={S.fieldSelect} value={form.gender} onChange={set('gender')}>
-              <option value="">Select...</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="non_binary">Non-binary</option>
-              <option value="prefer_not_to_say">Prefer not to say</option>
-            </select>
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-mn">
+                Middle name(s)
+              </label>
+              <input
+                id="gf-m-mn"
+                className="grd-modal-input"
+                type="text"
+                placeholder="Leave blank if not applicable"
+                value={form.middleNames}
+                onChange={set('middleNames')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-ln">
+                Last name <span className="grd-modal-required">*</span>
+              </label>
+              <input
+                id="gf-m-ln"
+                className={`grd-modal-input${errLast ? ' grd-modal-input-error' : ''}`}
+                type="text"
+                placeholder="e.g. Smith"
+                value={form.lastName}
+                onChange={set('lastName')}
+              />
+              <span className={`grd-modal-error-text${errLast ? ' grd-modal-error-visible' : ''}`}>Last name is required</span>
+            </div>
           </div>
-          <Field label="Occupation" field="occupation" placeholder="e.g. Teacher, Retired" />
-          <Field label="Relationship to you" field="relationship" placeholder="e.g. Friend, sibling, child" />
-          <Field label="Mobile" field="mobile" placeholder="e.g. 07700 900000" />
-          <Field label="Email" field="email" placeholder="e.g. john.smith@example.com" type="email" />
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-a1">
+                Address line 1
+              </label>
+              <input
+                id="gf-m-a1"
+                className={`grd-modal-input${errAddr ? ' grd-modal-input-error' : ''}`}
+                type="text"
+                placeholder="House number and street"
+                value={form.addressLine1}
+                onChange={set('addressLine1')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-a2">
+                Address line 2
+              </label>
+              <input
+                id="gf-m-a2"
+                className="grd-modal-input"
+                type="text"
+                placeholder="Flat, building name, or area"
+                value={form.addressLine2}
+                onChange={set('addressLine2')}
+              />
+            </div>
+          </div>
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-town">
+                Town / city
+              </label>
+              <input
+                id="gf-m-town"
+                className="grd-modal-input"
+                type="text"
+                placeholder="Town or city"
+                value={form.town}
+                onChange={set('town')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-pc">
+                Postcode
+              </label>
+              <input
+                id="gf-m-pc"
+                className={`grd-modal-input${errAddr ? ' grd-modal-input-error' : ''}`}
+                type="text"
+                placeholder="e.g. SW1A 1AA"
+                value={form.postcode}
+                onChange={set('postcode')}
+              />
+              <span className={`grd-modal-error-text${errAddr ? ' grd-modal-error-visible' : ''}`}>
+                Address line 1 or postcode is required
+              </span>
+            </div>
+          </div>
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-dob">
+                Date of birth
+              </label>
+              <input
+                id="gf-m-dob"
+                className="grd-modal-input"
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
+                onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-gender">
+                Gender
+              </label>
+              <select id="gf-m-gender" className="grd-modal-field-select" value={form.gender} onChange={set('gender')}>
+                <option value="">Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="non_binary">Non-binary</option>
+                <option value="prefer_not_to_say">Prefer not to say</option>
+              </select>
+            </div>
+          </div>
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-occ">
+                Occupation
+              </label>
+              <input
+                id="gf-m-occ"
+                className="grd-modal-input"
+                type="text"
+                placeholder="e.g. Teacher, Retired"
+                value={form.occupation}
+                onChange={set('occupation')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-rel">
+                What is their relationship to you?
+              </label>
+              <input
+                id="gf-m-rel"
+                className="grd-modal-input"
+                type="text"
+                placeholder="e.g. Friend, sibling, cousin"
+                value={form.relationship}
+                onChange={set('relationship')}
+              />
+            </div>
+          </div>
+          <div className="grd-modal-grid">
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-mob">
+                Mobile
+              </label>
+              <input
+                id="gf-m-mob"
+                className="grd-modal-input"
+                type="tel"
+                placeholder="e.g. 07700 900000"
+                value={form.mobile}
+                onChange={set('mobile')}
+              />
+            </div>
+            <div className="grd-modal-field">
+              <label className="grd-modal-label" htmlFor="gf-m-em">
+                Email
+              </label>
+              <input
+                id="gf-m-em"
+                className="grd-modal-input"
+                type="email"
+                placeholder="e.g. john.smith@email.com"
+                value={form.email}
+                onChange={set('email')}
+              />
+            </div>
+          </div>
         </div>
 
-        <div style={S.requiredNote}>* Required fields</div>
-
-        <div style={S.modalActions}>
-          <button type="button" style={S.modalCancelBtn} onClick={onClose}>
+        <div className="grd-modal-footer">
+          <button type="button" className="grd-modal-btn-cancel" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            style={{ ...S.modalApplyBtn, opacity: isValid ? 1 : 0.45, cursor: isValid ? 'pointer' : 'not-allowed' }}
-            disabled={!isValid}
-            onClick={() => onSave(form)}
-          >
-            💾 Apply changes
+          <button type="button" className="grd-modal-btn-save" onClick={trySave}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Add person
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 function ChildModal({ title, initial, onSave, onClose }) {
-  const { S } = useGuardianFlowTheme();
   const [form, setForm] = useState(initial || { childFirstName: '', childLastName: '', dob: '' });
+  const [showErrors, setShowErrors] = useState(false);
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const isValid = form.childFirstName.trim() && form.childLastName.trim() && form.dob.trim();
+
+  useEffect(() => {
+    setShowErrors(false);
+  }, [initial, title]);
 
   const dobMax = new Date().toISOString().split('T')[0];
   const dobMin = (() => {
@@ -670,70 +389,80 @@ function ChildModal({ title, initial, onSave, onClose }) {
     return d.toISOString().split('T')[0];
   })();
 
-  return (
-    <div style={S.modalOverlay} role="presentation" onClick={onClose}>
-      <div style={S.modalBox} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <h3 style={S.modalTitle}>{title || 'Add Child'}</h3>
-          <button type="button" style={S.closeBtn} onClick={onClose} aria-label="Close">
-            ✕
+  const trySave = () => {
+    setShowErrors(true);
+    if (!isValid) return;
+    onSave(form);
+  };
+
+  return createPortal(
+    <div className="grd-child-modal-overlay grd-modal-open" role="presentation" onClick={onClose}>
+      <div className="grd-child-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="grd-child-modal-header">
+          <h3 className="grd-child-modal-title">{title || 'Add Child'}</h3>
+          <button type="button" className="grd-modal-close" onClick={onClose} aria-label="Close">
+            &times;
           </button>
         </div>
 
-        <div style={S.formGrid}>
-          <div style={S.fieldGroup}>
-            <label style={S.fieldLabel}>First name(s) including middle names *</label>
-            <input
-              style={S.fieldInput}
-              placeholder="e.g. Emily Rose"
-              value={form.childFirstName}
-              onChange={set('childFirstName')}
-            />
+        <div className="grd-child-modal-body">
+          <div className="grd-child-fields" style={{ gridTemplateColumns: '1fr' }}>
+            <div>
+              <label className="grd-field-label" htmlFor="gf-c-fn">
+                First name(s) including middle names *
+              </label>
+              <input
+                id="gf-c-fn"
+                className={`grd-field-input${showErrors && !form.childFirstName.trim() ? ' ring-2 ring-red-400' : ''}`}
+                placeholder="e.g. Emily Rose"
+                value={form.childFirstName}
+                onChange={set('childFirstName')}
+              />
+            </div>
+            <div>
+              <label className="grd-field-label" htmlFor="gf-c-ln">
+                Last name / Surname *
+              </label>
+              <input
+                id="gf-c-ln"
+                className={`grd-field-input${showErrors && !form.childLastName.trim() ? ' ring-2 ring-red-400' : ''}`}
+                placeholder="e.g. Smith"
+                value={form.childLastName}
+                onChange={set('childLastName')}
+              />
+            </div>
+            <div>
+              <label className="grd-field-label" htmlFor="gf-c-dob">
+                Date of birth *
+              </label>
+              <input
+                id="gf-c-dob"
+                className={`grd-field-input${showErrors && !form.dob.trim() ? ' ring-2 ring-red-400' : ''}`}
+                type="date"
+                value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
+                max={dobMax}
+                min={dobMin}
+                onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+              />
+            </div>
           </div>
-          <div style={S.fieldGroup}>
-            <label style={S.fieldLabel}>Last name / Surname *</label>
-            <input
-              style={S.fieldInput}
-              placeholder="e.g. Smith"
-              value={form.childLastName}
-              onChange={set('childLastName')}
-            />
-          </div>
-          <div style={{ ...S.fieldGroup, ...S.formGridFull }}>
-            <label style={S.fieldLabel}>Date of birth *</label>
-            <input
-              type="date"
-              style={S.fieldInput}
-              value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
-              max={dobMax}
-              min={dobMin}
-              onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
-            />
-          </div>
-        </div>
 
-        <div style={S.requiredNote}>* Required fields</div>
-
-        <div style={S.modalActions}>
-          <button type="button" style={S.modalCancelBtn} onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            style={{ ...S.modalApplyBtn, opacity: isValid ? 1 : 0.45, cursor: isValid ? 'pointer' : 'not-allowed' }}
-            disabled={!isValid}
-            onClick={() => onSave(form)}
-          >
-            💾 Apply changes
-          </button>
+          <div className="grd-save-row flex flex-wrap justify-end gap-2">
+            <button type="button" className="grd-btn-secondary min-h-[44px]" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className="grd-btn-add min-h-[44px]" onClick={trySave}>
+              Save child
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
-function GuardianList({ guardians, onChange, addLabel = 'Add Guardian', formValues }) {
-  const { S } = useGuardianFlowTheme();
+function GuardianList({ guardians, onChange, addLabel = 'Add Guardian', modalSubtitle, formValues }) {
   const [modal, setModal] = useState(null);
 
   const openAdd = () => setModal({ mode: 'add' });
@@ -766,40 +495,59 @@ function GuardianList({ guardians, onChange, addLabel = 'Add Guardian', formValu
   const handleRemove = (i) => onChange(guardians.filter((_, idx) => idx !== i));
 
   const displayName = (g) => [g.title, g.firstName, g.middleNames, g.lastName].filter(Boolean).join(' ');
+  const initials = (g) => {
+    const a = (g.firstName || '').trim().charAt(0);
+    const b = (g.lastName || '').trim().charAt(0);
+    return (a + b || '?').toUpperCase();
+  };
+  const detailLine = (g) =>
+    [g.addressLine1, g.town, g.postcode].filter((x) => x && String(x).trim()).join(', ');
+
+  const sub =
+    modalSubtitle ||
+    (modal?.mode === 'edit' ? 'Edit details' : `For: ${addLabel}`);
 
   return (
     <>
-      {guardians.length === 0 && <div style={S.emptyState}>No guardian has been specified.</div>}
-
-      {guardians.length > 0 && (
-        <>
-          <div style={S.addedLabel}>✅ Added ({guardians.length}):</div>
-          {guardians.map((g, i) => (
-            <div key={i} style={S.itemRow}>
-              <span className="min-w-0 break-words">
-                <strong>{displayName(g)}</strong>
-                {g.addressLine1 && ` — ${g.addressLine1}, ${g.town}, ${g.postcode}`}
-              </span>
-              <div style={S.itemActions}>
-                <button type="button" style={S.editBtn} onClick={() => openEdit(i)}>
-                  ✏️ Edit
-                </button>
-                <button type="button" style={S.removeBtn} onClick={() => handleRemove(i)}>
-                  🗑 Remove
-                </button>
-              </div>
-            </div>
-          ))}
-        </>
+      {guardians.length === 0 && (
+        <div className="grd-empty-card">
+          <p className="ec-title">No guardian added yet</p>
+          <p className="ec-sub">Use the button below to add someone.</p>
+        </div>
       )}
 
-      <button type="button" style={S.addBtn} onClick={openAdd}>
-        + {addLabel}
+      {guardians.map((g, i) => (
+        <div key={i} className="grd-person-card">
+          <div className="grd-person-avatar" aria-hidden>
+            {initials(g)}
+          </div>
+          <div className="grd-person-info min-w-0">
+            <p className="grd-person-name break-words">{displayName(g) || 'Guardian'}</p>
+            {detailLine(g) ? <p className="grd-person-detail break-words">{detailLine(g)}</p> : null}
+          </div>
+          <div className="flex flex-shrink-0 flex-col gap-1 sm:flex-row">
+            <button type="button" className="grd-btn-secondary min-h-[44px] px-3 text-xs" onClick={() => openEdit(i)}>
+              Edit
+            </button>
+            <button type="button" className="grd-btn-remove" onClick={() => handleRemove(i)}>
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+
+      <button type="button" className="grd-btn-add" onClick={openAdd}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        {addLabel}
       </button>
 
       {modal && (
         <PersonModal
           modalTitle={modal.mode === 'add' ? 'Add Guardian' : 'Edit Guardian'}
+          subtitle={sub}
           initial={modal.mode === 'edit' ? guardians[modal.index] : null}
           formValues={formValues}
           onSave={handleSave}
@@ -816,6 +564,7 @@ export default function GuardianFlow({
   appointGuardiansValue,
   initialFlowState = null,
   onFlowStateChange,
+  onAppointGuardiansChange,
   formValues: formValuesProp,
 }) {
   const isEmbedded = variant === 'embedded';
@@ -826,6 +575,7 @@ export default function GuardianFlow({
 
   const [standaloneOption, setStandaloneOption] = useState(null);
   const [sameGuardians, setSameGuardians] = useState([]);
+  const [substituteSameGuardians, setSubstituteSameGuardians] = useState([]);
   const [children, setChildren] = useState([]);
   const [childModal, setChildModal] = useState(null);
   /** 1 = add children, 2 = assign guardian(s) */
@@ -834,12 +584,6 @@ export default function GuardianFlow({
   const prevEmbeddedOptionRef = useRef(null);
 
   const option = isEmbedded ? embeddedOption : standaloneOption;
-
-  const dark = useDocumentDarkTheme();
-  const theme = useMemo(() => {
-    const C = dark ? PALETTE_DARK : PALETTE_LIGHT;
-    return { C, S: buildGuardianFlowStyles(C) };
-  }, [dark]);
 
   const openAddChild = () => setChildModal({ mode: 'add' });
   const openEditChild = (i) => setChildModal({ mode: 'edit', index: i });
@@ -868,8 +612,8 @@ export default function GuardianFlow({
     });
 
   const flowStateSnapshot = useMemo(
-    () => ({ sameGuardians, children, step }),
-    [sameGuardians, children, step]
+    () => ({ sameGuardians, children, step, substituteSameGuardians }),
+    [sameGuardians, children, step, substituteSameGuardians]
   );
 
   useLayoutEffect(() => {
@@ -884,6 +628,9 @@ export default function GuardianFlow({
       }
       if (Array.isArray(snap.children)) {
         setChildren(snap.children);
+      }
+      if (Array.isArray(snap.substituteSameGuardians)) {
+        setSubstituteSameGuardians(snap.substituteSameGuardians);
       }
       if (typeof snap.step === 'number' && (snap.step === 1 || snap.step === 2)) {
         setStep(snap.step);
@@ -910,9 +657,15 @@ export default function GuardianFlow({
         setStep(1);
         setChildren([]);
         setSameGuardians([]);
+        setSubstituteSameGuardians([]);
       });
     }
   }, [isEmbedded, embeddedOption]);
+
+  const selectEmbedded = (flowOpt) => {
+    const v = mapFlowOptionToAppointValue(flowOpt);
+    if (v) onAppointGuardiansChange?.(v);
+  };
 
   const handleComplete = () => {
     const resolved = isEmbedded
@@ -920,6 +673,7 @@ export default function GuardianFlow({
       : standaloneOption;
 
     const sameDeduped = dedupeGuardianFlowPersonList(sameGuardians);
+    const substituteDeduped = dedupeGuardianFlowPersonList(substituteSameGuardians);
     const childrenDeduped = children.map((ch) => ({
       ...ch,
       guardians: dedupeGuardianFlowPersonList(Array.isArray(ch.guardians) ? ch.guardians : []),
@@ -927,26 +681,80 @@ export default function GuardianFlow({
 
     const childGuardianCount = (chs) =>
       (chs || []).reduce((n, ch) => n + (Array.isArray(ch.guardians) ? ch.guardians.length : 0), 0);
-    if (sameDeduped.length < sameGuardians.length || childGuardianCount(childrenDeduped) < childGuardianCount(children)) {
+    if (
+      sameDeduped.length < sameGuardians.length ||
+      substituteDeduped.length < substituteSameGuardians.length ||
+      childGuardianCount(childrenDeduped) < childGuardianCount(children)
+    ) {
       toast.info('Duplicate guardians removed', {
         description: 'The same person was listed more than once; only one copy is kept when saving.',
       });
     }
 
-    const flow = { sameGuardians: sameDeduped, children: childrenDeduped, step };
-
     if (resolved === 'no') {
-      onComplete?.({ guardianOption: 'no', _flowState: { sameGuardians: [], children: [], step: 1 } });
-    } else if (resolved === 'yes_same') {
+      onComplete?.({
+        guardianOption: 'no',
+        _flowState: { sameGuardians: [], children: [], step: 1, substituteSameGuardians: [] },
+      });
+      return;
+    }
+
+    if (resolved === 'yes_same') {
+      if (!childrenDeduped.length) {
+        toast.error('Add your children', {
+          description: 'Add at least one child under 18 before saving.',
+        });
+        return;
+      }
+      if (!sameDeduped.length) {
+        toast.error('Add a guardian', {
+          description: 'Name at least one guardian for your children.',
+        });
+        return;
+      }
       onComplete?.({
         guardianOption: 'yes_same',
         guardians: sameDeduped,
+        substituteGuardians: substituteDeduped,
         children: childrenDeduped,
-        _flowState: flow,
+        _flowState: {
+          sameGuardians: sameDeduped,
+          children: childrenDeduped,
+          step,
+          substituteSameGuardians: substituteDeduped,
+        },
       });
-    } else if (resolved === 'yes_different') {
-      onComplete?.({ guardianOption: 'yes_different', children: childrenDeduped, _flowState: flow });
-    } else if (import.meta.env.DEV) {
+      return;
+    }
+
+    if (resolved === 'yes_different') {
+      if (!childrenDeduped.length) {
+        toast.error('Add your children', {
+          description: 'Add at least one child under 18 before saving.',
+        });
+        return;
+      }
+      const missingG = childrenDeduped.some((ch) => !Array.isArray(ch.guardians) || ch.guardians.length === 0);
+      if (missingG) {
+        toast.error('Guardians for every child', {
+          description: 'Assign at least one guardian to each child before saving.',
+        });
+        return;
+      }
+      onComplete?.({
+        guardianOption: 'yes_different',
+        children: childrenDeduped,
+        _flowState: {
+          sameGuardians: [],
+          children: childrenDeduped,
+          step,
+          substituteSameGuardians: [],
+        },
+      });
+      return;
+    }
+
+    if (import.meta.env.DEV) {
       console.warn('[GuardianFlow] Save ignored: could not map appointGuardians', {
         appointGuardiansValue,
         resolved,
@@ -955,113 +763,192 @@ export default function GuardianFlow({
     }
   };
 
-  return (
-    <GuardianFlowThemeContext.Provider value={theme}>
-    <div style={theme.S.section} className="min-w-0">
-      <div style={theme.S.sectionHeader}>
-        <div style={theme.S.sectionIcon}>📄</div>
-        <h2 style={theme.S.sectionTitle}>{isEmbedded ? 'Guardian details' : 'Guardians'}</h2>
+  const q1Radios = (
+    <>
+      <div className="grd-q-header">
+        <div className="grd-badge-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        </div>
+        <h3>Do you have children under 18 that you would like to appoint a guardian for?</h3>
       </div>
-      <hr style={theme.S.divider} />
 
-      {!isEmbedded && (
-        <>
-          <div style={theme.S.questionRow}>
-            <span style={theme.S.questionIcon}>✏️</span>
-            <p style={theme.S.questionText}>Do you have children under 18 that you would like to appoint a guardian for?</p>
-          </div>
-          <div style={theme.S.helpRow}>
-            <span style={theme.S.helpIcon}>ℹ️</span>
-            <p style={theme.S.helpText}>
-              A guardian is someone who would take legal responsibility for your children if both parents passed away.
-            </p>
-          </div>
-
-          <div style={theme.S.radioGroup}>
-            {[
-              { value: 'no', label: 'No' },
-              { value: 'yes_same', label: 'Yes — same guardian(s) for all children' },
-              {
-                value: 'yes_different',
-                label: 'Yes — I want to appoint different guardians for different children',
-              },
-            ].map((opt) => (
-              <label key={opt.value} style={theme.S.radioLabel}>
-                <input
-                  type="radio"
-                  style={theme.S.radio}
-                  name="guardianOption"
-                  value={opt.value}
-                  checked={standaloneOption === opt.value}
-                  onChange={() => {
-                    setStandaloneOption(opt.value);
-                    setChildren([]);
-                    setSameGuardians([]);
-                    setStep(1);
-                  }}
-                />
-                {opt.label}
-              </label>
-            ))}
-          </div>
-        </>
-      )}
-
-      {isEmbedded && embeddedOption && embeddedOption !== 'no' && (
-        <p
-          className="break-words text-sm"
-          style={{ ...theme.S.helpText, marginBottom: 18, fontStyle: 'normal', color: theme.C.textMid }}
-        >
-          Add each child under 18, then assign guardian(s). Your answer above controls whether guardians are shared
-          across all children or set per child.
+      <div className="grd-why">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <p>
+          WHY WE ASK THIS: A guardian takes full legal responsibility for raising your children if both parents pass
+          away. Without one named in your will, a court decides — which may not reflect your wishes.
         </p>
+      </div>
+
+      <p className="grd-helper">
+        If you have children under 18, we strongly recommend naming at least one guardian. You can also name a backup
+        in case your first choice is unable to act.
+      </p>
+
+      <div className="grd-radio-group">
+        <label className="grd-radio-opt" htmlFor="gf-q-no">
+          <input
+            id="gf-q-no"
+            type="radio"
+            name={isEmbedded ? 'grd-embed-appoint' : 'guardianOptionStandalone'}
+            checked={option === 'no'}
+            onChange={() => {
+              if (isEmbedded) selectEmbedded('no');
+              else {
+                setStandaloneOption('no');
+                setChildren([]);
+                setSameGuardians([]);
+                setSubstituteSameGuardians([]);
+                setStep(1);
+              }
+            }}
+          />
+          <div>
+            <div className="grd-opt-label">No — I don&apos;t need to appoint a guardian</div>
+            <div className="grd-opt-sub">
+              I have no children under 18, or I don&apos;t wish to name a guardian in my will
+            </div>
+          </div>
+        </label>
+        <label className="grd-radio-opt" htmlFor="gf-q-yes-same">
+          <input
+            id="gf-q-yes-same"
+            type="radio"
+            name={isEmbedded ? 'grd-embed-appoint' : 'guardianOptionStandalone'}
+            checked={option === 'yes_same'}
+            onChange={() => {
+              if (isEmbedded) selectEmbedded('yes_same');
+              else {
+                setStandaloneOption('yes_same');
+                setChildren([]);
+                setSameGuardians([]);
+                setSubstituteSameGuardians([]);
+                setStep(1);
+              }
+            }}
+          />
+          <div>
+            <div className="grd-opt-label">Yes — the same guardian(s) for all my children</div>
+            <div className="grd-opt-sub">
+              I want to name one set of guardian(s) who will look after all my children together
+            </div>
+          </div>
+        </label>
+        <label className="grd-radio-opt" htmlFor="gf-q-yes-diff">
+          <input
+            id="gf-q-yes-diff"
+            type="radio"
+            name={isEmbedded ? 'grd-embed-appoint' : 'guardianOptionStandalone'}
+            checked={option === 'yes_different'}
+            onChange={() => {
+              if (isEmbedded) selectEmbedded('yes_different');
+              else {
+                setStandaloneOption('yes_different');
+                setChildren([]);
+                setSameGuardians([]);
+                setSubstituteSameGuardians([]);
+                setStep(1);
+              }
+            }}
+          />
+          <div>
+            <div className="grd-opt-label">Yes, but I want to appoint different guardians for each child</div>
+            <div className="grd-opt-sub">
+              Each child will have their own guardian — I&apos;ll assign them individually below
+            </div>
+          </div>
+        </label>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="grd-wrap min-w-0">
+      <div className="grd-section-title">
+        <div className="grd-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+        </div>
+        <h2>Guardians</h2>
+      </div>
+      <hr className="grd-rule" />
+
+      {q1Radios}
+
+      {option === 'yes_different' && (step === 1 || step === 2) && (
+        <div className="grd-warn">
+          <p className="grd-warn-title">Assigning guardians per child</p>
+          <p className="grd-warn-body">
+            Add each of your children below, then assign their individual guardian(s). Each child has a completely
+            separate guardian list.
+          </p>
+        </div>
       )}
 
-      {/* Step 1 (yes_same + yes_different): children */}
       {(option === 'yes_same' || option === 'yes_different') && step === 1 && (
-        <div style={theme.S.stepCard} className="min-w-0">
-          <div style={theme.S.stepLabel}>Step 1 of 2 — Your children</div>
-          <div style={theme.S.stepTitle}>Add each child under 18</div>
-          <div style={theme.S.stepHelp}>
+        <div className="grd-step-card min-w-0">
+          <div className="grd-step-label">Step 1 of 2 — Your children</div>
+          <div className="grd-step-title">Add each child under 18</div>
+          <div className="grd-step-help">
             {option === 'yes_same'
               ? 'Add all children below. On the next step you will choose guardian(s) for all of them.'
               : 'Add all children below. On the next step you will assign a specific guardian to each one.'}
           </div>
 
-          {children.length === 0 && <div style={theme.S.emptyState}>No children added yet.</div>}
-
-          {children.length > 0 && (
-            <>
-              <div style={theme.S.addedLabel}>✅ Added ({children.length}):</div>
-              {children.map((c, i) => (
-                <div key={i} style={theme.S.itemRow}>
-                  <span className="min-w-0 break-words">
-                    {c.childFirstName} {c.childLastName} — DOB: {formatDob(c.dob)}
-                  </span>
-                  <div style={theme.S.itemActions}>
-                    <button type="button" style={theme.S.editBtn} onClick={() => openEditChild(i)}>
-                      ✏️ Edit
-                    </button>
-                    <button type="button" style={theme.S.removeBtn} onClick={() => handleRemoveChild(i)}>
-                      🗑 Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
+          {children.length === 0 && (
+            <div className="grd-empty-card">
+              <p className="ec-title">No children added yet</p>
+              <p className="ec-sub">Click &quot;Add Child&quot; below to get started.</p>
+            </div>
           )}
 
-          <button type="button" style={theme.S.addBtn} onClick={openAddChild}>
-            + Add Child
+          {children.map((c, i) => (
+            <div key={i} className="grd-person-card">
+              <div className="grd-person-avatar" aria-hidden>
+                {String(i + 1)}
+              </div>
+              <div className="grd-person-info min-w-0">
+                <p className="grd-person-name break-words">
+                  {c.childFirstName} {c.childLastName}
+                </p>
+                <p className="grd-person-detail">DOB: {formatDob(c.dob)}</p>
+              </div>
+              <div className="flex flex-shrink-0 flex-col gap-1 sm:flex-row">
+                <button type="button" className="grd-btn-secondary min-h-[44px] px-3 text-xs" onClick={() => openEditChild(i)}>
+                  Edit
+                </button>
+                <button type="button" className="grd-btn-remove" onClick={() => handleRemoveChild(i)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <button type="button" className="grd-btn-add" onClick={openAddChild}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Child
           </button>
 
           {children.length > 0 && (
-            <>
-              <hr style={theme.S.sectionDivider} />
-              <button type="button" style={theme.S.continueBtn} onClick={() => setStep(2)} className="min-h-[44px]">
+            <div className="grd-save-row">
+              <button type="button" className="grd-btn-add w-full sm:w-auto" onClick={() => setStep(2)}>
                 Continue — assign guardian{option === 'yes_different' ? 's' : ''} →
               </button>
-            </>
+            </div>
           )}
 
           {childModal && (
@@ -1084,93 +971,118 @@ export default function GuardianFlow({
         </div>
       )}
 
-      {/* Step 2a: same guardian(s) for all children */}
       {option === 'yes_same' && step === 2 && (
-        <div style={theme.S.stepCard} className="min-w-0">
-          <div style={theme.S.stepLabel}>Step 2 of 2 — Guardian(s)</div>
-          <div style={theme.S.stepTitle}>Who would you like to be your children&apos;s guardian?</div>
-          <div style={theme.S.stepHelp}>
+        <div className="grd-step-card min-w-0">
+          <div className="grd-step-label">Step 2 of 2 — Guardian(s)</div>
+          <div className="grd-step-title">Who would you like to be your children&apos;s guardian?</div>
+          <div className="grd-step-help">
             This should be someone you trust completely to raise your children. You can appoint more than one person.
-            These guardian(s) will apply to all {children.length} {children.length === 1 ? 'child' : 'children'}{' '}
-            listed.
+            These guardian(s) will apply to all {children.length} {children.length === 1 ? 'child' : 'children'} listed.
           </div>
 
-          <div style={{ marginBottom: 18 }} className="min-w-0">
-            <div style={{ fontSize: 13, fontWeight: 600, color: theme.C.textMid, marginBottom: 8 }}>Applies to:</div>
+          <div className="grd-panel">
+            <p className="grd-panel-title">Applies to</p>
             {children.map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  fontSize: 13,
-                  color: theme.C.textMid,
-                  padding: '4px 0',
-                  borderBottom: `1px solid ${theme.C.border}`,
-                }}
-                className="break-words"
-              >
+              <p key={i} className="grd-person-detail mb-1 break-words">
                 {c.childFirstName} {c.childLastName} — DOB: {formatDob(c.dob)}
-              </div>
+              </p>
             ))}
           </div>
 
-          <GuardianList
-            guardians={sameGuardians}
-            onChange={setSameGuardians}
-            formValues={formValuesProp}
-          />
+          <div className="grd-panel">
+            <p className="grd-panel-title">Who would you like to be your children&apos;s guardian?</p>
+            <p className="grd-panel-sub">
+              This should be someone you trust completely to raise your children. You can appoint more than one person —
+              they will act jointly.
+            </p>
+            <GuardianList
+              guardians={sameGuardians}
+              onChange={setSameGuardians}
+              addLabel="Add Guardian"
+              modalSubtitle="For: Add Guardian"
+              formValues={formValuesProp}
+            />
+          </div>
 
-          <hr style={theme.S.sectionDivider} />
-          <button type="button" style={theme.S.backBtn} onClick={() => setStep(1)} className="min-h-[44px]">
+          <div className="grd-panel">
+            <p className="grd-panel-title">Is there a backup guardian if your first choice is unable to act?</p>
+            <p className="grd-panel-sub">
+              A substitute guardian steps in if your first-choice guardian is unable or unwilling to take on the role.
+              Optional but strongly recommended.
+            </p>
+            <div className="grd-tiles">
+              <div className="grd-tile">
+                <p className="t-title">Why have a backup?</p>
+                <p className="t-sub">Your first choice may predecease you, become ill, or decline the role</p>
+              </div>
+              <div className="grd-tile">
+                <p className="t-title">Who to choose</p>
+                <p className="t-sub">Someone who shares your values and could step in at short notice</p>
+              </div>
+            </div>
+            <GuardianList
+              guardians={substituteSameGuardians}
+              onChange={setSubstituteSameGuardians}
+              addLabel="Add Substitute Guardian"
+              modalSubtitle="For: Add Substitute Guardian"
+              formValues={formValuesProp}
+            />
+          </div>
+
+          <button type="button" className="grd-btn-secondary min-h-[44px]" onClick={() => setStep(1)}>
             ← Edit children
           </button>
         </div>
       )}
 
-      {/* Step 2b: per-child guardians */}
       {option === 'yes_different' && step === 2 && (
-        <div style={theme.S.stepCard} className="min-w-0">
-          <div style={theme.S.stepLabel}>Step 2 of 2 — Guardians per child</div>
-          <div style={theme.S.stepTitle}>Assign a guardian to each child</div>
-          <div style={theme.S.stepHelp}>
+        <div className="grd-step-card min-w-0">
+          <div className="grd-step-label">Step 2 of 2 — Guardians per child</div>
+          <div className="grd-step-title">Assign a guardian to each child</div>
+          <div className="grd-step-help">
             For each child below, add the person(s) you would like to be their guardian if both parents passed away.
           </div>
 
           {children.map((child, i) => (
-            <div key={i} style={theme.S.childBlock}>
-              <div style={theme.S.childName}>
-                {child.childFirstName} {child.childLastName}
+            <div key={i} className="grd-child-card">
+              <div className="grd-child-header">
+                <div className="grd-child-header-left min-w-0">
+                  <div className="grd-child-number">{i + 1}</div>
+                  <span className="grd-child-header-name break-words">
+                    {child.childFirstName} {child.childLastName}
+                  </span>
+                </div>
               </div>
-              <div style={theme.S.childDob}>Date of birth: {formatDob(child.dob)}</div>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, color: theme.C.textMid }}>
-                Who would you like to be {child.childFirstName}&apos;s guardian?
+              <div className="grd-child-body">
+                <p className="grd-person-detail mb-3">Date of birth: {formatDob(child.dob)}</p>
+                <p className="grd-guardian-sub-label">Who would you like to be {child.childFirstName}&apos;s guardian?</p>
+                <p className="grd-guardian-empty-msg mb-2">
+                  This should be someone you trust completely. You can appoint more than one person.
+                </p>
+                <GuardianList
+                  guardians={child.guardians}
+                  onChange={(g) => updateChildGuardians(i, g)}
+                  addLabel={`Add Guardian for ${child.childFirstName}`}
+                  modalSubtitle={`For: Add Guardian (${child.childFirstName})`}
+                  formValues={formValuesProp}
+                />
               </div>
-              <div style={{ fontSize: 12, color: theme.C.textLight, fontStyle: 'italic', marginBottom: 14 }}>
-                This should be someone you trust completely. You can appoint more than one person.
-              </div>
-              <GuardianList
-                guardians={child.guardians}
-                onChange={(g) => updateChildGuardians(i, g)}
-                addLabel={`Add Guardian for ${child.childFirstName}`}
-                formValues={formValuesProp}
-              />
             </div>
           ))}
 
-          <button type="button" style={theme.S.backBtn} onClick={() => setStep(1)} className="min-h-[44px]">
+          <button type="button" className="grd-btn-secondary mt-2 min-h-[44px]" onClick={() => setStep(1)}>
             ← Edit children
           </button>
         </div>
       )}
 
       {option && (
-        <>
-          <hr style={theme.S.sectionDivider} />
-          <button type="button" style={theme.S.saveBtn} onClick={handleComplete} className="min-h-[44px]">
+        <div className="grd-save-row">
+          <button type="button" className="grd-btn-add w-full sm:w-auto" onClick={handleComplete}>
             {isEmbedded ? 'Save guardians to form →' : 'Save and continue →'}
           </button>
-        </>
+        </div>
       )}
     </div>
-    </GuardianFlowThemeContext.Provider>
   );
 }

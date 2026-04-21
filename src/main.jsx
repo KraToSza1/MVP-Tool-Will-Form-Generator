@@ -1,5 +1,6 @@
 import React from 'react'
 import './index.css';
+import './styles/aristone-guardians.css';
 import { StrictMode } from 'react'
 
 /** Warm connection to Supabase API (helps sign-in and data calls, including in embedded iframes). */

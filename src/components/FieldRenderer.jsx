@@ -297,6 +297,9 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
           formValues={formValues}
           appointGuardiansValue={formValues.appointGuardians}
           initialFlowState={initialFlowState}
+          onAppointGuardiansChange={(v) => {
+            setFormValues((prev) => ({ ...prev, appointGuardians: v }));
+          }}
           onFlowStateChange={(state) => {
             setFormValues((prev) => ({
               ...prev,
@@ -304,7 +307,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             }));
           }}
           onComplete={(data) => {
-            const patch = mapGuardianFlowCompletionToFormValues(data, { skipAppointGuardians: true });
+            const patch = mapGuardianFlowCompletionToFormValues(data, { skipAppointGuardians: false });
             const flow = data._flowState || { sameGuardians: [], children: [], step: 1 };
             setFormValues((prev) => ({
               ...prev,

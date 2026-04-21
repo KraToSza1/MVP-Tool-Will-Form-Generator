@@ -388,7 +388,8 @@ export const buildClauses = ({
         }
         return;
       }
-      if (['button', 'hidden', 'display'].includes(field.type)) return;
+      if (['button', 'display'].includes(field.type)) return;
+      if (field.type === 'hidden' && field.id !== 'appointGuardians') return;
 
       if (field.willClauseText) {
         const interpolated = interpolateText(field.willClauseText, formValues);
@@ -455,7 +456,12 @@ export const buildClauses = ({
         });
       }
 
-      if (field.options && (field.type === 'radio' || field.type === 'select')) {
+      const isAppointGuardiansHidden =
+        field.type === 'hidden' && field.id === 'appointGuardians' && Array.isArray(field.options);
+      if (
+        field.options &&
+        (field.type === 'radio' || field.type === 'select' || isAppointGuardiansHidden)
+      ) {
         const selectedValue = formValues[field.id];
         if (selectedValue) {
           const selectedOption = field.options.find((opt) => opt && opt.value === selectedValue);

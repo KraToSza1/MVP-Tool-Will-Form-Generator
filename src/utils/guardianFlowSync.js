@@ -279,10 +279,15 @@ export function mapGuardianFlowCompletionToFormValues(data, opts = {}) {
       data.guardians || [],
       data.children || []
     );
+    const subRows = (data.substituteGuardians || [])
+      .map(guardianFlowPersonToAppointmentRow)
+      .filter(Boolean);
+    out.substituteGuardianData = subRows;
   } else if (data.guardianOption === 'yes_different') {
     if (!skipAppointGuardians) out.appointGuardians = 'Yes, but appoint different guardians for children';
     out.guardianData = [];
     out.guardianshipDetailsData = buildGuardianshipDetailsClause(data.children || []);
+    out.substituteGuardianData = [];
   }
   return out;
 }

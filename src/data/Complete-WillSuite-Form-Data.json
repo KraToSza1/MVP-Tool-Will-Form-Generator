@@ -721,9 +721,8 @@
             "fields": [
                 {
                     "id": "appointGuardians",
-                    "type": "radio",
-                    "label": "Does the Testator wish to appoint Guardians for any minor children?",
-                    "infoText": "If the Testator has care of minors, they may wish to appoint guardians to care for them should they pass away. The other parent of the Testator's children normally has joint parental responsibility for any children aged under 18.",
+                    "type": "hidden",
+                    "value": null,
                     "options": [
                         {
                             "value": "No",
@@ -739,25 +738,14 @@
                             "label": "Yes, but appoint different guardians for children",
                             "willClauseText": "I hereby make the following specific appointments of guardians for my children: {{field:guardianshipDetailsSection:fullDetails}}"
                         }
-                    ],
-                    "value": null
+                    ]
                 },
                 {
                     "id": "guardianGuidedFlow",
                     "type": "guardianFlow",
-                    "label": "Guardian details (guided)",
-                    "infoText": "Use this guided flow to add guardians. You can still use “Add Guardian” below if you prefer.",
-                    "excludeFromWill": true,
-                    "conditions": [
-                        {
-                            "field": "appointGuardians",
-                            "operator": "in",
-                            "value": [
-                                "Yes",
-                                "Yes, but appoint different guardians for children"
-                            ]
-                        }
-                    ]
+                    "label": "",
+                    "infoText": "",
+                    "excludeFromWill": true
                 },
                 {
                     "id": "guardianFlowState",
@@ -769,6 +757,7 @@
                     "id": "guardiansSection",
                     "type": "section",
                     "label": "Who are the guardians?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
                             "field": "appointGuardians",
@@ -802,6 +791,7 @@
                     "id": "substituteGuardiansSection",
                     "type": "section",
                     "label": "Who are the substitute guardians? (if any)",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
                             "field": "appointGuardians",
