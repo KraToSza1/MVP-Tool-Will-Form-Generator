@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import {
   AlertCircle,
   Check,
@@ -14,6 +15,13 @@ import { formatMonetaryGiftsDetailsFromList } from '../utils/monetaryGiftsFormat
 
 function uid() {
   return `mg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function relationshipFromPick(source, data) {
+  const fromData = data && typeof data === 'object' ? String(data.relationship || '').trim() : '';
+  if (fromData) return fromData;
+  if (source === 'partner') return 'Partner / spouse';
+  return '';
 }
 
 /** @param {{ field: object, formValues: object, setFormValues: Function, validationErrors?: object, setValidationErrors?: Function, logFormChange?: Function }} props */
@@ -155,10 +163,16 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
   const [conditionKey, setConditionKey] = useState('');
   const [lapseKey, setLapseKey] = useState('residue');
   const [errors, setErrors] = useState({ recipient: false, amount: false });
+  const [pickContactId, setPickContactId] = useState('');
   const modalTitleId = useId();
   const prevOverflow = useRef('');
 
   const list = Array.isArray(formValues.monetaryGiftsList) ? formValues.monetaryGiftsList : [];
+
+  const contactPickOptions = useMemo(() => {
+    const raw = getContactCandidates(formValues || {});
+    return raw.filter((c) => personDisplayNameForGift(c.data) !== '');
+  }, [formValues]);
 
   useEffect(() => {
     const raw = formValues.monetaryGiftsList;
@@ -182,8 +196,18 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
     setAmount('');
     setConditionKey('');
     setLapseKey('residue');
+    setPickContactId('');
     setErrors({ recipient: false, amount: false });
     setModalOpen(true);
+  };
+
+  const applyPickedContact = (id) => {
+    setPickContactId(id);
+    if (!id) return;
+    const c = contactPickOptions.find((x) => x.id === id);
+    if (!c) return;
+    setRecipient(personDisplayNameForGift(c.data));
+    setRelationship(relationshipFromPick(c.source, c.data));
   };
 
   const closeModal = () => setModalOpen(false);
@@ -354,6 +378,30 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                 </p>
               </div>
 
+              {contactPickOptions.length > 0 ? (
+                <div>
+                  <label htmlFor="mg-pick-contact" className="block text-xs text-slate-300 mb-1.5">
+                    Choose someone you&apos;ve already entered <span className="text-slate-500 font-normal">(optional)</span>
+                  </label>
+                  <select
+                    id="mg-pick-contact"
+                    className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    value={pickContactId}
+                    onChange={(e) => applyPickedContact(e.target.value)}
+                  >
+                    <option value="">— Type name manually below —</option>
+                    {contactPickOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 m-0 mt-1">
+                    Fills recipient (and relationship when known) from your form — you can still edit before saving.
+                  </p>
+                </div>
+              ) : null}
+
               <div>
                 <label htmlFor="mg-recipient" className="block text-xs text-slate-300 mb-1.5">
                   Recipient&apos;s full name <span className="text-red-400">*</span>
@@ -362,7 +410,10 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                   id="mg-recipient"
                   type="text"
                   value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
+                  onChange={(e) => {
+                    setRecipient(e.target.value);
+                    if (pickContactId) setPickContactId('');
+                  }}
                   placeholder="e.g. Richard Jones, Cancer Research UK"
                   className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
                     errors.recipient ? 'border-red-400' : 'border-slate-600'
@@ -382,7 +433,10 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                   id="mg-relationship"
                   type="text"
                   value={relationship}
-                  onChange={(e) => setRelationship(e.target.value)}
+                  onChange={(e) => {
+                    setRelationship(e.target.value);
+                    if (pickContactId) setPickContactId('');
+                  }}
                   placeholder="e.g. nephew, friend, charity, carer"
                   className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                 />

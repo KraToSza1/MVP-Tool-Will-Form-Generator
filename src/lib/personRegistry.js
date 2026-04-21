@@ -71,6 +71,20 @@ function labelFromData(data) {
   return '(unnamed)';
 }
 
+/**
+ * Plain name for clauses / gifts (no "(unnamed)" placeholder).
+ * @param {Record<string, unknown>|null|undefined} data
+ * @returns {string}
+ */
+export function personDisplayNameForGift(data) {
+  if (!data || typeof data !== 'object') return '';
+  const n = [data.title, data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ').trim();
+  if (n) return n;
+  if (trim(data.knownAs)) return trim(data.knownAs);
+  if (trim(data.fullName)) return trim(data.fullName);
+  return '';
+}
+
 function personFingerprint(data) {
   if (!data || typeof data !== 'object') return '';
   return [
