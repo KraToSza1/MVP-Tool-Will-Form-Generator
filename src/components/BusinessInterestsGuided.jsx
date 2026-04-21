@@ -283,23 +283,23 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
       </div>
       <p className="ari-hint">Not sure? Select &quot;I&apos;m not sure&quot; and your solicitor will help you work it out.</p>
 
-      <div className="ari-radio-group" role="radiogroup" aria-label="Business interests">
-        <label className="ari-radio-opt">
-          <input type="radio" name={`ari-biz-${uid}`} checked={radioQ1.no} onChange={() => setQ1('no')} />
+      <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Business interests">
+        <label className="ari-radio-opt" htmlFor={`ari-biz-no-${uid}`} onClick={() => setQ1('no')}>
+          <input id={`ari-biz-no-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.no} onChange={() => setQ1('no')} />
           <div>
             <div className="ari-opt-label">No, I don&apos;t have any business interests</div>
             <div className="ari-opt-sub">I&apos;m not a business owner, shareholder, partner, or company director</div>
           </div>
         </label>
-        <label className="ari-radio-opt">
-          <input type="radio" name={`ari-biz-${uid}`} checked={radioQ1.yes} onChange={() => setQ1('yes')} />
+        <label className="ari-radio-opt" htmlFor={`ari-biz-yes-${uid}`} onClick={() => setQ1('yes')}>
+          <input id={`ari-biz-yes-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.yes} onChange={() => setQ1('yes')} />
           <div>
             <div className="ari-opt-label">Yes, I own or have an interest in a business</div>
             <div className="ari-opt-sub">I&apos;ll provide a few details so my solicitor can advise properly</div>
           </div>
         </label>
-        <label className="ari-radio-opt">
-          <input type="radio" name={`ari-biz-${uid}`} checked={radioQ1.unsure} onChange={() => setQ1('unsure')} />
+        <label className="ari-radio-opt" htmlFor={`ari-biz-unsure-${uid}`} onClick={() => setQ1('unsure')}>
+          <input id={`ari-biz-unsure-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.unsure} onChange={() => setQ1('unsure')} />
           <div>
             <div className="ari-opt-label">I&apos;m not sure</div>
             <div className="ari-opt-sub">My solicitor will check this with me before the will is drafted</div>
@@ -360,9 +360,10 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
 
           <div className="ari-field">
             <span className="ari-label">Is there a shareholder or partnership agreement in place?</span>
-            <div className="ari-inline-radios" role="radiogroup">
-              <label className="ari-inline-radio">
+            <div className="ari-inline-radios relative z-[1]" role="radiogroup">
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-yes-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'Yes')}>
                 <input
+                  id={`ari-agreement-yes-${uid}`}
                   type="radio"
                   name={`ari-agreement-${uid}`}
                   checked={agreementVal === 'Yes'}
@@ -370,8 +371,9 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 />
                 Yes
               </label>
-              <label className="ari-inline-radio">
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-no-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'No')}>
                 <input
+                  id={`ari-agreement-no-${uid}`}
                   type="radio"
                   name={`ari-agreement-${uid}`}
                   checked={agreementVal === 'No'}
@@ -379,8 +381,9 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 />
                 No
               </label>
-              <label className="ari-inline-radio">
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-unsure-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'Unsure')}>
                 <input
+                  id={`ari-agreement-unsure-${uid}`}
                   type="radio"
                   name={`ari-agreement-${uid}`}
                   checked={agreementVal === 'Unsure'}
@@ -433,16 +436,16 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             </div>
           </div>
 
-          <div className="ari-radio-group" role="radiogroup" aria-label="Trustees carry on business">
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-carry-${uid}`} checked={radioQ2.no} onChange={() => setQ2('no')} />
+          <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Trustees carry on business">
+            <label className="ari-radio-opt" htmlFor={`ari-carry-no-${uid}`} onClick={() => setQ2('no')}>
+              <input id={`ari-carry-no-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.no} onChange={() => setQ2('no')} />
               <div>
                 <div className="ari-opt-label">No — wind it down as usual</div>
                 <div className="ari-opt-sub">My trustees should close or sell the business in the normal way</div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-carry-${uid}`} checked={radioQ2.yes} onChange={() => setQ2('yes')} />
+            <label className="ari-radio-opt" htmlFor={`ari-carry-yes-${uid}`} onClick={() => setQ2('yes')}>
+              <input id={`ari-carry-yes-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.yes} onChange={() => setQ2('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — give my trustees the power to keep it running</div>
                 <div className="ari-opt-sub">
@@ -450,8 +453,8 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 </div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-carry-${uid}`} checked={radioQ2.unsure} onChange={() => setQ2('unsure')} />
+            <label className="ari-radio-opt" htmlFor={`ari-carry-unsure-${uid}`} onClick={() => setQ2('unsure')}>
+              <input id={`ari-carry-unsure-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.unsure} onChange={() => setQ2('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I&apos;d like to discuss this with my solicitor</div>
                 <div className="ari-opt-sub">We&apos;ll flag this for review before your will is drafted</div>
@@ -494,23 +497,23 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             </div>
           </div>
 
-          <div className="ari-radio-group" role="radiogroup" aria-label="Separate business trustee" style={{ marginTop: '1rem' }}>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-sep-${uid}`} checked={radioQ3.no} onChange={() => setQ3('no')} />
+          <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Separate business trustee" style={{ marginTop: '1rem' }}>
+            <label className="ari-radio-opt" htmlFor={`ari-sep-no-${uid}`} onClick={() => setQ3('no')}>
+              <input id={`ari-sep-no-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.no} onChange={() => setQ3('no')} />
               <div>
                 <div className="ari-opt-label">No — my executors can handle everything</div>
                 <div className="ari-opt-sub">The same people managing my estate will look after the business too</div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-sep-${uid}`} checked={radioQ3.yes} onChange={() => setQ3('yes')} />
+            <label className="ari-radio-opt" htmlFor={`ari-sep-yes-${uid}`} onClick={() => setQ3('yes')}>
+              <input id={`ari-sep-yes-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.yes} onChange={() => setQ3('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — I want a dedicated trustee for the business</div>
                 <div className="ari-opt-sub">I&apos;ll name this person or professional below</div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-sep-${uid}`} checked={radioQ3.unsure} onChange={() => setQ3('unsure')} />
+            <label className="ari-radio-opt" htmlFor={`ari-sep-unsure-${uid}`} onClick={() => setQ3('unsure')}>
+              <input id={`ari-sep-unsure-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.unsure} onChange={() => setQ3('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I&apos;d like my solicitor&apos;s advice on this</div>
                 <div className="ari-opt-sub">We&apos;ll discuss this before your will is finalised</div>
@@ -648,23 +651,23 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             </div>
           </div>
 
-          <div className="ari-radio-group" role="radiogroup" aria-label="Business Property Relief trust">
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.no} onChange={() => setQ4('no')} />
+          <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Business Property Relief trust">
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-no-${uid}`} onClick={() => setQ4('no')}>
+              <input id={`ari-bpr-no-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.no} onChange={() => setQ4('no')} />
               <div>
                 <div className="ari-opt-label">No — I do not want a BPR trust in my will</div>
                 <div className="ari-opt-sub">My solicitor will not add BPR trust wording unless we discuss it later</div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.yes} onChange={() => setQ4('yes')} />
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-yes-${uid}`} onClick={() => setQ4('yes')}>
+              <input id={`ari-bpr-yes-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.yes} onChange={() => setQ4('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — please include a BPR trust</div>
                 <div className="ari-opt-sub">I want my solicitor to prepare the trust terms and schedules</div>
               </div>
             </label>
-            <label className="ari-radio-opt">
-              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.unsure} onChange={() => setQ4('unsure')} />
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-unsure-${uid}`} onClick={() => setQ4('unsure')}>
+              <input id={`ari-bpr-unsure-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.unsure} onChange={() => setQ4('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I need advice first</div>
                 <div className="ari-opt-sub">Flag this for discussion; my solicitor will help me decide</div>

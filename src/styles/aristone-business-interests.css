@@ -187,6 +187,9 @@ html.dark-theme .ari-hint {
   cursor: pointer;
   border-radius: 6px;
   transition: background 0.1s;
+  position: relative;
+  /* Ensure clicks reach the label/control (some overlays steal events). */
+  pointer-events: auto;
 }
 .ari-radio-opt:hover {
   background: #f9fafb;
@@ -201,6 +204,7 @@ html.dark-theme .ari-radio-opt:hover {
   height: 18px;
   flex-shrink: 0;
   cursor: pointer;
+  pointer-events: auto;
 }
 .ari-opt-label {
   font-size: 15px;
@@ -318,6 +322,8 @@ html.dark-theme .ari-input {
   background: #fff;
   color: #1a1f3c;
   transition: border-color 0.15s;
+  position: relative;
+  pointer-events: auto;
 }
 html.dark-theme .ari-inline-radio {
   border-color: #475569;

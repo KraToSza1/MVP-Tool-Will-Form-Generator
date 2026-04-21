@@ -266,7 +266,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
 
   if (field.type === 'businessInterestsGuided') {
     return (
-      <div className="min-w-0 max-w-full overflow-x-hidden">
+      <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate">
         <BusinessInterestsGuided formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
