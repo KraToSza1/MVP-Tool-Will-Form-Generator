@@ -1932,34 +1932,29 @@
                     ]
                 },
                 {
-                    "id": "includeBPRTrust",
-                    "type": "radio",
-                    "label": "Include a Business Property Relief Trust?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "field": "hasBusinessInterests",
-                            "operator": "eq",
-                            "value": "Yes"
-                        }
-                    ]
-                },
-                {
                     "id": "bprTrustSection",
                     "type": "section",
                     "label": "Business Property Relief Trust",
                     "willClauseText": "I give such of my business assets as may qualify for applicable tax relief to my Trustees to hold on the terms of the Business Property Relief Trust detailed in Schedule {{field:bprTrustScheduleNumber:value}} of this Will.",
                     "conditions": [
+                        {
+                            "operator": "AND",
+                            "clauses": [
+                                {
+                                    "field": "hasBusinessInterests",
+                                    "operator": "eq",
+                                    "value": "Yes"
+                                },
+                                {
+                                    "field": "bprTrustClientIntent",
+                                    "operator": "in",
+                                    "value": [
+                                        "Yes",
+                                        "Unsure"
+                                    ]
+                                }
+                            ]
+                        },
                         {
                             "operator": "AND",
                             "clauses": [
@@ -1976,6 +1971,7 @@
                             ]
                         }
                     ],
+                    "conditionLogic": "OR",
                     "subFields": [
                         {
                             "id": "bprTrustDetails",

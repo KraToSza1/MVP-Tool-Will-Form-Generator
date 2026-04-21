@@ -795,7 +795,7 @@ export const generateDummyFormData = (formData) => {
     digitalAssetsWantManagement: 'Yes',
     digitalAssetsWhoManages: 'MyExecutors',
     appointDifferentTrustees: 'No',
-    includeBPRTrust: 'Yes',
+    bprTrustClientIntent: 'Yes',
     leaveMoneyGifts: 'Yes',
     leaveSpecificGifts: 'Yes',
     leavePropertyGifts: 'Yes',

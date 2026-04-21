@@ -8,6 +8,11 @@ import {
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
+import {
+  getBprTrustClientIntent,
+  isBprSolicitorPackageComplete,
+  shouldBlockPdfForBprTrust,
+} from '../lib/bprTrustClientIntent.js';
 
 /** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
 const pdfDebugEnabled = () =>
@@ -836,8 +841,9 @@ const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []
     }
   }
   
-  // Business Property Relief Trust Schedule validation
-  if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+  // Business Property Relief Trust Schedule validation (strict when client intent is Yes)
+  const bprIntentReport = getBprTrustClientIntent(formValues);
+  if (bprIntentReport === 'Yes' && formValues.bprTrustScheduleNumber) {
     const scheduleNumber = String(formValues.bprTrustScheduleNumber).trim();
     if (scheduleNumber && scheduleNumber !== '') {
       const hasDetails = formValues.bprTrustDetails && String(formValues.bprTrustDetails).trim() !== '';
@@ -2786,6 +2792,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     // ===== PREFLIGHT VALIDATION GATE =====
     // Comprehensive validation before PDF generation - builds missing[] and warnings[]
     const missing = [];
+
+    if (shouldBlockPdfForBprTrust(formValues)) {
+      missing.push({
+        section: 'Business Interests',
+        field: 'bprTrustSection',
+        clauseNumber: null,
+        issue:
+          'CRITICAL: Client requested a Business Property Relief Trust. Complete Business Property Details, Schedule Number, and BPR Trust Terms before generating the PDF.',
+        snippet: '(BPR solicitor fields incomplete)',
+      });
+    }
     const placeholderPatterns = [
       /\btest\s+test/i,              // "test test" or "test test test"
       /\btest\s+test\s+test/i,       // "test test test" explicitly
@@ -2811,7 +2828,13 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
       scheduleReferences.add(`Schedule ${String(formValues.propertyTrustScheduleNumber).trim()}`);
     }
-    if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+    const bprIntentPreflight = getBprTrustClientIntent(formValues);
+    if (
+      bprIntentPreflight &&
+      bprIntentPreflight !== 'No' &&
+      isBprSolicitorPackageComplete(formValues) &&
+      formValues.bprTrustScheduleNumber
+    ) {
       scheduleReferences.add(`Schedule ${String(formValues.bprTrustScheduleNumber).trim()}`);
     }
 
@@ -3118,6 +3141,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       console.log(`[PDF SCHEDULES MISSING] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}" for BPR Trust`);
       
       if (bprTrustScheduleNum === scheduleNumber) {
+        const bprIntentSched = getBprTrustClientIntent(formValues);
+        if (bprIntentSched === 'Unsure' && !isBprSolicitorPackageComplete(formValues)) {
+          console.log(`[PDF SCHEDULES MISSING] BPR intent Unsure and solicitor package incomplete — schedule not treated as missing`);
+          return false;
+        }
         // This is a BPR Trust schedule - check if content exists
         const details = formValues.bprTrustDetails ? 
           String(formValues.bprTrustDetails).trim() : '';
@@ -3398,8 +3426,14 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       }
     }
     
-    // Map BPR Trust schedule
-    if (formValues.includeBPRTrust === 'Yes' && formValues.bprTrustScheduleNumber) {
+    // Map BPR Trust schedule (only when solicitor package is complete)
+    const bprIntentMap = getBprTrustClientIntent(formValues);
+    if (
+      bprIntentMap &&
+      bprIntentMap !== 'No' &&
+      isBprSolicitorPackageComplete(formValues) &&
+      formValues.bprTrustScheduleNumber
+    ) {
       const oldNumber = String(formValues.bprTrustScheduleNumber).trim();
       if (oldNumber && !scheduleNumberMap.has(oldNumber)) {
         scheduleNumberMap.set(oldNumber, legalScheduleIndex);

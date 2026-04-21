@@ -26,6 +26,7 @@
  */
 
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
+import { getBprTrustClientIntent } from '../lib/bprTrustClientIntent.js';
 
 function getFormData(formDataParam) {
   return formDataParam && Array.isArray(formDataParam.formSections) ? formDataParam : defaultFormData;
@@ -235,14 +236,22 @@ export const validateBPRTrustSchedules = (formValues, formDataParam) => {
   const formData = getFormData(formDataParam);
   const issues = [];
 
+  const intent = getBprTrustClientIntent(formValues);
+
   console.log('[VALIDATE BPR TRUST] Checking validation...');
-  console.log('[VALIDATE BPR TRUST] includeBPRTrust:', formValues.includeBPRTrust);
+  console.log('[VALIDATE BPR TRUST] bprTrustClientIntent:', intent);
   console.log('[VALIDATE BPR TRUST] bprTrustScheduleNumber:', formValues.bprTrustScheduleNumber);
   console.log('[VALIDATE BPR TRUST] bprTrustDetails exists:', !!formValues.bprTrustDetails);
   console.log('[VALIDATE BPR TRUST] bprTrustTerms exists:', !!formValues.bprTrustTerms);
 
-  // Check if BPR Trust is enabled (matching Property Trust logic)
-  const isBPRTrustEnabled = formValues.includeBPRTrust === 'Yes' || 
+  if (intent === 'Unsure' || intent === 'No' || intent === '') {
+    console.log('[VALIDATE BPR TRUST] Skipping schedule content validation for intent:', intent || '(empty)');
+    return issues;
+  }
+
+  // Client requested BPR (Yes) — require schedule content when a schedule number is present (legacy: includeBPRTrust)
+  const isBPRTrustEnabled = intent === 'Yes' ||
+                            formValues.includeBPRTrust === 'Yes' ||
                             formValues.includeBPRTrust === true ||
                             String(formValues.includeBPRTrust || '').toLowerCase() === 'yes';
   

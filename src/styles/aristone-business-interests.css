@@ -426,6 +426,92 @@ html.dark-theme .ari-warn-body {
   color: #fde68a;
 }
 
+/* BPR Q4 explainer + client confirmation (handoff April 2026) */
+.ari-bpr-explainer {
+  background: #eef0fd;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 1.25rem;
+}
+html.dark-theme .ari-bpr-explainer {
+  background: #1e293b;
+  border: 1px solid #6366f1;
+}
+.ari-bpr-explainer h4 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4f46e5;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+html.dark-theme .ari-bpr-explainer h4 {
+  color: #a5b4fc;
+}
+.ari-bpr-explainer p {
+  font-size: 13px;
+  color: #1a1f3c;
+  line-height: 1.65;
+  margin: 0 0 8px;
+}
+html.dark-theme .ari-bpr-explainer p {
+  color: #e2e8f0;
+}
+.ari-bpr-explainer p:last-child {
+  margin-bottom: 0;
+}
+.ari-bpr-example {
+  background: #fff;
+  border: 1px solid #c7c4f5;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 10px;
+}
+html.dark-theme .ari-bpr-example {
+  background: #0f172a;
+  border-color: #818cf8;
+}
+.ari-bpr-example p {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.6;
+}
+html.dark-theme .ari-bpr-example p {
+  color: #cbd5e1;
+}
+.ari-bpr-example strong {
+  color: #1a1f3c;
+  font-weight: 600;
+}
+html.dark-theme .ari-bpr-example strong {
+  color: #f1f5f9;
+}
+
+.ari-bpr-confirm-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 1.5rem;
+}
+html.dark-theme .ari-bpr-confirm-box {
+  background: rgba(22, 101, 52, 0.35);
+  border-color: #4ade80;
+}
+.ari-bpr-confirm-box p {
+  font-size: 13px;
+  color: #166534;
+  margin: 0;
+  line-height: 1.6;
+}
+html.dark-theme .ari-bpr-confirm-box p {
+  color: #bbf7d0;
+}
+.ari-bpr-confirm-box strong {
+  font-weight: 600;
+}
+
 @media (max-width: 480px) {
   .ari-examples,
   .ari-guidance,

@@ -1,7 +1,10 @@
 import { mergeMatterPayloads } from './formPayload.js';
+import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from './bprTrustClientIntent.js';
 
 export const OUTSTANDING_CATEGORY = {
   ID_VERIFICATION: 'idVerification',
+  BPR_TRUST_REQUIRED: 'bprTrustRequired',
+  BPR_TRUST_REVIEW: 'bprTrustReview',
   TESTAMENTARY_CAPACITY: 'testamentaryCapacity',
 };
 
@@ -67,11 +70,29 @@ export function isMatterTestamentaryCapacityOutstanding(matter) {
   return !isTestamentaryCapacityComplete(getMergedMatterPayload(matter));
 }
 
+export function isMatterBprTrustRequiredOutstanding(matter) {
+  const payload = getMergedMatterPayload(matter);
+  return getBprTrustClientIntent(payload) === 'Yes' && !isBprSolicitorPackageComplete(payload);
+}
+
+export function isMatterBprTrustReviewOutstanding(matter) {
+  const payload = getMergedMatterPayload(matter);
+  return getBprTrustClientIntent(payload) === 'Unsure';
+}
+
 export function getMatterOutstandingCategories(matter) {
   const categories = [];
 
   if (isMatterIdVerificationOutstanding(matter)) {
     categories.push(OUTSTANDING_CATEGORY.ID_VERIFICATION);
+  }
+
+  if (isMatterBprTrustRequiredOutstanding(matter)) {
+    categories.push(OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED);
+  }
+
+  if (isMatterBprTrustReviewOutstanding(matter)) {
+    categories.push(OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW);
   }
 
   if (isMatterTestamentaryCapacityOutstanding(matter)) {

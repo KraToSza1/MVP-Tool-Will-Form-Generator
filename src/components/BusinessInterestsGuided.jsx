@@ -111,24 +111,30 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
     businessSeparateTrusteeTown: '',
     businessSeparateTrusteePostcode: '',
     businessSeparateTrusteeRecordId: '',
+    bprTrustClientIntent: '',
   };
 
   const setQ1 = (val) => {
     const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
     recordIdRef.current = null;
     if (mapped !== 'Yes') {
-      applyPatch((prev) => ({
-        ...prev,
-        hasBusinessInterests: mapped,
-        ...clearBusinessDetailFields,
-        separateTrusteeData: stripGuidedTrusteeRows(prev.separateTrusteeData),
-      }));
+      applyPatch((prev) => {
+        const next = {
+          ...prev,
+          hasBusinessInterests: mapped,
+          ...clearBusinessDetailFields,
+          separateTrusteeData: stripGuidedTrusteeRows(prev.separateTrusteeData),
+        };
+        delete next.includeBPRTrust;
+        return next;
+      });
       return;
     }
-    applyPatch((prev) => ({
-      ...prev,
-      hasBusinessInterests: 'Yes',
-    }));
+    applyPatch((prev) => {
+      const next = { ...prev, hasBusinessInterests: 'Yes' };
+      delete next.includeBPRTrust;
+      return next;
+    });
   };
 
   const setQ2 = (val) => {
@@ -165,6 +171,15 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
     });
   };
 
+  const setQ4 = (val) => {
+    const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
+    applyPatch((prev) => {
+      const next = { ...prev, bprTrustClientIntent: mapped };
+      delete next.includeBPRTrust;
+      return next;
+    });
+  };
+
   const onDetailChange = (key, value) => {
     applyPatch({ [key]: value });
   };
@@ -198,6 +213,14 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
     yes: q3 === 'Yes',
     unsure: q3 === 'Unsure',
   };
+
+  const q4 = formValues.bprTrustClientIntent;
+  const radioQ4 = {
+    no: q4 === 'No',
+    yes: q4 === 'Yes',
+    unsure: q4 === 'Unsure',
+  };
+  const showBprConfirm = q4 === 'Yes' || q4 === 'Unsure';
 
   return (
     <div className="ari-wrap min-w-0">
@@ -332,14 +355,6 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             </select>
             <p className="ari-hint" style={{ marginTop: 5 }}>
               This helps us check whether Business Property Relief (BPR) could reduce inheritance tax on your estate.
-            </p>
-          </div>
-
-          <div className="ari-warn">
-            <p className="ari-warn-title">Business Property Relief (BPR)</p>
-            <p className="ari-warn-body">
-              BPR can reduce inheritance tax on certain business assets. Your solicitor will confirm what applies after
-              reviewing your answers — the range above is only a rough guide for triage.
             </p>
           </div>
 
@@ -603,6 +618,74 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                   />
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          <hr className="ari-sep" />
+
+          <div className="ari-q-header">
+            <div className="ari-badge-sm" aria-hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </div>
+            <h3>Do you want your will to include a Business Property Relief (BPR) trust?</h3>
+          </div>
+
+          <div className="ari-bpr-explainer">
+            <h4>Plain-English summary</h4>
+            <p>
+              A BPR trust can sometimes help reduce inheritance tax on qualifying business assets. The exact wording is legal
+              work — your solicitor drafts the trust terms. Here we only need to know what you want to explore.
+            </p>
+            <div className="ari-bpr-example">
+              <p>
+                <strong>Example.</strong> You might say yes if you want your solicitor to build in a BPR trust for your company
+                shares; you might say no if you already know you do not need one; or &quot;I&apos;m not sure&quot; if you want
+                advice on the call first.
+              </p>
+            </div>
+          </div>
+
+          <div className="ari-radio-group" role="radiogroup" aria-label="Business Property Relief trust">
+            <label className="ari-radio-opt">
+              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.no} onChange={() => setQ4('no')} />
+              <div>
+                <div className="ari-opt-label">No — I do not want a BPR trust in my will</div>
+                <div className="ari-opt-sub">My solicitor will not add BPR trust wording unless we discuss it later</div>
+              </div>
+            </label>
+            <label className="ari-radio-opt">
+              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.yes} onChange={() => setQ4('yes')} />
+              <div>
+                <div className="ari-opt-label">Yes — please include a BPR trust</div>
+                <div className="ari-opt-sub">I want my solicitor to prepare the trust terms and schedules</div>
+              </div>
+            </label>
+            <label className="ari-radio-opt">
+              <input type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.unsure} onChange={() => setQ4('unsure')} />
+              <div>
+                <div className="ari-opt-label">I&apos;m not sure — I need advice first</div>
+                <div className="ari-opt-sub">Flag this for discussion; my solicitor will help me decide</div>
+              </div>
+            </label>
+          </div>
+
+          {showBprConfirm ? (
+            <div id={`ari-bpr-confirm-${uid}`} className="ari-bpr-confirm-box">
+              {q4 === 'Yes' ? (
+                <p>
+                  <strong>BPR trust requested.</strong> Your solicitor will complete the Business Property Details, schedule
+                  number, and trust terms on their side before your will is finalised. PDF generation may be blocked until those
+                  fields are filled.
+                </p>
+              ) : (
+                <p>
+                  <strong>Flagged for discussion.</strong> Your solicitor will talk this through with you. A draft PDF can
+                  still be produced; any BPR trust section stays blank until you agree the approach.
+                </p>
+              )}
             </div>
           ) : null}
         </div>

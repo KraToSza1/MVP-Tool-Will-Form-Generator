@@ -6,7 +6,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { listMatters, deleteMatter, MATTER_STATUS } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
 import { getPartnerShortLabel } from '../lib/partnerIntakeSummary.js';
-import { OUTSTANDING_CATEGORY, getMatterOutstandingCategories, isMatterIdVerificationOutstanding, isMatterTestamentaryCapacityOutstanding } from '../lib/matterOutstanding.js';
+import {
+  OUTSTANDING_CATEGORY,
+  getMatterOutstandingCategories,
+  isMatterIdVerificationOutstanding,
+  isMatterBprTrustRequiredOutstanding,
+  isMatterBprTrustReviewOutstanding,
+  isMatterTestamentaryCapacityOutstanding,
+} from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
@@ -37,6 +44,30 @@ const OUTSTANDING_CATEGORY_META = {
     activeClasses: 'border-rose-300 bg-rose-100 shadow-sm',
     inactiveClasses: 'border-rose-200 bg-white/90 hover:border-rose-300 hover:bg-rose-50',
     actionTextClasses: 'text-rose-800',
+  },
+  [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]: {
+    title: 'BPR Trust — solicitor completion required',
+    shortLabel: 'BPR (required)',
+    description:
+      'Client requested a Business Property Relief Trust. Complete Business Property Details, Schedule Number, and BPR Trust Terms on the matter before generating the PDF.',
+    icon: BriefcaseBusiness,
+    badgeClasses: 'border-rose-200 bg-rose-100 text-rose-900',
+    iconClasses: 'bg-rose-100 text-rose-700',
+    activeClasses: 'border-rose-300 bg-rose-100 shadow-sm',
+    inactiveClasses: 'border-rose-200 bg-white/90 hover:border-rose-300 hover:bg-rose-50',
+    actionTextClasses: 'text-rose-800',
+  },
+  [OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]: {
+    title: 'BPR Trust — needs review',
+    shortLabel: 'BPR (review)',
+    description:
+      'Client was unsure about a BPR Trust — discuss on onboarding. PDF can still be generated; complete or clear the BPR fields when advice is finalised.',
+    icon: BriefcaseBusiness,
+    badgeClasses: 'border-amber-200 bg-amber-100 text-amber-900',
+    iconClasses: 'bg-amber-100 text-amber-700',
+    activeClasses: 'border-amber-300 bg-amber-100 shadow-sm',
+    inactiveClasses: 'border-amber-200 bg-white/90 hover:border-amber-300 hover:bg-amber-50',
+    actionTextClasses: 'text-amber-800',
   },
   [OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]: {
     title: 'Testamentary Capacity Outstanding',
@@ -252,6 +283,8 @@ export default function SolicitorDashboardPage() {
 
   const outstandingGroups = useMemo(() => ({
     [OUTSTANDING_CATEGORY.ID_VERIFICATION]: allMattersForStats.filter((matter) => isMatterIdVerificationOutstanding(matter)),
+    [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]: allMattersForStats.filter((matter) => isMatterBprTrustRequiredOutstanding(matter)),
+    [OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]: allMattersForStats.filter((matter) => isMatterBprTrustReviewOutstanding(matter)),
     [OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]: allMattersForStats.filter((matter) => isMatterTestamentaryCapacityOutstanding(matter)),
   }), [allMattersForStats]);
 
@@ -334,9 +367,9 @@ export default function SolicitorDashboardPage() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Outstanding items</p>
-              <h2 className="mt-2 text-lg sm:text-2xl font-bold tracking-tight text-slate-950 break-words leading-snug">ID Verification Outstanding and Testamentary Capacity Outstanding stay pinned here.</h2>
+              <h2 className="mt-2 text-lg sm:text-2xl font-bold tracking-tight text-slate-950 break-words leading-snug">ID verification, BPR Trust follow-up, and Testamentary Capacity stay pinned here.</h2>
               <p className="mt-2 max-w-3xl text-sm text-slate-700">
-                These categories are shown above the main matter list so they cannot be missed. Click either category to see the files that still need action.
+                These categories are shown above the main matter list so they cannot be missed. Click a category to see the files that still need action.
               </p>
             </div>
             <div className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold ${hasOutstandingItems ? 'border-rose-200 bg-white text-rose-900' : 'border-emerald-200 bg-white text-emerald-900'}`}>

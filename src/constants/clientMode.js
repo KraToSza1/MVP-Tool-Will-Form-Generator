@@ -209,6 +209,11 @@ export const SOLICITOR_ONLY_FIELD_IDS = new Set([
   'appointProfessionalExecutor',
   'professionalExecutorSection',
   'substituteProfessionalExecutorSection',
+  // BPR trust legal drafting — completed by solicitor after client intent on guided intake
+  'bprTrustSection',
+  'bprTrustDetails',
+  'bprTrustScheduleNumber',
+  'bprTrustTerms',
 ]);
 
 export const isSolicitorMode = () => {

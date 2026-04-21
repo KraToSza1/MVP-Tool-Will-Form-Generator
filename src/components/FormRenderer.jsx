@@ -1628,6 +1628,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return true;
       }
 
+      if (field.type === 'businessInterestsGuided') {
+        if (formValues.hasBusinessInterests !== 'Yes') return true;
+        const intent = formValues.bprTrustClientIntent;
+        const ok = intent === 'Yes' || intent === 'No' || intent === 'Unsure';
+        DEBUG_LOGS&&console.log(`[VALIDATION] businessInterestsGuided BPR intent: "${intent}", valid: ${ok}`);
+        return ok;
+      }
+
       if (field.type === 'section' && field.subFields) {
         return field.subFields.every(checkField);
       }
@@ -1665,6 +1673,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
           if (field.conditions && !evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
+          if (field.type === 'businessInterestsGuided') {
+            if (formValues.hasBusinessInterests !== 'Yes') return true;
+            const intent = formValues.bprTrustClientIntent;
+            return intent === 'Yes' || intent === 'No' || intent === 'Unsure';
+          }
           if (field.type === 'section' && field.subFields) {
             return field.subFields.every(fieldFullyCompleted);
           }
@@ -1712,6 +1725,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       if (['button', 'hidden', 'display'].includes(field.type)) {
         if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} skipped - type: ${field.type}`);
+        return;
+      }
+
+      if (field.type === 'businessInterestsGuided') {
+        if (formValues.hasBusinessInterests === 'Yes') {
+          const intent = formValues.bprTrustClientIntent;
+          if (intent !== 'Yes' && intent !== 'No' && intent !== 'Unsure') {
+            issues.push({
+              fieldId: field.id,
+              fieldLabel: 'Business interests — BPR trust',
+              message:
+                'Please answer whether you want a Business Property Relief (BPR) trust, or select that you need advice first.',
+              type: 'required',
+            });
+          }
+        }
         return;
       }
 
