@@ -248,6 +248,10 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     }
     DEBUG_LOGS&&console.log(`[FIELD HIDDEN] Field "${field.id}" (${field.label}) hidden due to conditions not met`);
     return null;
+  }
+
+  if (field.type === 'hidden') {
+    return null;
   } else if (field.conditions) {
     DEBUG_LOGS&&console.log(`[FIELD SHOWN] Field "${field.id}" (${field.label}) shown - conditions met`);
   } else {

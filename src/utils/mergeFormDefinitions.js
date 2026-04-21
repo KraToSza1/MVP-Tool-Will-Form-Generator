@@ -1,4 +1,35 @@
 /**
+ * Guardians: always use bundled field definitions so deploys fix structure
+ * (hidden appointGuardians, guided-only flow, client-hidden legacy sections)
+ * even when Supabase still has an older radio + labels. Custom fields in this
+ * section (e.g. custom_*) are preserved after the pinned block.
+ */
+const GUARDIAN_SCHEMA_PINNED_IDS = new Set([
+  'appointGuardians',
+  'guardianGuidedFlow',
+  'guardianFlowState',
+  'guardiansSection',
+  'substituteGuardiansSection',
+]);
+
+function pinGuardianFieldsFromBundle(merged, bundle) {
+  const bundleSec = bundle.formSections?.find((s) => s.formSection === 'Guardians');
+  const mergedIdx = merged.formSections?.findIndex((s) => s.formSection === 'Guardians');
+  if (!bundleSec?.fields || mergedIdx < 0) return;
+
+  const mergedSec = merged.formSections[mergedIdx];
+  const mergedFields = mergedSec.fields || [];
+
+  const pinnedFromBundle = bundleSec.fields
+    .filter((f) => f.id && GUARDIAN_SCHEMA_PINNED_IDS.has(f.id))
+    .map((f) => JSON.parse(JSON.stringify(f)));
+
+  const tail = mergedFields.filter((f) => f.id && !GUARDIAN_SCHEMA_PINNED_IDS.has(f.id));
+
+  mergedSec.fields = [...pinnedFromBundle, ...tail];
+}
+
+/**
  * Merge a Supabase-saved questionnaire with the bundled factory default.
  *
  * Priority: Supabase wins for everything it already has (labels, placeholders,
@@ -73,6 +104,8 @@ export function mergeFormDefinitions(remote, bundle) {
     Number(remote._schemaRevision) || 0,
     Number(bundle._schemaRevision) || 0
   );
+
+  pinGuardianFieldsFromBundle(merged, bundle);
 
   return merged;
 }
