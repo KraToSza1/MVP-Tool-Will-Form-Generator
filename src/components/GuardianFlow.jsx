@@ -592,6 +592,12 @@ export default function GuardianFlow({
   const handleSaveChild = (form) => {
     if (childModal.mode === 'add') {
       setChildren((prev) => [...prev, { ...form, guardians: [] }]);
+      if (option === 'yes_different') {
+        const fn = String(form.childFirstName || '').trim() || 'this child';
+        toast.info('Add a guardian', {
+          description: `Use “Add Guardian for ${fn}” below — each child needs at least one guardian before you save.`,
+        });
+      }
     } else {
       setChildren((prev) => {
         const updated = [...prev];
@@ -632,13 +638,15 @@ export default function GuardianFlow({
       if (Array.isArray(snap.substituteSameGuardians)) {
         setSubstituteSameGuardians(snap.substituteSameGuardians);
       }
+      const perChild = mapAppointToGuardianFlowOption(appointGuardiansValue) === 'yes_different';
       if (typeof snap.step === 'number' && (snap.step === 1 || snap.step === 2)) {
-        setStep(snap.step);
+        // Per-child guardians are collected on step 1 only; ignore legacy step 2 snapshots.
+        setStep(perChild && snap.step === 2 ? 1 : snap.step);
       } else if (typeof snap.childrenConfirmed === 'boolean') {
-        setStep(snap.childrenConfirmed ? 2 : 1);
+        setStep(snap.childrenConfirmed && !perChild ? 2 : 1);
       }
     });
-  }, [isEmbedded, initialFlowState]);
+  }, [isEmbedded, initialFlowState, appointGuardiansValue]);
 
   useEffect(() => {
     if (!isEmbedded || typeof onFlowStateChange !== 'function') return;
@@ -661,6 +669,13 @@ export default function GuardianFlow({
       });
     }
   }, [isEmbedded, embeddedOption]);
+
+  /** Per-child flow uses a single step; collapse legacy step 2 from older drafts. */
+  useEffect(() => {
+    if (option === 'yes_different' && step === 2) {
+      setStep(1);
+    }
+  }, [option, step]);
 
   const selectEmbedded = (flowOpt) => {
     const v = mapFlowOptionToAppointValue(flowOpt);
@@ -747,7 +762,7 @@ export default function GuardianFlow({
         _flowState: {
           sameGuardians: [],
           children: childrenDeduped,
-          step,
+          step: 1,
           substituteSameGuardians: [],
         },
       });
@@ -890,7 +905,7 @@ export default function GuardianFlow({
 
       {q1Radios}
 
-      {option === 'yes_different' && (step === 1 || step === 2) && (
+      {option === 'yes_different' && (
         <div className="grd-warn">
           <p className="grd-warn-title">Assigning guardians per child</p>
           <p className="grd-warn-body">
@@ -902,12 +917,16 @@ export default function GuardianFlow({
 
       {(option === 'yes_same' || option === 'yes_different') && step === 1 && (
         <div className="grd-step-card min-w-0">
-          <div className="grd-step-label">Step 1 of 2 — Your children</div>
-          <div className="grd-step-title">Add each child under 18</div>
+          <div className="grd-step-label">
+            {option === 'yes_different' ? 'Your children — guardian for each' : 'Step 1 of 2 — Your children'}
+          </div>
+          <div className="grd-step-title">
+            {option === 'yes_different' ? 'Add each child and assign their guardian(s)' : 'Add each child under 18'}
+          </div>
           <div className="grd-step-help">
             {option === 'yes_same'
               ? 'Add all children below. On the next step you will choose guardian(s) for all of them.'
-              : 'Add all children below. On the next step you will assign a specific guardian to each one.'}
+              : 'Add each child below, then assign at least one guardian to that child before saving. Every child must have their own guardian list.'}
           </div>
 
           {children.length === 0 && (
@@ -917,27 +936,62 @@ export default function GuardianFlow({
             </div>
           )}
 
-          {children.map((c, i) => (
-            <div key={i} className="grd-person-card">
-              <div className="grd-person-avatar" aria-hidden>
-                {String(i + 1)}
+          {children.map((c, i) =>
+            option === 'yes_different' ? (
+              <div key={i} className="grd-child-card">
+                <div className="grd-child-header">
+                  <div className="grd-child-header-left min-w-0">
+                    <div className="grd-child-number">{i + 1}</div>
+                    <span className="grd-child-header-name break-words">
+                      {c.childFirstName} {c.childLastName}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1 sm:flex-row sm:items-center">
+                    <button type="button" className="grd-btn-secondary min-h-[44px] px-3 text-xs" onClick={() => openEditChild(i)}>
+                      Edit child
+                    </button>
+                    <button type="button" className="grd-btn-remove-child" onClick={() => handleRemoveChild(i)}>
+                      Remove child
+                    </button>
+                  </div>
+                </div>
+                <div className="grd-child-body">
+                  <p className="grd-person-detail mb-3">Date of birth: {formatDob(c.dob)}</p>
+                  <p className="grd-guardian-sub-label">Guardian(s) for {c.childFirstName}</p>
+                  <p className="grd-guardian-empty-msg mb-2">
+                    Add at least one person you trust to be this child&apos;s guardian. You can add more than one.
+                  </p>
+                  <GuardianList
+                    guardians={c.guardians}
+                    onChange={(g) => updateChildGuardians(i, g)}
+                    addLabel={`Add Guardian for ${c.childFirstName}`}
+                    modalSubtitle={`For: Add Guardian (${c.childFirstName})`}
+                    formValues={formValuesProp}
+                  />
+                </div>
               </div>
-              <div className="grd-person-info min-w-0">
-                <p className="grd-person-name break-words">
-                  {c.childFirstName} {c.childLastName}
-                </p>
-                <p className="grd-person-detail">DOB: {formatDob(c.dob)}</p>
+            ) : (
+              <div key={i} className="grd-person-card">
+                <div className="grd-person-avatar" aria-hidden>
+                  {String(i + 1)}
+                </div>
+                <div className="grd-person-info min-w-0">
+                  <p className="grd-person-name break-words">
+                    {c.childFirstName} {c.childLastName}
+                  </p>
+                  <p className="grd-person-detail">DOB: {formatDob(c.dob)}</p>
+                </div>
+                <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
+                  <button type="button" className="grd-btn-secondary min-h-[44px] px-3 text-xs" onClick={() => openEditChild(i)}>
+                    Edit
+                  </button>
+                  <button type="button" className="grd-btn-remove" onClick={() => handleRemoveChild(i)}>
+                    Remove
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-shrink-0 flex-col gap-1 sm:flex-row">
-                <button type="button" className="grd-btn-secondary min-h-[44px] px-3 text-xs" onClick={() => openEditChild(i)}>
-                  Edit
-                </button>
-                <button type="button" className="grd-btn-remove" onClick={() => handleRemoveChild(i)}>
-                  Remove
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          )}
 
           <button type="button" className="grd-btn-add" onClick={openAddChild}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -947,10 +1001,10 @@ export default function GuardianFlow({
             Add Child
           </button>
 
-          {children.length > 0 && (
+          {option === 'yes_same' && children.length > 0 && (
             <div className="grd-save-row">
               <button type="button" className="grd-btn-add w-full sm:w-auto" onClick={() => setStep(2)}>
-                Continue — assign guardian{option === 'yes_different' ? 's' : ''} →
+                Continue — assign guardians →
               </button>
             </div>
           )}
@@ -1034,47 +1088,6 @@ export default function GuardianFlow({
           </div>
 
           <button type="button" className="grd-btn-secondary min-h-[44px]" onClick={() => setStep(1)}>
-            ← Edit children
-          </button>
-        </div>
-      )}
-
-      {option === 'yes_different' && step === 2 && (
-        <div className="grd-step-card min-w-0">
-          <div className="grd-step-label">Step 2 of 2 — Guardians per child</div>
-          <div className="grd-step-title">Assign a guardian to each child</div>
-          <div className="grd-step-help">
-            For each child below, add the person(s) you would like to be their guardian if both parents passed away.
-          </div>
-
-          {children.map((child, i) => (
-            <div key={i} className="grd-child-card">
-              <div className="grd-child-header">
-                <div className="grd-child-header-left min-w-0">
-                  <div className="grd-child-number">{i + 1}</div>
-                  <span className="grd-child-header-name break-words">
-                    {child.childFirstName} {child.childLastName}
-                  </span>
-                </div>
-              </div>
-              <div className="grd-child-body">
-                <p className="grd-person-detail mb-3">Date of birth: {formatDob(child.dob)}</p>
-                <p className="grd-guardian-sub-label">Who would you like to be {child.childFirstName}&apos;s guardian?</p>
-                <p className="grd-guardian-empty-msg mb-2">
-                  This should be someone you trust completely. You can appoint more than one person.
-                </p>
-                <GuardianList
-                  guardians={child.guardians}
-                  onChange={(g) => updateChildGuardians(i, g)}
-                  addLabel={`Add Guardian for ${child.childFirstName}`}
-                  modalSubtitle={`For: Add Guardian (${child.childFirstName})`}
-                  formValues={formValuesProp}
-                />
-              </div>
-            </div>
-          ))}
-
-          <button type="button" className="grd-btn-secondary mt-2 min-h-[44px]" onClick={() => setStep(1)}>
             ← Edit children
           </button>
         </div>
