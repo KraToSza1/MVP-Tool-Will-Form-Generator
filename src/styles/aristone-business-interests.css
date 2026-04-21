@@ -1,0 +1,435 @@
+/* Aristone Business Interests — scoped "ari-" classes (handoff April 2026). Dark: html.dark-theme */
+
+.ari-wrap {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1a1f3c;
+  max-width: 720px;
+  padding: 0 0 2rem;
+}
+
+html.dark-theme .ari-wrap {
+  color: #f1f5f9;
+}
+
+.ari-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.ari-section-title h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  color: #1a1f3c;
+}
+html.dark-theme .ari-section-title h2 {
+  color: #f1f5f9;
+}
+
+.ari-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #eef0fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+html.dark-theme .ari-badge {
+  background: #1e293b;
+  border: 1px solid #475569;
+}
+.ari-badge svg {
+  width: 18px;
+  height: 18px;
+  color: #4f46e5;
+}
+html.dark-theme .ari-badge svg {
+  color: #a5b4fc;
+}
+
+.ari-badge-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #eef0fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+html.dark-theme .ari-badge-sm {
+  background: #1e293b;
+  border: 1px solid #475569;
+}
+.ari-badge-sm svg {
+  width: 14px;
+  height: 14px;
+  color: #4f46e5;
+}
+html.dark-theme .ari-badge-sm svg {
+  color: #a5b4fc;
+}
+
+.ari-rule {
+  border: none;
+  height: 2px;
+  background: #4f46e5;
+  margin: 0 0 1.75rem;
+}
+
+.ari-q-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ari-q-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: #1a1f3c;
+  line-height: 1.4;
+}
+html.dark-theme .ari-q-header h3 {
+  color: #f1f5f9;
+}
+
+.ari-why {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1.25rem;
+  align-items: flex-start;
+}
+.ari-why svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #9ca3af;
+}
+.ari-why p {
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.6;
+  margin: 0;
+}
+html.dark-theme .ari-why p {
+  color: #94a3b8;
+}
+
+.ari-helper {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+}
+html.dark-theme .ari-helper {
+  color: #cbd5e1;
+}
+
+.ari-examples {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ari-tile {
+  background: #eef0fd;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+html.dark-theme .ari-tile {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid #475569;
+}
+.ari-tile .t-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1f3c;
+  margin: 0 0 2px;
+}
+html.dark-theme .ari-tile .t-title {
+  color: #f1f5f9;
+}
+.ari-tile .t-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+html.dark-theme .ari-tile .t-sub {
+  color: #94a3b8;
+}
+
+.ari-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 4px 0 1.25rem;
+}
+html.dark-theme .ari-hint {
+  color: #64748b;
+}
+
+.ari-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 1.5rem;
+}
+.ari-radio-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+.ari-radio-opt:hover {
+  background: #f9fafb;
+}
+html.dark-theme .ari-radio-opt:hover {
+  background: rgba(51, 65, 85, 0.5);
+}
+.ari-radio-opt input[type='radio'] {
+  margin-top: 3px;
+  accent-color: #4f46e5;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.ari-opt-label {
+  font-size: 15px;
+  color: #1a1f3c;
+  line-height: 1.5;
+}
+html.dark-theme .ari-opt-label {
+  color: #f1f5f9;
+}
+.ari-opt-sub {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+html.dark-theme .ari-opt-sub {
+  color: #94a3b8;
+}
+
+.ari-sep {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1.75rem 0;
+  border: none;
+}
+html.dark-theme .ari-sep {
+  background: #475569;
+}
+
+.ari-callout {
+  border-left: 3px solid #4f46e5;
+  padding-left: 1rem;
+  margin-bottom: 1.25rem;
+}
+.ari-callout p {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+html.dark-theme .ari-callout p {
+  color: #cbd5e1;
+}
+.ari-callout strong {
+  color: #1a1f3c;
+  font-weight: 600;
+}
+html.dark-theme .ari-callout strong {
+  color: #f1f5f9;
+}
+
+.ari-field {
+  margin-bottom: 14px;
+}
+.ari-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1f3c;
+  display: block;
+  margin-bottom: 5px;
+}
+html.dark-theme .ari-label {
+  color: #e2e8f0;
+}
+.ari-label .ari-optional {
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.ari-select,
+.ari-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 14px;
+  padding: 9px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #1a1f3c;
+  background: #fff;
+  box-sizing: border-box;
+  font-family: inherit;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+html.dark-theme .ari-select,
+html.dark-theme .ari-input {
+  border-color: #475569;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+.ari-select:focus,
+.ari-input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.ari-inline-radios {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ari-inline-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 14px;
+  min-height: 44px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1f3c;
+  transition: border-color 0.15s;
+}
+html.dark-theme .ari-inline-radio {
+  border-color: #475569;
+  background: #1e293b;
+  color: #f1f5f9;
+}
+.ari-inline-radio:hover {
+  border-color: #4f46e5;
+}
+.ari-inline-radio input {
+  accent-color: #4f46e5;
+}
+
+.ari-guidance {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+.ari-guidance-full {
+  grid-template-columns: 1fr;
+}
+.ari-guidance-box {
+  background: #f0f4ff;
+  border: 1px solid #c7c4f5;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+html.dark-theme .ari-guidance-box {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: #6366f1;
+}
+.ari-g-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1f3c;
+  margin: 0 0 6px;
+}
+html.dark-theme .ari-g-title {
+  color: #f1f5f9;
+}
+.ari-g-item {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 3px;
+  line-height: 1.5;
+}
+html.dark-theme .ari-g-item {
+  color: #cbd5e1;
+}
+
+.ari-trustee-box {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  background: #fafafa;
+  margin-bottom: 1.5rem;
+}
+html.dark-theme .ari-trustee-box {
+  border-color: #475569;
+  background: #0f172a;
+}
+.ari-trustee-box h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1f3c;
+  margin: 0 0 1rem;
+}
+html.dark-theme .ari-trustee-box h4 {
+  color: #f1f5f9;
+}
+.ari-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ari-warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 1.5rem;
+}
+html.dark-theme .ari-warn {
+  background: rgba(146, 64, 14, 0.25);
+  border-color: #fbbf24;
+}
+.ari-warn-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 4px;
+}
+html.dark-theme .ari-warn-title {
+  color: #fcd34d;
+}
+.ari-warn-body {
+  font-size: 13px;
+  color: #92400e;
+  margin: 0;
+  line-height: 1.6;
+}
+html.dark-theme .ari-warn-body {
+  color: #fde68a;
+}
+
+@media (max-width: 480px) {
+  .ari-examples,
+  .ari-guidance,
+  .ari-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -708,6 +708,12 @@ function applyRichPersonDemoOverrides(dummyData) {
     dummyData.countryOfResidence = 'United Kingdom';
   }
 
+  if (dummyData.hasBusinessInterests === 'Yes') {
+    dummyData.businessInterestType = dummyData.businessInterestType || 'ltd-shares';
+    dummyData.businessInterestValueRange = dummyData.businessInterestValueRange || '250k-1m';
+    dummyData.shareholderAgreementInPlace = dummyData.shareholderAgreementInPlace || 'Unsure';
+  }
+
   console.log('[AUTOFILL GENERATE] 🧑‍🤝‍🧑 Rich person demo pass:', {
     contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
     appointGuardians: dummyData.appointGuardians,

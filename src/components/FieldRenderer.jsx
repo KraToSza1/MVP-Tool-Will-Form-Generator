@@ -55,6 +55,7 @@ import AddPersonButtonField from './AddPersonButtonField.jsx';
 import ExecutorIndividualAgeFlow from './ExecutorIndividualAgeFlow.jsx';
 import { toast } from 'sonner';
 import GuardianFlow from './GuardianFlow.jsx';
+import BusinessInterestsGuided from './BusinessInterestsGuided.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 import { mapGuardianFlowCompletionToFormValues } from '../utils/guardianFlowSync.js';
 
@@ -261,6 +262,14 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       return <ExcludedPersonAddBlock field={field} formValues={formValues} setFormValues={setFormValues} />;
     }
     return <AddPersonButtonField field={field} formValues={formValues} setFormValues={setFormValues} />;
+  }
+
+  if (field.type === 'businessInterestsGuided') {
+    return (
+      <div className="min-w-0 max-w-full overflow-x-hidden">
+        <BusinessInterestsGuided formValues={formValues} setFormValues={setFormValues} />
+      </div>
+    );
   }
 
   if (field.type === 'guardianFlow') {
@@ -1556,7 +1565,7 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   if (prevProps.field.id !== nextProps.field.id) return false;
   if (prevProps.field.type !== nextProps.field.type) return false;
   // Guardian embedded flow uses many slices of formValues + fresh inline callbacks; never skip updates.
-  if (prevProps.field.type === 'guardianFlow') {
+  if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided') {
     return false;
   }
   if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;

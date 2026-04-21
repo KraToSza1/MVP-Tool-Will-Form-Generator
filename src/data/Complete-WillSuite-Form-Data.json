@@ -1869,77 +1869,10 @@
             "formSection": "Business Interests",
             "fields": [
                 {
-                    "id": "hasBusinessInterests",
-                    "type": "radio",
-                    "label": "Does the Testator have any business interests?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "trusteePowerCarryOnBusiness",
-                    "type": "radio",
-                    "label": "Does the Testator wish to grant the trustees power to carry on business?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I grant my Trustees the power to manage, continue, or sell any business or share of a business that I own at the time of my death, in accordance with clause 4.8 of the STEP standard provisions (third edition). While the business is carried on by my Trustees, they shall not be personally liable for any losses to the business, except in cases of willful default, gross negligence, or breach of trust."
-                        }
-                    ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "field": "hasBusinessInterests",
-                            "operator": "eq",
-                            "value": "Yes"
-                        }
-                    ]
-                },
-                {
-                    "id": "appointSeparateBusinessTrustee",
-                    "type": "radio",
-                    "label": "Does the Testator wish to appoint separate business trustee?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "operator": "AND",
-                            "clauses": [
-                                {
-                                    "field": "hasBusinessInterests",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                },
-                                {
-                                    "field": "trusteePowerCarryOnBusiness",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                }
-                            ]
-                        }
-                    ]
+                    "id": "businessInterestsGuided",
+                    "type": "businessInterestsGuided",
+                    "label": "",
+                    "excludeFromWill": true
                 },
                 {
                     "id": "separateTrusteesSection",
@@ -1956,18 +1889,29 @@
                                     "value": "Yes"
                                 },
                                 {
-                                    "field": "trusteePowerCarryOnBusiness",
+                                    "field": "appointSeparateBusinessTrustee",
                                     "operator": "eq",
                                     "value": "Yes"
+                                }
+                            ]
+                        },
+                        {
+                            "operator": "AND",
+                            "clauses": [
+                                {
+                                    "field": "howResidueDistributed",
+                                    "operator": "eq",
+                                    "value": "IntoFLIT"
                                 },
                                 {
-                                    "field": "appointSeparateBusinessTrustee",
+                                    "field": "appointSeparateTrusteesFLIT",
                                     "operator": "eq",
                                     "value": "Yes"
                                 }
                             ]
                         }
                     ],
+                    "conditionLogic": "OR",
                     "subFields": [
                         {
                             "id": "separateTrusteeStatusDisplay",

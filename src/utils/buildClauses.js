@@ -534,6 +534,19 @@ export const buildClauses = ({
         });
       }
     });
+
+    if (section.formSection === 'Business Interests' && formValues.trusteePowerCarryOnBusiness === 'Yes') {
+      const carryTemplate =
+        'I grant my Trustees the power to manage, continue, or sell any business or share of a business that I own at the time of my death, in accordance with clause 4.8 of the STEP standard provisions (third edition). While the business is carried on by my Trustees, they shall not be personally liable for any losses to the business, except in cases of willful default, gross negligence, or breach of trust.';
+      addClause({
+        section,
+        field: { id: 'trusteePowerCarryOnBusiness', label: 'Trustees carry on business' },
+        template: carryTemplate,
+        text: interpolateText(carryTemplate, formValues),
+        id: `${section.formSection}-trusteePowerCarryOnBusiness-Yes`,
+        isConditional: false,
+      });
+    }
   });
 
   const execAgeCompiled = String(formValues.executorIndividualActingAgeClause || '').trim();
