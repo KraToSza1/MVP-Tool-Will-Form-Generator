@@ -58,7 +58,12 @@ function reconcileSeparateTrustees(prevList, appointYes, guidedRow) {
   return base;
 }
 
-export default function BusinessInterestsGuided({ formValues, setFormValues }) {
+const DEFAULT_BPR_REQUESTED = 'BPR trust requested';
+const DEFAULT_BPR_UNSURE =
+  'Flagged for discussion. Your solicitor will talk this through with you. A draft PDF can still be produced; any BPR trust section stays blank until you agree the approach.';
+
+/** @param {{ field?: object, formValues: object, setFormValues: Function }} props */
+export default function BusinessInterestsGuided({ field, formValues, setFormValues }) {
   const uid = useId();
   const recordIdRef = useRef(formValues.businessSeparateTrusteeRecordId || null);
 
@@ -222,18 +227,18 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
   };
   const showBprConfirm = q4 === 'Yes' || q4 === 'Unsure';
 
+  const bprRequestedCopy =
+    typeof field?.bprTrustRequestedMessage === 'string' && field.bprTrustRequestedMessage.trim() !== ''
+      ? field.bprTrustRequestedMessage.trim()
+      : DEFAULT_BPR_REQUESTED;
+  const bprUnsureCopy =
+    typeof field?.bprTrustUnsureMessage === 'string' && field.bprTrustUnsureMessage.trim() !== ''
+      ? field.bprTrustUnsureMessage.trim()
+      : DEFAULT_BPR_UNSURE;
+
   return (
     <div className="ari-wrap min-w-0">
-      <div className="ari-section-title">
-        <div className="ari-badge" aria-hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="7" width="20" height="14" rx="2" />
-            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-          </svg>
-        </div>
-        <h2>Business Interests</h2>
-      </div>
-      <hr className="ari-rule" />
+      {/* Section title comes from FormRenderer — avoid duplicating "Business Interests" heading */}
 
       <div className="ari-q-header">
         <div className="ari-badge-sm" aria-hidden>
@@ -677,18 +682,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
 
           {showBprConfirm ? (
             <div id={`ari-bpr-confirm-${uid}`} className="ari-bpr-confirm-box">
-              {q4 === 'Yes' ? (
-                <p>
-                  <strong>BPR trust requested.</strong> Your solicitor will complete the Business Property Details, schedule
-                  number, and trust terms on their side before your will is finalised. PDF generation may be blocked until those
-                  fields are filled.
-                </p>
-              ) : (
-                <p>
-                  <strong>Flagged for discussion.</strong> Your solicitor will talk this through with you. A draft PDF can
-                  still be produced; any BPR trust section stays blank until you agree the approach.
-                </p>
-              )}
+              {q4 === 'Yes' ? <p>{bprRequestedCopy}</p> : <p>{bprUnsureCopy}</p>}
             </div>
           ) : null}
         </div>

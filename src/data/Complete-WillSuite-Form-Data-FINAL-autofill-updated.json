@@ -3321,15 +3321,18 @@
         {
           "id": "leaveMoneyGifts",
           "type": "radio",
-          "label": "Does the Testator want to leave any gifts of money?",
+          "label": "Would you like to leave specific sums of money to any individuals or organisations?",
           "options": [
             {
               "value": "No",
-              "label": "No"
+              "label": "No — I don't want to leave any cash gifts",
+              "description": "My estate will be distributed according to the rest of my will without specific cash gifts"
             },
             {
               "value": "Yes",
-              "label": "Yes"
+              "label": "Yes — I want to leave one or more cash gifts",
+              "description": "I'll specify each recipient and amount below",
+              "willClauseText": "I make the following specific monetary gifts to be paid from my estate, free of all taxes and duties: {{field:monetaryGiftsDetails:value}}."
             }
           ],
           "value": null
@@ -3337,7 +3340,7 @@
         {
           "id": "monetaryGiftsSection",
           "type": "section",
-          "label": "Monetary Gifts",
+          "label": "Your cash gifts",
           "conditions": [
             {
               "field": "leaveMoneyGifts",
@@ -3348,10 +3351,9 @@
           "subFields": [
             {
               "id": "monetaryGiftsDetails",
-              "type": "textarea",
-              "label": "Enter monetary gift details",
-              "placeholder": "Enter the monetary gifts you wish to make (e.g., '£10,000 to my nephew Richard Jones')",
-              "rows": 5,
+              "type": "monetaryGiftsList",
+              "label": "",
+              "excludeFromWill": true,
               "value": ""
             }
           ],
@@ -3360,16 +3362,23 @@
         {
           "id": "failedMoneyGiftPassProportionately",
           "type": "radio",
-          "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+          "label": "What should happen if a recipient dies before you and can no longer receive their gift?",
           "options": [
             {
               "value": "No",
-              "label": "No"
+              "label": "No — a failed gift should fall into the residue of my estate",
+              "description": "The simplest approach: any failed gift is added to the general pot left over after all other gifts"
             },
             {
               "value": "Yes",
-              "label": "Yes",
+              "label": "Yes — a failed gift should be shared proportionately among my other beneficiaries",
+              "description": "The failed gift is redistributed to remaining beneficiaries in proportion to their existing shares",
               "willClauseText": "If any monetary gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that gift."
+            },
+            {
+              "value": "Unsure",
+              "label": "I'd like my solicitor to advise me on this",
+              "description": "We'll discuss the best approach before your will is finalised"
             }
           ],
           "value": null,

@@ -11,6 +11,7 @@ import {
   buildGuardianshipDetailsClauseSameGuardians,
   normalizeSourceToGuardianModalForm,
 } from './guardianFlowSync.js';
+import { formatMonetaryGiftsDetailsFromList } from './monetaryGiftsFormat.js';
 
 /** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
 const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
@@ -1006,6 +1007,34 @@ export const generateDummyFormData = (formData) => {
         skippedCount++;
         return;
       }
+      if (field.type === 'monetaryGiftsList') {
+        const list = [
+          {
+            id: 'demo-mg-1',
+            recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+            recipientRelationship: 'son',
+            amount: 25000,
+            conditionKey: 'age-25',
+            conditionLabel: 'Only when they reach the age of 25',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+          {
+            id: 'demo-mg-2',
+            recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
+            recipientRelationship: 'daughter',
+            amount: 15000,
+            conditionKey: 'age-21',
+            conditionLabel: 'Only when they reach the age of 21',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+        ];
+        dummyData.monetaryGiftsList = list;
+        dummyData.monetaryGiftsDetails = `${formatMonetaryGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+        processedCount += 2;
+        return;
+      }
       if (field.type === 'display' || field.type === 'button') {
         skippedCount++;
         return;
@@ -1217,7 +1246,6 @@ export const generateDummyFormData = (formData) => {
     witness2Phone: '020 7002 0002',
     witness2Occupation: 'Teacher (demo W2)',
 
-    monetaryGiftsDetails: `I give £25,000 to my son ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} when he reaches 25. I give £15,000 to my daughter ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} when she reaches 21.${DEMO_TEXT_TAG}`,
     specificGiftsDetails: `I give my grandfather's gold pocket watch to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}. I give my oil paintings to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
     propertyGiftsDetails: `I give my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode} to my wife ${DEMO.partner.fullName} absolutely.${DEMO_TEXT_TAG}`,
     propertyTrustDetails: `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`,

@@ -56,6 +56,11 @@ import ExecutorIndividualAgeFlow from './ExecutorIndividualAgeFlow.jsx';
 import { toast } from 'sonner';
 import GuardianFlow from './GuardianFlow.jsx';
 import BusinessInterestsGuided from './BusinessInterestsGuided.jsx';
+import {
+  MonetaryGiftsLeaveQuestion,
+  MonetaryGiftsListPanel,
+  MonetaryGiftsLapseQuestion,
+} from './MonetaryGiftsFields.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 import { mapGuardianFlowCompletionToFormValues } from '../utils/guardianFlowSync.js';
 
@@ -271,7 +276,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
   if (field.type === 'businessInterestsGuided') {
     return (
       <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate">
-        <BusinessInterestsGuided formValues={formValues} setFormValues={setFormValues} />
+        <BusinessInterestsGuided field={field} formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
   }
@@ -707,6 +712,32 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     );
   }
 
+  if (field.type === 'radio' && field.options && field.id === 'leaveMoneyGifts') {
+    return (
+      <MonetaryGiftsLeaveQuestion
+        field={field}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        validationErrors={validationErrors}
+        setValidationErrors={setValidationErrors}
+        logFormChange={logFormChange}
+      />
+    );
+  }
+
+  if (field.type === 'radio' && field.options && field.id === 'failedMoneyGiftPassProportionately') {
+    return (
+      <MonetaryGiftsLapseQuestion
+        field={field}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        validationErrors={validationErrors}
+        setValidationErrors={setValidationErrors}
+        logFormChange={logFormChange}
+      />
+    );
+  }
+
   if (field.type === 'radio' && field.options) {
     DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
@@ -932,6 +963,14 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             <span>{validationErrors[field.id]}</span>
           </p>
         )}
+      </div>
+    );
+  }
+
+  if (field.type === 'section' && field.id === 'monetaryGiftsSection' && field.subFields) {
+    return (
+      <div className="min-w-0 max-w-full">
+        <MonetaryGiftsListPanel formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
   }

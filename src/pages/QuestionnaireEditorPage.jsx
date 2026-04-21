@@ -280,6 +280,7 @@ function FieldEditModal({ field, onClose, onSave }) {
   const allFields = useMemo(() => collectAllFields(formData), [formData]);
   const isCustom = field.id?.startsWith?.('custom_');
   const isDisplay = field.type === 'display';
+  const isBizGuided = field.type === 'businessInterestsGuided';
   const [label, setLabel] = useState(field.label || '');
   const [displayText, setDisplayText] = useState(field.text ?? '');
   const [placeholder, setPlaceholder] = useState(field.placeholder ?? '');
@@ -296,6 +297,8 @@ function FieldEditModal({ field, onClose, onSave }) {
   const [optionsText, setOptionsText] = useState(() =>
     Array.isArray(field.options) ? optionsToMultiline(field.options) : ''
   );
+  const [bprTrustRequestedMessage, setBprTrustRequestedMessage] = useState(field.bprTrustRequestedMessage ?? '');
+  const [bprTrustUnsureMessage, setBprTrustUnsureMessage] = useState(field.bprTrustUnsureMessage ?? '');
 
   const applyConditions = (next) => {
     const validConditions = conditions.filter((c) => c.field && c.operator);
@@ -339,6 +342,25 @@ function FieldEditModal({ field, onClose, onSave }) {
       return;
     }
 
+    if (field.type === 'businessInterestsGuided') {
+      const next = {
+        ...field,
+        label: label.trim(),
+        infoText: infoText.trim() || undefined,
+      };
+      if (!next.infoText) delete next.infoText;
+      const req = bprTrustRequestedMessage.trim();
+      const uns = bprTrustUnsureMessage.trim();
+      if (req) next.bprTrustRequestedMessage = req;
+      else delete next.bprTrustRequestedMessage;
+      if (uns) next.bprTrustUnsureMessage = uns;
+      else delete next.bprTrustUnsureMessage;
+      applyConditions(next);
+      onSave(next);
+      onClose();
+      return;
+    }
+
     const next = { ...field, label, placeholder: placeholder || undefined, infoText: infoText || undefined };
     if (isDisplay) {
       next.text = displayText;
@@ -364,7 +386,9 @@ function FieldEditModal({ field, onClose, onSave }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
-        <h3 className="text-lg font-semibold text-slate-900">{isDisplay ? 'Edit alert / info message' : 'Edit question'}</h3>
+        <h3 className="text-lg font-semibold text-slate-900">
+          {isDisplay ? 'Edit alert / info message' : isBizGuided ? 'Edit Business Interests (guided)' : 'Edit question'}
+        </h3>
         <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
         <div className="mt-4 space-y-4">
           {isDisplay && (
@@ -381,7 +405,9 @@ function FieldEditModal({ field, onClose, onSave }) {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-slate-700">{isDisplay ? 'Heading / label (optional)' : 'Question / label'}</label>
+            <label className="block text-sm font-medium text-slate-700">
+              {isDisplay ? 'Heading / label (optional)' : isBizGuided ? 'Internal label (optional)' : 'Question / label'}
+            </label>
             <input
               type="text"
               value={label}
@@ -390,6 +416,39 @@ function FieldEditModal({ field, onClose, onSave }) {
               placeholder="e.g. Who moved my cheese?"
             />
           </div>
+          {isBizGuided && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">BPR confirmation — client chose “Yes” (include BPR trust)</label>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Shown in the green confirmation box after the client selects that they want a BPR trust. Leave blank to use
+                  the default short line.
+                </p>
+                <textarea
+                  value={bprTrustRequestedMessage}
+                  onChange={(e) => setBprTrustRequestedMessage(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  placeholder="BPR trust requested"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">
+                  BPR confirmation — client needs advice first (unsure)
+                </label>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Shown when the client needs advice first. Leave blank to use the default wording.
+                </p>
+                <textarea
+                  value={bprTrustUnsureMessage}
+                  onChange={(e) => setBprTrustUnsureMessage(e.target.value)}
+                  rows={4}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  placeholder="Flagged for discussion…"
+                />
+              </div>
+            </>
+          )}
           {isCustom && (
             <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
               <input
