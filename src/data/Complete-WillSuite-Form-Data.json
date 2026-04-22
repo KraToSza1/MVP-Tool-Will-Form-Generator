@@ -2236,9 +2236,16 @@
             "formSection": "Other Provisions",
             "fields": [
                 {
+                    "id": "otherProvisionsGuided",
+                    "type": "otherProvisionsGuided",
+                    "label": "",
+                    "excludeFromWill": true
+                },
+                {
                     "id": "provisionsForPets",
                     "type": "radio",
                     "label": "Would the Testator like to include provisions for pets?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2257,6 +2264,7 @@
                     "type": "section",
                     "label": "Who is to care for the Testator's pets?",
                     "infoText": "Any pets owned by the Testator at the date of their death shall be cared for by named beneficiary.",
+                    "_hiddenFromClient": true,
                     "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
                     "conditions": [
                         {
@@ -2288,10 +2296,17 @@
                     "id": "substitutePetCarerSection",
                     "type": "section",
                     "label": "Who is the substitute carer for the Testator's pets?",
+                    "_hiddenFromClient": true,
                     "willClauseText": "If my {{field:petCarerSection:fullDetails}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:fullDetails}} assume this responsibility instead.",
+                    "conditionLogic": "AND",
                     "conditions": [
                         {
                             "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "substitutePetCarer",
                             "operator": "eq",
                             "value": "Yes"
                         }
@@ -2320,6 +2335,7 @@
                     "type": "radio",
                     "label": "Shall any pets be cared for by RSPCA's home for life scheme if unable to be homed?",
                     "infoText": "The Home for Life Scheme gives the Testator peace of mind that, in the event of their death, the RSPCA will care for your pets and re-home them, if possible. You can apply online here",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2341,29 +2357,13 @@
                     ]
                 },
                 {
-                    "id": "petCarerOptions",
-                    "type": "radio",
-                    "label": "Would the Testator like to leave a gift of money with any pets?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals."
-                        }
-                    ],
-                    "value": null
-                },
-                {
                     "id": "substitutePetCarer",
                     "type": "radio",
                     "label": "Would the Testator like to name a substitute pet carer?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
-                            "field": "petCarerOptions",
+                            "field": "provisionsForPets",
                             "operator": "eq",
                             "value": "Yes"
                         }
@@ -2382,24 +2382,102 @@
                     "value": null
                 },
                 {
-                    "id": "petCarerGift",
-                    "type": "currency",
-                    "label": "Amount to leave for pet care",
-                    "placeholder": "e.g. 5000",
+                    "id": "leavePetCareFund",
+                    "type": "radio",
+                    "label": "Would the Testator like to leave a ring-fenced sum for pets' care costs?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
-                            "field": "petCarerOptions",
+                            "field": "provisionsForPets",
                             "operator": "eq",
                             "value": "Yes"
                         }
                     ],
-                    "willClauseText": "I give the sum of {{field:petCarerGift:formattedAmount}} to whoever accepts responsibility for caring for my pets, to be used exclusively for their upkeep, veterinary care, and general welfare.",
+                    "options": [
+                        {
+                            "value": "No",
+                            "label": "No"
+                        },
+                        {
+                            "value": "Yes",
+                            "label": "Yes"
+                        }
+                    ],
+                    "value": null
+                },
+                {
+                    "id": "amountToLeaveForPetCare",
+                    "type": "currency",
+                    "label": "Amount to set aside for pet care",
+                    "placeholder": "e.g. 5000",
+                    "_hiddenFromClient": true,
+                    "conditionLogic": "AND",
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "leavePetCareFund",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "willClauseText": "I give the sum of {{field:amountToLeaveForPetCare:formattedAmount}} to whoever accepts responsibility for caring for my pets, to be used exclusively for their upkeep, veterinary care, and general welfare.",
+                    "value": null
+                },
+                {
+                    "id": "personalGiftToPetCarer",
+                    "type": "radio",
+                    "label": "Would the Testator like to leave a personal gift to the person who cares for the pets?",
+                    "_hiddenFromClient": true,
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "options": [
+                        {
+                            "value": "No",
+                            "label": "No"
+                        },
+                        {
+                            "value": "Yes",
+                            "label": "Yes"
+                        }
+                    ],
+                    "value": null
+                },
+                {
+                    "id": "petCarerPersonalGift",
+                    "type": "currency",
+                    "label": "Personal gift amount to the pet carer",
+                    "placeholder": "e.g. 500",
+                    "_hiddenFromClient": true,
+                    "conditionLogic": "AND",
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "personalGiftToPetCarer",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "willClauseText": "I give the sum of {{field:petCarerPersonalGift:formattedAmount}} to {{field:petCarerSection:fullDetails}} as a personal gift in recognition of their taking responsibility for my pets, for their own benefit absolutely.",
                     "value": null
                 },
                 {
                     "id": "relieveDebts",
                     "type": "radio",
                     "label": "Does the Testator wish to relieve anyone of debts upon the Testator's death?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2417,6 +2495,7 @@
                     "id": "debtsReleasedSection",
                     "type": "section",
                     "label": "Who should be released from their debts?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
                             "field": "relieveDebts",
@@ -2449,9 +2528,16 @@
             "formSection": "Administrative Provisions",
             "fields": [
                 {
+                    "id": "administrativeProvisionsGuided",
+                    "type": "administrativeProvisionsGuided",
+                    "label": "",
+                    "excludeFromWill": true
+                },
+                {
                     "id": "includeReceiptByMinors",
                     "type": "radio",
                     "label": "Include Receipt by Minors clause?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2469,6 +2555,7 @@
                     "id": "includeCypresClause",
                     "type": "radio",
                     "label": "Include Cy-près clause?",
+                    "_hiddenFromClient": true,
                     "infoText": "If the Testator has made a gift to a charity in their Will this clause will ensure that the gift will not fail if the charity ceases to exist at their death. Instead the gift will be made to another charity with similar charitable aims.",
                     "options": [
                         {
@@ -2487,6 +2574,7 @@
                     "id": "bringLifetimeGiftsIntoAccount",
                     "type": "radio",
                     "label": "Bring into account gifts or loans made to children in lifetime?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2503,7 +2591,8 @@
                 {
                     "id": "specifyLifetimeLoansGifts",
                     "type": "radio",
-                    "label": "Would you like to specify any specific loans / gifts within the Will?",
+                    "label": "Would you like to note any specific loans or gifts to executors?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2514,14 +2603,7 @@
                             "label": "Yes"
                         }
                     ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "field": "bringLifetimeGiftsIntoAccount",
-                            "operator": "eq",
-                            "value": "Yes"
-                        }
-                    ]
+                    "value": null
                 },
                 {
                     "id": "specifyLoansGiftsText",
@@ -2529,21 +2611,12 @@
                     "label": "Specify Loans / Gifts",
                     "placeholder": "I wish to make my Executors aware of...",
                     "value": "",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
-                            "operator": "AND",
-                            "clauses": [
-                                {
-                                    "field": "bringLifetimeGiftsIntoAccount",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                },
-                                {
-                                    "field": "specifyLifetimeLoansGifts",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                }
-                            ]
+                            "field": "specifyLifetimeLoansGifts",
+                            "operator": "eq",
+                            "value": "Yes"
                         }
                     ]
                 },
@@ -2551,6 +2624,7 @@
                     "id": "stepProvisionsApply",
                     "type": "radio",
                     "label": "Which STEP provisions shall apply?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "NoProvisions",
@@ -2578,6 +2652,7 @@
                     "id": "excludeSpecificStepProvisions",
                     "type": "radio",
                     "label": "Should any specific STEP provisions be excluded?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -2607,6 +2682,7 @@
                     "label": "Which STEP provision is to be excluded?",
                     "placeholder": "e.g. 1",
                     "value": "",
+                    "_hiddenFromClient": true,
                     "willClauseText": "The STEP provisions shall apply subject to the exclusion of provision [UserEnteredText].",
                     "conditions": [
                         {
@@ -2632,6 +2708,7 @@
                     "label": "Which STEP provisions are to be excluded?",
                     "placeholder": "e.g. 1, 2, & 3",
                     "value": "",
+                    "_hiddenFromClient": true,
                     "willClauseText": "The STEP provisions shall apply subject to the exclusion of provisions [UserEnteredText].",
                     "conditions": [
                         {

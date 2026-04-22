@@ -64,6 +64,14 @@ import {
   isDeliberateExclusionsGuidedComplete,
   getDeliberateExclusionsGuidedValidationIssues,
 } from './DeliberateExclusionsGuided.jsx';
+import {
+  isOtherProvisionsGuidedComplete,
+  getOtherProvisionsGuidedValidationIssues,
+} from './OtherProvisionsGuided.jsx';
+import {
+  isAdministrativeProvisionsGuidedComplete,
+  getAdministrativeProvisionsGuidedValidationIssues,
+} from './AdministrativeProvisionsGuided.jsx';
 import { toast } from 'sonner';
 import {
   isSolicitorMode,
@@ -1679,6 +1687,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return ok;
       }
 
+      if (field.type === 'otherProvisionsGuided') {
+        const ok = isOtherProvisionsGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] otherProvisionsGuided valid: ${ok}`);
+        return ok;
+      }
+
+      if (field.type === 'administrativeProvisionsGuided') {
+        const ok = isAdministrativeProvisionsGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] administrativeProvisionsGuided valid: ${ok}`);
+        return ok;
+      }
+
       if (field.type === 'section' && field.subFields) {
         return field.subFields.every(checkField);
       }
@@ -1742,6 +1762,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           if (field.type === 'deliberateExclusionsGuided') {
             return isDeliberateExclusionsGuidedComplete(formValues);
+          }
+          if (field.type === 'otherProvisionsGuided') {
+            return isOtherProvisionsGuidedComplete(formValues);
+          }
+          if (field.type === 'administrativeProvisionsGuided') {
+            return isAdministrativeProvisionsGuidedComplete(formValues);
           }
           if (field.type === 'section' && field.subFields) {
             return field.subFields.every(fieldFullyCompleted);
@@ -1877,6 +1903,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       if (field.type === 'deliberateExclusionsGuided') {
         getDeliberateExclusionsGuidedValidationIssues(formValues).forEach((i) => {
+          issues.push({ ...i, fieldId: field.id });
+        });
+        return;
+      }
+
+      if (field.type === 'otherProvisionsGuided') {
+        getOtherProvisionsGuidedValidationIssues(formValues).forEach((i) => {
+          issues.push({ ...i, fieldId: field.id });
+        });
+        return;
+      }
+
+      if (field.type === 'administrativeProvisionsGuided') {
+        getAdministrativeProvisionsGuidedValidationIssues(formValues).forEach((i) => {
           issues.push({ ...i, fieldId: field.id });
         });
         return;
@@ -4870,7 +4910,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           for (let i = 0; i < formData.formSections.length; i++) {
                             const section = formData.formSections[i];
                             const hasField = section.fields?.some(f => {
-                              if (f.id === 'addPetCarerButton' || f.id === 'provisionsForPets') {
+                              if (f.id === 'addPetCarerButton' || f.id === 'provisionsForPets' || f.id === 'otherProvisionsGuided') {
                                 return true;
                               }
                               // Check subFields if it's a section field
@@ -4891,9 +4931,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             console.log('[GO TO FIRST ISSUE] Found section containing pet carer fields:', containingSection.formSection);
                             setCurrentIndex(containingSectionIndex);
                             setValidationModalOpen(false);
-                            toast.info('Please click "Add Pet Carer" to add pet carer details.', { duration: 5000 });
+                            toast.info('Please add a pet carer in Other Provisions.', { duration: 5000 });
                             // Wait longer for section to render, then scroll
-                            setTimeout(() => scrollToField('addPetCarerButton'), 800);
+                            setTimeout(() => scrollToField('otherProvisionsGuided', ['addPetCarerButton']), 800);
                             return;
                           } else {
                             console.warn('[GO TO FIRST ISSUE] Could not find section containing addPetCarerButton');
@@ -5356,9 +5396,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             if (hasPetProvisions && !hasPetCarerData) {
                               console.log('[GO TO FIRST ISSUE] ✅ User selected "Yes" for pet provisions but no pet carer data - scrolling to Add button');
                               
-                              // Find the section containing provisionsForPets field
+                              // Find the section containing guided or legacy pet carer fields
                               const containingSection = formData.formSections.find(section =>
-                                section.fields?.some(f => f.id === 'provisionsForPets' || f.id === 'addPetCarerButton')
+                                section.fields?.some(
+                                  (f) =>
+                                    f.id === 'provisionsForPets' ||
+                                    f.id === 'addPetCarerButton' ||
+                                    f.id === 'otherProvisionsGuided'
+                                )
                               );
                               
                               if (containingSection) {
@@ -5371,14 +5416,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                   setValidationModalOpen(false);
                                   
                                   // Show helpful message
-                                  toast.info(
-                                    'Please click "Add Pet Carer" to add pet carer details.',
-                                    { duration: 5000 }
-                                  );
+                                  toast.info('Please add a pet carer in Other Provisions.', { duration: 5000 });
                                   
-                                  // Wait for section to render, then scroll to Add button
+                                  // Wait for section to render, then scroll to guided block
                                   setTimeout(() => {
-                                    scrollToField('addPetCarerButton');
+                                    scrollToField('otherProvisionsGuided', ['addPetCarerButton']);
                                   }, 500);
                                   return;
                                 }

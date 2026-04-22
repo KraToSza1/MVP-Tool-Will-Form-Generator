@@ -110,7 +110,7 @@ export default function PersonRecordModal({
 
   const node = (
     <div
-      className="person-record-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-[2px]"
+      className="person-record-modal fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px] dark:bg-black/70"
       role="presentation"
       onClick={onClose}
     >
@@ -118,23 +118,23 @@ export default function PersonRecordModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="person-record-modal-title"
-        className="max-h-[min(90dvh,900px)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl"
+        className="questionnaire-modal-panel max-h-[min(90dvh,900px)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-700 bg-slate-950/95 px-4 py-3 sm:px-5">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 dark:border-slate-700 dark:bg-slate-950/95">
           <div className="min-w-0">
-            <p id="person-record-modal-title" className="flex items-center gap-2 text-base font-semibold text-slate-100">
-              <User className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden />
+            <p id="person-record-modal-title" className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+              <User className="h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
               <span>{isEditMode ? 'Edit person' : 'Add person'}</span>
             </p>
             {contextLabel ? (
-              <p className="mt-0.5 text-xs text-slate-400">For: {contextLabel}</p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">For: {contextLabel}</p>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -144,11 +144,11 @@ export default function PersonRecordModal({
         <div className="space-y-4 px-4 py-4 sm:px-5">
           {!isEditMode && (
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Same person or new</span>
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Same person or new</span>
               <select
                 value={sourceId}
                 onChange={(e) => applySource(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="mt-1.5 w-full min-h-[44px] rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
                 <option value="__new__">Enter a new person</option>
                 {candidates.map((c) => (
@@ -160,8 +160,8 @@ export default function PersonRecordModal({
             </label>
           )}
 
-          <p className="flex gap-2 text-xs text-slate-400">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-400" aria-hidden />
+          <p className="flex gap-2 text-xs text-slate-600 dark:text-slate-400">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
             <span>
               {isEditMode
                 ? 'Update the details below and save. First name, last name, and at least address line 1 or postcode are required.'
@@ -172,13 +172,13 @@ export default function PersonRecordModal({
           <div className="grid gap-3 sm:grid-cols-2">
             {personSpecs.map((spec, i) => (
               <label key={spec.key} className="block text-sm">
-                <span className="text-slate-400">{spec.label}</span>
+                <span className="text-slate-600 dark:text-slate-300">{spec.label}</span>
                 {spec.type === 'select' ? (
                   <select
                     ref={i === 0 ? firstInputRef : undefined}
                     value={draft[spec.key] ?? ''}
                     onChange={(e) => setDraft((d) => ({ ...d, [spec.key]: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                    className="mt-1 w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     {(spec.options || []).map((opt) => (
                       <option key={opt.value || 'empty'} value={opt.value}>
@@ -194,7 +194,7 @@ export default function PersonRecordModal({
                     onChange={(e) => setDraft((d) => ({ ...d, [spec.key]: e.target.value }))}
                     placeholder={spec.placeholder || ''}
                     autoComplete="off"
-                    className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
+                    className="mt-1 w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
                 )}
               </label>
@@ -202,18 +202,18 @@ export default function PersonRecordModal({
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-700 bg-slate-950/90 px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 dark:border-slate-700 dark:bg-slate-950/90">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="min-h-[44px] rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
             <Check className="h-4 w-4" aria-hidden />
             {isEditMode ? 'Save changes' : 'Add person'}

@@ -884,7 +884,8 @@ export const generateDummyFormData = (formData) => {
     provisionsForPets: 'Yes',
     substitutePetCarer: 'Yes',
     petsCaredForByRSPCA: 'No',
-    petCarerOptions: 'Yes',
+    leavePetCareFund: 'Yes',
+    personalGiftToPetCarer: 'Yes',
     relieveDebts: 'Yes',
     includeReceiptByMinors: 'Yes',
     includeCypresClause: 'Yes',
@@ -1303,6 +1304,33 @@ export const generateDummyFormData = (formData) => {
         processedCount += 4;
         return;
       }
+      if (field.type === 'otherProvisionsGuided') {
+        dummyData.provisionsForPets = 'Yes';
+        dummyData.petCarerData = [{ ...DEMO.petCarer, _personRecordId: 'demo-pet-carer' }];
+        dummyData.substitutePetCarer = 'Yes';
+        dummyData.substitutePetCarerData = [{ ...DEMO.petCarerSub, _personRecordId: 'demo-pet-sub' }];
+        dummyData.petsCaredForByRSPCA = 'No';
+        dummyData.leavePetCareFund = 'Yes';
+        dummyData.amountToLeaveForPetCare = '5000';
+        dummyData.petCarerGift = '5000';
+        dummyData.personalGiftToPetCarer = 'Yes';
+        dummyData.petCarerPersonalGift = '500';
+        processedCount += 8;
+        return;
+      }
+      if (field.type === 'administrativeProvisionsGuided') {
+        dummyData.includeReceiptByMinors = 'Yes';
+        dummyData.includeCypresClause = 'Yes';
+        dummyData.bringLifetimeGiftsIntoAccount = 'Yes';
+        dummyData.specifyLifetimeLoansGifts = 'Yes';
+        dummyData.specifyLoansGiftsText = `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase.${DEMO_TEXT_TAG}`;
+        dummyData.stepProvisionsApply = 'AllStandardSpecialInclude';
+        dummyData.excludeSpecificStepProvisions = 'No';
+        dummyData.stepProvisionToExcludeOne = '';
+        dummyData.stepProvisionsToExcludeMultiple = '';
+        processedCount += 7;
+        return;
+      }
       if (field.type === 'display' || field.type === 'button') {
         skippedCount++;
         return;
@@ -1541,6 +1569,9 @@ export const generateDummyFormData = (formData) => {
 
     petCarerGift: '5000',
     amountToLeaveForPetCare: '5000',
+    petCarerPersonalGift: '500',
+    leavePetCareFund: 'Yes',
+    personalGiftToPetCarer: 'Yes',
     minimumCharityAmountValue: '100000',
     willExecutionDate: new Date().toISOString().split('T')[0],
     nativeLanguage: 'English',
@@ -1588,6 +1619,8 @@ export const generateDummyFormData = (formData) => {
     'propertyTrustGuided',
     'personalChattelsGuided',
     'deliberateExclusionsGuided',
+    'otherProvisionsGuided',
+    'administrativeProvisionsGuided',
     'businessInterestsGuided',
     'guardianFlow',
   ]);

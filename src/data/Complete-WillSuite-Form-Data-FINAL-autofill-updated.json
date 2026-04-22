@@ -3522,9 +3522,16 @@
             "formSection": "Other Provisions",
             "fields": [
                 {
+                    "id": "otherProvisionsGuided",
+                    "type": "otherProvisionsGuided",
+                    "label": "",
+                    "excludeFromWill": true
+                },
+                {
                     "id": "provisionsForPets",
                     "type": "radio",
                     "label": "Would the Testator like to include provisions for pets?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -3532,7 +3539,8 @@
                         },
                         {
                             "value": "Yes",
-                            "label": "Yes"
+                            "label": "Yes",
+                            "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals."
                         }
                     ],
                     "value": null
@@ -3542,7 +3550,8 @@
                     "type": "section",
                     "label": "Who is to care for the Testator's pets?",
                     "infoText": "Any pets owned by the Testator at the date of their death shall be cared for by named beneficiary.",
-                    "willClauseText": "I request that my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} of {{field:petCarerSection:addressList}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
+                    "_hiddenFromClient": true,
+                    "willClauseText": "I request that my {{field:petCarerSection:fullDetails}} care for any pets I own at the time of my death. I trust them to provide a loving home for these animals.",
                     "conditions": [
                         {
                             "field": "provisionsForPets",
@@ -3554,198 +3563,36 @@
                         {
                             "id": "petCarerStatusDisplay",
                             "type": "display",
-                            "text": "No pet carer has been specified.",
-                            "value": ""
+                            "text": "No pet carer has been specified."
                         },
                         {
                             "id": "addPetCarerButton",
                             "type": "button",
                             "label": "Add Pet Carer",
-                            "action": "openAddForm",
-                            "value": ""
-                        },
-                        {
-                            "id": "addPetCarerModalFields",
-                            "type": "modalFields",
-                            "label": "Enter details for add Pet Carer",
-                            "fields": [
-                                {
-                                    "id": "addPetCarer_title",
-                                    "type": "radio",
-                                    "label": "Title",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Mr",
-                                            "label": "Mr"
-                                        },
-                                        {
-                                            "value": "Mrs",
-                                            "label": "Mrs"
-                                        },
-                                        {
-                                            "value": "Miss",
-                                            "label": "Miss"
-                                        },
-                                        {
-                                            "value": "Ms",
-                                            "label": "Ms"
-                                        },
-                                        {
-                                            "value": "Dr",
-                                            "label": "Dr"
-                                        },
-                                        {
-                                            "value": "Prof",
-                                            "label": "Prof"
-                                        },
-                                        {
-                                            "value": "Sir",
-                                            "label": "Sir"
-                                        },
-                                        {
-                                            "value": "Dame",
-                                            "label": "Dame"
-                                        },
-                                        {
-                                            "value": "Lord",
-                                            "label": "Lord"
-                                        },
-                                        {
-                                            "value": "Lady",
-                                            "label": "Lady"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_firstName",
-                                    "type": "text",
-                                    "label": "First Name(s)",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_middleName",
-                                    "type": "text",
-                                    "label": "Middle Name(s)",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addPetCarer_lastName",
-                                    "type": "text",
-                                    "label": "Last Name",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_knownAs",
-                                    "type": "text",
-                                    "label": "Known As",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addPetCarer_alias",
-                                    "type": "text",
-                                    "label": "Alias",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addPetCarer_dateOfBirth",
-                                    "type": "date",
-                                    "label": "Date of Birth",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_gender",
-                                    "type": "radio",
-                                    "label": "Gender",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Male",
-                                            "label": "Male"
-                                        },
-                                        {
-                                            "value": "Female",
-                                            "label": "Female"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_mobile",
-                                    "type": "text",
-                                    "label": "Mobile",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_email",
-                                    "type": "text",
-                                    "label": "Email",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_address1",
-                                    "type": "text",
-                                    "label": "Address 1",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_postcode",
-                                    "type": "text",
-                                    "label": "Postcode",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addPetCarer_address2",
-                                    "type": "text",
-                                    "label": "Address 2",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addPetCarer_address3",
-                                    "type": "text",
-                                    "label": "Address 3",
-                                    "value": "",
-                                    "required": false
-                                }
-                            ],
-                            "value": ""
+                            "action": "openAddForm"
                         },
                         {
                             "id": "petCarerData",
                             "type": "hidden",
                             "value": null
                         }
-                    ],
-                    "value": ""
+                    ]
                 },
                 {
                     "id": "substitutePetCarerSection",
                     "type": "section",
                     "label": "Who is the substitute carer for the Testator's pets?",
-                    "willClauseText": "If my {{field:petCarerSection:relationshipList}} {{field:petCarerSection:nameList}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:relationshipList}} {{field:substitutePetCarerSection:nameList}} of {{field:substitutePetCarerSection:addressList}} assume this responsibility instead.",
+                    "_hiddenFromClient": true,
+                    "willClauseText": "If my {{field:petCarerSection:fullDetails}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:fullDetails}} assume this responsibility instead.",
+                    "conditionLogic": "AND",
                     "conditions": [
                         {
                             "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "substitutePetCarer",
                             "operator": "eq",
                             "value": "Yes"
                         }
@@ -3754,195 +3601,27 @@
                         {
                             "id": "substitutePetCarerStatusDisplay",
                             "type": "display",
-                            "text": "No substitute pet carer has been specified.",
-                            "value": ""
+                            "text": "No substitute pet carer has been specified."
                         },
                         {
                             "id": "addSubstitutePetCarerButton",
                             "type": "button",
                             "label": "Add Substitute Pet Carer",
-                            "action": "openAddForm",
-                            "value": ""
-                        },
-                        {
-                            "id": "addSubstitutePetCarerModalFields",
-                            "type": "modalFields",
-                            "label": "Enter details for add Substitute Pet Carer",
-                            "fields": [
-                                {
-                                    "id": "addSubstitutePetCarer_title",
-                                    "type": "radio",
-                                    "label": "Title",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Mr",
-                                            "label": "Mr"
-                                        },
-                                        {
-                                            "value": "Mrs",
-                                            "label": "Mrs"
-                                        },
-                                        {
-                                            "value": "Miss",
-                                            "label": "Miss"
-                                        },
-                                        {
-                                            "value": "Ms",
-                                            "label": "Ms"
-                                        },
-                                        {
-                                            "value": "Dr",
-                                            "label": "Dr"
-                                        },
-                                        {
-                                            "value": "Prof",
-                                            "label": "Prof"
-                                        },
-                                        {
-                                            "value": "Sir",
-                                            "label": "Sir"
-                                        },
-                                        {
-                                            "value": "Dame",
-                                            "label": "Dame"
-                                        },
-                                        {
-                                            "value": "Lord",
-                                            "label": "Lord"
-                                        },
-                                        {
-                                            "value": "Lady",
-                                            "label": "Lady"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_firstName",
-                                    "type": "text",
-                                    "label": "First Name(s)",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_middleName",
-                                    "type": "text",
-                                    "label": "Middle Name(s)",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_lastName",
-                                    "type": "text",
-                                    "label": "Last Name",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_knownAs",
-                                    "type": "text",
-                                    "label": "Known As",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_alias",
-                                    "type": "text",
-                                    "label": "Alias",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_dateOfBirth",
-                                    "type": "date",
-                                    "label": "Date of Birth",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_gender",
-                                    "type": "radio",
-                                    "label": "Gender",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Male",
-                                            "label": "Male"
-                                        },
-                                        {
-                                            "value": "Female",
-                                            "label": "Female"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_mobile",
-                                    "type": "text",
-                                    "label": "Mobile",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_email",
-                                    "type": "text",
-                                    "label": "Email",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_address1",
-                                    "type": "text",
-                                    "label": "Address 1",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_postcode",
-                                    "type": "text",
-                                    "label": "Postcode",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_address2",
-                                    "type": "text",
-                                    "label": "Address 2",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addSubstitutePetCarer_address3",
-                                    "type": "text",
-                                    "label": "Address 3",
-                                    "value": "",
-                                    "required": false
-                                }
-                            ],
-                            "value": ""
+                            "action": "openAddForm"
                         },
                         {
                             "id": "substitutePetCarerData",
                             "type": "hidden",
                             "value": null
                         }
-                    ],
-                    "value": ""
+                    ]
                 },
                 {
                     "id": "petsCaredForByRSPCA",
                     "type": "radio",
                     "label": "Shall any pets be cared for by RSPCA's home for life scheme if unable to be homed?",
                     "infoText": "The Home for Life Scheme gives the Testator peace of mind that, in the event of their death, the RSPCA will care for your pets and re-home them, if possible. You can apply online here",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -3950,7 +3629,8 @@
                         },
                         {
                             "value": "Yes",
-                            "label": "Yes"
+                            "label": "Yes",
+                            "willClauseText": "If neither my primary nor substitute pet carers are able or willing to care for my pets, I request that these pets be offered to the RSPCA under their Home for Life scheme."
                         }
                     ],
                     "value": null,
@@ -3963,28 +3643,38 @@
                     ]
                 },
                 {
-                    "id": "petCarerOptions",
-                    "type": "radio",
-                    "label": "Would the Testator like to leave a gift of money with any pets?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null
-                },
-                {
                     "id": "substitutePetCarer",
                     "type": "radio",
                     "label": "Would the Testator like to name a substitute pet carer?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
-                            "field": "petCarerOptions",
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "options": [
+                        {
+                            "value": "No",
+                            "label": "No"
+                        },
+                        {
+                            "value": "Yes",
+                            "label": "Yes",
+                            "willClauseText": "If my {{field:petCarerSection:fullDetails}} is unable or unwilling to care for my pets, I request that my {{field:substitutePetCarerSection:fullDetails}} assume this responsibility instead."
+                        }
+                    ],
+                    "value": null
+                },
+                {
+                    "id": "leavePetCareFund",
+                    "type": "radio",
+                    "label": "Would the Testator like to leave a ring-fenced sum for pets' care costs?",
+                    "_hiddenFromClient": true,
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
                             "operator": "eq",
                             "value": "Yes"
                         }
@@ -4002,24 +3692,78 @@
                     "value": null
                 },
                 {
-                    "id": "petCarerGift",
+                    "id": "amountToLeaveForPetCare",
                     "type": "currency",
-                    "label": "Amount to leave for pet care",
+                    "label": "Amount to set aside for pet care",
                     "placeholder": "e.g. 5000",
+                    "_hiddenFromClient": true,
+                    "conditionLogic": "AND",
                     "conditions": [
                         {
-                            "field": "petCarerOptions",
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "leavePetCareFund",
                             "operator": "eq",
                             "value": "Yes"
                         }
                     ],
-                    "willClauseText": "I give the sum of {{field:petCarerGift:formattedAmount}} to whoever accepts responsibility for caring for my pets, to be used exclusively for their upkeep, veterinary care, and general welfare.",
+                    "willClauseText": "I give the sum of {{field:amountToLeaveForPetCare:formattedAmount}} to whoever accepts responsibility for caring for my pets, to be used exclusively for their upkeep, veterinary care, and general welfare.",
+                    "value": null
+                },
+                {
+                    "id": "personalGiftToPetCarer",
+                    "type": "radio",
+                    "label": "Would the Testator like to leave a personal gift to the person who cares for the pets?",
+                    "_hiddenFromClient": true,
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "options": [
+                        {
+                            "value": "No",
+                            "label": "No"
+                        },
+                        {
+                            "value": "Yes",
+                            "label": "Yes"
+                        }
+                    ],
+                    "value": null
+                },
+                {
+                    "id": "petCarerPersonalGift",
+                    "type": "currency",
+                    "label": "Personal gift amount to the pet carer",
+                    "placeholder": "e.g. 500",
+                    "_hiddenFromClient": true,
+                    "conditionLogic": "AND",
+                    "conditions": [
+                        {
+                            "field": "provisionsForPets",
+                            "operator": "eq",
+                            "value": "Yes"
+                        },
+                        {
+                            "field": "personalGiftToPetCarer",
+                            "operator": "eq",
+                            "value": "Yes"
+                        }
+                    ],
+                    "willClauseText": "I give the sum of {{field:petCarerPersonalGift:formattedAmount}} to {{field:petCarerSection:fullDetails}} as a personal gift in recognition of their taking responsibility for my pets, for their own benefit absolutely.",
                     "value": null
                 },
                 {
                     "id": "relieveDebts",
                     "type": "radio",
                     "label": "Does the Testator wish to relieve anyone of debts upon the Testator's death?",
+                    "_hiddenFromClient": true,
                     "options": [
                         {
                             "value": "No",
@@ -4027,7 +3771,8 @@
                         },
                         {
                             "value": "Yes",
-                            "label": "Yes"
+                            "label": "Yes",
+                            "willClauseText": "I hereby release and forgive my {{field:debtsReleasedSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records."
                         }
                     ],
                     "value": null
@@ -4036,6 +3781,7 @@
                     "id": "debtsReleasedSection",
                     "type": "section",
                     "label": "Who should be released from their debts?",
+                    "_hiddenFromClient": true,
                     "conditions": [
                         {
                             "field": "relieveDebts",
@@ -4047,189 +3793,20 @@
                         {
                             "id": "debtorStatusDisplay",
                             "type": "display",
-                            "text": "No debtor has been specified.",
-                            "value": ""
+                            "text": "No debtor has been specified."
                         },
                         {
                             "id": "addDebtorButton",
                             "type": "button",
                             "label": "Add Debtor",
-                            "action": "openAddForm",
-                            "value": ""
-                        },
-                        {
-                            "id": "addDebtorModalFields",
-                            "type": "modalFields",
-                            "label": "Enter details for add Debtor",
-                            "fields": [
-                                {
-                                    "id": "addDebtor_title",
-                                    "type": "radio",
-                                    "label": "Title",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Mr",
-                                            "label": "Mr"
-                                        },
-                                        {
-                                            "value": "Mrs",
-                                            "label": "Mrs"
-                                        },
-                                        {
-                                            "value": "Miss",
-                                            "label": "Miss"
-                                        },
-                                        {
-                                            "value": "Ms",
-                                            "label": "Ms"
-                                        },
-                                        {
-                                            "value": "Dr",
-                                            "label": "Dr"
-                                        },
-                                        {
-                                            "value": "Prof",
-                                            "label": "Prof"
-                                        },
-                                        {
-                                            "value": "Sir",
-                                            "label": "Sir"
-                                        },
-                                        {
-                                            "value": "Dame",
-                                            "label": "Dame"
-                                        },
-                                        {
-                                            "value": "Lord",
-                                            "label": "Lord"
-                                        },
-                                        {
-                                            "value": "Lady",
-                                            "label": "Lady"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_firstName",
-                                    "type": "text",
-                                    "label": "First Name(s)",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_middleName",
-                                    "type": "text",
-                                    "label": "Middle Name(s)",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addDebtor_lastName",
-                                    "type": "text",
-                                    "label": "Last Name",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_knownAs",
-                                    "type": "text",
-                                    "label": "Known As",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addDebtor_alias",
-                                    "type": "text",
-                                    "label": "Alias",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addDebtor_dateOfBirth",
-                                    "type": "date",
-                                    "label": "Date of Birth",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_gender",
-                                    "type": "radio",
-                                    "label": "Gender",
-                                    "required": true,
-                                    "options": [
-                                        {
-                                            "value": "Male",
-                                            "label": "Male"
-                                        },
-                                        {
-                                            "value": "Female",
-                                            "label": "Female"
-                                        },
-                                        {
-                                            "value": "Other",
-                                            "label": "Other"
-                                        }
-                                    ],
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_mobile",
-                                    "type": "text",
-                                    "label": "Mobile",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_email",
-                                    "type": "text",
-                                    "label": "Email",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_address1",
-                                    "type": "text",
-                                    "label": "Address 1",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_postcode",
-                                    "type": "text",
-                                    "label": "Postcode",
-                                    "required": true,
-                                    "value": ""
-                                },
-                                {
-                                    "id": "addDebtor_address2",
-                                    "type": "text",
-                                    "label": "Address 2",
-                                    "value": "",
-                                    "required": false
-                                },
-                                {
-                                    "id": "addDebtor_address3",
-                                    "type": "text",
-                                    "label": "Address 3",
-                                    "value": "",
-                                    "required": false
-                                }
-                            ],
-                            "value": ""
+                            "action": "openAddForm"
                         },
                         {
                             "id": "debtorData",
                             "type": "hidden",
                             "value": null
                         }
-                    ],
-                    "value": ""
+                    ]
                 }
             ]
         },

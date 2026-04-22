@@ -795,7 +795,6 @@ const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []
   
   // Pet provisions
   if (formValues.provisionsForPets === 'Yes') {
-    // Pets: if user says Yes, require pet carer details
     const petCarerList = formValues.petCarerData || formValues.petCarerSectionData || [];
     if (!Array.isArray(petCarerList) || petCarerList.length === 0) {
       criticalIssues.push({
@@ -804,7 +803,7 @@ const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []
         message: 'Pet carer details are required when "Provisions for pets" is Yes.',
       });
     }
-    
+
     if (formValues.substitutePetCarer === 'Yes') {
       const subPetCarerList = formValues.substitutePetCarerData || formValues.substitutePetCarerSectionData || [];
       if (!Array.isArray(subPetCarerList) || subPetCarerList.length === 0) {
@@ -815,9 +814,22 @@ const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []
         });
       }
     }
-    
-    if (!formValues.petCarerGift || String(formValues.petCarerGift).trim() === '' || formValues.petCarerGift === '0') {
-      missing.push('PET CARE: Pet carer gift amount - must specify monetary support for pet care');
+
+    if (formValues.leavePetCareFund === 'Yes') {
+      const care =
+        formValues.amountToLeaveForPetCare != null && formValues.amountToLeaveForPetCare !== ''
+          ? formValues.amountToLeaveForPetCare
+          : formValues.petCarerGift;
+      const careStr = String(care || '').replace(/[£,\s]/g, '').trim();
+      if (!careStr || careStr === '0' || Number(careStr) === 0) {
+        missing.push('PET CARE: Enter an amount for the pet care fund, or choose not to leave a care fund.');
+      }
+    }
+    if (formValues.personalGiftToPetCarer === 'Yes') {
+      const g = String(formValues.petCarerPersonalGift || '').replace(/[£,\s]/g, '').trim();
+      if (!g || g === '0' || Number(g) === 0) {
+        missing.push('PET CARE: Enter a personal gift amount for the pet carer, or choose not to leave a personal gift.');
+      }
     }
   }
   
