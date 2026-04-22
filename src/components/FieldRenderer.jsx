@@ -61,6 +61,11 @@ import {
   MonetaryGiftsListPanel,
   MonetaryGiftsLapseQuestion,
 } from './MonetaryGiftsFields.jsx';
+import {
+  SpecificGiftsLeaveQuestion,
+  SpecificGiftsListPanel,
+  SpecificGiftsLapseQuestion,
+} from './SpecificGiftsFields.jsx';
 import { getAristoneEstateRecommendationState } from '../constants/clientMode.js';
 import { mapGuardianFlowCompletionToFormValues } from '../utils/guardianFlowSync.js';
 
@@ -738,6 +743,32 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     );
   }
 
+  if (field.type === 'radio' && field.options && field.id === 'leaveSpecificGifts') {
+    return (
+      <SpecificGiftsLeaveQuestion
+        field={field}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        validationErrors={validationErrors}
+        setValidationErrors={setValidationErrors}
+        logFormChange={logFormChange}
+      />
+    );
+  }
+
+  if (field.type === 'radio' && field.options && field.id === 'failedSpecificGiftPassProportionately') {
+    return (
+      <SpecificGiftsLapseQuestion
+        field={field}
+        formValues={formValues}
+        setFormValues={setFormValues}
+        validationErrors={validationErrors}
+        setValidationErrors={setValidationErrors}
+        logFormChange={logFormChange}
+      />
+    );
+  }
+
   if (field.type === 'radio' && field.options) {
     DEBUG_LOGS&&console.log(`[RADIO FIELD] Field "${field.id}" (${field.label}) - Options: ${field.options.length}, Selected: "${formValues[field.id] || 'none'}", Required: ${field.required}`);
     const FieldIcon = getFieldIcon(field.type, field.id);
@@ -971,6 +1002,14 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     return (
       <div className="min-w-0 max-w-full">
         <MonetaryGiftsListPanel formValues={formValues} setFormValues={setFormValues} />
+      </div>
+    );
+  }
+
+  if (field.type === 'section' && field.id === 'specificGiftsSection' && field.subFields) {
+    return (
+      <div className="min-w-0 max-w-full">
+        <SpecificGiftsListPanel formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
   }
@@ -1612,6 +1651,12 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   if (prevProps.field.type !== nextProps.field.type) return false;
   // Guardian embedded flow uses many slices of formValues + fresh inline callbacks; never skip updates.
   if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided') {
+    return false;
+  }
+  if (
+    prevProps.field.type === 'section' &&
+    (prevProps.field.id === 'monetaryGiftsSection' || prevProps.field.id === 'specificGiftsSection')
+  ) {
     return false;
   }
   if (prevProps.formValues[prevProps.field.id] !== nextProps.formValues[nextProps.field.id]) return false;

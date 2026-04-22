@@ -12,6 +12,8 @@ const GUARDIAN_SCHEMA_PINNED_IDS = new Set([
   'substituteGuardiansSection',
 ]);
 
+const SPECIFIC_GIFTS_PINNED_IDS = new Set(['leaveSpecificGifts', 'specificGiftsSection', 'failedSpecificGiftPassProportionately']);
+
 function pinGuardianFieldsFromBundle(merged, bundle) {
   const bundleSec = bundle.formSections?.find((s) => s.formSection === 'Guardians');
   const mergedIdx = merged.formSections?.findIndex((s) => s.formSection === 'Guardians');
@@ -25,6 +27,23 @@ function pinGuardianFieldsFromBundle(merged, bundle) {
     .map((f) => JSON.parse(JSON.stringify(f)));
 
   const tail = mergedFields.filter((f) => f.id && !GUARDIAN_SCHEMA_PINNED_IDS.has(f.id));
+
+  mergedSec.fields = [...pinnedFromBundle, ...tail];
+}
+
+function pinSpecificGiftsFieldsFromBundle(merged, bundle) {
+  const bundleSec = bundle.formSections?.find((s) => s.formSection === 'Specific Gifts');
+  const mergedIdx = merged.formSections?.findIndex((s) => s.formSection === 'Specific Gifts');
+  if (!bundleSec?.fields || mergedIdx < 0) return;
+
+  const mergedSec = merged.formSections[mergedIdx];
+  const mergedFields = mergedSec.fields || [];
+
+  const pinnedFromBundle = bundleSec.fields
+    .filter((f) => f.id && SPECIFIC_GIFTS_PINNED_IDS.has(f.id))
+    .map((f) => JSON.parse(JSON.stringify(f)));
+
+  const tail = mergedFields.filter((f) => f.id && !SPECIFIC_GIFTS_PINNED_IDS.has(f.id));
 
   mergedSec.fields = [...pinnedFromBundle, ...tail];
 }
@@ -106,6 +125,7 @@ export function mergeFormDefinitions(remote, bundle) {
   );
 
   pinGuardianFieldsFromBundle(merged, bundle);
+  pinSpecificGiftsFieldsFromBundle(merged, bundle);
 
   return merged;
 }

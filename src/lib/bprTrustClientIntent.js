@@ -17,8 +17,3 @@ export function isBprSolicitorPackageComplete(formValues) {
   const t = String(formValues?.bprTrustTerms ?? '').trim();
   return Boolean(d && s && t);
 }
-
-/** Block final PDF when the client chose Yes and the solicitor has not completed all three BPR fields. */
-export function shouldBlockPdfForBprTrust(formValues) {
-  return getBprTrustClientIntent(formValues) === 'Yes' && !isBprSolicitorPackageComplete(formValues);
-}

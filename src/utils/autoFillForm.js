@@ -12,6 +12,7 @@ import {
   normalizeSourceToGuardianModalForm,
 } from './guardianFlowSync.js';
 import { formatMonetaryGiftsDetailsFromList } from './monetaryGiftsFormat.js';
+import { formatSpecificGiftsDetailsFromList } from './specificGiftsFormat.js';
 
 /** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
 const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
@@ -1032,6 +1033,40 @@ export const generateDummyFormData = (formData) => {
         ];
         dummyData.monetaryGiftsList = list;
         dummyData.monetaryGiftsDetails = `${formatMonetaryGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+        processedCount += 2;
+        return;
+      }
+      if (field.type === 'specificGiftsList') {
+        const list = [
+          {
+            id: 'demo-sg-1',
+            itemDescription: "my grandfather's gold pocket watch",
+            itemType: 'jewellery',
+            itemTypeLabel: 'Jewellery or watches',
+            itemLocation: 'At my home in the bedroom safe',
+            recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+            recipientRelationship: 'son',
+            conditionKey: '',
+            conditionLabel: 'None',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+          {
+            id: 'demo-sg-2',
+            itemDescription: 'my collection of family oil paintings (listed in schedule to be provided)',
+            itemType: 'artwork',
+            itemTypeLabel: 'Artwork or antiques',
+            itemLocation: '',
+            recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
+            recipientRelationship: 'daughter',
+            conditionKey: '',
+            conditionLabel: 'None',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+        ];
+        dummyData.specificGiftsList = list;
+        dummyData.specificGiftsDetails = `${formatSpecificGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
         processedCount += 2;
         return;
       }

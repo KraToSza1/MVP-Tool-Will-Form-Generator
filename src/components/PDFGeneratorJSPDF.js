@@ -8,11 +8,7 @@ import {
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
-import {
-  getBprTrustClientIntent,
-  isBprSolicitorPackageComplete,
-  shouldBlockPdfForBprTrust,
-} from '../lib/bprTrustClientIntent.js';
+import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from '../lib/bprTrustClientIntent.js';
 
 /** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
 const pdfDebugEnabled = () =>
@@ -2793,16 +2789,9 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     // Comprehensive validation before PDF generation - builds missing[] and warnings[]
     const missing = [];
 
-    if (shouldBlockPdfForBprTrust(formValues)) {
-      missing.push({
-        section: 'Business Interests',
-        field: 'bprTrustSection',
-        clauseNumber: null,
-        issue:
-          'CRITICAL: Client requested a Business Property Relief Trust. Complete Business Property Details, Schedule Number, and BPR Trust Terms before generating the PDF.',
-        snippet: '(BPR solicitor fields incomplete)',
-      });
-    }
+    // BPR solicitor package: do not hard-block PDF download. Incomplete BPR still appears in the
+    // validation appendix / schedule logic, and the matter dashboard flags BPR_TRUST_REQUIRED.
+
     const placeholderPatterns = [
       /\btest\s+test/i,              // "test test" or "test test test"
       /\btest\s+test\s+test/i,       // "test test test" explicitly

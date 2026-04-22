@@ -2059,15 +2059,17 @@
                 {
                     "id": "leaveSpecificGifts",
                     "type": "radio",
-                    "label": "Does the Testator want to leave any specific gifts?",
+                    "label": "Would you like to leave any specific items or property to particular people or organisations?",
                     "options": [
                         {
                             "value": "No",
-                            "label": "No"
+                            "label": "No — I don't want to leave any specific items",
+                            "description": "Everything will be distributed as part of the general estate without naming individual items"
                         },
                         {
                             "value": "Yes",
-                            "label": "Yes",
+                            "label": "Yes — I want to leave one or more specific items to named people",
+                            "description": "I'll describe each item and who I want to receive it below",
                             "willClauseText": "I make the following specific gifts of personal property, to be distributed free of all taxes and duties: {{field:specificGiftsDetails:value}}."
                         }
                     ],
@@ -2076,7 +2078,7 @@
                 {
                     "id": "specificGiftsSection",
                     "type": "section",
-                    "label": "Specific Gifts",
+                    "label": "Your specific gifts",
                     "conditions": [
                         {
                             "field": "leaveSpecificGifts",
@@ -2087,27 +2089,34 @@
                     "subFields": [
                         {
                             "id": "specificGiftsDetails",
-                            "type": "textarea",
-                            "label": "Enter specific gifts details",
-                            "placeholder": "Enter the specific gifts you wish to make (e.g., 'My diamond ring to my daughter Jane Smith')",
-                            "rows": 5,
+                            "type": "specificGiftsList",
+                            "label": "",
+                            "excludeFromWill": true,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "value": ""
                 },
                 {
                     "id": "failedSpecificGiftPassProportionately",
                     "type": "radio",
-                    "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
+                    "label": "What should happen if a recipient of a specific gift dies before you and can no longer receive it?",
                     "options": [
                         {
                             "value": "No",
-                            "label": "No"
+                            "label": "No — a failed gift should fall into the residue of my estate",
+                            "description": "Simpler and most common — the item value is added to the general estate pot"
                         },
                         {
                             "value": "Yes",
-                            "label": "Yes",
+                            "label": "Yes — a failed gift should be shared proportionately among my other beneficiaries",
+                            "description": "The gift value is redistributed in proportion to each beneficiary's existing share",
                             "willClauseText": "If any specific gift made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that specific gift."
+                        },
+                        {
+                            "value": "Unsure",
+                            "label": "I'd like my solicitor to advise me on this",
+                            "description": "We'll discuss the right approach before your will is finalised"
                         }
                     ],
                     "value": null,
