@@ -1,5 +1,7 @@
 // Shared clause builder for Preview and PDF
 // Set VITE_DEBUG_CLAUSES=true in .env to enable verbose [BUILD CLAUSES] logs
+import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
+
 const DEBUG_CLAUSES = import.meta.env.VITE_DEBUG_CLAUSES === 'true';
 
 export const buildClauses = ({
@@ -550,6 +552,48 @@ export const buildClauses = ({
         template: carryTemplate,
         text: interpolateText(carryTemplate, formValues),
         id: `${section.formSection}-trusteePowerCarryOnBusiness-Yes`,
+        isConditional: false,
+      });
+    }
+
+    if (section.formSection === 'Property Gifts' && formValues.leavePropertyGifts === 'Yes' && hasFieldValue('propertyGiftsDetails')) {
+      const mainTemplate =
+        'I make the following gifts of real property, to be distributed free of all taxes and duties: {{field:propertyGiftsDetails:value}}.';
+      addClause({
+        section,
+        field: { id: 'propertyGiftsDetails', label: 'Property gifts' },
+        template: mainTemplate,
+        text: interpolateText(mainTemplate, formValues),
+        id: `${section.formSection}-propertyGifts-main`,
+        isConditional: false,
+      });
+    }
+    if (section.formSection === 'Property Gifts' && formValues.leavePropertyGifts === 'Yes' && formValues.failedPropertyGiftPassProportionately === 'Yes') {
+      const lapseTemplate =
+        'If any gift of property made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that property gift.';
+      addClause({
+        section,
+        field: { id: 'failedPropertyGiftPassProportionately', label: 'Failed property gifts' },
+        template: lapseTemplate,
+        text: interpolateText(lapseTemplate, formValues),
+        id: `${section.formSection}-failedPropertyGiftPassProportionately-Yes`,
+        isConditional: false,
+      });
+    }
+
+    if (
+      section.formSection === 'Property Trust' &&
+      getPropertyTrustClientIntent(formValues) === 'Yes' &&
+      isPropertyTrustSolicitorPackageComplete(formValues)
+    ) {
+      const mainTemplate =
+        'I give {{field:propertyTrustDetails:value}} to my Trustees to hold upon the terms of the Property Trust detailed in Schedule {{field:propertyTrustScheduleNumber:value}} of this Will.';
+      addClause({
+        section,
+        field: { id: 'propertyTrustDetails', label: 'Property trust' },
+        template: mainTemplate,
+        text: interpolateText(mainTemplate, formValues),
+        id: `${section.formSection}-propertyTrust-main`,
         isConditional: false,
       });
     }

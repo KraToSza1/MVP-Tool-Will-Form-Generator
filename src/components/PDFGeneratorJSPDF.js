@@ -9,6 +9,7 @@ import {
 } from '../utils/appointmentPersonFormat.js';
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from '../lib/bprTrustClientIntent.js';
+import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
 
 /** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
 const pdfDebugEnabled = () =>
@@ -820,21 +821,11 @@ const _generateMissingDataReport = (formValues, willClauses, criticalIssues = []
     }
   }
   
-  // Property Trust Schedule validation - catch missing schedule content before PDF generation
-  if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
-    const scheduleNumber = String(formValues.propertyTrustScheduleNumber).trim();
-    if (scheduleNumber && scheduleNumber !== '') {
-      // Schedule number exists, check if content is missing
-      const hasDetails = formValues.propertyTrustDetails && String(formValues.propertyTrustDetails).trim() !== '';
-      const hasTerms = formValues.propertyTrustTerms && String(formValues.propertyTrustTerms).trim() !== '';
-      
-      if (!hasDetails || !hasTerms) {
-        const missingParts = [];
-        if (!hasDetails) missingParts.push('Property Details');
-        if (!hasTerms) missingParts.push('Property Trust Terms');
-        missing.push(`PROPERTY TRUST: Missing Schedule content in Property Trust section. Schedule ${scheduleNumber} is referenced but ${missingParts.join(' and ')} ${missingParts.length === 1 ? 'is' : 'are'} missing.`);
-      }
-    }
+  // Property Trust — client chose Yes: block PDF until solicitor completes details, schedule, and terms
+  if (getPropertyTrustClientIntent(formValues) === 'Yes' && !isPropertyTrustSolicitorPackageComplete(formValues)) {
+    missing.push(
+      'PROPERTY TRUST: Client has requested a Property Trust. Complete Property Details, Schedule Number, and Property Trust Terms before the PDF can be generated.'
+    );
   }
   
   // Business Property Relief Trust Schedule validation (strict when client intent is Yes)
@@ -2813,8 +2804,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       /\band\s+after\s+their\s+death\s+for\s*$/i // "and after their death for " (blank remainder)
     ];
     
-    // Ensure trust schedules are referenced when data exists (even if clause text is filtered)
-    if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
+    // Property Trust schedule reference only when solicitor package is complete (matches clause injection)
+    if (
+      getPropertyTrustClientIntent(formValues) === 'Yes' &&
+      isPropertyTrustSolicitorPackageComplete(formValues) &&
+      formValues.propertyTrustScheduleNumber
+    ) {
       scheduleReferences.add(`Schedule ${String(formValues.propertyTrustScheduleNumber).trim()}`);
     }
     const bprIntentPreflight = getBprTrustClientIntent(formValues);
@@ -3405,8 +3400,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     const scheduleNumberMap = new Map();
     let legalScheduleIndex = 1;
     
-    // Map Property Trust schedule
-    if (formValues.includePropertyTrust === 'Yes' && formValues.propertyTrustScheduleNumber) {
+    // Map Property Trust schedule (only when solicitor package is complete — matches clause injection)
+    if (
+      getPropertyTrustClientIntent(formValues) === 'Yes' &&
+      isPropertyTrustSolicitorPackageComplete(formValues) &&
+      formValues.propertyTrustScheduleNumber
+    ) {
       const oldNumber = String(formValues.propertyTrustScheduleNumber).trim();
       if (oldNumber) {
         scheduleNumberMap.set(oldNumber, legalScheduleIndex);

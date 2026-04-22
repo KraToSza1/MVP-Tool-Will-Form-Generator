@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ShieldAlert, ClipboardCheck, BriefcaseBusiness, FileClock, Inbox, ExternalLink, Copy, ChevronDown, ChevronRight, HelpCircle, FilterX, Trash2 } from 'lucide-react';
+import { Search, ShieldAlert, ClipboardCheck, BriefcaseBusiness, FileClock, Inbox, ExternalLink, Copy, ChevronDown, ChevronRight, HelpCircle, FilterX, Trash2, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { listMatters, deleteMatter, MATTER_STATUS } from '../lib/matters.js';
@@ -12,6 +12,8 @@ import {
   isMatterIdVerificationOutstanding,
   isMatterBprTrustRequiredOutstanding,
   isMatterBprTrustReviewOutstanding,
+  isMatterPropertyTrustRequiredOutstanding,
+  isMatterPropertyTrustReviewOutstanding,
   isMatterTestamentaryCapacityOutstanding,
 } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
@@ -63,6 +65,30 @@ const OUTSTANDING_CATEGORY_META = {
     description:
       'Client was unsure about a BPR Trust — discuss on onboarding. PDF can still be generated; complete or clear the BPR fields when advice is finalised.',
     icon: BriefcaseBusiness,
+    badgeClasses: 'border-amber-200 bg-amber-100 text-amber-900',
+    iconClasses: 'bg-amber-100 text-amber-700',
+    activeClasses: 'border-amber-300 bg-amber-100 shadow-sm',
+    inactiveClasses: 'border-amber-200 bg-white/90 hover:border-amber-300 hover:bg-amber-50',
+    actionTextClasses: 'text-amber-800',
+  },
+  [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED]: {
+    title: 'Property Trust — solicitor completion required',
+    shortLabel: 'Property trust (required)',
+    description:
+      'Client requested a property trust. Complete Property Details, Schedule Number, and Property Trust Terms on the matter before generating the final PDF.',
+    icon: Landmark,
+    badgeClasses: 'border-rose-200 bg-rose-100 text-rose-900',
+    iconClasses: 'bg-rose-100 text-rose-700',
+    activeClasses: 'border-rose-300 bg-rose-100 shadow-sm',
+    inactiveClasses: 'border-rose-200 bg-white/90 hover:border-rose-300 hover:bg-rose-50',
+    actionTextClasses: 'text-rose-800',
+  },
+  [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]: {
+    title: 'Property Trust — needs review',
+    shortLabel: 'Property trust (review)',
+    description:
+      'Client was unsure about a property trust — discuss on onboarding. PDF can still be generated; complete or clear the trust fields when advice is finalised.',
+    icon: Landmark,
     badgeClasses: 'border-amber-200 bg-amber-100 text-amber-900',
     iconClasses: 'bg-amber-100 text-amber-700',
     activeClasses: 'border-amber-300 bg-amber-100 shadow-sm',
@@ -285,6 +311,8 @@ export default function SolicitorDashboardPage() {
     [OUTSTANDING_CATEGORY.ID_VERIFICATION]: allMattersForStats.filter((matter) => isMatterIdVerificationOutstanding(matter)),
     [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]: allMattersForStats.filter((matter) => isMatterBprTrustRequiredOutstanding(matter)),
     [OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]: allMattersForStats.filter((matter) => isMatterBprTrustReviewOutstanding(matter)),
+    [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED]: allMattersForStats.filter((matter) => isMatterPropertyTrustRequiredOutstanding(matter)),
+    [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]: allMattersForStats.filter((matter) => isMatterPropertyTrustReviewOutstanding(matter)),
     [OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]: allMattersForStats.filter((matter) => isMatterTestamentaryCapacityOutstanding(matter)),
   }), [allMattersForStats]);
 

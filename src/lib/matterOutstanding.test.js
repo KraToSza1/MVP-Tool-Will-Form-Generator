@@ -6,6 +6,8 @@ import {
   hasMeaningfulAnswer,
   isMatterBprTrustRequiredOutstanding,
   isMatterBprTrustReviewOutstanding,
+  isMatterPropertyTrustRequiredOutstanding,
+  isMatterPropertyTrustReviewOutstanding,
   isMatterTestamentaryCapacityOutstanding,
   isTestamentaryCapacityComplete,
 } from './matterOutstanding.js';
@@ -86,5 +88,26 @@ describe('matterOutstanding', () => {
       client_payload: { bprTrustClientIntent: 'Unsure' },
       solicitor_payload: completeCapacityPayload,
     })).toEqual([OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]);
+  });
+
+  it('flags property trust required when client chose Yes and solicitor fields are incomplete', () => {
+    const matter = {
+      client_payload: { includePropertyTrust: 'Yes' },
+      solicitor_payload: { propertyTrustDetails: 'x', propertyTrustScheduleNumber: '', propertyTrustTerms: 'y' },
+    };
+    expect(isMatterPropertyTrustRequiredOutstanding(matter)).toBe(true);
+  });
+
+  it('flags property trust review when client was unsure', () => {
+    const matter = {
+      client_payload: { includePropertyTrust: 'Unsure' },
+      solicitor_payload: {},
+    };
+    expect(isMatterPropertyTrustReviewOutstanding(matter)).toBe(true);
+    expect(getMatterOutstandingCategories({
+      outstanding_verification: false,
+      client_payload: { includePropertyTrust: 'Unsure' },
+      solicitor_payload: completeCapacityPayload,
+    })).toEqual([OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]);
   });
 });

@@ -3464,67 +3464,10 @@
       "formSection": "Property Gifts",
       "fields": [
         {
-          "id": "leavePropertyGifts",
-          "type": "radio",
-          "label": "Does the Testator want to leave any gifts of property (not in a property trust)?",
-          "options": [
-            {
-              "value": "No",
-              "label": "No"
-            },
-            {
-              "value": "Yes",
-              "label": "Yes"
-            }
-          ],
-          "value": null
-        },
-        {
-          "id": "propertyGiftsSection",
-          "type": "section",
-          "label": "Property Gifts",
-          "conditions": [
-            {
-              "field": "leavePropertyGifts",
-              "operator": "eq",
-              "value": "Yes"
-            }
-          ],
-          "subFields": [
-            {
-              "id": "propertyGiftsDetails",
-              "type": "textarea",
-              "label": "Enter property gift details",
-              "placeholder": "Enter the property gifts you wish to make (e.g., 'My house at 123 Main St to my son John Smith')",
-              "rows": 5,
-              "value": ""
-            }
-          ],
-          "value": ""
-        },
-        {
-          "id": "failedPropertyGiftPassProportionately",
-          "type": "radio",
-          "label": "Should any shares of gifts pass to the other beneficiaries proportionately according to their shares should their gift fail (if distributing in shares)?",
-          "options": [
-            {
-              "value": "No",
-              "label": "No"
-            },
-            {
-              "value": "Yes",
-              "label": "Yes",
-              "willClauseText": "If any gift of property made in shares fails (for example, if a beneficiary predeceases me), that share shall be added proportionately to the shares of the other beneficiaries of that property gift."
-            }
-          ],
-          "value": null,
-          "conditions": [
-            {
-              "field": "leavePropertyGifts",
-              "operator": "eq",
-              "value": "Yes"
-            }
-          ]
+          "id": "propertyGiftsGuided",
+          "type": "propertyGiftsGuided",
+          "label": "",
+          "excludeFromWill": true
         }
       ]
     },
@@ -3532,59 +3475,10 @@
       "formSection": "Property Trust",
       "fields": [
         {
-          "id": "includePropertyTrust",
-          "type": "radio",
-          "label": "Include a property trust?",
-          "options": [
-            {
-              "value": "No",
-              "label": "No"
-            },
-            {
-              "value": "Yes",
-              "label": "Yes"
-            }
-          ],
-          "value": null
-        },
-        {
-          "id": "propertyTrustSection",
-          "type": "section",
-          "label": "Property Trust",
-          "conditions": [
-            {
-              "field": "includePropertyTrust",
-              "operator": "eq",
-              "value": "Yes"
-            }
-          ],
-          "subFields": [
-            {
-              "id": "propertyTrustDetails",
-              "type": "textarea",
-              "label": "Property Details",
-              "placeholder": "Enter the property details for the trust (e.g., '55 Oak Street, London, NW1 6XE')",
-              "rows": 3,
-              "value": ""
-            },
-            {
-              "id": "propertyTrustScheduleNumber",
-              "type": "text",
-              "label": "Schedule Number",
-              "placeholder": "Enter the schedule number (e.g., '1')",
-              "value": "",
-              "useAutofill": true
-            },
-            {
-              "id": "propertyTrustTerms",
-              "type": "textarea",
-              "label": "Property Trust Terms",
-              "placeholder": "Enter the terms of the property trust",
-              "rows": 5,
-              "value": ""
-            }
-          ],
-          "value": ""
+          "id": "propertyTrustGuided",
+          "type": "propertyTrustGuided",
+          "label": "",
+          "excludeFromWill": true
         }
       ]
     },

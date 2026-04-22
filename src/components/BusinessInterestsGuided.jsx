@@ -804,24 +804,24 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                     aria-modal="true"
                     aria-labelledby={modalTitleId}
                     id="ari-trustee-form"
-                    className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl"
+                    className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 pt-5 pb-4">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 pt-5 pb-4 dark:border-white/10">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-500/25">
-                          <Pencil className="h-4 w-4 text-indigo-300" aria-hidden="true" />
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-300">
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
                         </div>
                         <div className="min-w-0">
-                          <p id={modalTitleId} className="m-0 text-lg font-bold text-slate-100">
+                          <p id={modalTitleId} className="m-0 text-lg font-bold text-slate-900 dark:text-slate-100">
                             Separate business trustee
                           </p>
-                          <p className="m-0 mt-0.5 text-xs text-slate-400">Name and address for your will (required fields below)</p>
+                          <p className="m-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400">Name and address for your will (required fields below)</p>
                         </div>
                       </div>
                       <button
                         type="button"
-                        className="rounded-md p-1 text-slate-400 hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-400 dark:hover:text-slate-100"
                         aria-label="Close"
                         onClick={cancelTrusteeModal}
                       >
@@ -831,19 +831,22 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
 
                     <div className="space-y-4 px-5 py-4">
                       {trusteeModalError ? (
-                        <p className="m-0 rounded-lg border border-red-500/40 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
+                        <p
+                          className="m-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/50 dark:text-red-200"
+                          role="alert"
+                        >
                           {trusteeModalError}
                         </p>
                       ) : null}
 
                       <div className="min-w-0">
-                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={`ari-biz-trustee-pick-${uid}`}>
+                        <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={`ari-biz-trustee-pick-${uid}`}>
                           Choose someone you&apos;ve already entered{' '}
-                          <span className="font-normal text-slate-500">(optional)</span>
+                          <span className="font-normal text-slate-500 dark:text-slate-500">(optional)</span>
                         </label>
                         <select
                           id={`ari-biz-trustee-pick-${uid}`}
-                          className="min-h-[44px] w-full min-w-0 rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          className="min-h-[44px] w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                           value={businessTrusteePickId}
                           onChange={(e) => applyBusinessTrusteeFromContact(e.target.value)}
                         >
@@ -854,7 +857,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                             </option>
                           ))}
                         </select>
-                        <p className="mt-1.5 m-0 text-xs leading-snug text-slate-500">
+                        <p className="mt-1.5 m-0 text-xs leading-snug text-slate-500 dark:text-slate-500">
                           {businessTrusteeContactOptions.length > 0
                             ? 'Copies name, email and address when we have them from your form — edit before saving.'
                             : 'Add people elsewhere in the form to pick them here, or type manually below.'}
@@ -863,24 +866,24 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idFirst}>
-                            First name <span className="text-red-400">*</span>
+                          <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idFirst}>
+                            First name <span className="text-red-600 dark:text-red-400">*</span>
                           </label>
                           <input
                             id={idFirst}
-                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                             value={formValues.businessSeparateTrusteeFirstName || ''}
                             onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeFirstName', e.target.value)}
                             autoComplete="given-name"
                           />
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idLast}>
-                            Last name <span className="text-red-400">*</span>
+                          <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idLast}>
+                            Last name <span className="text-red-600 dark:text-red-400">*</span>
                           </label>
                           <input
                             id={idLast}
-                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                             value={formValues.businessSeparateTrusteeLastName || ''}
                             onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeLastName', e.target.value)}
                             autoComplete="family-name"
@@ -889,12 +892,12 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                       </div>
 
                       <div>
-                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={`ari-trustee-rel-${uid}`}>
+                        <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={`ari-trustee-rel-${uid}`}>
                           Relationship to you
                         </label>
                         <select
                           id={`ari-trustee-rel-${uid}`}
-                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                           value={formValues.businessSeparateTrusteeRelationship || ''}
                           onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeRelationship', e.target.value)}
                         >
@@ -907,13 +910,13 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                       </div>
 
                       <div>
-                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idEmail}>
+                        <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idEmail}>
                           Email <span className="text-slate-500">(optional)</span>
                         </label>
                         <input
                           id={idEmail}
                           type="email"
-                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                           value={formValues.businessSeparateTrusteeEmail || ''}
                           onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeEmail', e.target.value)}
                           autoComplete="email"
@@ -921,12 +924,12 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                       </div>
 
                       <div>
-                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idAddr}>
-                          Address line 1 <span className="text-red-400">*</span>
+                        <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idAddr}>
+                          Address line 1 <span className="text-red-600 dark:text-red-400">*</span>
                         </label>
                         <input
                           id={idAddr}
-                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                           value={formValues.businessSeparateTrusteeAddress1 || ''}
                           onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeAddress1', e.target.value)}
                           autoComplete="street-address"
@@ -935,24 +938,24 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idTown}>
-                            Town / city <span className="text-red-400">*</span>
+                          <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idTown}>
+                            Town / city <span className="text-red-600 dark:text-red-400">*</span>
                           </label>
                           <input
                             id={idTown}
-                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                             value={formValues.businessSeparateTrusteeTown || ''}
                             onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeTown', e.target.value)}
                             autoComplete="address-level2"
                           />
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idPc}>
-                            Postcode <span className="text-red-400">*</span>
+                          <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor={idPc}>
+                            Postcode <span className="text-red-600 dark:text-red-400">*</span>
                           </label>
                           <input
                             id={idPc}
-                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                             value={formValues.businessSeparateTrusteePostcode || ''}
                             onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteePostcode', e.target.value)}
                             autoComplete="postal-code"
@@ -961,18 +964,18 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                       </div>
                     </div>
 
-                    <div className="flex flex-col-reverse gap-2 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end">
+                    <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 dark:border-white/10 sm:flex-row sm:justify-end">
                       <button
                         type="button"
                         onClick={cancelTrusteeModal}
-                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-500 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:w-auto"
+                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
                         onClick={saveTrusteeModal}
-                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 sm:w-auto"
+                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-indigo-500 dark:focus-visible:ring-offset-slate-900 sm:w-auto"
                       >
                         Save
                       </button>

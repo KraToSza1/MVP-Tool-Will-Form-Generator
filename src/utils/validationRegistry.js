@@ -27,6 +27,7 @@
 
 import defaultFormData from '../data/Complete-WillSuite-Form-Data.json';
 import { getBprTrustClientIntent } from '../lib/bprTrustClientIntent.js';
+import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
 
 function getFormData(formDataParam) {
   return formDataParam && Array.isArray(formDataParam.formSections) ? formDataParam : defaultFormData;
@@ -161,66 +162,27 @@ export const validatePropertyTrustSchedules = (formValues, formDataParam) => {
   const formData = getFormData(formDataParam);
   const issues = [];
 
-  console.log('[VALIDATE PROPERTY TRUST] Checking validation...');
-  console.log('[VALIDATE PROPERTY TRUST] includePropertyTrust:', formValues.includePropertyTrust);
-  console.log('[VALIDATE PROPERTY TRUST] propertyTrustScheduleNumber:', formValues.propertyTrustScheduleNumber);
-  console.log('[VALIDATE PROPERTY TRUST] propertyTrustDetails exists:', !!formValues.propertyTrustDetails);
-  console.log('[VALIDATE PROPERTY TRUST] propertyTrustTerms exists:', !!formValues.propertyTrustTerms);
+  const intent = getPropertyTrustClientIntent(formValues);
+  if (intent === 'Yes' && !isPropertyTrustSolicitorPackageComplete(formValues)) {
+    const missingParts = [];
+    if (!String(formValues?.propertyTrustDetails ?? '').trim()) missingParts.push('Property Details');
+    if (!String(formValues?.propertyTrustScheduleNumber ?? '').trim()) missingParts.push('Schedule Number');
+    if (!String(formValues?.propertyTrustTerms ?? '').trim()) missingParts.push('Property Trust Terms');
 
-  // Check if Property Trust is enabled
-  const isPropertyTrustEnabled = formValues.includePropertyTrust === 'Yes' || 
-                                  formValues.includePropertyTrust === true ||
-                                  String(formValues.includePropertyTrust || '').toLowerCase() === 'yes';
-  
-  const scheduleNumber = formValues.propertyTrustScheduleNumber ? 
-                         String(formValues.propertyTrustScheduleNumber).trim() : '';
-  
-  console.log('[VALIDATE PROPERTY TRUST] isPropertyTrustEnabled:', isPropertyTrustEnabled);
-  console.log('[VALIDATE PROPERTY TRUST] scheduleNumber:', scheduleNumber);
-  console.log('[VALIDATE PROPERTY TRUST] propertyTrustDetails:', formValues.propertyTrustDetails ? `EXISTS (${formValues.propertyTrustDetails.length} chars)` : 'MISSING');
-  console.log('[VALIDATE PROPERTY TRUST] propertyTrustTerms:', formValues.propertyTrustTerms ? `EXISTS (${formValues.propertyTrustTerms.length} chars)` : 'MISSING');
+    const propertyTrustSectionIndex = formData.formSections.findIndex((s) => s.formSection === 'Property Trust');
 
-  if (isPropertyTrustEnabled && scheduleNumber && scheduleNumber !== '') {
-    const detailsValue = formValues.propertyTrustDetails;
-    const termsValue = formValues.propertyTrustTerms;
-    
-    const hasDetails = detailsValue && 
-                      String(detailsValue).trim() !== '' && 
-                      String(detailsValue).trim() !== 'undefined' &&
-                      !String(detailsValue).includes('[MISSING');
-    const hasTerms = termsValue && 
-                    String(termsValue).trim() !== '' && 
-                    String(termsValue).trim() !== 'undefined' &&
-                    !String(termsValue).includes('[MISSING');
-
-    console.log('[VALIDATE PROPERTY TRUST] hasDetails:', hasDetails, 'detailsValue:', detailsValue?.substring(0, 50));
-    console.log('[VALIDATE PROPERTY TRUST] hasTerms:', hasTerms, 'termsValue:', termsValue?.substring(0, 50));
-
-    if (!hasDetails || !hasTerms) {
-      const missingParts = [];
-      if (!hasDetails) missingParts.push('Property Details');
-      if (!hasTerms) missingParts.push('Property Trust Terms');
-
-      const propertyTrustSectionIndex = formData.formSections.findIndex(
-        s => s.formSection === 'Property Trust'
-      );
-
-      issues.push({
-        section: 'Property Trust',
-        sectionId: 'propertyTrustSection',
-        fieldId: !hasDetails ? 'propertyTrustDetails' : 'propertyTrustTerms',
-        targetFieldIds: [
-          ...(!hasDetails ? ['propertyTrustDetails'] : []),
-          ...(!hasTerms ? ['propertyTrustTerms'] : [])
-        ],
-        targetSectionIndex: propertyTrustSectionIndex,
-        issue: 'Missing Schedule content in Property Trust section.',
-        message: `Schedule ${scheduleNumber} is referenced but ${missingParts.join(' and ')} ${missingParts.length === 1 ? 'is' : 'are'} missing.`,
-        fieldLabel: `Schedule ${scheduleNumber}`,
-        scheduleNumber,
-        missingFields: missingParts
-      });
-    }
+    issues.push({
+      section: 'Property Trust',
+      sectionId: 'propertyTrustSection',
+      fieldId: 'propertyTrustDetails',
+      targetFieldIds: ['propertyTrustDetails', 'propertyTrustScheduleNumber', 'propertyTrustTerms'],
+      targetSectionIndex: propertyTrustSectionIndex >= 0 ? propertyTrustSectionIndex : 0,
+      issue: 'Property Trust — solicitor completion required',
+      message: `Client requested a property trust. Complete: ${missingParts.join(', ')}.`,
+      fieldLabel: 'Property Trust (solicitor)',
+      scheduleNumber: String(formValues?.propertyTrustScheduleNumber ?? '').trim(),
+      missingFields: missingParts,
+    });
   }
 
   return issues;

@@ -1,10 +1,13 @@
 import { mergeMatterPayloads } from './formPayload.js';
 import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from './bprTrustClientIntent.js';
+import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from './propertyTrustClientIntent.js';
 
 export const OUTSTANDING_CATEGORY = {
   ID_VERIFICATION: 'idVerification',
   BPR_TRUST_REQUIRED: 'bprTrustRequired',
   BPR_TRUST_REVIEW: 'bprTrustReview',
+  PROPERTY_TRUST_REQUIRED: 'propertyTrustRequired',
+  PROPERTY_TRUST_REVIEW: 'propertyTrustReview',
   TESTAMENTARY_CAPACITY: 'testamentaryCapacity',
 };
 
@@ -80,6 +83,16 @@ export function isMatterBprTrustReviewOutstanding(matter) {
   return getBprTrustClientIntent(payload) === 'Unsure';
 }
 
+export function isMatterPropertyTrustRequiredOutstanding(matter) {
+  const payload = getMergedMatterPayload(matter);
+  return getPropertyTrustClientIntent(payload) === 'Yes' && !isPropertyTrustSolicitorPackageComplete(payload);
+}
+
+export function isMatterPropertyTrustReviewOutstanding(matter) {
+  const payload = getMergedMatterPayload(matter);
+  return getPropertyTrustClientIntent(payload) === 'Unsure';
+}
+
 export function getMatterOutstandingCategories(matter) {
   const categories = [];
 
@@ -93,6 +106,14 @@ export function getMatterOutstandingCategories(matter) {
 
   if (isMatterBprTrustReviewOutstanding(matter)) {
     categories.push(OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW);
+  }
+
+  if (isMatterPropertyTrustRequiredOutstanding(matter)) {
+    categories.push(OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED);
+  }
+
+  if (isMatterPropertyTrustReviewOutstanding(matter)) {
+    categories.push(OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW);
   }
 
   if (isMatterTestamentaryCapacityOutstanding(matter)) {

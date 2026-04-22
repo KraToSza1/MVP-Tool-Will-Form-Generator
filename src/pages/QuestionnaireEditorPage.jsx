@@ -281,6 +281,8 @@ function FieldEditModal({ field, onClose, onSave }) {
   const isCustom = field.id?.startsWith?.('custom_');
   const isDisplay = field.type === 'display';
   const isBizGuided = field.type === 'businessInterestsGuided';
+  const isPropertyGiftsGuided = field.type === 'propertyGiftsGuided';
+  const isPropertyTrustGuided = field.type === 'propertyTrustGuided';
   const [label, setLabel] = useState(field.label || '');
   const [displayText, setDisplayText] = useState(field.text ?? '');
   const [placeholder, setPlaceholder] = useState(field.placeholder ?? '');
@@ -361,6 +363,32 @@ function FieldEditModal({ field, onClose, onSave }) {
       return;
     }
 
+    if (field.type === 'propertyGiftsGuided') {
+      const next = {
+        ...field,
+        label: label.trim(),
+        infoText: infoText.trim() || undefined,
+      };
+      if (!next.infoText) delete next.infoText;
+      applyConditions(next);
+      onSave(next);
+      onClose();
+      return;
+    }
+
+    if (field.type === 'propertyTrustGuided') {
+      const next = {
+        ...field,
+        label: label.trim(),
+        infoText: infoText.trim() || undefined,
+      };
+      if (!next.infoText) delete next.infoText;
+      applyConditions(next);
+      onSave(next);
+      onClose();
+      return;
+    }
+
     const next = { ...field, label, placeholder: placeholder || undefined, infoText: infoText || undefined };
     if (isDisplay) {
       next.text = displayText;
@@ -387,7 +415,15 @@ function FieldEditModal({ field, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl questionnaire-modal-panel">
         <h3 className="text-lg font-semibold text-slate-900">
-          {isDisplay ? 'Edit alert / info message' : isBizGuided ? 'Edit Business Interests (guided)' : 'Edit question'}
+          {isDisplay
+            ? 'Edit alert / info message'
+            : isBizGuided
+              ? 'Edit Business Interests (guided)'
+              : isPropertyGiftsGuided
+                ? 'Edit Property Gifts (guided)'
+                : isPropertyTrustGuided
+                  ? 'Edit Property Trust (guided)'
+                  : 'Edit question'}
         </h3>
         <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
         <div className="mt-4 space-y-4">
@@ -406,7 +442,11 @@ function FieldEditModal({ field, onClose, onSave }) {
           )}
           <div>
             <label className="block text-sm font-medium text-slate-700">
-              {isDisplay ? 'Heading / label (optional)' : isBizGuided ? 'Internal label (optional)' : 'Question / label'}
+              {isDisplay
+                ? 'Heading / label (optional)'
+                : isBizGuided || isPropertyGiftsGuided || isPropertyTrustGuided
+                  ? 'Internal label (optional)'
+                  : 'Question / label'}
             </label>
             <input
               type="text"

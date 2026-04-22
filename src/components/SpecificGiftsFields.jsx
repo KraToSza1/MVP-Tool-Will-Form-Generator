@@ -389,51 +389,51 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={modalTitleId}
-                className="w-full max-w-lg max-h-[min(92vh,900px)] overflow-y-auto rounded-2xl bg-slate-900 border border-slate-600 shadow-2xl my-auto"
+                className="my-auto w-full max-w-lg max-h-[min(92vh,900px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-white/10">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500/25 flex items-center justify-center flex-shrink-0">
-                      <Gift className="w-4 h-4 text-indigo-300" aria-hidden="true" />
+                <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 pt-5 pb-4 dark:border-white/10">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-300">
+                      <Gift className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0">
-                      <p id={modalTitleId} className="text-lg font-bold text-slate-100 m-0 break-words">
+                      <p id={modalTitleId} className="m-0 break-words text-lg font-bold text-slate-900 dark:text-slate-100">
                         Add a specific gift
                       </p>
-                      <p className="text-xs text-slate-400 m-0 mt-0.5">Describe the item and who should receive it</p>
+                      <p className="m-0 mt-0.5 text-xs text-slate-600 dark:text-slate-400">Describe the item and who should receive it</p>
                     </div>
                   </div>
                   <button
                     type="button"
-                    className="text-slate-400 hover:text-slate-100 p-1 rounded-md min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-400 dark:hover:text-slate-100"
                     aria-label="Close"
                     onClick={closeModal}
                   >
-                    <X className="w-5 h-5" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 
-                <div className="px-5 py-4 space-y-4">
-                  <div className="flex gap-2 rounded-lg bg-indigo-500/10 px-3 py-2.5">
-                    <Info className="w-3.5 h-3.5 text-indigo-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                    <p className="text-xs text-slate-300 m-0 leading-relaxed break-words">
+                <div className="space-y-4 px-5 py-4">
+                  <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden="true" />
+                    <p className="m-0 break-words text-xs leading-relaxed text-slate-700 dark:text-slate-300">
                       Choose who receives this gift (you can copy someone already on your form), then describe the item.
                       Add one gift at a time.
                     </p>
                   </div>
 
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
+                  <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
                     Who receives this item
                   </p>
 
                   <div>
-                    <label htmlFor="sg-pick-contact" className="block text-xs text-slate-300 mb-1.5">
-                      Choose someone you&apos;ve already entered <span className="text-slate-500 font-normal">(optional)</span>
+                    <label htmlFor="sg-pick-contact" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
+                      Choose someone you&apos;ve already entered <span className="font-normal text-slate-500">(optional)</span>
                     </label>
                     <select
                       id="sg-pick-contact"
-                      className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                      className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                       value={pickContactId}
                       onChange={(e) => applyPickedContact(e.target.value)}
                     >
@@ -444,7 +444,7 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                         </option>
                       ))}
                     </select>
-                    <p className="text-xs text-slate-500 m-0 mt-1 break-words">
+                    <p className="mt-1 m-0 break-words text-xs text-slate-500 dark:text-slate-500">
                       {contactPickOptions.length > 0
                         ? 'Fills recipient and relationship when known — you can still edit. Includes executors, guardians, gift recipients, and saved contacts.'
                         : 'Add people elsewhere in the form (or save another gift) and they will appear here. You can always type a new name below.'}
@@ -452,8 +452,8 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                   </div>
 
                   <div>
-                    <label htmlFor="sg-recipient" className="block text-xs text-slate-300 mb-1.5">
-                      Recipient&apos;s full name <span className="text-red-400">*</span>
+                    <label htmlFor="sg-recipient" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
+                      Recipient&apos;s full name <span className="text-red-600 dark:text-red-400">*</span>
                     </label>
                     <input
                       id="sg-recipient"
@@ -464,17 +464,19 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                         if (pickContactId) setPickContactId('');
                       }}
                       placeholder="e.g. Jane Elizabeth Smith, Cancer Research UK"
-                      className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-                        errors.recipient ? 'border-red-400' : 'border-slate-600'
+                      className={`w-full min-h-[44px] rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40 ${
+                        errors.recipient ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                       }`}
                     />
-                    {errors.recipient && <p className="text-xs text-red-400 mt-1 m-0">Recipient name is required</p>}
+                    {errors.recipient && (
+                      <p className="mt-1 m-0 text-xs text-red-600 dark:text-red-400">Recipient name is required</p>
+                    )}
                   </div>
 
                   <div>
-                    <label htmlFor="sg-relationship" className="block text-xs text-slate-300 mb-1.5">
+                    <label htmlFor="sg-relationship" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
                       Their relationship to you{' '}
-                      <span className="text-slate-500 font-normal">(optional but recommended)</span>
+                      <span className="font-normal text-slate-500">(optional but recommended)</span>
                     </label>
                     <input
                       id="sg-relationship"
@@ -485,22 +487,22 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                         if (pickContactId) setPickContactId('');
                       }}
                       placeholder="e.g. my daughter, my nephew, my closest friend"
-                      className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                      className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                     />
                   </div>
 
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
+                  <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
                     About the item
                   </p>
 
-                  <p className="text-xs text-slate-500 m-0 -mt-2 break-words">
+                  <p className="-mt-2 m-0 break-words text-xs text-slate-500 dark:text-slate-500">
                     Describe the item clearly enough that it could be identified without any doubt. The more specific you
                     are, the less room for dispute.
                   </p>
 
                   <div>
-                    <label htmlFor="sg-description" className="block text-xs text-slate-300 mb-1.5">
-                      Description of the item <span className="text-red-400">*</span>
+                    <label htmlFor="sg-description" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
+                      Description of the item <span className="text-red-600 dark:text-red-400">*</span>
                     </label>
                     <input
                       id="sg-description"
@@ -508,27 +510,27 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="e.g. My diamond engagement ring, my 1967 Jaguar E-Type registration ABC 123"
-                      className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 break-words ${
-                        errors.description ? 'border-red-400' : 'border-slate-600'
+                      className={`w-full min-h-[44px] break-words rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40 ${
+                        errors.description ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                       }`}
                     />
-                    {errors.description && <p className="text-xs text-red-400 mt-1 m-0">Please describe the item</p>}
-                    <p className="text-xs text-slate-500 m-0 mt-1 break-words">
+                    {errors.description && <p className="mt-1 m-0 text-xs text-red-600 dark:text-red-400">Please describe the item</p>}
+                    <p className="mt-1 m-0 break-words text-xs text-slate-500 dark:text-slate-500">
                       Be as specific as possible — include make, model, registration, stone type, or any identifying marks.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label htmlFor="sg-type" className="block text-xs text-slate-300 mb-1.5">
-                        Type of item <span className="text-red-400">*</span>
+                      <label htmlFor="sg-type" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
+                        Type of item <span className="text-red-600 dark:text-red-400">*</span>
                       </label>
                       <select
                         id="sg-type"
                         value={itemType}
                         onChange={(e) => setItemType(e.target.value)}
-                        className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px] ${
-                          errors.itemType ? 'border-red-400' : 'border-slate-600'
+                        className={`min-h-[44px] w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40 ${
+                          errors.itemType ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                         }`}
                       >
                         {ITEM_TYPE_OPTIONS.map((o) => (
@@ -537,11 +539,11 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                           </option>
                         ))}
                       </select>
-                      {errors.itemType && <p className="text-xs text-red-400 mt-1 m-0">Please select a type</p>}
+                      {errors.itemType && <p className="mt-1 m-0 text-xs text-red-600 dark:text-red-400">Please select a type</p>}
                     </div>
                     <div>
-                      <label htmlFor="sg-location" className="block text-xs text-slate-300 mb-1.5">
-                        Where is it kept? <span className="text-slate-500 font-normal">(optional)</span>
+                      <label htmlFor="sg-location" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
+                        Where is it kept? <span className="font-normal text-slate-500">(optional)</span>
                       </label>
                       <input
                         id="sg-location"
@@ -549,25 +551,25 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                         value={itemLocation}
                         onChange={(e) => setItemLocation(e.target.value)}
                         placeholder="e.g. At my home, in a safe at the bank"
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                        className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                       />
                     </div>
                   </div>
 
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
+                  <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
                     Conditions (optional)
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label htmlFor="sg-condition" className="block text-xs text-slate-300 mb-1.5">
+                      <label htmlFor="sg-condition" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
                         Any condition on this gift?
                       </label>
                       <select
                         id="sg-condition"
                         value={conditionKey}
                         onChange={(e) => setConditionKey(e.target.value)}
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                        className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                       >
                         {conditionOptions.map((o) => (
                           <option key={o.value || 'none'} value={o.value}>
@@ -577,14 +579,14 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="sg-lapse" className="block text-xs text-slate-300 mb-1.5">
+                      <label htmlFor="sg-lapse" className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300">
                         If this recipient cannot receive it, what should happen?
                       </label>
                       <select
                         id="sg-lapse"
                         value={lapseKey}
                         onChange={(e) => setLapseKey(e.target.value)}
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                        className="min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
                       >
                         {lapseOptions.map((o) => (
                           <option key={o.value} value={o.value}>
@@ -592,27 +594,27 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-slate-500 m-0 mt-1 break-words">
+                      <p className="mt-1 m-0 break-words text-xs text-slate-500 dark:text-slate-500">
                         This overrides the general fallback rule for this specific item only.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 px-5 py-4 border-t border-white/10 flex-wrap sm:flex-nowrap">
+                <div className="flex flex-col-reverse flex-wrap gap-2 border-t border-slate-200 px-5 py-4 dark:border-white/10 sm:flex-row sm:flex-nowrap sm:justify-end">
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-600 text-slate-300 hover:bg-slate-800 min-h-[44px] w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={saveGift}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white min-h-[44px] w-full sm:w-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-slate-900"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-indigo-500 dark:focus-visible:ring-offset-slate-900 sm:w-auto"
                   >
-                    <Check className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
+                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                     Save gift
                   </button>
                 </div>

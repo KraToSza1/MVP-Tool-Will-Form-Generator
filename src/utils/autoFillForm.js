@@ -13,6 +13,8 @@ import {
 } from './guardianFlowSync.js';
 import { formatMonetaryGiftsDetailsFromList } from './monetaryGiftsFormat.js';
 import { formatSpecificGiftsDetailsFromList } from './specificGiftsFormat.js';
+import { formatPropertyGiftsDetailsFromList } from './propertyGiftsFormat.js';
+import { formatPropertyTrustClientSummaryFromState } from './propertyTrustFormat.js';
 
 /** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
 const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
@@ -1116,6 +1118,63 @@ export const generateDummyFormData = (formData) => {
         dummyData.specificGiftsList = list;
         dummyData.specificGiftsDetails = `${formatSpecificGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
         processedCount += 2;
+        return;
+      }
+      if (field.type === 'propertyGiftsGuided') {
+        const list = [
+          {
+            id: 'demo-pg-1',
+            addressLine1: DEMO.testator.address1,
+            addressLine2: DEMO.testator.address2 || '',
+            town: DEMO.testator.address3 || '',
+            postcode: DEMO.testator.postcode,
+            tenure: 'freehold',
+            hasMortgage: 'no',
+            mortgageInstruction: '',
+            recipientName: DEMO.partner.fullName,
+            recipientRelationship: 'Partner / spouse',
+            conditionKey: '',
+            conditionLabel: 'None',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+        ];
+        dummyData.leavePropertyGifts = 'Yes';
+        dummyData.failedPropertyGiftPassProportionately = 'Yes';
+        dummyData.propertyGiftsList = list;
+        dummyData.propertyGiftsDetails = `${formatPropertyGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+        processedCount += 4;
+        return;
+      }
+      if (field.type === 'propertyTrustGuided') {
+        const props = [
+          {
+            id: 'demo-pt-1',
+            addressLine1: DEMO.testator.address1,
+            addressLine2: DEMO.testator.address2 || '',
+            town: DEMO.testator.address3 || '',
+            postcode: DEMO.testator.postcode,
+            tenure: 'freehold',
+          },
+        ];
+        dummyData.includePropertyTrust = 'Yes';
+        dummyData.propertyTrustType = 'life-interest';
+        dummyData.propertyTrustLifeTenantFirstName = DEMO.partner.firstName;
+        dummyData.propertyTrustLifeTenantLastName = DEMO.partner.lastName;
+        dummyData.propertyTrustLifeTenantName = `${DEMO.partner.firstName} ${DEMO.partner.lastName}`.trim();
+        dummyData.propertyTrustLifeTenantRelationship = 'spouse';
+        dummyData.propertyTrustPropertiesList = props;
+        const summaryBase = formatPropertyTrustClientSummaryFromState({
+          ...dummyData,
+          includePropertyTrust: 'Yes',
+          propertyTrustType: 'life-interest',
+          propertyTrustLifeTenantFirstName: DEMO.partner.firstName,
+          propertyTrustLifeTenantLastName: DEMO.partner.lastName,
+          propertyTrustLifeTenantRelationship: 'spouse',
+          propertyTrustPropertiesList: props,
+        });
+        dummyData.propertyTrustClientSummary = `${summaryBase}${DEMO_TEXT_TAG}`;
+        processedCount += 6;
         return;
       }
       if (field.type === 'display' || field.type === 'button') {
