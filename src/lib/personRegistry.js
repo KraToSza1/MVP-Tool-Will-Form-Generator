@@ -198,6 +198,22 @@ export function getContactCandidates(formValues) {
     });
   }
 
+  // Gift modals: recipients already entered on this draft (so later gifts can reuse the same name/relationship).
+  const addGiftRecipientCandidates = (list, key, titlePrefix) => {
+    if (!Array.isArray(list)) return;
+    list.forEach((item, i) => {
+      if (!item || typeof item !== 'object') return;
+      const recipientName = trim(item.recipientName);
+      if (!recipientName) return;
+      const rel = trim(item.recipientRelationship);
+      const data = { ...emptyPersonRecord(), fullName: recipientName, relationship: rel };
+      const idKey = item.id != null && String(item.id) !== '' ? String(item.id) : `${i}`;
+      push(`gift:${key}:${idKey}`, `${titlePrefix} — ${recipientName}`, `gift:${key}`, data);
+    });
+  };
+  addGiftRecipientCandidates(formValues.specificGiftsList, 'specificGiftsList', 'Specific gift');
+  addGiftRecipientCandidates(formValues.monetaryGiftsList, 'monetaryGiftsList', 'Cash gift');
+
   logPerson('candidates_built', { count: out.length, keys: out.map((o) => o.id) });
   return out;
 }

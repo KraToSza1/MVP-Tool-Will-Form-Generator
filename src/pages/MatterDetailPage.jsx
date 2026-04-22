@@ -14,6 +14,7 @@ import {
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
 } from '../constants/clientMode.js';
 import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
+import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
@@ -287,7 +288,7 @@ export default function MatterDetailPage() {
     const toastId = toast.loading('Generating PDF...');
     try {
       console.log('[MatterDetailPage PDF] Loading PDF module...');
-      const pdfModule = await import('../components/PDFGeneratorJSPDF.js');
+      const pdfModule = await importPdfGeneratorModule();
       const generatePDFWithJSPDF = pdfModule.generatePDFWithJSPDF;
       console.log('[MatterDetailPage PDF] PDF module loaded', { hasGeneratePDFWithJSPDF: !!generatePDFWithJSPDF });
       if (!generatePDFWithJSPDF) {
@@ -366,8 +367,21 @@ export default function MatterDetailPage() {
         cause: err?.cause,
         fullError: String(err),
       });
-      const msg = err?.message || 'Unknown error';
-      toast.error('PDF failed', { id: toastId, description: msg });
+      if (isStaleChunkLoadError(err)) {
+        toast.error('App was just updated', {
+          id: toastId,
+          description:
+            'Refresh this page, then try the PDF again. This happens when a new version was published while this tab stayed open.',
+          duration: 14_000,
+          action: {
+            label: 'Refresh page',
+            onClick: () => window.location.reload(),
+          },
+        });
+      } else {
+        const msg = err?.message || 'Unknown error';
+        toast.error('PDF failed', { id: toastId, description: msg });
+      }
     } finally {
       setIsGeneratingPDF(false);
     }

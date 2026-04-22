@@ -3,7 +3,8 @@
  * Wires to: hasBusinessInterests, trusteePowerCarryOnBusiness, appointSeparateBusinessTrustee,
  * separateTrusteeData, and intake-only detail fields.
  */
-import React, { useCallback, useId, useRef } from 'react';
+import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import '../styles/aristone-business-interests.css';
 
 const TRUSTEE_REL_OPTIONS = [
@@ -58,6 +59,52 @@ function reconcileSeparateTrustees(prevList, appointYes, guidedRow) {
   return base;
 }
 
+function trimVal(v) {
+  if (v == null) return '';
+  return String(v).trim();
+}
+
+/** Map a contact-candidate record into the guided separate trustee text fields. */
+function mapContactToBusinessTrusteeFields(c) {
+  const d = c?.data;
+  if (!d || typeof d !== 'object') return null;
+  let firstName = trimVal(d.firstName);
+  let lastName = trimVal(d.lastName);
+  if (!firstName && !lastName) {
+    const full = trimVal(d.fullName) || personDisplayNameForGift(d);
+    if (full) {
+      const parts = full.split(/\s+/).filter(Boolean);
+      firstName = parts[0] || '';
+      lastName = parts.slice(1).join(' ') || '';
+    }
+  }
+  return {
+    businessSeparateTrusteeFirstName: firstName,
+    businessSeparateTrusteeLastName: lastName,
+    businessSeparateTrusteeEmail: trimVal(d.email),
+    businessSeparateTrusteeAddress1: trimVal(d.address1),
+    businessSeparateTrusteeTown: trimVal(d.address3) || trimVal(d.city),
+    businessSeparateTrusteePostcode: trimVal(d.postcode),
+  };
+}
+
+function mapRelationshipToTrusteeSelect(rel) {
+  const r = (rel || '').toLowerCase();
+  if (!r) return '';
+  for (const o of TRUSTEE_REL_OPTIONS) {
+    if (!o.value) continue;
+    if (r.includes(o.value.toLowerCase())) return o.value;
+  }
+  if (r.includes('spouse') || r.includes('partner') || r.includes('wife') || r.includes('husband')) return 'Partner';
+  if (r.includes('sibling') || r.includes('brother') || r.includes('sister')) return 'Sibling';
+  if (r.includes('solicitor')) return 'Solicitor';
+  if (r.includes('accountant')) return 'Accountant';
+  if (r.includes('friend')) return 'Friend';
+  if (r.includes('professional')) return 'Professional adviser';
+  if (r.includes('business') && r.includes('partner')) return 'Business partner';
+  return 'Other';
+}
+
 const DEFAULT_BPR_REQUESTED = 'BPR trust requested';
 const DEFAULT_BPR_UNSURE =
   'Flagged for discussion. Your solicitor will talk this through with you. A draft PDF can still be produced; any BPR trust section stays blank until you agree the approach.';
@@ -66,6 +113,7 @@ const DEFAULT_BPR_UNSURE =
 export default function BusinessInterestsGuided({ field, formValues, setFormValues }) {
   const uid = useId();
   const recordIdRef = useRef(formValues.businessSeparateTrusteeRecordId || null);
+  const [businessTrusteePickId, setBusinessTrusteePickId] = useState('');
 
   const idFirst = `ari-trustee-firstname-${uid}`;
   const idLast = `ari-trustee-lastname-${uid}`;
@@ -77,6 +125,11 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
   const hasBiz = formValues.hasBusinessInterests;
   const showDetails = hasBiz === 'Yes';
   const showTrusteeForm = showDetails && formValues.appointSeparateBusinessTrustee === 'Yes';
+
+  const businessTrusteeContactOptions = useMemo(
+    () => getContactCandidates(formValues || {}),
+    [formValues]
+  );
 
   const applyPatch = useCallback((updater) => {
     setFormValues((prev) => (typeof updater === 'function' ? updater(prev) : { ...prev, ...updater }));
@@ -122,6 +175,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
   const setQ1 = (val) => {
     const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
     recordIdRef.current = null;
+    setBusinessTrusteePickId('');
     if (mapped !== 'Yes') {
       applyPatch((prev) => {
         const next = {
@@ -161,6 +215,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
   const setQ3 = (val) => {
     const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
     if (mapped !== 'Yes') {
+      setBusinessTrusteePickId('');
       recordIdRef.current = null;
       applyPatch((prev) => ({
         ...prev,
@@ -189,7 +244,27 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
     applyPatch({ [key]: value });
   };
 
+  const applyBusinessTrusteeFromContact = (id) => {
+    setBusinessTrusteePickId(id);
+    if (!id) return;
+    const c = businessTrusteeContactOptions.find((x) => x.id === id);
+    if (!c) return;
+    const mapped = mapContactToBusinessTrusteeFields(c);
+    if (!mapped) return;
+    const rel = mapRelationshipToTrusteeSelect(c.data?.relationship);
+    applyPatch((prev) => {
+      const next = {
+        ...prev,
+        ...mapped,
+        businessSeparateTrusteeRelationship: rel || prev.businessSeparateTrusteeRelationship,
+      };
+      if (next.appointSeparateBusinessTrustee !== 'Yes') return next;
+      return syncTrusteeIntoState(next);
+    });
+  };
+
   const onTrusteeFieldChange = (key, value) => {
+    setBusinessTrusteePickId('');
     applyPatch((prev) => {
       const draft = { ...prev, [key]: value };
       if (draft.appointSeparateBusinessTrustee !== 'Yes') return draft;
@@ -530,8 +605,32 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
             <div id="ari-trustee-form" className="ari-trustee-box min-w-0">
               <h4>Details of your separate business trustee</h4>
               <p className="ari-helper text-sm">
-                Address fields are needed so your will can name them correctly. You can refine this with your solicitor later.
+                Address fields are needed so your will can name them correctly. You can refine this with your solicitor
+                later.
               </p>
+              <div className="ari-field min-w-0">
+                <label className="ari-label" htmlFor={`ari-biz-trustee-pick-${uid}`}>
+                  Choose someone you&apos;ve already entered <span className="text-slate-500 dark:text-slate-400 font-normal">(optional)</span>
+                </label>
+                <select
+                  id={`ari-biz-trustee-pick-${uid}`}
+                  className="ari-select w-full min-h-[44px] min-w-0"
+                  value={businessTrusteePickId}
+                  onChange={(e) => applyBusinessTrusteeFromContact(e.target.value)}
+                >
+                  <option value="">— Type details manually below —</option>
+                  {businessTrusteeContactOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 m-0 leading-snug break-words">
+                  {businessTrusteeContactOptions.length > 0
+                    ? 'Copies name, email and address when we have them from your form — edit before continuing.'
+                    : 'Add executors, partners or other people elsewhere in the form to pick them here, or type manually below.'}
+                </p>
+              </div>
               <div className="ari-field-grid">
                 <div className="ari-field">
                   <label className="ari-label" htmlFor={idFirst}>

@@ -79,6 +79,7 @@ import {
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
+import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -622,7 +623,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // Prefetch the PDF generator chunk when users reach the final step.
   useEffect(() => {
     if (currentIndex === visibleSections.length - 1) {
-      import('./PDFGeneratorJSPDF.js').catch(() => {});
+      importPdfGeneratorModule().catch(() => {});
     }
   }, [currentIndex, visibleSections.length]);
 
@@ -3403,10 +3404,25 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       while (importAttempts <= maxRetries) {
         try {
-          const pdfModule = await import('./PDFGeneratorJSPDF.js');
+          const pdfModule = await importPdfGeneratorModule();
           generatePDFWithJSPDF = pdfModule.generatePDFWithJSPDF;
           break;
-        } catch {
+        } catch (e) {
+          if (isStaleChunkLoadError(e)) {
+            clearTimeout(timeoutId);
+            setIsGeneratingPDF(false);
+            if (toastId) toast.dismiss(toastId);
+            toast.error('App was just updated', {
+              description:
+                'Refresh the page, then try the PDF again. (A new version was published while you had this tab open.)',
+              duration: 14_000,
+              action: {
+                label: 'Refresh page',
+                onClick: () => window.location.reload(),
+              },
+            });
+            return;
+          }
           importAttempts++;
           if (importAttempts > maxRetries) {
             clearTimeout(timeoutId);
@@ -3419,9 +3435,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             // Data is preserved (formValues still in state), so user can retry
             return;
           }
-          
+
           // Wait before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * importAttempts));
+          await new Promise((resolve) => setTimeout(resolve, 1000 * importAttempts));
         }
       }
       

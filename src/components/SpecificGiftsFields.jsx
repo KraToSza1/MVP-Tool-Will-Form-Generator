@@ -190,10 +190,7 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
 
   const list = Array.isArray(formValues.specificGiftsList) ? formValues.specificGiftsList : [];
 
-  const contactPickOptions = useMemo(() => {
-    const raw = getContactCandidates(formValues || {});
-    return raw.filter((c) => personDisplayNameForGift(c.data) !== '');
-  }, [formValues]);
+  const contactPickOptions = useMemo(() => getContactCandidates(formValues || {}), [formValues]);
 
   useEffect(() => {
     const raw = formValues.specificGiftsList;
@@ -229,8 +226,19 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
     if (!id) return;
     const c = contactPickOptions.find((x) => x.id === id);
     if (!c) return;
-    setRecipient(personDisplayNameForGift(c.data));
-    setRelationship(relationshipFromPick(c.source, c.data));
+    const d = c.data;
+    const fromParts = personDisplayNameForGift(d);
+    const fromFull = d && String(d.fullName || '').trim();
+    const fromLabel =
+      !fromParts && !fromFull && c.label
+        ? String(c.label)
+            .replace(/^Specific gift —\s*/i, '')
+            .replace(/^Cash gift —\s*/i, '')
+            .replace(/^.+?#\d+\s*—\s*/i, '')
+            .trim()
+        : '';
+    setRecipient(fromParts || fromFull || fromLabel);
+    setRelationship(relationshipFromPick(c.source, d));
   };
 
   const closeModal = () => setModalOpen(false);
@@ -410,100 +418,38 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                   <div className="flex gap-2 rounded-lg bg-indigo-500/10 px-3 py-2.5">
                     <Info className="w-3.5 h-3.5 text-indigo-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
                     <p className="text-xs text-slate-300 m-0 leading-relaxed break-words">
-                      Describe the item clearly enough that it could be identified without any doubt. The more
-                      specific you are, the less room for dispute. Add one item at a time.
+                      Choose who receives this gift (you can copy someone already on your form), then describe the item.
+                      Add one gift at a time.
                     </p>
-                  </div>
-
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
-                    About the item
-                  </p>
-
-                  <div>
-                    <label htmlFor="sg-description" className="block text-xs text-slate-300 mb-1.5">
-                      Description of the item <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      id="sg-description"
-                      type="text"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="e.g. My diamond engagement ring, my 1967 Jaguar E-Type registration ABC 123"
-                      className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 break-words ${
-                        errors.description ? 'border-red-400' : 'border-slate-600'
-                      }`}
-                    />
-                    {errors.description && <p className="text-xs text-red-400 mt-1 m-0">Please describe the item</p>}
-                    <p className="text-xs text-slate-500 m-0 mt-1 break-words">
-                      Be as specific as possible — include make, model, registration, stone type, or any identifying
-                      marks.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label htmlFor="sg-type" className="block text-xs text-slate-300 mb-1.5">
-                        Type of item <span className="text-red-400">*</span>
-                      </label>
-                      <select
-                        id="sg-type"
-                        value={itemType}
-                        onChange={(e) => setItemType(e.target.value)}
-                        className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px] ${
-                          errors.itemType ? 'border-red-400' : 'border-slate-600'
-                        }`}
-                      >
-                        {ITEM_TYPE_OPTIONS.map((o) => (
-                          <option key={o.value || 'empty'} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.itemType && <p className="text-xs text-red-400 mt-1 m-0">Please select a type</p>}
-                    </div>
-                    <div>
-                      <label htmlFor="sg-location" className="block text-xs text-slate-300 mb-1.5">
-                        Where is it kept? <span className="text-slate-500 font-normal">(optional)</span>
-                      </label>
-                      <input
-                        id="sg-location"
-                        type="text"
-                        value={itemLocation}
-                        onChange={(e) => setItemLocation(e.target.value)}
-                        placeholder="e.g. At my home, in a safe at the bank"
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                      />
-                    </div>
                   </div>
 
                   <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
                     Who receives this item
                   </p>
 
-                  {contactPickOptions.length > 0 ? (
-                    <div>
-                      <label htmlFor="sg-pick-contact" className="block text-xs text-slate-300 mb-1.5">
-                        Same person or new <span className="text-slate-500 font-normal">(optional)</span>
-                      </label>
-                      <select
-                        id="sg-pick-contact"
-                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-indigo-500/50 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
-                        value={pickContactId}
-                        onChange={(e) => applyPickedContact(e.target.value)}
-                      >
-                        <option value="">Enter a new person</option>
-                        {contactPickOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-slate-500 m-0 mt-1 break-words">
-                        You can copy from someone you already entered elsewhere, then edit if needed. Or type a new
-                        person below.
-                      </p>
-                    </div>
-                  ) : null}
+                  <div>
+                    <label htmlFor="sg-pick-contact" className="block text-xs text-slate-300 mb-1.5">
+                      Choose someone you&apos;ve already entered <span className="text-slate-500 font-normal">(optional)</span>
+                    </label>
+                    <select
+                      id="sg-pick-contact"
+                      className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px]"
+                      value={pickContactId}
+                      onChange={(e) => applyPickedContact(e.target.value)}
+                    >
+                      <option value="">— Type name manually below —</option>
+                      {contactPickOptions.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 m-0 mt-1 break-words">
+                      {contactPickOptions.length > 0
+                        ? 'Fills recipient and relationship when known — you can still edit. Includes executors, guardians, gift recipients, and saved contacts.'
+                        : 'Add people elsewhere in the form (or save another gift) and they will appear here. You can always type a new name below.'}
+                    </p>
+                  </div>
 
                   <div>
                     <label htmlFor="sg-recipient" className="block text-xs text-slate-300 mb-1.5">
@@ -541,6 +487,71 @@ export function SpecificGiftsListPanel({ formValues, setFormValues }) {
                       placeholder="e.g. my daughter, my nephew, my closest friend"
                       className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                     />
+                  </div>
+
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
+                    About the item
+                  </p>
+
+                  <p className="text-xs text-slate-500 m-0 -mt-2 break-words">
+                    Describe the item clearly enough that it could be identified without any doubt. The more specific you
+                    are, the less room for dispute.
+                  </p>
+
+                  <div>
+                    <label htmlFor="sg-description" className="block text-xs text-slate-300 mb-1.5">
+                      Description of the item <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      id="sg-description"
+                      type="text"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="e.g. My diamond engagement ring, my 1967 Jaguar E-Type registration ABC 123"
+                      className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 break-words ${
+                        errors.description ? 'border-red-400' : 'border-slate-600'
+                      }`}
+                    />
+                    {errors.description && <p className="text-xs text-red-400 mt-1 m-0">Please describe the item</p>}
+                    <p className="text-xs text-slate-500 m-0 mt-1 break-words">
+                      Be as specific as possible — include make, model, registration, stone type, or any identifying marks.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="sg-type" className="block text-xs text-slate-300 mb-1.5">
+                        Type of item <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        id="sg-type"
+                        value={itemType}
+                        onChange={(e) => setItemType(e.target.value)}
+                        className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 min-h-[44px] ${
+                          errors.itemType ? 'border-red-400' : 'border-slate-600'
+                        }`}
+                      >
+                        {ITEM_TYPE_OPTIONS.map((o) => (
+                          <option key={o.value || 'empty'} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.itemType && <p className="text-xs text-red-400 mt-1 m-0">Please select a type</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="sg-location" className="block text-xs text-slate-300 mb-1.5">
+                        Where is it kept? <span className="text-slate-500 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        id="sg-location"
+                        type="text"
+                        value={itemLocation}
+                        onChange={(e) => setItemLocation(e.target.value)}
+                        placeholder="e.g. At my home, in a safe at the bank"
+                        className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                      />
+                    </div>
                   </div>
 
                   <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 m-0 pb-2 border-b border-white/10">
