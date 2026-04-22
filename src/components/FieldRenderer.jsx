@@ -1014,6 +1014,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     );
   }
 
+  /* Legacy FLIT list UI — was _hiddenFromClient; clause + PDF still use formValues.separateTrusteeData */
+  if (field.type === 'section' && field.id === 'separateTrusteesSection') {
+    return null;
+  }
+
   if (field.type === 'section' && field.subFields) {
     const isAddressSection = field.label.toLowerCase().includes('address');
     

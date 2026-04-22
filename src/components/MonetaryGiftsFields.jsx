@@ -344,24 +344,24 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-slate-900 border border-slate-600 shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white text-slate-900 border border-slate-200 shadow-2xl dark:bg-slate-900 dark:text-slate-100 dark:border-slate-600"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-white/10">
+            <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-slate-200 dark:border-white/10">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-indigo-500/25 flex items-center justify-center flex-shrink-0">
-                  <Pencil className="w-4 h-4 text-indigo-300" aria-hidden="true" />
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-500/25 dark:text-indigo-300 flex items-center justify-center flex-shrink-0">
+                  <Pencil className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <p id={modalTitleId} className="text-lg font-bold text-slate-100 m-0">
+                  <p id={modalTitleId} className="text-lg font-bold text-slate-900 dark:text-slate-100 m-0">
                     Add a cash gift
                   </p>
-                  <p className="text-xs text-slate-400 m-0 mt-0.5">Specify the recipient and amount</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 m-0 mt-0.5">Specify the recipient and amount</p>
                 </div>
               </div>
               <button
                 type="button"
-                className="text-slate-400 hover:text-slate-100 p-1 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 p-1 rounded-md min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 aria-label="Close"
                 onClick={closeModal}
               >
@@ -370,9 +370,9 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
             </div>
 
             <div className="px-5 py-4 space-y-4">
-              <div className="flex gap-2 rounded-lg bg-indigo-500/10 px-3 py-2.5">
-                <Info className="w-3.5 h-3.5 text-indigo-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                <p className="text-xs text-slate-300 m-0 leading-relaxed">
+              <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
+                <Info className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-300 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <p className="text-xs text-slate-700 dark:text-slate-300 m-0 leading-relaxed">
                   Each gift should have a clear recipient name and a specific amount in pounds. Add one gift at
                   a time — you can add as many as you need.
                 </p>
@@ -380,12 +380,12 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
 
               {contactPickOptions.length > 0 ? (
                 <div>
-                  <label htmlFor="mg-pick-contact" className="block text-xs text-slate-300 mb-1.5">
+                  <label htmlFor="mg-pick-contact" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
                     Choose someone you&apos;ve already entered <span className="text-slate-500 font-normal">(optional)</span>
                   </label>
                   <select
                     id="mg-pick-contact"
-                    className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    className="w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border border-slate-300 text-slate-900 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40"
                     value={pickContactId}
                     onChange={(e) => applyPickedContact(e.target.value)}
                   >
@@ -396,15 +396,15 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-slate-500 m-0 mt-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-500 m-0 mt-1">
                     Fills recipient (and relationship when known) from your form — you can still edit before saving.
                   </p>
                 </div>
               ) : null}
 
               <div>
-                <label htmlFor="mg-recipient" className="block text-xs text-slate-300 mb-1.5">
-                  Recipient&apos;s full name <span className="text-red-400">*</span>
+                <label htmlFor="mg-recipient" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
+                  Recipient&apos;s full name <span className="text-red-600 dark:text-red-400">*</span>
                 </label>
                 <input
                   id="mg-recipient"
@@ -415,17 +415,17 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                     if (pickContactId) setPickContactId('');
                   }}
                   placeholder="e.g. Richard Jones, Cancer Research UK"
-                  className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-                    errors.recipient ? 'border-red-400' : 'border-slate-600'
+                  className={`w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border text-slate-900 placeholder:text-slate-500 dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40 ${
+                    errors.recipient ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                   }`}
                 />
                 {errors.recipient && (
-                  <p className="text-xs text-red-400 mt-1 m-0">Recipient name is required</p>
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1 m-0">Recipient name is required</p>
                 )}
               </div>
 
               <div>
-                <label htmlFor="mg-relationship" className="block text-xs text-slate-300 mb-1.5">
+                <label htmlFor="mg-relationship" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
                   Their relationship to you{' '}
                   <span className="text-slate-500 font-normal">(optional)</span>
                 </label>
@@ -438,17 +438,17 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                     if (pickContactId) setPickContactId('');
                   }}
                   placeholder="e.g. nephew, friend, charity, carer"
-                  className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  className="w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border border-slate-300 text-slate-900 placeholder:text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40"
                 />
-                <p className="text-xs text-slate-500 m-0 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-500 m-0 mt-1">
                   Helps identify the correct person if there are others with the same name.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="mg-amount" className="block text-xs text-slate-300 mb-1.5">
-                    Amount (£) <span className="text-red-400">*</span>
+                  <label htmlFor="mg-amount" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
+                    Amount (£) <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
                     id="mg-amount"
@@ -457,16 +457,16 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="e.g. 5000"
-                    className={`w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-                      errors.amount ? 'border-red-400' : 'border-slate-600'
+                    className={`w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border text-slate-900 placeholder:text-slate-500 dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40 ${
+                      errors.amount ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                     }`}
                   />
                   {errors.amount && (
-                    <p className="text-xs text-red-400 mt-1 m-0">Please enter a valid amount</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-1 m-0">Please enter a valid amount</p>
                   )}
                 </div>
                 <div>
-                  <label htmlFor="mg-condition" className="block text-xs text-slate-300 mb-1.5">
+                  <label htmlFor="mg-condition" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
                     Any condition on this gift?{' '}
                     <span className="text-slate-500 font-normal">(optional)</span>
                   </label>
@@ -474,7 +474,7 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                     id="mg-condition"
                     value={conditionKey}
                     onChange={(e) => setConditionKey(e.target.value)}
-                    className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    className="w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border border-slate-300 text-slate-900 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40"
                   >
                     {conditionOptions.map((o) => (
                       <option key={o.value || 'none'} value={o.value}>
@@ -486,14 +486,14 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
               </div>
 
               <div>
-                <label htmlFor="mg-lapse" className="block text-xs text-slate-300 mb-1.5">
+                <label htmlFor="mg-lapse" className="block text-xs text-slate-700 dark:text-slate-300 mb-1.5">
                   If this recipient cannot receive the gift, what should happen to it?
                 </label>
                 <select
                   id="mg-lapse"
                   value={lapseKey}
                   onChange={(e) => setLapseKey(e.target.value)}
-                  className="w-full rounded-lg px-3.5 py-2.5 text-sm bg-slate-800 border border-slate-600 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  className="w-full min-h-[44px] rounded-lg px-3.5 py-2.5 text-sm bg-white border border-slate-300 text-slate-900 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:focus:ring-indigo-500/40"
                 >
                   {lapseOptions.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -501,24 +501,24 @@ export function MonetaryGiftsListPanel({ formValues, setFormValues }) {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-slate-500 m-0 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-500 m-0 mt-1">
                   This overrides the general fallback rule for this specific gift only.
                 </p>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-white/10">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-white/10">
               <button
                 type="button"
                 onClick={closeModal}
-                className="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-600 text-slate-300 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-300 text-slate-800 bg-white hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:bg-transparent dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={saveGift}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-slate-900"
+                className="inline-flex w-full sm:w-auto min-h-[44px] items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white dark:bg-indigo-600 dark:hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
               >
                 <Check className="w-4 h-4" strokeWidth={2.5} aria-hidden="true" />
                 Save gift
