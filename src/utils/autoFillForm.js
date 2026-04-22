@@ -16,6 +16,72 @@ import { formatSpecificGiftsDetailsFromList } from './specificGiftsFormat.js';
 import { formatPropertyGiftsDetailsFromList } from './propertyGiftsFormat.js';
 import { formatPropertyTrustClientSummaryFromState } from './propertyTrustFormat.js';
 
+/**
+ * Recursively collect every field `id` from the form definition (including nested sections
+ * and option-level fields). Used so autofill can replace form state without leaving stale keys.
+ */
+function collectFormFieldIdsRecursive(fields, out) {
+  for (const field of fields || []) {
+    if (!field) continue;
+    if (field.id) out.add(field.id);
+    if (field.type === 'section' && field.subFields) {
+      collectFormFieldIdsRecursive(field.subFields, out);
+    }
+    if (Array.isArray(field.options)) {
+      for (const opt of field.options) {
+        if (opt?.fields) collectFormFieldIdsRecursive(opt.fields, out);
+      }
+    }
+  }
+}
+
+/**
+ * Keys that live in `formValues` but are not a standalone `id` in Complete-WillSuite-Form-Data.json
+ * (guided components, person registry, ID uploads, FLIT name lines, business-trustee capture).
+ */
+const AUTOFILL_NON_FIELD_STATE_KEYS = new Set([
+  CONTACT_REGISTRY_KEY,
+  'identityVerification',
+  'identityVerificationFileNames',
+  'guardianshipDetailsData',
+  'propertyTrustClientSummary',
+  'flitLifeTenantName',
+  'flitLifeTenantRel',
+  'flitTrustEndMode',
+  '_flitTrustEndMode',
+  'furtherResidualFallbackRows',
+  'businessSeparateTrusteeRecordId',
+  'businessSeparateTrusteeFirstName',
+  'businessSeparateTrusteeLastName',
+  'businessSeparateTrusteeEmail',
+  'businessSeparateTrusteeRelationship',
+  'businessSeparateTrusteeAddress1',
+  'businessSeparateTrusteeTown',
+  'businessSeparateTrusteePostcode',
+]);
+
+export function collectAllFormStateKeys(formData) {
+  const keys = new Set(AUTOFILL_NON_FIELD_STATE_KEYS);
+  for (const sec of formData?.formSections || []) {
+    collectFormFieldIdsRecursive(sec.fields, keys);
+  }
+  return keys;
+}
+
+/**
+ * Keep only keys that belong to the current form schema (plus non-field state above).
+ * Prevents "Auto-Fill" from leaving deprecated fields from older sessions in React state.
+ */
+export function filterAutofillPayloadToFormSchema(payload, formData) {
+  if (!payload || typeof payload !== 'object') return {};
+  const allowed = collectAllFormStateKeys(formData);
+  const out = {};
+  for (const k of Object.keys(payload)) {
+    if (allowed.has(k)) out[k] = payload[k];
+  }
+  return out;
+}
+
 /** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
 const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
 
@@ -45,7 +111,7 @@ const DEMO = {
     address2: 'Canary Wharf',
     address3: 'London',
     postcode: 'E14 9WT',
-    occupation: 'Software architect (demo autofill)',
+    occupation: 'Software architect — Will Tool demo',
   },
   partner: {
     fullName: 'Elena Voss',
@@ -59,7 +125,7 @@ const DEMO = {
     tel2: '020 7946 1102',
     dateOfBirth: '1980-09-22',
     gender: 'Female',
-    occupation: 'Nurse (demo autofill)',
+    occupation: 'Nurse — Will Tool demo',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
     address1: '42 Meridian Wharf',
@@ -76,22 +142,22 @@ const DEMO = {
     brother: { firstName: 'Noah', lastName: 'Ellwood' },
     sister: { firstName: 'Iris', lastName: 'Ellwood' },
   },
-  guardian1: 'Rowan Blake — Guardian 1 (demo autofill)',
-  guardian2: 'Sienna Blake — Guardian 2 (demo autofill)',
-  guardianSub: 'Theo Marsh — Substitute guardian (demo autofill)',
-  digitalExecutor: 'Dana Reyes — Digital executor (demo autofill)',
-  trustee: 'Tracy Okonkwo — Trustee (demo autofill)',
-  trusteeSub: 'Uma Patel — Substitute trustee (demo autofill)',
-  witness1: 'Wendy Wainwright — Witness 1 (demo autofill)',
-  witness2: 'Winston White — Witness 2 (demo autofill)',
-  executorIndiv1: 'David Day — Individual executor 1 (demo autofill)',
-  executorIndiv2: 'Laura Lake — Individual executor 2 (demo autofill)',
-  substituteExecIndiv: 'Robert Rook — Substitute executor individual (demo autofill)',
-  excluded: 'Evan Excluded — Deliberate exclusion (demo autofill)',
-  debtor: 'Darren Debtor — Debt released (demo autofill)',
-  signingOnBehalf: 'Sally Signer — Signs on behalf (demo autofill)',
-  interpreter: 'Ingrid Interpreter — Interpreter (demo autofill)',
-  chattelRecipient: 'Chloe Chattels — Chattels recipient (demo autofill)',
+  guardian1: 'Rowan Blake — Guardian 1 — Will Tool demo',
+  guardian2: 'Sienna Blake — Guardian 2 — Will Tool demo',
+  guardianSub: 'Theo Marsh — Substitute guardian — Will Tool demo',
+  digitalExecutor: 'Dana Reyes — Digital executor — Will Tool demo',
+  trustee: 'Tracy Okonkwo — Trustee — Will Tool demo',
+  trusteeSub: 'Uma Patel — Substitute trustee — Will Tool demo',
+  witness1: 'Wendy Wainwright — Witness 1 — Will Tool demo',
+  witness2: 'Winston White — Witness 2 — Will Tool demo',
+  executorIndiv1: 'David Day — Individual executor 1 — Will Tool demo',
+  executorIndiv2: 'Laura Lake — Individual executor 2 — Will Tool demo',
+  substituteExecIndiv: 'Robert Rook — Substitute executor individual — Will Tool demo',
+  excluded: 'Evan Excluded — Deliberate exclusion — Will Tool demo',
+  debtor: 'Darren Debtor — Debt released — Will Tool demo',
+  signingOnBehalf: 'Sally Signer — Signs on behalf — Will Tool demo',
+  interpreter: 'Ingrid Interpreter — Interpreter — Will Tool demo',
+  chattelRecipient: 'Chloe Chattels — Chattels recipient — Will Tool demo',
   petCarer: {
     title: 'Ms',
     firstName: 'Penny',
@@ -194,7 +260,7 @@ function applyRichPersonDemoOverrides(dummyData) {
     middleName: '',
     gender: 'Male',
     dateOfBirth: '15/06/1975',
-    occupation: 'Professional (demo autofill)',
+    occupation: 'Professional — Will Tool demo',
     relationship: 'Friend',
     ...fields,
     _personRecordId: `autofill-demo-${++seq}`,
@@ -302,7 +368,7 @@ function applyRichPersonDemoOverrides(dummyData) {
     address2: 'Rotherhithe',
     address3: 'London',
     postcode: 'SE16 7GG',
-    occupation: 'Teacher (demo autofill)',
+    occupation: 'Teacher — Will Tool demo',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
     relationship: 'Friend',
@@ -319,7 +385,7 @@ function applyRichPersonDemoOverrides(dummyData) {
     address2: 'Rotherhithe',
     address3: 'London',
     postcode: 'SE16 7GH',
-    occupation: 'Architect (demo autofill)',
+    occupation: 'Architect — Will Tool demo',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
     relationship: 'Friend',
@@ -336,7 +402,7 @@ function applyRichPersonDemoOverrides(dummyData) {
     address2: '',
     address3: 'Birmingham',
     postcode: 'B16 0RP',
-    occupation: 'Teacher (demo autofill)',
+    occupation: 'Teacher — Will Tool demo',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
     relationship: 'Sister',
@@ -354,7 +420,7 @@ function applyRichPersonDemoOverrides(dummyData) {
     address2: '',
     address3: 'Birmingham',
     postcode: 'B16 0RP',
-    occupation: 'Engineer (demo autofill)',
+    occupation: 'Engineer — Will Tool demo',
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
     relationship: 'Brother-in-law',
@@ -431,7 +497,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Deptford',
       address3: 'London',
       postcode: 'SE8 4HU',
-      occupation: 'Engineer (demo autofill)',
+      occupation: 'Engineer — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Uncle',
@@ -452,7 +518,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       postcode: 'NW3 9EX',
       mobile: '07700999199',
       email: 'david.day.demo@example.com',
-      occupation: 'Teacher (demo autofill)',
+      occupation: 'Teacher — Will Tool demo',
       relationship: 'Friend',
     }),
     row({
@@ -466,7 +532,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       postcode: 'NW3 9EY',
       mobile: '07700999198',
       email: 'laura.lake.demo@example.com',
-      occupation: 'Accountant (demo autofill)',
+      occupation: 'Accountant — Will Tool demo',
       relationship: 'Sister',
     }),
   ];
@@ -489,7 +555,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Croydon',
       address3: 'London',
       postcode: 'CR0 9DE',
-      occupation: 'IT consultant (demo autofill)',
+      occupation: 'IT consultant — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Friend',
@@ -508,7 +574,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Ealing',
       address3: 'London',
       postcode: 'W5 1TR',
-      occupation: 'Accountant (demo autofill)',
+      occupation: 'Accountant — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Friend',
@@ -527,7 +593,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Ealing',
       address3: 'London',
       postcode: 'W5 1TS',
-      occupation: 'Solicitor (demo autofill)',
+      occupation: 'Solicitor — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Sister',
@@ -586,12 +652,12 @@ function applyRichPersonDemoOverrides(dummyData) {
       postcode: 'SW17 9EX',
       mobile: '07700111140',
       email: 'evan.excluded.demo@example.com',
-      occupation: 'Consultant (demo autofill)',
+      occupation: 'Consultant — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Former partner',
     });
-    exD.exclusionReason = 'No contact for several years (demo autofill)';
+    exD.exclusionReason = 'No contact for several years — Will Tool demo';
     dummyData.excludedPersonData = [exD];
   }
   dummyData.chattelRecipientData = [
@@ -607,7 +673,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Richmond',
       address3: 'Surrey',
       postcode: 'TW9 1CH',
-      occupation: 'Designer (demo autofill)',
+      occupation: 'Designer — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Friend',
@@ -626,14 +692,14 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Wimbledon',
       address3: 'London',
       postcode: 'SW19 1DB',
-      occupation: 'Contractor (demo autofill)',
+      occupation: 'Contractor — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Former colleague',
     });
     debtRow._debtId = 'demo-pch-debt-1';
     debtRow.debtAmount = '£2,500';
-    debtRow.debtNotes = 'Informal loan (demo autofill)';
+    debtRow.debtNotes = 'Informal loan — Will Tool demo';
     dummyData.debtorData = [debtRow];
   }
 
@@ -666,7 +732,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Hammersmith',
       address3: 'London',
       postcode: 'W6 1SG',
-      occupation: 'Attorney (demo autofill)',
+      occupation: 'Attorney — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Attorney',
@@ -685,7 +751,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: 'Acton',
       address3: 'London',
       postcode: 'W3 1IN',
-      occupation: 'Interpreter (demo autofill)',
+      occupation: 'Interpreter — Will Tool demo',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Friend',
@@ -696,14 +762,14 @@ function applyRichPersonDemoOverrides(dummyData) {
     row({
       ...DEMO.petCarer,
       middleName: '',
-      occupation: 'Retail manager (demo autofill)',
+      occupation: 'Retail manager — Will Tool demo',
   }),
   ];
   dummyData.substitutePetCarerData = [
     row({
       ...DEMO.petCarerSub,
       middleName: '',
-      occupation: 'Engineer (demo autofill)',
+      occupation: 'Engineer — Will Tool demo',
     }),
   ];
   dummyData.separateTrusteeData = [
@@ -720,7 +786,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: DEMO.flitTrusteeA.address2,
       address3: DEMO.flitTrusteeA.address3,
       postcode: DEMO.flitTrusteeA.postcode,
-      occupation: 'Director (demo autofill)',
+      occupation: 'Director — Will Tool demo',
       relationship: DEMO.flitTrusteeA.relationship,
       relationshipToTestator: DEMO.flitTrusteeA.relationshipToTestator,
     }),
@@ -737,7 +803,7 @@ function applyRichPersonDemoOverrides(dummyData) {
       address2: DEMO.flitTrusteeB.address2,
       address3: DEMO.flitTrusteeB.address3,
       postcode: DEMO.flitTrusteeB.postcode,
-      occupation: 'Analyst (demo autofill)',
+      occupation: 'Analyst — Will Tool demo',
       relationship: DEMO.flitTrusteeB.relationship,
       relationshipToTestator: DEMO.flitTrusteeB.relationshipToTestator,
     }),
@@ -1074,7 +1140,7 @@ export const generateDummyFormData = (formData) => {
     middleName: '',
     gender: 'Male',
     dateOfBirth: '15/06/1975',
-    occupation: 'Professional (demo autofill)',
+    occupation: 'Professional — Will Tool demo',
     relationship: 'Friend',
     ...fields,
     _personRecordId: `autofill-demo-${++autofillPersonSeq}`,
@@ -1236,7 +1302,7 @@ export const generateDummyFormData = (formData) => {
             address2: 'Richmond',
             address3: 'Surrey',
             postcode: 'TW9 1CH',
-            occupation: 'Designer (demo autofill)',
+            occupation: 'Designer — Will Tool demo',
             nationalityCountry: 'United Kingdom',
             countryOfResidence: 'United Kingdom',
             relationship: 'Friend',
@@ -1262,14 +1328,14 @@ export const generateDummyFormData = (formData) => {
           address2: 'Wimbledon',
           address3: 'London',
           postcode: 'SW19 1DB',
-          occupation: 'Contractor (demo autofill)',
+          occupation: 'Contractor — Will Tool demo',
           nationalityCountry: 'United Kingdom',
           countryOfResidence: 'United Kingdom',
           relationship: 'Former colleague',
         });
         debt._debtId = 'demo-pch-debt-1';
         debt.debtAmount = '£2,500';
-        debt.debtNotes = 'Informal loan (demo autofill)';
+        debt.debtNotes = 'Informal loan — Will Tool demo';
         dummyData.debtorData = [debt];
         processedCount += 12;
         return;
@@ -1289,12 +1355,12 @@ export const generateDummyFormData = (formData) => {
           postcode: 'SW17 9EX',
           mobile: '07700111140',
           email: 'evan.excluded.demo@example.com',
-          occupation: 'Consultant (demo autofill)',
+          occupation: 'Consultant — Will Tool demo',
           nationalityCountry: 'United Kingdom',
           countryOfResidence: 'United Kingdom',
           relationship: 'Former partner',
         });
-        ex.exclusionReason = 'No contact for several years (demo autofill)';
+        ex.exclusionReason = 'No contact for several years — Will Tool demo';
         dummyData.deliberatelyExcludingAnyone = 'Yes';
         dummyData.excludedPersonData = [ex];
         dummyData.spouseBenefitOnDivorce = 'No';
@@ -1320,7 +1386,7 @@ export const generateDummyFormData = (formData) => {
             dateOfBirth: DEMO.petCarer.dateOfBirth,
             gender: DEMO.petCarer.gender,
             middleName: '',
-            occupation: 'Retail manager (demo autofill)',
+            occupation: 'Retail manager — Will Tool demo',
             nationalityCountry: 'United Kingdom',
             countryOfResidence: 'United Kingdom',
           }),
@@ -1341,7 +1407,7 @@ export const generateDummyFormData = (formData) => {
             dateOfBirth: DEMO.petCarerSub.dateOfBirth,
             gender: DEMO.petCarerSub.gender,
             middleName: '',
-            occupation: 'Engineer (demo autofill)',
+            occupation: 'Engineer — Will Tool demo',
             nationalityCountry: 'United Kingdom',
             countryOfResidence: 'United Kingdom',
           }),
@@ -1367,14 +1433,14 @@ export const generateDummyFormData = (formData) => {
             address2: 'Wimbledon',
             address3: 'London',
             postcode: 'SW19 1DB',
-            occupation: 'Contractor (demo autofill)',
+            occupation: 'Contractor — Will Tool demo',
             nationalityCountry: 'United Kingdom',
             countryOfResidence: 'United Kingdom',
             relationship: 'Former colleague',
           });
           debt._debtId = 'opg-demo-debt-1';
           debt.debtAmount = '£2,500';
-          debt.debtNotes = 'Informal loan noted for executors (demo autofill).';
+          debt.debtNotes = 'Informal loan noted for executors — Will Tool demo.';
           dummyData.debtorData = [debt];
         }
         processedCount += 18;
@@ -1395,15 +1461,14 @@ export const generateDummyFormData = (formData) => {
         return;
       }
       if (field.type === 'estateResidueGuided') {
-        /** FLIT path: matches unlock workflow + IHT default Ratcliffe. */
+        /** FLIT path: align with `unlockEverything` (separate FLIT trustees) + `applyRichPersonDemoOverrides` trustee rows. */
         dummyData.howResidueDistributed = 'IntoFLIT';
         dummyData.powerToRevokeLifeInterest = 'Yes';
-        dummyData.appointSeparateTrusteesFLIT = 'No';
-        dummyData.separateTrusteeData = [];
+        dummyData.appointSeparateTrusteesFLIT = 'Yes';
         dummyData.flitLifeTenantName = `${DEMO.partner.firstName} ${DEMO.partner.lastName}`.trim();
-        dummyData.flitLifeTenantRel = 'spouse / civil partner (demo autofill)';
+        dummyData.flitLifeTenantRel = 'spouse / civil partner — Will Tool demo';
         dummyData.lifeTenantDetails = `${dummyData.flitLifeTenantName} (${dummyData.flitLifeTenantRel})`;
-        dummyData.beneficiariesDetails = `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} in equal shares (demo).`;
+        dummyData.beneficiariesDetails = `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} in equal shares.`;
         dummyData.flitTrustEndMode = 'to-beneficiaries';
         dummyData._flitTrustEndMode = 'to-beneficiaries';
         dummyData.trustEndDistributionDetails =

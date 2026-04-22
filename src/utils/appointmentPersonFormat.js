@@ -19,6 +19,7 @@ function pickAllowedPersonFields(item) {
 
 const DEMO_STRIP = [
   /\s*\(demo\s+autofill[^)]*\)/gi,
+  /\s*[—–-]\s*Will Tool demo(\s*data)?/gi,
   /\s*[—–-]\s*Digital executor.*$/i,
   /\s*\bdemo\s+autofill\b/gi,
 ];

@@ -56,7 +56,7 @@ import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
 import { Download, FileText, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft, Save, Sparkles, RotateCcw, X, ArrowRight, Info, ArrowUp, Zap, AlertTriangle } from 'lucide-react';
-import { generateDummyFormData } from '../utils/autoFillForm.js';
+import { filterAutofillPayloadToFormSchema, generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
 import { isPersonalChattelsGuidedComplete, getPersonalChattelsGuidedValidationIssues } from './PersonalChattelsGuided.jsx';
@@ -2715,15 +2715,21 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           allItems: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData : 'N/A'
         });
       }
+
+      const filteredToSchema = filterAutofillPayloadToFormSchema(dummyData, formData);
+      if (import.meta.env.DEV && Object.keys(filteredToSchema).length < Object.keys(dummyData).length) {
+        const dropped = Object.keys(dummyData).filter((k) => !(k in filteredToSchema));
+        console.log('[FORM AUTO-FILL] 🧹 Dropped non-schema autofill keys:', dropped);
+      }
       
-      const mergedForApply = { ...formValues, ...dummyData };
-      console.log('[FORM AUTO-FILL] ✅ Merged form values (preview):', {
-        previousCount: Object.keys(formValues).length,
-        newCount: Object.keys(mergedForApply).length,
-        hasSeparateTrusteeData: !!mergedForApply.separateTrusteeData
+      const nextStateForPreview = { ...filteredToSchema };
+      console.log('[FORM AUTO-FILL] ✅ New form state (schema-filtered) preview:', {
+        previousKeyCount: Object.keys(formValues).length,
+        nextKeyCount: Object.keys(nextStateForPreview).length,
+        hasSeparateTrusteeData: !!nextStateForPreview.separateTrusteeData
       });
       if (import.meta.env.DEV) {
-        const est = getAristoneEstateRecommendationState(mergedForApply);
+        const est = getAristoneEstateRecommendationState(nextStateForPreview);
         console.log('[FORM AUTO-FILL] Estate recommendation preview (after merge):', {
           summary: getEstateRecommendationLogSummary(est),
           eligible: est.eligible,
@@ -2737,12 +2743,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         });
       }
 
-      console.log('[FORM AUTO-FILL] 🔄 Updating form values state...');
-      setFormValues((prev) => ({ ...prev, ...dummyData }));
+      console.log('[FORM AUTO-FILL] 🔄 Updating form values state (replace with schema-only keys, no legacy merge)...');
+      setFormValues(filteredToSchema);
       
       console.log('[FORM AUTO-FILL] 💾 Saving to localStorage...');
       try {
-        localStorage.setItem('willForm', JSON.stringify(dummyData));
+        localStorage.setItem('willForm', JSON.stringify(filteredToSchema));
         console.log('[FORM AUTO-FILL] ✅ Saved to localStorage successfully');
       } catch (storageError) {
         console.error('[FORM AUTO-FILL] ❌ Failed to save to localStorage:', storageError);
@@ -2765,15 +2771,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(dummyData).length} fields (client mode — includes Estate Overview demo; solicitor-only steps omitted). Open Trustees/Executors to see Aristone recommendation if eligible.`
-            : `Filled ${Object.keys(dummyData).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
+            ? `Filled ${Object.keys(filteredToSchema).length} fields (client mode — includes Estate Overview demo; solicitor-only steps omitted). Open Trustees/Executors to see Aristone recommendation if eligible.`
+            : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 5000
       });
       
       if (import.meta.env.DEV) {
         console.log('[FORM AUTO-FILL] 🔍 Building clause debug export...');
         const previewMaxIndex = visibleSections.length - 1;
-        const exportPayload = buildClauseDebugExport(dummyData, previewMaxIndex);
+        const exportPayload = buildClauseDebugExport(filteredToSchema, previewMaxIndex);
         window.lastClauseDebugExport = exportPayload;
         console.group('[CLAUSE DEBUG][AUTO-FILL]');
         console.info('diff', exportPayload.diff);
