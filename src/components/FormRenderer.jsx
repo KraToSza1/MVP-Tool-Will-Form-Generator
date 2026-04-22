@@ -3747,7 +3747,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         <div className="w-full max-w-6xl">
           <div className="flex flex-col lg:flex-row gap-6">
             <section 
-              className="w-full max-w-3xl bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-5 md:p-6 border border-gray-200 transition-all duration-300 hover:shadow-2xl"
+              className="will-form-section-card w-full max-w-3xl bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-5 md:p-6 border border-gray-200 transition-all duration-300 hover:shadow-2xl"
               aria-label={`Form section: ${currentSection?.formSection || 'Questionnaire'}`}
               role="region"
             >

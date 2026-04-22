@@ -1869,6 +1869,7 @@
                 {
                     "id": "separateTrusteesSection",
                     "type": "section",
+                    "_hiddenFromClient": true,
                     "label": "Who are the separate Trustees?",
                     "willClauseText": "Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests.",
                     "conditions": [

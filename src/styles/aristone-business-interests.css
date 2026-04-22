@@ -54,14 +54,14 @@ html.dark-theme .ari-badge svg {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: #eef0fd;
+  background: #e0e7ff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 html.dark-theme .ari-badge-sm {
-  background: #1e293b;
+  background: rgba(67, 56, 202, 0.35);
   border: 1px solid #475569;
 }
 .ari-badge-sm svg {
@@ -137,8 +137,10 @@ html.dark-theme .ari-helper {
   gap: 8px;
   margin-bottom: 8px;
 }
+/* Match MonetaryGifts: indigo-50/90 (light) + slate-800/90 (dark) with indigo-100 / slate-600 borders */
 .ari-tile {
-  background: #eef0fd;
+  background: rgba(238, 242, 255, 0.9);
+  border: 1px solid #e0e7ff;
   border-radius: 8px;
   padding: 10px 12px;
 }
@@ -149,7 +151,7 @@ html.dark-theme .ari-tile {
 .ari-tile .t-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1f3c;
+  color: #0f172a;
   margin: 0 0 2px;
 }
 html.dark-theme .ari-tile .t-title {
@@ -157,11 +159,12 @@ html.dark-theme .ari-tile .t-title {
 }
 .ari-tile .t-sub {
   font-size: 12px;
-  color: #6b7280;
+  color: #475569;
   margin: 0;
+  line-height: 1.5;
 }
 html.dark-theme .ari-tile .t-sub {
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 
 .ari-hint {
@@ -183,19 +186,32 @@ html.dark-theme .ari-hint {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 10px 6px;
+  padding: 10px 8px;
   cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.1s;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
   position: relative;
-  /* Ensure clicks reach the label/control (some overlays steal events). */
   pointer-events: auto;
 }
-.ari-radio-opt:hover {
-  background: #f9fafb;
+/* Match MonetaryGiftsFields: selected = indigo + slate-800 in dark */
+.ari-radio-opt:has(input:checked) {
+  border-color: #a5b4fc;
+  background: rgba(238, 242, 255, 0.8);
 }
-html.dark-theme .ari-radio-opt:hover {
-  background: rgba(51, 65, 85, 0.5);
+html.dark-theme .ari-radio-opt:has(input:checked) {
+  border-color: #6366f1;
+  background: rgba(30, 41, 59, 0.9);
+}
+.ari-radio-opt:hover:not(:has(input:checked)) {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+html.dark-theme .ari-radio-opt:hover:not(:has(input:checked)) {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: #475569;
 }
 .ari-radio-opt input[type='radio'] {
   margin-top: 3px;
@@ -235,13 +251,21 @@ html.dark-theme .ari-sep {
 }
 
 .ari-callout {
-  border-left: 3px solid #4f46e5;
-  padding-left: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e0e7ff;
+  border-left: 4px solid #4f46e5;
+  background: rgba(238, 242, 255, 0.9);
+  padding: 12px 14px;
   margin-bottom: 1.25rem;
+}
+html.dark-theme .ari-callout {
+  border: 1px solid #475569;
+  border-left: 4px solid #6366f1;
+  background: rgba(30, 41, 59, 0.9);
 }
 .ari-callout p {
   font-size: 13px;
-  color: #6b7280;
+  color: #475569;
   line-height: 1.6;
   margin: 0;
 }
@@ -249,7 +273,7 @@ html.dark-theme .ari-callout p {
   color: #cbd5e1;
 }
 .ari-callout strong {
-  color: #1a1f3c;
+  color: #0f172a;
   font-weight: 600;
 }
 html.dark-theme .ari-callout strong {
@@ -333,6 +357,16 @@ html.dark-theme .ari-inline-radio {
 .ari-inline-radio:hover {
   border-color: #4f46e5;
 }
+.ari-inline-radio:has(input:checked) {
+  border-color: #818cf8;
+  background: rgba(238, 242, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15);
+}
+html.dark-theme .ari-inline-radio:has(input:checked) {
+  border-color: #6366f1;
+  background: rgba(30, 41, 59, 0.95);
+  box-shadow: none;
+}
 .ari-inline-radio input {
   accent-color: #4f46e5;
 }
@@ -347,19 +381,19 @@ html.dark-theme .ari-inline-radio {
   grid-template-columns: 1fr;
 }
 .ari-guidance-box {
-  background: #f0f4ff;
-  border: 1px solid #c7c4f5;
+  background: rgba(238, 242, 255, 0.9);
+  border: 1px solid #e0e7ff;
   border-radius: 8px;
   padding: 12px 14px;
 }
 html.dark-theme .ari-guidance-box {
-  background: rgba(30, 41, 59, 0.85);
-  border-color: #6366f1;
+  background: rgba(30, 41, 59, 0.9);
+  border-color: #475569;
 }
 .ari-g-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1f3c;
+  color: #0f172a;
   margin: 0 0 6px;
 }
 html.dark-theme .ari-g-title {
@@ -367,7 +401,7 @@ html.dark-theme .ari-g-title {
 }
 .ari-g-item {
   font-size: 12px;
-  color: #6b7280;
+  color: #475569;
   margin: 0 0 3px;
   line-height: 1.5;
 }
@@ -375,26 +409,7 @@ html.dark-theme .ari-g-item {
   color: #cbd5e1;
 }
 
-.ari-trustee-box {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 1.25rem 1.5rem;
-  background: #fafafa;
-  margin-bottom: 1.5rem;
-}
-html.dark-theme .ari-trustee-box {
-  border-color: #475569;
-  background: #0f172a;
-}
-.ari-trustee-box h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1f3c;
-  margin: 0 0 1rem;
-}
-html.dark-theme .ari-trustee-box h4 {
-  color: #f1f5f9;
-}
+/* Separate business trustee form panel: indigo classes in BusinessInterestsGuided.jsx */
 .ari-field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -432,16 +447,17 @@ html.dark-theme .ari-warn-body {
   color: #fde68a;
 }
 
-/* BPR Q4 explainer + client confirmation (handoff April 2026) */
+/* BPR Q4 explainer: same indigo + slate duality as MonetaryGifts */
 .ari-bpr-explainer {
-  background: #eef0fd;
+  background: rgba(238, 242, 255, 0.95);
+  border: 1px solid #e0e7ff;
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 1.25rem;
 }
 html.dark-theme .ari-bpr-explainer {
-  background: #1e293b;
-  border: 1px solid #6366f1;
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid #475569;
 }
 .ari-bpr-explainer h4 {
   font-size: 12px;

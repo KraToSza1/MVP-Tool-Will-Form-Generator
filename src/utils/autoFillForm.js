@@ -152,6 +152,17 @@ const DEMO = {
     dateOfBirth: '1981-11-08',
     gender: 'Female',
   },
+  /** Separate business trustee (BusinessInterestsGuided modal) — `_businessGuidedCapture` row in separateTrusteeData */
+  businessTrusteeGuided: {
+    recordId: 'biz-trustee-autofill-demo',
+    firstName: 'Harriet',
+    lastName: 'Morgan',
+    email: 'harriet.morgan.biz.demo@example.com',
+    relationship: 'Accountant',
+    address1: 'Unit 4, Business Park House',
+    town: 'Reading',
+    postcode: 'RG1 1AA',
+  },
 };
 
 /**
@@ -165,7 +176,8 @@ const ESTATE_DEMO = {
   approxValue: '£1,000,001 – £3,000,000',
   approxLiabilities: 'Under £50,000',
   ownProperty: 'Yes',
-  businessInterests: 'No',
+  /** Aligns with unlockEverything.hasBusinessInterests + Business Interests guided autofill */
+  businessInterests: 'Yes',
   feesAck: ['ack'],
 };
 
@@ -232,9 +244,12 @@ function applyRichPersonDemoOverrides(dummyData) {
       email: 'rowan.blake.demo@example.com',
       mobile: '07700999110',
       address1: '7 Guardian Grove',
+      address2: 'Rotherhithe',
+      address3: 'London',
       postcode: 'SE16 7GG',
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
+      relationship: 'Friend (demo guardian)',
     },
     {
       id: 'demo-reg-catherine-nancy',
@@ -702,6 +717,39 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationshipToTestator: DEMO.flitTrusteeB.relationshipToTestator,
     }),
   ];
+
+  if (dummyData.hasBusinessInterests === 'Yes' && dummyData.appointSeparateBusinessTrustee === 'Yes') {
+    const g = DEMO.businessTrusteeGuided;
+    dummyData.businessSeparateTrusteeRecordId = g.recordId;
+    dummyData.businessSeparateTrusteeFirstName = g.firstName;
+    dummyData.businessSeparateTrusteeLastName = g.lastName;
+    dummyData.businessSeparateTrusteeEmail = g.email;
+    dummyData.businessSeparateTrusteeRelationship = g.relationship;
+    dummyData.businessSeparateTrusteeAddress1 = g.address1;
+    dummyData.businessSeparateTrusteeTown = g.town;
+    dummyData.businessSeparateTrusteePostcode = g.postcode;
+    dummyData.separateTrusteeData = [
+      ...(dummyData.separateTrusteeData || []),
+      {
+        title: '',
+        firstName: g.firstName,
+        middleName: '',
+        lastName: g.lastName,
+        email: g.email,
+        relationship: g.relationship,
+        address1: g.address1,
+        address2: '',
+        address3: g.town,
+        postcode: g.postcode,
+        gender: '',
+        dateOfBirth: '',
+        occupation: '',
+        mobile: '',
+        _businessGuidedCapture: true,
+        _personRecordId: g.recordId,
+      },
+    ];
+  }
 
   if (dummyData.nationalityCountry == null || dummyData.nationalityCountry === '' || dummyData.nationalityCountry === 'Standard value') {
     dummyData.nationalityCountry = 'United Kingdom';

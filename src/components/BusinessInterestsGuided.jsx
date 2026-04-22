@@ -3,9 +3,27 @@
  * Wires to: hasBusinessInterests, trusteePowerCarryOnBusiness, appointSeparateBusinessTrustee,
  * separateTrusteeData, and intake-only detail fields.
  */
-import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Briefcase, Pencil, X } from 'lucide-react';
 import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
+import { getFormPeopleEntries } from '../lib/formPeopleSummary.js';
 import '../styles/aristone-business-interests.css';
+
+/** Normalise tri-state for display (legacy saves may use odd casing) */
+function normalizeYesNoUnsure(v) {
+  if (v === true) return 'Yes';
+  if (v === false) return 'No';
+  if (v == null) return undefined;
+  const s = String(v).trim();
+  if (!s) return undefined;
+  const l = s.toLowerCase();
+  if (l === 'yes' || l === 'y') return 'Yes';
+  if (l === 'no' || l === 'n') return 'No';
+  if (l === 'unsure') return 'Unsure';
+  if (s === 'Yes' || s === 'No' || s === 'Unsure') return s;
+  return undefined;
+}
 
 const TRUSTEE_REL_OPTIONS = [
   { value: '', label: 'Select…' },
@@ -78,14 +96,49 @@ function mapContactToBusinessTrusteeFields(c) {
       lastName = parts.slice(1).join(' ') || '';
     }
   }
+  /* Prefer town/city fields; some registry entries only have a locality on address line 2. */
+  const townish =
+    trimVal(d.address3) || trimVal(d.city) || trimVal(d.town) || trimVal(d.address2);
+
   return {
     businessSeparateTrusteeFirstName: firstName,
     businessSeparateTrusteeLastName: lastName,
     businessSeparateTrusteeEmail: trimVal(d.email),
     businessSeparateTrusteeAddress1: trimVal(d.address1),
-    businessSeparateTrusteeTown: trimVal(d.address3) || trimVal(d.city),
+    businessSeparateTrusteeTown: townish,
     businessSeparateTrusteePostcode: trimVal(d.postcode),
   };
+}
+
+/** Full snapshot for cancel / edit-entry in the separate business trustee modal */
+function getTrusteeModalSnapshot(v) {
+  if (!v || typeof v !== 'object') return null;
+  const rows = v.separateTrusteeData;
+  const separateTrusteeData = Array.isArray(rows) ? rows.map((row) => (row && typeof row === 'object' ? { ...row } : row)) : rows;
+  return {
+    appointSeparateBusinessTrustee: v.appointSeparateBusinessTrustee,
+    businessSeparateTrusteeFirstName: v.businessSeparateTrusteeFirstName ?? '',
+    businessSeparateTrusteeLastName: v.businessSeparateTrusteeLastName ?? '',
+    businessSeparateTrusteeRelationship: v.businessSeparateTrusteeRelationship ?? '',
+    businessSeparateTrusteeEmail: v.businessSeparateTrusteeEmail ?? '',
+    businessSeparateTrusteeAddress1: v.businessSeparateTrusteeAddress1 ?? '',
+    businessSeparateTrusteeTown: v.businessSeparateTrusteeTown ?? '',
+    businessSeparateTrusteePostcode: v.businessSeparateTrusteePostcode ?? '',
+    businessSeparateTrusteeRecordId: v.businessSeparateTrusteeRecordId ?? '',
+    separateTrusteeData,
+  };
+}
+
+function businessTrusteeSummary(v) {
+  const fn = trimVal(v?.businessSeparateTrusteeFirstName);
+  const ln = trimVal(v?.businessSeparateTrusteeLastName);
+  const a1 = trimVal(v?.businessSeparateTrusteeAddress1);
+  const town = trimVal(v?.businessSeparateTrusteeTown);
+  const pc = trimVal(v?.businessSeparateTrusteePostcode);
+  const name = [fn, ln].filter(Boolean).join(' ').trim() || '';
+  const addr = [a1, town, pc].filter(Boolean).join(', ');
+  const complete = !!(fn && ln && a1 && town && pc);
+  return { name, addr, complete };
 }
 
 function mapRelationshipToTrusteeSelect(rel) {
@@ -112,8 +165,13 @@ const DEFAULT_BPR_UNSURE =
 /** @param {{ field?: object, formValues: object, setFormValues: Function }} props */
 export default function BusinessInterestsGuided({ field, formValues, setFormValues }) {
   const uid = useId();
+  const modalTitleId = useId();
   const recordIdRef = useRef(formValues.businessSeparateTrusteeRecordId || null);
+  const preTrusteeModalRef = useRef(null);
+  const bizDetailsRef = useRef(null);
   const [businessTrusteePickId, setBusinessTrusteePickId] = useState('');
+  const [trusteeModalOpen, setTrusteeModalOpen] = useState(false);
+  const [trusteeModalError, setTrusteeModalError] = useState('');
 
   const idFirst = `ari-trustee-firstname-${uid}`;
   const idLast = `ari-trustee-lastname-${uid}`;
@@ -122,9 +180,11 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
   const idTown = `ari-trustee-town-${uid}`;
   const idPc = `ari-trustee-pc-${uid}`;
 
-  const hasBiz = formValues.hasBusinessInterests;
-  const showDetails = hasBiz === 'Yes';
+  const q1 = normalizeYesNoUnsure(formValues.hasBusinessInterests);
+  const showDetails = q1 === 'Yes';
   const showTrusteeForm = showDetails && formValues.appointSeparateBusinessTrustee === 'Yes';
+
+  const peopleEntriesCount = useMemo(() => getFormPeopleEntries(formValues || {}).length, [formValues]);
 
   const businessTrusteeContactOptions = useMemo(
     () => getContactCandidates(formValues || {}),
@@ -216,6 +276,9 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
     const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
     if (mapped !== 'Yes') {
       setBusinessTrusteePickId('');
+      setTrusteeModalOpen(false);
+      setTrusteeModalError('');
+      preTrusteeModalRef.current = null;
       recordIdRef.current = null;
       applyPatch((prev) => ({
         ...prev,
@@ -226,10 +289,74 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
       return;
     }
     applyPatch((prev) => {
-      const draft = { ...prev, appointSeparateBusinessTrustee: 'Yes' };
-      return syncTrusteeIntoState(draft);
+      preTrusteeModalRef.current = getTrusteeModalSnapshot(prev);
+      return { ...prev, appointSeparateBusinessTrustee: 'Yes' };
     });
+    setTrusteeModalError('');
+    setBusinessTrusteePickId('');
+    setTrusteeModalOpen(true);
   };
+
+  const openTrusteeModalForEdit = useCallback(() => {
+    preTrusteeModalRef.current = getTrusteeModalSnapshot(formValues);
+    setTrusteeModalError('');
+    setTrusteeModalOpen(true);
+  }, [formValues]);
+
+  const cancelTrusteeModal = useCallback(() => {
+    const snap = preTrusteeModalRef.current;
+    if (snap) {
+      applyPatch((prev) => ({
+        ...prev,
+        ...snap,
+        separateTrusteeData: snap.separateTrusteeData,
+      }));
+      recordIdRef.current = snap.businessSeparateTrusteeRecordId || null;
+    }
+    preTrusteeModalRef.current = null;
+    setTrusteeModalError('');
+    setBusinessTrusteePickId('');
+    setTrusteeModalOpen(false);
+  }, [applyPatch]);
+
+  const saveTrusteeModal = useCallback(() => {
+    const rid = formValues.businessSeparateTrusteeRecordId || recordIdRef.current;
+    const row = buildGuidedTrusteeRow({ ...formValues, businessSeparateTrusteeRecordId: rid }, rid);
+    if (!row) {
+      setTrusteeModalError('Please enter first name, last name, address line 1, town and postcode.');
+      return;
+    }
+    applyPatch((prev) => syncTrusteeIntoState(prev));
+    preTrusteeModalRef.current = null;
+    setTrusteeModalError('');
+    setTrusteeModalOpen(false);
+  }, [applyPatch, formValues]);
+
+  useEffect(() => {
+    if (formValues.appointSeparateBusinessTrustee !== 'Yes') {
+      setTrusteeModalOpen(false);
+      setTrusteeModalError('');
+    }
+  }, [formValues.appointSeparateBusinessTrustee]);
+
+  useEffect(() => {
+    if (!trusteeModalOpen || typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [trusteeModalOpen]);
+
+  const wasShowingBizDetails = useRef(false);
+  useEffect(() => {
+    if (showDetails && !wasShowingBizDetails.current) {
+      requestAnimationFrame(() => {
+        bizDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+    wasShowingBizDetails.current = showDetails;
+  }, [showDetails]);
 
   const setQ4 = (val) => {
     const mapped = val === 'yes' ? 'Yes' : val === 'no' ? 'No' : 'Unsure';
@@ -275,9 +402,9 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
   const agreementVal = formValues.shareholderAgreementInPlace || '';
 
   const radioQ1 = {
-    no: hasBiz === 'No',
-    yes: hasBiz === 'Yes',
-    unsure: hasBiz === 'Unsure',
+    no: q1 === 'No',
+    yes: q1 === 'Yes',
+    unsure: q1 === 'Unsure',
   };
 
   const q2 = formValues.trusteePowerCarryOnBusiness;
@@ -310,6 +437,8 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
     typeof field?.bprTrustUnsureMessage === 'string' && field.bprTrustUnsureMessage.trim() !== ''
       ? field.bprTrustUnsureMessage.trim()
       : DEFAULT_BPR_UNSURE;
+
+  const trusteeSummary = useMemo(() => businessTrusteeSummary(formValues), [formValues]);
 
   return (
     <div className="ari-wrap min-w-0">
@@ -364,21 +493,21 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
       <p className="ari-hint">Not sure? Select &quot;I&apos;m not sure&quot; and your solicitor will help you work it out.</p>
 
       <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Business interests">
-        <label className="ari-radio-opt" htmlFor={`ari-biz-no-${uid}`} onClick={() => setQ1('no')}>
+        <label className="ari-radio-opt" htmlFor={`ari-biz-no-${uid}`}>
           <input id={`ari-biz-no-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.no} onChange={() => setQ1('no')} />
           <div>
             <div className="ari-opt-label">No, I don&apos;t have any business interests</div>
             <div className="ari-opt-sub">I&apos;m not a business owner, shareholder, partner, or company director</div>
           </div>
         </label>
-        <label className="ari-radio-opt" htmlFor={`ari-biz-yes-${uid}`} onClick={() => setQ1('yes')}>
+        <label className="ari-radio-opt" htmlFor={`ari-biz-yes-${uid}`}>
           <input id={`ari-biz-yes-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.yes} onChange={() => setQ1('yes')} />
           <div>
             <div className="ari-opt-label">Yes, I own or have an interest in a business</div>
             <div className="ari-opt-sub">I&apos;ll provide a few details so my solicitor can advise properly</div>
           </div>
         </label>
-        <label className="ari-radio-opt" htmlFor={`ari-biz-unsure-${uid}`} onClick={() => setQ1('unsure')}>
+        <label className="ari-radio-opt" htmlFor={`ari-biz-unsure-${uid}`}>
           <input id={`ari-biz-unsure-${uid}`} type="radio" name={`ari-biz-${uid}`} checked={radioQ1.unsure} onChange={() => setQ1('unsure')} />
           <div>
             <div className="ari-opt-label">I&apos;m not sure</div>
@@ -388,13 +517,23 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
       </div>
 
       {showDetails ? (
-        <div id="ari-biz-details" className="min-w-0">
+        <div id="ari-biz-details" ref={bizDetailsRef} className="min-w-0">
           <div className="ari-callout">
             <p>
               <strong>A few quick details about your business.</strong> Don&apos;t worry about being exact — your solicitor
               will go through this with you.
             </p>
           </div>
+
+          <p className="ari-hint break-words" style={{ marginTop: 10 }} role="status">
+            People you have already added elsewhere on this will (for example executors and beneficiaries) are listed in
+            the summary <strong>at the top of the page</strong>
+            {peopleEntriesCount > 0
+              ? ` — we can see ${peopleEntriesCount} on your form.`
+              : '.'}{' '}
+            If you choose a <strong>separate business trustee</strong> in a later step, you can pick someone from that list
+            using &quot;choose from contacts you&apos;ve already entered&quot; in the form that appears.
+          </p>
 
           <div className="ari-field">
             <label className="ari-label" htmlFor={`ari-biz-type-${uid}`}>
@@ -441,7 +580,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
           <div className="ari-field">
             <span className="ari-label">Is there a shareholder or partnership agreement in place?</span>
             <div className="ari-inline-radios relative z-[1]" role="radiogroup">
-              <label className="ari-inline-radio" htmlFor={`ari-agreement-yes-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'Yes')}>
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-yes-${uid}`}>
                 <input
                   id={`ari-agreement-yes-${uid}`}
                   type="radio"
@@ -451,7 +590,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                 />
                 Yes
               </label>
-              <label className="ari-inline-radio" htmlFor={`ari-agreement-no-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'No')}>
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-no-${uid}`}>
                 <input
                   id={`ari-agreement-no-${uid}`}
                   type="radio"
@@ -461,7 +600,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                 />
                 No
               </label>
-              <label className="ari-inline-radio" htmlFor={`ari-agreement-unsure-${uid}`} onClick={() => onDetailChange('shareholderAgreementInPlace', 'Unsure')}>
+              <label className="ari-inline-radio" htmlFor={`ari-agreement-unsure-${uid}`}>
                 <input
                   id={`ari-agreement-unsure-${uid}`}
                   type="radio"
@@ -517,14 +656,14 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
           </div>
 
           <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Trustees carry on business">
-            <label className="ari-radio-opt" htmlFor={`ari-carry-no-${uid}`} onClick={() => setQ2('no')}>
+            <label className="ari-radio-opt" htmlFor={`ari-carry-no-${uid}`}>
               <input id={`ari-carry-no-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.no} onChange={() => setQ2('no')} />
               <div>
                 <div className="ari-opt-label">No — wind it down as usual</div>
                 <div className="ari-opt-sub">My trustees should close or sell the business in the normal way</div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-carry-yes-${uid}`} onClick={() => setQ2('yes')}>
+            <label className="ari-radio-opt" htmlFor={`ari-carry-yes-${uid}`}>
               <input id={`ari-carry-yes-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.yes} onChange={() => setQ2('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — give my trustees the power to keep it running</div>
@@ -533,7 +672,7 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
                 </div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-carry-unsure-${uid}`} onClick={() => setQ2('unsure')}>
+            <label className="ari-radio-opt" htmlFor={`ari-carry-unsure-${uid}`}>
               <input id={`ari-carry-unsure-${uid}`} type="radio" name={`ari-carry-${uid}`} checked={radioQ2.unsure} onChange={() => setQ2('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I&apos;d like to discuss this with my solicitor</div>
@@ -578,21 +717,21 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
           </div>
 
           <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Separate business trustee" style={{ marginTop: '1rem' }}>
-            <label className="ari-radio-opt" htmlFor={`ari-sep-no-${uid}`} onClick={() => setQ3('no')}>
+            <label className="ari-radio-opt" htmlFor={`ari-sep-no-${uid}`}>
               <input id={`ari-sep-no-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.no} onChange={() => setQ3('no')} />
               <div>
                 <div className="ari-opt-label">No — my executors can handle everything</div>
                 <div className="ari-opt-sub">The same people managing my estate will look after the business too</div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-sep-yes-${uid}`} onClick={() => setQ3('yes')}>
+            <label className="ari-radio-opt" htmlFor={`ari-sep-yes-${uid}`}>
               <input id={`ari-sep-yes-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.yes} onChange={() => setQ3('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — I want a dedicated trustee for the business</div>
-                <div className="ari-opt-sub">I&apos;ll name this person or professional below</div>
+                <div className="ari-opt-sub">A form opens to add their name and address (like your cash gifts)</div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-sep-unsure-${uid}`} onClick={() => setQ3('unsure')}>
+            <label className="ari-radio-opt" htmlFor={`ari-sep-unsure-${uid}`}>
               <input id={`ari-sep-unsure-${uid}`} type="radio" name={`ari-sep-${uid}`} checked={radioQ3.unsure} onChange={() => setQ3('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I&apos;d like my solicitor&apos;s advice on this</div>
@@ -601,132 +740,248 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
             </label>
           </div>
 
-          {showTrusteeForm ? (
-            <div id="ari-trustee-form" className="ari-trustee-box min-w-0">
-              <h4>Details of your separate business trustee</h4>
-              <p className="ari-helper text-sm">
-                Address fields are needed so your will can name them correctly. You can refine this with your solicitor
-                later.
-              </p>
-              <div className="ari-field min-w-0">
-                <label className="ari-label" htmlFor={`ari-biz-trustee-pick-${uid}`}>
-                  Choose someone you&apos;ve already entered <span className="text-slate-500 dark:text-slate-400 font-normal">(optional)</span>
-                </label>
-                <select
-                  id={`ari-biz-trustee-pick-${uid}`}
-                  className="ari-select w-full min-h-[44px] min-w-0"
-                  value={businessTrusteePickId}
-                  onChange={(e) => applyBusinessTrusteeFromContact(e.target.value)}
-                >
-                  <option value="">— Type details manually below —</option>
-                  {businessTrusteeContactOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 m-0 leading-snug break-words">
-                  {businessTrusteeContactOptions.length > 0
-                    ? 'Copies name, email and address when we have them from your form — edit before continuing.'
-                    : 'Add executors, partners or other people elsewhere in the form to pick them here, or type manually below.'}
-                </p>
-              </div>
-              <div className="ari-field-grid">
-                <div className="ari-field">
-                  <label className="ari-label" htmlFor={idFirst}>
-                    First name
-                  </label>
-                  <input
-                    id={idFirst}
-                    className="ari-input"
-                    value={formValues.businessSeparateTrusteeFirstName || ''}
-                    onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeFirstName', e.target.value)}
-                    autoComplete="given-name"
-                  />
+          {showTrusteeForm && !trusteeModalOpen ? (
+            <div
+              id="ari-trustee-summary"
+              className="mb-4 flex min-w-0 flex-col gap-3 rounded-xl border border-indigo-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-slate-600 dark:bg-slate-900/50"
+            >
+              <div className="flex min-w-0 flex-1 gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
+                  <Briefcase className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden="true" />
                 </div>
-                <div className="ari-field">
-                  <label className="ari-label" htmlFor={idLast}>
-                    Last name
-                  </label>
-                  <input
-                    id={idLast}
-                    className="ari-input"
-                    value={formValues.businessSeparateTrusteeLastName || ''}
-                    onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeLastName', e.target.value)}
-                    autoComplete="family-name"
-                  />
+                <div className="min-w-0">
+                  <p className="m-0 text-sm font-bold text-indigo-600 dark:text-indigo-400">Separate business trustee</p>
+                  {trusteeSummary.complete ? (
+                    <>
+                      <p className="m-0 mt-0.5 break-words text-base font-semibold text-slate-900 dark:text-slate-100">
+                        {trusteeSummary.name}
+                      </p>
+                      {trusteeSummary.addr ? (
+                        <p className="m-0 mt-0.5 break-words text-xs leading-snug text-slate-600 dark:text-slate-300">
+                          {trusteeSummary.addr}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="m-0 mt-1 text-sm text-slate-600 dark:text-slate-300">
+                      Add their name and address in the form so your will can name them correctly. You can refine this with
+                      your solicitor later.
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="ari-field">
-                <label className="ari-label" htmlFor={`ari-trustee-rel-${uid}`}>
-                  Relationship to you
-                </label>
-                <select
-                  id={`ari-trustee-rel-${uid}`}
-                  className="ari-select"
-                  value={formValues.businessSeparateTrusteeRelationship || ''}
-                  onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeRelationship', e.target.value)}
-                >
-                  {TRUSTEE_REL_OPTIONS.map((o) => (
-                    <option key={o.value || 'empty'} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="ari-field">
-                <label className="ari-label" htmlFor={idEmail}>
-                  Email <span className="ari-optional">(optional)</span>
-                </label>
-                <input
-                  id={idEmail}
-                  type="email"
-                  className="ari-input"
-                  value={formValues.businessSeparateTrusteeEmail || ''}
-                  onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeEmail', e.target.value)}
-                  autoComplete="email"
-                />
-              </div>
-              <div className="ari-field">
-                <label className="ari-label" htmlFor={idAddr}>
-                  Address line 1
-                </label>
-                <input
-                  id={idAddr}
-                  className="ari-input"
-                  value={formValues.businessSeparateTrusteeAddress1 || ''}
-                  onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeAddress1', e.target.value)}
-                  autoComplete="street-address"
-                />
-              </div>
-              <div className="ari-field-grid">
-                <div className="ari-field">
-                  <label className="ari-label" htmlFor={idTown}>
-                    Town / city
-                  </label>
-                  <input
-                    id={idTown}
-                    className="ari-input"
-                    value={formValues.businessSeparateTrusteeTown || ''}
-                    onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeTown', e.target.value)}
-                    autoComplete="address-level2"
-                  />
-                </div>
-                <div className="ari-field">
-                  <label className="ari-label" htmlFor={idPc}>
-                    Postcode
-                  </label>
-                  <input
-                    id={idPc}
-                    className="ari-input"
-                    value={formValues.businessSeparateTrusteePostcode || ''}
-                    onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteePostcode', e.target.value)}
-                    autoComplete="postal-code"
-                  />
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={openTrusteeModalForEdit}
+                className="inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto dark:border-indigo-500/50 dark:bg-indigo-600/30 dark:text-indigo-100 dark:shadow-none dark:hover:bg-indigo-600/50 dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-slate-900"
+              >
+                {trusteeSummary.complete ? (
+                  <>
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                    Edit
+                  </>
+                ) : (
+                  <>
+                    <Briefcase className="h-4 w-4" aria-hidden="true" />
+                    Add details
+                  </>
+                )}
+              </button>
             </div>
           ) : null}
+
+          {trusteeModalOpen && typeof document !== 'undefined'
+            ? createPortal(
+                <div
+                  className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60"
+                  role="presentation"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) cancelTrusteeModal();
+                  }}
+                >
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={modalTitleId}
+                    id="ari-trustee-form"
+                    className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-start justify-between gap-3 border-b border-white/10 px-5 pt-5 pb-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-500/25">
+                          <Pencil className="h-4 w-4 text-indigo-300" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <p id={modalTitleId} className="m-0 text-lg font-bold text-slate-100">
+                            Separate business trustee
+                          </p>
+                          <p className="m-0 mt-0.5 text-xs text-slate-400">Name and address for your will (required fields below)</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-md p-1 text-slate-400 hover:text-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        aria-label="Close"
+                        onClick={cancelTrusteeModal}
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4 px-5 py-4">
+                      {trusteeModalError ? (
+                        <p className="m-0 rounded-lg border border-red-500/40 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
+                          {trusteeModalError}
+                        </p>
+                      ) : null}
+
+                      <div className="min-w-0">
+                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={`ari-biz-trustee-pick-${uid}`}>
+                          Choose someone you&apos;ve already entered{' '}
+                          <span className="font-normal text-slate-500">(optional)</span>
+                        </label>
+                        <select
+                          id={`ari-biz-trustee-pick-${uid}`}
+                          className="min-h-[44px] w-full min-w-0 rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          value={businessTrusteePickId}
+                          onChange={(e) => applyBusinessTrusteeFromContact(e.target.value)}
+                        >
+                          <option value="">— Type details manually below —</option>
+                          {businessTrusteeContactOptions.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1.5 m-0 text-xs leading-snug text-slate-500">
+                          {businessTrusteeContactOptions.length > 0
+                            ? 'Copies name, email and address when we have them from your form — edit before saving.'
+                            : 'Add people elsewhere in the form to pick them here, or type manually below.'}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idFirst}>
+                            First name <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            id={idFirst}
+                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            value={formValues.businessSeparateTrusteeFirstName || ''}
+                            onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeFirstName', e.target.value)}
+                            autoComplete="given-name"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idLast}>
+                            Last name <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            id={idLast}
+                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            value={formValues.businessSeparateTrusteeLastName || ''}
+                            onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeLastName', e.target.value)}
+                            autoComplete="family-name"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={`ari-trustee-rel-${uid}`}>
+                          Relationship to you
+                        </label>
+                        <select
+                          id={`ari-trustee-rel-${uid}`}
+                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          value={formValues.businessSeparateTrusteeRelationship || ''}
+                          onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeRelationship', e.target.value)}
+                        >
+                          {TRUSTEE_REL_OPTIONS.map((o) => (
+                            <option key={o.value || 'empty'} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idEmail}>
+                          Email <span className="text-slate-500">(optional)</span>
+                        </label>
+                        <input
+                          id={idEmail}
+                          type="email"
+                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          value={formValues.businessSeparateTrusteeEmail || ''}
+                          onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeEmail', e.target.value)}
+                          autoComplete="email"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idAddr}>
+                          Address line 1 <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          id={idAddr}
+                          className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          value={formValues.businessSeparateTrusteeAddress1 || ''}
+                          onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeAddress1', e.target.value)}
+                          autoComplete="street-address"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idTown}>
+                            Town / city <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            id={idTown}
+                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            value={formValues.businessSeparateTrusteeTown || ''}
+                            onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteeTown', e.target.value)}
+                            autoComplete="address-level2"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-xs text-slate-300" htmlFor={idPc}>
+                            Postcode <span className="text-red-400">*</span>
+                          </label>
+                          <input
+                            id={idPc}
+                            className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            value={formValues.businessSeparateTrusteePostcode || ''}
+                            onChange={(e) => onTrusteeFieldChange('businessSeparateTrusteePostcode', e.target.value)}
+                            autoComplete="postal-code"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col-reverse gap-2 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={cancelTrusteeModal}
+                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-slate-500 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 sm:w-auto"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveTrusteeModal}
+                        className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 sm:w-auto"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )
+            : null}
 
           <hr className="ari-sep" />
 
@@ -756,21 +1011,21 @@ export default function BusinessInterestsGuided({ field, formValues, setFormValu
           </div>
 
           <div className="ari-radio-group relative z-[1]" role="radiogroup" aria-label="Business Property Relief trust">
-            <label className="ari-radio-opt" htmlFor={`ari-bpr-no-${uid}`} onClick={() => setQ4('no')}>
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-no-${uid}`}>
               <input id={`ari-bpr-no-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.no} onChange={() => setQ4('no')} />
               <div>
                 <div className="ari-opt-label">No — I do not want a BPR trust in my will</div>
                 <div className="ari-opt-sub">My solicitor will not add BPR trust wording unless we discuss it later</div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-bpr-yes-${uid}`} onClick={() => setQ4('yes')}>
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-yes-${uid}`}>
               <input id={`ari-bpr-yes-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.yes} onChange={() => setQ4('yes')} />
               <div>
                 <div className="ari-opt-label">Yes — please include a BPR trust</div>
                 <div className="ari-opt-sub">I want my solicitor to prepare the trust terms and schedules</div>
               </div>
             </label>
-            <label className="ari-radio-opt" htmlFor={`ari-bpr-unsure-${uid}`} onClick={() => setQ4('unsure')}>
+            <label className="ari-radio-opt" htmlFor={`ari-bpr-unsure-${uid}`}>
               <input id={`ari-bpr-unsure-${uid}`} type="radio" name={`ari-bpr-${uid}`} checked={radioQ4.unsure} onChange={() => setQ4('unsure')} />
               <div>
                 <div className="ari-opt-label">I&apos;m not sure — I need advice first</div>

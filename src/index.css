@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* App theme uses html.dark-theme + .dark (synced in ThemeContext). Default dark: = prefers-color-scheme only — without this, app dark + OS light leaves dark: utilities inactive while global text remaps still run → illegible UI. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Global layout + dark mode support */
 html, body, #root {
   height: 100%;
@@ -31,6 +34,13 @@ html.dark-theme .bg-slate-100 {
   background-color: rgba(15, 23, 42, 0.92) !important;
 }
 
+/* Main client questionnaire card — global text remaps assume a dark surface in app dark mode */
+html.dark-theme .will-form-section-card {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+  color: #e2e8f0;
+}
+
 html.dark-theme .bg-gray-100,
 html.dark-theme .bg-slate-200 {
   background-color: rgba(30, 41, 59, 0.95) !important;
@@ -44,6 +54,21 @@ html.dark-theme .bg-indigo-50,
 html.dark-theme .bg-blue-50,
 html.dark-theme .bg-amber-50,
 html.dark-theme .bg-emerald-50 {
+  background-color: rgba(30, 41, 59, 0.92) !important;
+}
+
+/* Opacity + /xx variants are separate classes in Tailwind — must remap or panels stay light while text-* !important flips to light text */
+html.dark-theme .bg-indigo-50\/70,
+html.dark-theme .bg-indigo-50\/80,
+html.dark-theme .bg-indigo-50\/90,
+html.dark-theme .bg-indigo-50\/95,
+html.dark-theme .bg-indigo-100\/80,
+html.dark-theme .bg-indigo-100\/90,
+html.dark-theme .bg-blue-50\/80,
+html.dark-theme .bg-blue-50\/90,
+html.dark-theme .bg-blue-50\/95,
+html.dark-theme .bg-emerald-50\/80,
+html.dark-theme .bg-amber-50\/80 {
   background-color: rgba(30, 41, 59, 0.92) !important;
 }
 

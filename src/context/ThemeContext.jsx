@@ -25,6 +25,8 @@ export function ThemeProvider({ children }) {
 
     root.classList.toggle('dark-theme', isDark);
     body.classList.toggle('dark-theme', isDark);
+    /* Keep Tailwind `dark:` in sync (see index.css @custom-variant dark); not only prefers-color-scheme */
+    root.classList.toggle('dark', isDark);
     root.style.colorScheme = isDark ? 'dark' : 'light';
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
