@@ -58,6 +58,8 @@ import GuardianFlow from './GuardianFlow.jsx';
 import BusinessInterestsGuided from './BusinessInterestsGuided.jsx';
 import PropertyGiftsGuided from './PropertyGiftsGuided.jsx';
 import PropertyTrustGuided from './PropertyTrustGuided.jsx';
+import PersonalChattelsGuided from './PersonalChattelsGuided.jsx';
+import DeliberateExclusionsGuided from './DeliberateExclusionsGuided.jsx';
 import {
   MonetaryGiftsLeaveQuestion,
   MonetaryGiftsListPanel,
@@ -300,6 +302,22 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     return (
       <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate">
         <PropertyTrustGuided field={field} formValues={formValues} setFormValues={setFormValues} />
+      </div>
+    );
+  }
+
+  if (field.type === 'personalChattelsGuided') {
+    return (
+      <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate">
+        <PersonalChattelsGuided field={field} formValues={formValues} setFormValues={setFormValues} />
+      </div>
+    );
+  }
+
+  if (field.type === 'deliberateExclusionsGuided') {
+    return (
+      <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate">
+        <DeliberateExclusionsGuided field={field} formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
   }
@@ -1673,7 +1691,7 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   if (prevProps.field.id !== nextProps.field.id) return false;
   if (prevProps.field.type !== nextProps.field.type) return false;
   // Guardian embedded flow uses many slices of formValues + fresh inline callbacks; never skip updates.
-  if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided' || prevProps.field.type === 'propertyGiftsGuided' || prevProps.field.type === 'propertyTrustGuided') {
+  if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided' || prevProps.field.type === 'propertyGiftsGuided' || prevProps.field.type === 'propertyTrustGuided' || prevProps.field.type === 'personalChattelsGuided' || prevProps.field.type === 'deliberateExclusionsGuided') {
     return false;
   }
   if (

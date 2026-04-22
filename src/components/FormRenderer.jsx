@@ -59,6 +59,11 @@ import { Download, FileText, CheckCircle2, AlertCircle, ChevronRight, ChevronLef
 import { generateDummyFormData } from '../utils/autoFillForm.js';
 import { validatePropertyTrustSchedules, validateBPRTrustSchedules } from '../utils/validationRegistry.js';
 import { buildClauses } from '../utils/buildClauses.js';
+import { isPersonalChattelsGuidedComplete, getPersonalChattelsGuidedValidationIssues } from './PersonalChattelsGuided.jsx';
+import {
+  isDeliberateExclusionsGuidedComplete,
+  getDeliberateExclusionsGuidedValidationIssues,
+} from './DeliberateExclusionsGuided.jsx';
 import { toast } from 'sonner';
 import {
   isSolicitorMode,
@@ -1662,6 +1667,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return typeOk && lifeOk && hasProps;
       }
 
+      if (field.type === 'personalChattelsGuided') {
+        const ok = isPersonalChattelsGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] personalChattelsGuided valid: ${ok}`);
+        return ok;
+      }
+
+      if (field.type === 'deliberateExclusionsGuided') {
+        const ok = isDeliberateExclusionsGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] deliberateExclusionsGuided valid: ${ok}`);
+        return ok;
+      }
+
       if (field.type === 'section' && field.subFields) {
         return field.subFields.every(checkField);
       }
@@ -1719,6 +1736,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             const lifeOk = fn !== '' && ln !== '';
             const props = formValues.propertyTrustPropertiesList;
             return typeOk && lifeOk && Array.isArray(props) && props.length > 0;
+          }
+          if (field.type === 'personalChattelsGuided') {
+            return isPersonalChattelsGuidedComplete(formValues);
+          }
+          if (field.type === 'deliberateExclusionsGuided') {
+            return isDeliberateExclusionsGuidedComplete(formValues);
           }
           if (field.type === 'section' && field.subFields) {
             return field.subFields.every(fieldFullyCompleted);
@@ -1842,6 +1865,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             });
           }
         }
+        return;
+      }
+
+      if (field.type === 'personalChattelsGuided') {
+        getPersonalChattelsGuidedValidationIssues(formValues).forEach((i) => {
+          issues.push({ ...i, fieldId: field.id });
+        });
+        return;
+      }
+
+      if (field.type === 'deliberateExclusionsGuided') {
+        getDeliberateExclusionsGuidedValidationIssues(formValues).forEach((i) => {
+          issues.push({ ...i, fieldId: field.id });
+        });
         return;
       }
 

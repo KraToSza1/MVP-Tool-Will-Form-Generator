@@ -836,14 +836,38 @@
                     "required": true,
                     "excludeFromWill": true,
                     "options": [
-                        { "value": "", "label": "Please select…" },
-                        { "value": "Under £50,000", "label": "Under £50,000" },
-                        { "value": "£50,000 – £325,000", "label": "£50,000 – £325,000" },
-                        { "value": "£325,001 – £650,000", "label": "£325,001 – £650,000" },
-                        { "value": "£650,001 – £1,000,000", "label": "£650,001 – £1,000,000" },
-                        { "value": "£1,000,001 – £3,000,000", "label": "£1,000,001 – £3,000,000" },
-                        { "value": "£3,000,001 – £5,000,000", "label": "£3,000,001 – £5,000,000" },
-                        { "value": "Over £5,000,000", "label": "Over £5,000,000" }
+                        {
+                            "value": "",
+                            "label": "Please select…"
+                        },
+                        {
+                            "value": "Under £50,000",
+                            "label": "Under £50,000"
+                        },
+                        {
+                            "value": "£50,000 – £325,000",
+                            "label": "£50,000 – £325,000"
+                        },
+                        {
+                            "value": "£325,001 – £650,000",
+                            "label": "£325,001 – £650,000"
+                        },
+                        {
+                            "value": "£650,001 – £1,000,000",
+                            "label": "£650,001 – £1,000,000"
+                        },
+                        {
+                            "value": "£1,000,001 – £3,000,000",
+                            "label": "£1,000,001 – £3,000,000"
+                        },
+                        {
+                            "value": "£3,000,001 – £5,000,000",
+                            "label": "£3,000,001 – £5,000,000"
+                        },
+                        {
+                            "value": "Over £5,000,000",
+                            "label": "Over £5,000,000"
+                        }
                     ],
                     "value": null
                 },
@@ -854,13 +878,34 @@
                     "required": true,
                     "excludeFromWill": true,
                     "options": [
-                        { "value": "", "label": "Please select…" },
-                        { "value": "None", "label": "None" },
-                        { "value": "Under £50,000", "label": "Under £50,000" },
-                        { "value": "£50,001 – £325,000", "label": "£50,001 – £325,000" },
-                        { "value": "£325,001 – £650,000", "label": "£325,001 – £650,000" },
-                        { "value": "£650,001 – £1,000,000", "label": "£650,001 – £1,000,000" },
-                        { "value": "Over £1,000,000", "label": "Over £1,000,000" }
+                        {
+                            "value": "",
+                            "label": "Please select…"
+                        },
+                        {
+                            "value": "None",
+                            "label": "None"
+                        },
+                        {
+                            "value": "Under £50,000",
+                            "label": "Under £50,000"
+                        },
+                        {
+                            "value": "£50,001 – £325,000",
+                            "label": "£50,001 – £325,000"
+                        },
+                        {
+                            "value": "£325,001 – £650,000",
+                            "label": "£325,001 – £650,000"
+                        },
+                        {
+                            "value": "£650,001 – £1,000,000",
+                            "label": "£650,001 – £1,000,000"
+                        },
+                        {
+                            "value": "Over £1,000,000",
+                            "label": "Over £1,000,000"
+                        }
                     ],
                     "value": null
                 },
@@ -871,8 +916,14 @@
                     "required": false,
                     "excludeFromWill": true,
                     "options": [
-                        { "value": "Yes", "label": "Yes" },
-                        { "value": "No", "label": "No" }
+                        {
+                            "value": "Yes",
+                            "label": "Yes"
+                        },
+                        {
+                            "value": "No",
+                            "label": "No"
+                        }
                     ],
                     "value": null
                 },
@@ -883,8 +934,14 @@
                     "required": false,
                     "excludeFromWill": true,
                     "options": [
-                        { "value": "Yes", "label": "Yes" },
-                        { "value": "No", "label": "No" }
+                        {
+                            "value": "Yes",
+                            "label": "Yes"
+                        },
+                        {
+                            "value": "No",
+                            "label": "No"
+                        }
                     ],
                     "value": null
                 }
@@ -2157,145 +2214,10 @@
             "formSection": "Personal Chattels",
             "fields": [
                 {
-                    "id": "unspecifiedChattelsAction",
-                    "type": "radio",
-                    "label": "What should happen to personal possessions not specified by this Will?",
-                    "options": [
-                        {
-                            "value": "SameAsResidue",
-                            "label": "Pass on same terms as residue",
-                            "willClauseText": "I direct that all my personal possessions not otherwise specifically given by this Will or any Codicil to it shall be distributed upon the same terms as my Residuary Estate."
-                        },
-                        {
-                            "value": "SpecificRecipient",
-                            "label": "Pass to specific recipient",
-                            "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my {{field:chattelRecipientsSection:fullDetails}}, absolutely and beneficially."
-                        },
-                        {
-                            "value": "DistributedByExecutors",
-                            "label": "Distributed by Executors",
-                            "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to my Executors, with the request (but without creating any binding obligation) that they distribute these items in accordance with any wishes I may express to them during my lifetime or in a written memorandum left by me."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "chattelRecipientsSection",
-                    "type": "section",
-                    "label": "Who should receive the remaining personal possessions?",
-                    "conditions": [
-                        {
-                            "field": "unspecifiedChattelsAction",
-                            "operator": "eq",
-                            "value": "SpecificRecipient"
-                        }
-                    ],
-                    "subFields": [
-                        {
-                            "id": "chattelRecipientStatusDisplay",
-                            "type": "display",
-                            "text": "No recipient has been specified."
-                        },
-                        {
-                            "id": "addChattelRecipientButton",
-                            "type": "button",
-                            "label": "Add Recipient",
-                            "action": "openAddForm"
-                        },
-                        {
-                            "id": "chattelRecipientData",
-                            "type": "hidden",
-                            "value": null
-                        }
-                    ]
-                },
-                {
-                    "id": "chattelsInheritanceTax",
-                    "type": "radio",
-                    "label": "Estate Tax / Death Duties",
-                    "options": [
-                        {
-                            "value": "PaidByEstate",
-                            "label": "IHT to be paid by the estate",
-                            "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid from my Residuary Estate so that the recipients receive these items free of tax."
-                        },
-                        {
-                            "value": "PaidByRecipient",
-                            "label": "IHT to be paid by the recipient",
-                            "willClauseText": "Any Inheritance Tax arising from the gifts of my personal possessions shall be paid by the respective recipients of those items."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "produceMemorandum",
-                    "type": "radio",
-                    "label": "Would you like to produce a memorandum of wishes for low value gifts?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I may leave a separate memorandum of wishes concerning the distribution of certain personal items. While I request my Executors to consider these wishes, I acknowledge that such memorandum shall not be legally binding upon them."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "personalChattelsGift",
-                    "type": "radio",
-                    "label": "Give personal chattels to",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No specific gift"
-                        },
-                        {
-                            "value": "ResidueIncluded",
-                            "label": "Include with residuary estate"
-                        },
-                        {
-                            "value": "Beneficiary",
-                            "label": "To specific beneficiary",
-                            "willClauseText": "I give all my personal possessions not otherwise specifically given by this Will or any Codicil to it to {{field:chattelsGiftBeneficiarySection:fullDetails}}, absolutely and beneficially."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "chattelsGiftBeneficiaryName",
-                    "type": "text",
-                    "label": "Beneficiary name",
-                    "placeholder": "Full name of the beneficiary",
-                    "value": "",
-                    "required": true,
-                    "conditions": [
-                        {
-                            "field": "personalChattelsGift",
-                            "operator": "eq",
-                            "value": "Beneficiary"
-                        }
-                    ]
-                },
-                {
-                    "id": "forgiveDebt",
-                    "type": "radio",
-                    "label": "Would the Testator like to forgive any debts?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I hereby release and forgive my {{field:debtsReleasedSection:fullDetails}} from any debts owed to me at the date of my death. Evidence of such debts may be found among my papers or financial records."
-                        }
-                    ],
-                    "value": null
+                    "id": "personalChattelsGuided",
+                    "type": "personalChattelsGuided",
+                    "label": "",
+                    "excludeFromWill": true
                 }
             ]
         },
@@ -2303,88 +2225,10 @@
             "formSection": "Deliberate Exclusions",
             "fields": [
                 {
-                    "id": "deliberatelyExcludingAnyone",
-                    "type": "radio",
-                    "label": "Is the Testator deliberately excluding any person from this Will who may claim against the estate or object to the terms of the will?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I have deliberately made no provision in this Will for my {{field:excludedPersonSection:fullDetails}}. This decision is intentional and has been made after careful consideration. I have communicated my reasons separately to my Executors."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "excludedPersonsSection",
-                    "type": "section",
-                    "label": "Who is the Testator excluding?",
-                    "infoText": "Warning: many specialists believe an exclusion clause can provoke a claim that might not otherwise have been made. If used we recommend the Testator writes a side letter to the Executors, explaining their reasons, that could be used in evidence if necessary.",
-                    "conditions": [
-                        {
-                            "field": "deliberatelyExcludingAnyone",
-                            "operator": "eq",
-                            "value": "Yes"
-                        }
-                    ],
-                    "subFields": [
-                        {
-                            "id": "excludedPersonStatusDisplay",
-                            "type": "display",
-                            "text": "No excluded person has been specified."
-                        },
-                        {
-                            "id": "addExcludedPersonButton",
-                            "type": "button",
-                            "label": "Add Excluded Person",
-                            "action": "openAddForm"
-                        },
-                        {
-                            "id": "excludedPersonData",
-                            "type": "hidden",
-                            "value": null
-                        }
-                    ]
-                },
-                {
-                    "id": "spouseBenefitOnDivorce",
-                    "type": "radio",
-                    "label": "Does the Testator wish their spouse to benefit from this Will even if divorce / annulment takes place?",
-                    "infoText": "Use of this clause should be carefully considered as not all divorces are amicable.\n\nSelecting yes to this question will explicitly exclude Section 18a of the Wills Act 1837.",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "For the avoidance of doubt, I direct that Section 18A of the Wills Act 1837 shall not apply to this Will. Any gift to my spouse/civil partner shall take effect notwithstanding any subsequent divorce, dissolution, or annulment of our marriage or civil partnership."
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "stopGiftToChildrenOnFail",
-                    "type": "radio",
-                    "label": "Should any gifts to the Testator's children be stopped from automatically passing to their own children, should the gift fail?",
-                    "infoText": "Selecting yes to this question will explicitly exclude Section 33 of the Wills Act 1837.",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "I direct that Section 33 of the Wills Act 1837 (concerning gifts to children who die before the testator) shall not apply to any gift in this Will."
-                        }
-                    ],
-                    "value": null
+                    "id": "deliberateExclusionsGuided",
+                    "type": "deliberateExclusionsGuided",
+                    "label": "",
+                    "excludeFromWill": true
                 }
             ]
         },

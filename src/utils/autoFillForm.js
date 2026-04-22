@@ -571,8 +571,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationship: 'Friend',
     }),
   ];
-  dummyData.excludedPersonData = [
-    row({
+  {
+    const exD = row({
       title: 'Mr',
       firstName: 'Evan',
       lastName: 'Excluded',
@@ -590,8 +590,10 @@ function applyRichPersonDemoOverrides(dummyData) {
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Former partner',
-    }),
-  ];
+    });
+    exD.exclusionReason = 'No contact for several years (demo autofill)';
+    dummyData.excludedPersonData = [exD];
+  }
   dummyData.chattelRecipientData = [
     row({
       title: 'Ms',
@@ -611,8 +613,8 @@ function applyRichPersonDemoOverrides(dummyData) {
       relationship: 'Friend',
     }),
   ];
-  dummyData.debtorData = [
-    row({
+  {
+    const debtRow = row({
       title: 'Mr',
       firstName: 'Darren',
       lastName: 'Debtor',
@@ -628,8 +630,29 @@ function applyRichPersonDemoOverrides(dummyData) {
       nationalityCountry: 'United Kingdom',
       countryOfResidence: 'United Kingdom',
       relationship: 'Former colleague',
-    }),
-  ];
+    });
+    debtRow._debtId = 'demo-pch-debt-1';
+    debtRow.debtAmount = '£2,500';
+    debtRow.debtNotes = 'Informal loan (demo autofill)';
+    dummyData.debtorData = [debtRow];
+  }
+
+  // Personal chattels guided UI + clauses — always set after chattel/debt person rows
+  dummyData.unspecifiedChattelsAction = 'SpecificRecipient';
+  dummyData.chattelGuidedRecipientName = 'Chloe Chattels';
+  dummyData.chattelGuidedRecipientRelationship = 'Friend';
+  dummyData.chattelGuidedPick = '';
+  dummyData.chattelsInheritanceTax = 'PaidByEstate';
+  dummyData.produceMemorandum = 'Yes';
+  dummyData.personalChattelsGift = 'Beneficiary';
+  dummyData.chattelsGiftBeneficiaryName = 'Chloe Chattels';
+  dummyData.chattelsGiftBeneficiaryRelationship = 'Friend';
+  dummyData.chattelGiftPick = '';
+  dummyData.forgiveDebt = 'Yes';
+  dummyData.relieveDebts = 'Yes';
+  dummyData.deliberatelyExcludingAnyone = 'Yes';
+  dummyData.spouseBenefitOnDivorce = 'No';
+  dummyData.stopGiftToChildrenOnFail = 'No';
   dummyData.signingOnBehalfData = [
     row({
       title: 'Ms',
@@ -905,6 +928,13 @@ export const generateDummyFormData = (formData) => {
     estateBusinessInterests: ESTATE_DEMO.businessInterests,
     partnerTitle: 'Mrs',
     partnerGender: 'Female',
+    /** Personal chattels (guided) — same as personalChattelsGuided + applyRichPersonDemoOverrides */
+    chattelGuidedRecipientName: 'Chloe Chattels',
+    chattelGuidedRecipientRelationship: 'Friend',
+    chattelGuidedPick: '',
+    chattelsGiftBeneficiaryName: 'Chloe Chattels',
+    chattelsGiftBeneficiaryRelationship: 'Friend',
+    chattelGiftPick: '',
   };
 
   // Get value for a field - used in recursive processing
@@ -1043,6 +1073,18 @@ export const generateDummyFormData = (formData) => {
     }
   };
 
+  /** Rich person rows for processFields (e.g. personalChattelsGuided). Matches applyRichPersonDemoOverrides / PersonRecord shape. */
+  let autofillPersonSeq = 0;
+  const row = (fields) => ({
+    middleName: '',
+    gender: 'Male',
+    dateOfBirth: '15/06/1975',
+    occupation: 'Professional (demo autofill)',
+    relationship: 'Friend',
+    ...fields,
+    _personRecordId: `autofill-demo-${++autofillPersonSeq}`,
+  });
+
   // Process fields recursively (including section subFields)
   const processFields = (fields, sectionName = '') => {
     if (!fields || !Array.isArray(fields)) {
@@ -1175,6 +1217,90 @@ export const generateDummyFormData = (formData) => {
         });
         dummyData.propertyTrustClientSummary = `${summaryBase}${DEMO_TEXT_TAG}`;
         processedCount += 6;
+        return;
+      }
+      if (field.type === 'personalChattelsGuided') {
+        dummyData.unspecifiedChattelsAction = 'SpecificRecipient';
+        dummyData.chattelGuidedRecipientName = 'Chloe Chattels';
+        dummyData.chattelGuidedRecipientRelationship = 'Friend';
+        dummyData.chattelGuidedPick = '';
+        dummyData.chattelRecipientData = [
+          row({
+            title: 'Ms',
+            firstName: 'Chloe',
+            lastName: 'Chattels',
+            gender: 'Female',
+            dateOfBirth: '05/05/1985',
+            mobile: '07700111141',
+            email: 'chloe.chattels.demo@example.com',
+            address1: '12 Chattels Close',
+            address2: 'Richmond',
+            address3: 'Surrey',
+            postcode: 'TW9 1CH',
+            occupation: 'Designer (demo autofill)',
+            nationalityCountry: 'United Kingdom',
+            countryOfResidence: 'United Kingdom',
+            relationship: 'Friend',
+          }),
+        ];
+        dummyData.chattelsInheritanceTax = 'PaidByEstate';
+        dummyData.produceMemorandum = 'Yes';
+        dummyData.personalChattelsGift = 'Beneficiary';
+        dummyData.chattelsGiftBeneficiaryName = 'Chloe Chattels';
+        dummyData.chattelsGiftBeneficiaryRelationship = 'Friend';
+        dummyData.chattelGiftPick = '';
+        dummyData.forgiveDebt = 'Yes';
+        dummyData.relieveDebts = 'Yes';
+        const debt = row({
+          title: 'Mr',
+          firstName: 'Darren',
+          lastName: 'Debtor',
+          gender: 'Male',
+          dateOfBirth: '14/08/1974',
+          mobile: '07700111142',
+          email: 'darren.debtor.demo@example.com',
+          address1: '13 Debtor Street',
+          address2: 'Wimbledon',
+          address3: 'London',
+          postcode: 'SW19 1DB',
+          occupation: 'Contractor (demo autofill)',
+          nationalityCountry: 'United Kingdom',
+          countryOfResidence: 'United Kingdom',
+          relationship: 'Former colleague',
+        });
+        debt._debtId = 'demo-pch-debt-1';
+        debt.debtAmount = '£2,500';
+        debt.debtNotes = 'Informal loan (demo autofill)';
+        dummyData.debtorData = [debt];
+        processedCount += 12;
+        return;
+      }
+      if (field.type === 'deliberateExclusionsGuided') {
+        const ex = row({
+          title: 'Mr',
+          firstName: 'Evan',
+          lastName: 'Excluded',
+          middleName: '',
+          knownAs: '',
+          gender: 'Male',
+          dateOfBirth: '25/11/1988',
+          address1: '99 Excluded Lane',
+          address2: 'Tooting',
+          address3: 'London',
+          postcode: 'SW17 9EX',
+          mobile: '07700111140',
+          email: 'evan.excluded.demo@example.com',
+          occupation: 'Consultant (demo autofill)',
+          nationalityCountry: 'United Kingdom',
+          countryOfResidence: 'United Kingdom',
+          relationship: 'Former partner',
+        });
+        ex.exclusionReason = 'No contact for several years (demo autofill)';
+        dummyData.deliberatelyExcludingAnyone = 'Yes';
+        dummyData.excludedPersonData = [ex];
+        dummyData.spouseBenefitOnDivorce = 'No';
+        dummyData.stopGiftToChildrenOnFail = 'No';
+        processedCount += 4;
         return;
       }
       if (field.type === 'display' || field.type === 'button') {
@@ -1348,7 +1474,7 @@ export const generateDummyFormData = (formData) => {
     nationalityCountry: 'United Kingdom',
     countryOfResidence: 'United Kingdom',
 
-    chattelsGiftBeneficiaryName: DEMO.chattelRecipient.split(' — ')[0],
+    chattelsGiftBeneficiaryName: 'Chloe Chattels',
 
     address1: DEMO.testator.address1,
     address2: DEMO.testator.address2,
@@ -1457,11 +1583,20 @@ export const generateDummyFormData = (formData) => {
   console.log(`[AUTOFILL GENERATE] ✅ Applied ${unlockFieldsApplied} unlock fields`);
 
   // FINAL PASS: Collect every fillable field ID from the entire form and fill any we missed
+  const GUIDED_SHELL_FIELD_TYPES = new Set([
+    'propertyGiftsGuided',
+    'propertyTrustGuided',
+    'personalChattelsGuided',
+    'deliberateExclusionsGuided',
+    'businessInterestsGuided',
+    'guardianFlow',
+  ]);
   const collectAllFieldIds = (fields, ids = new Set()) => {
     if (!fields || !Array.isArray(fields)) return ids;
     fields.forEach((f) => {
       if (!f?.id) return;
       if (['display', 'button', 'hidden', 'signature'].includes(f.type)) return;
+      if (GUIDED_SHELL_FIELD_TYPES.has(f.type)) return;
       ids.add(f.id);
       if (f.type === 'section' && f.subFields) collectAllFieldIds(f.subFields, ids);
     });
@@ -1523,6 +1658,7 @@ export const generateDummyFormData = (formData) => {
     note: 'Estate bands should qualify Aristone recommendation on Executors step. Primary executors: rich rows + UK DOB. David ~22 (1824 — age flow radios); Laura 25+ (no age-choice block). Open Trustees/Executors to see ExecutorIndividualAgeFlow.',
   });
 
+  const debt0 = Array.isArray(dummyData.debtorData) ? dummyData.debtorData[0] : null;
   console.log('[AUTOFILL GENERATE] 📊 Final summary:', {
     totalFields: Object.keys(dummyData).length,
     contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
@@ -1532,6 +1668,16 @@ export const generateDummyFormData = (formData) => {
     howResidueDistributed: dummyData.howResidueDistributed,
     appointSeparateTrusteesFLIT: dummyData.appointSeparateTrusteesFLIT,
     samplePersonKeys: dummyData.guardianData?.[0] ? Object.keys(dummyData.guardianData[0]).filter((k) => !k.startsWith('_')).slice(0, 8) : [],
+    personalChattelsGuidedKeys: {
+      unspecifiedChattelsAction: dummyData.unspecifiedChattelsAction,
+      chattelGuidedRecipientName: dummyData.chattelGuidedRecipientName,
+      personalChattelsGift: dummyData.personalChattelsGift,
+      chattelsGiftBeneficiaryName: dummyData.chattelsGiftBeneficiaryName,
+      forgiveDebt: dummyData.forgiveDebt,
+      debtorDataDebtFields: debt0
+        ? { _debtId: debt0._debtId, debtAmount: debt0.debtAmount, hasNotes: !!debt0.debtNotes }
+        : null,
+    },
   });
   console.log('[AUTOFILL GENERATE] ========== GENERATION COMPLETE ==========');
 
