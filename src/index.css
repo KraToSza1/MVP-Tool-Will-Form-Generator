@@ -488,29 +488,6 @@ html.dark-theme .questionnaire-modal-panel button.border-slate-300:hover {
   background-color: rgba(51, 65, 85, 0.6) !important;
 }
 
-/* Identity verification block: readable in dark theme */
-html.dark-theme .id-verification-block,
-html.dark-theme .bg-amber-50\/50 {
-  background-color: rgba(30, 41, 59, 0.92) !important;
-  border-color: rgba(245, 158, 11, 0.4) !important;
-}
-html.dark-theme .id-verification-block .text-amber-800 {
-  color: #fcd34d !important;
-}
-html.dark-theme .upload-slot {
-  background-color: rgba(15, 23, 42, 0.85) !important;
-  border-color: rgba(99, 102, 241, 0.35) !important;
-}
-html.dark-theme .upload-slot .text-gray-500 {
-  color: #94a3b8 !important;
-}
-html.dark-theme .upload-slot .text-green-600 {
-  color: #86efac !important;
-}
-html.dark-theme .upload-slot .text-red-600 {
-  color: #fca5a5 !important;
-}
-
 /* Success / info summary banners (partner + executor cards) — dark theme */
 html.dark-theme .bg-green-100 {
   background-color: rgba(6, 78, 59, 0.5) !important;
