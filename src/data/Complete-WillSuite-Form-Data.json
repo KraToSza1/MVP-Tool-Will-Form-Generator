@@ -2734,6 +2734,12 @@
             "formSection": "Estate Administration/Residue",
             "fields": [
                 {
+                    "id": "estateResidueGuided",
+                    "type": "estateResidueGuided",
+                    "label": "",
+                    "excludeFromWill": true
+                },
+                {
                     "id": "howResidueDistributed",
                     "type": "radio",
                     "label": "How shall residue be distributed?",
@@ -2750,7 +2756,8 @@
                             "willClauseText": "My Trustees shall hold my Residuary Estate upon trust to pay the income thereof to {{field:flitLifeTenant:value}} during their lifetime (subject to the power to revoke/reduce below) and after their death for {{field:flitFinalBeneficiaries:value}}"
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "residualGiftsSection",
@@ -2772,7 +2779,8 @@
                             "rows": 5,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "powerToRevokeLifeInterest",
@@ -2797,7 +2805,8 @@
                             "operator": "eq",
                             "value": "IntoFLIT"
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "appointSeparateTrusteesFLIT",
@@ -2821,7 +2830,8 @@
                             "operator": "eq",
                             "value": "IntoFLIT"
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "lifeTenantSectionFLIT",
@@ -2843,7 +2853,8 @@
                             "rows": 3,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "beneficiariesSectionFLIT",
@@ -2865,7 +2876,8 @@
                             "rows": 3,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "trustEndDistributionSectionFLIT",
@@ -2887,7 +2899,8 @@
                             "rows": 3,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "specifyFurtherResidualGiftsOnFail",
@@ -2904,7 +2917,8 @@
                             "willClauseText": "If any gift of my Residuary Estate should fail, I give the failed share to [Further Residual Beneficiary List and Shares]."
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "furtherResidualGiftsSection",
@@ -2926,7 +2940,8 @@
                             "rows": 3,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "failedResiduePassProportionately",
@@ -2943,7 +2958,8 @@
                             "willClauseText": "If any share of my Residuary Estate should fail, that share shall be added proportionately to the other shares of my Residuary Estate."
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "give10PercentToCharity",
@@ -2961,7 +2977,8 @@
                             "willClauseText": "I give [10% / minimum amount specified] of my net estate [conditionally if IHT due] to [Charity/Charities List]..."
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "charityGiftOnlyIfIHTDue",
@@ -2985,7 +3002,8 @@
                             "willClauseText": "(This gift shall only take effect if Inheritance Tax would otherwise be payable on my estate)"
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "splitCharitableGift",
@@ -3008,7 +3026,8 @@
                             "label": "Yes"
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "charityBenefitSection",
@@ -3030,7 +3049,8 @@
                             "rows": 3,
                             "value": ""
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "minimumCharityAmount",
@@ -3053,7 +3073,8 @@
                             "label": "Yes"
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "minimumCharityAmountValue",
@@ -3080,7 +3101,8 @@
                                 }
                             ]
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "howIHTDealtWithSplitting",
@@ -3102,7 +3124,8 @@
                             "willClauseText": "Inheritance Tax payable on my Residuary Estate shall be borne by the non-exempt beneficiaries' shares (Ratcliffe calculation)."
                         }
                     ],
-                    "value": null
+                    "value": null,
+                    "_hiddenFromClient": true
                 }
             ]
         },

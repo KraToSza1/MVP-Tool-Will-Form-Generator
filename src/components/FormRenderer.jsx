@@ -72,6 +72,10 @@ import {
   isAdministrativeProvisionsGuidedComplete,
   getAdministrativeProvisionsGuidedValidationIssues,
 } from './AdministrativeProvisionsGuided.jsx';
+import {
+  isEstateResidueGuidedComplete,
+  getEstateResidueGuidedValidationIssues,
+} from '../utils/estateResidueGuidedShared.js';
 import { toast } from 'sonner';
 import {
   isSolicitorMode,
@@ -132,6 +136,31 @@ function stripWillClauseTextForUi(field) {
     next.subFields = next.subFields.map(stripWillClauseTextForUi);
   }
   return next;
+}
+
+/**
+ * Other / Administrative: render and validate only the guided shell field so legacy duplicate
+ * rows (pets, RSPCA, debts, etc.) never mount when the section JSON still lists them.
+ */
+function getSectionRenderFields(section) {
+  if (!section?.fields?.length) return section?.fields || [];
+  if (section.formSection === 'Other Provisions') {
+    const g = section.fields.find(
+      (f) => f.id === 'otherProvisionsGuided' || f.type === 'otherProvisionsGuided'
+    );
+    if (g) return [g];
+  }
+  if (section.formSection === 'Administrative Provisions') {
+    const g = section.fields.find(
+      (f) => f.id === 'administrativeProvisionsGuided' || f.type === 'administrativeProvisionsGuided'
+    );
+    if (g) return [g];
+  }
+  if (section.formSection === 'Estate Administration/Residue') {
+    const g = section.fields.find((f) => f.id === 'estateResidueGuided' || f.type === 'estateResidueGuided');
+    if (g) return [g];
+  }
+  return section.fields;
 }
 
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
@@ -302,7 +331,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
   latestPersistRef.current = { formValues, currentIndex };
 
-  // Testamentary Capacity: solicitors only. Hidden sections/fields: solicitors see everything, clients don't.
+  // Testamentary Capacity: whole section is solicitors-only. Field-level _hiddenFromClient: strip everywhere
+  // (guided shells replace legacy questions; values still live in formValues + buildClauses / PDF).
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
     return formData.formSections
@@ -312,7 +342,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return true;
       })
       .map((s) => {
-        if (solicitorMode || !Array.isArray(s.fields)) return s;
+        if (!Array.isArray(s.fields)) return s;
         let changed = false;
         const visibleFields = s.fields
           .filter((f) => { if (f._hiddenFromClient) { changed = true; return false; } return true; })
@@ -397,6 +427,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [visibleSections, currentIndex]);
 
   const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
+  /** Guided Other Provisions: first real heading is inside OtherProvisionsGuided — hide duplicate page chrome for this step. */
+  const hideOtherProvisionsTopChrome = currentSection?.formSection === 'Other Provisions';
+  const currentSectionRenderFields = useMemo(
+    () => getSectionRenderFields(currentSection),
+    [currentSection]
+  );
   const uploadedIdDocumentCount = useMemo(() => {
     const identityVerification = formValues?.identityVerification;
     if (!identityVerification || typeof identityVerification !== 'object') return 0;
@@ -1623,7 +1659,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const allRequiredFilled = useMemo(() => {
     DEBUG_LOGS&&console.log('[VALIDATION CHECK] ========== VALIDATING SECTION ==========');
     DEBUG_LOGS&&console.log('[VALIDATION CHECK] Current section:', currentSection?.formSection);
-    DEBUG_LOGS&&console.log('[VALIDATION CHECK] Total fields to check:', currentSection?.fields?.length);
+    DEBUG_LOGS&&console.log('[VALIDATION CHECK] Total fields to check:', currentSectionRenderFields?.length);
 
     const checkField = (field) => {
       DEBUG_LOGS&&console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
@@ -1699,6 +1735,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return ok;
       }
 
+      if (field.type === 'estateResidueGuided') {
+        const ok = isEstateResidueGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] estateResidueGuided valid: ${ok}`);
+        return ok;
+      }
+
       if (field.type === 'section' && field.subFields) {
         return field.subFields.every(checkField);
       }
@@ -1723,11 +1765,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return true;
     };
 
-    const result = currentSection.fields.every(checkField);
+    const result = currentSectionRenderFields.every(checkField);
 
     if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
-  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode, isDev]);
+  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, solicitorMode, isDev]);
 
   const isFormFullyCompleted = () => {
     try {
@@ -1769,6 +1811,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           if (field.type === 'administrativeProvisionsGuided') {
             return isAdministrativeProvisionsGuidedComplete(formValues);
           }
+          if (field.type === 'estateResidueGuided') {
+            return isEstateResidueGuidedComplete(formValues);
+          }
           if (field.type === 'section' && field.subFields) {
             return field.subFields.every(fieldFullyCompleted);
           }
@@ -1782,7 +1827,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           return !!formValues[field.id];
         };
-        return section.fields.every(fieldFullyCompleted);
+        return getSectionRenderFields(section).every(fieldFullyCompleted);
       });
     } catch (error) {
       console.error('[FORM] Error checking form completion:', error);
@@ -1797,7 +1842,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     if (isDev) {
       DEBUG_LOGS&&console.log('[VALIDATION] Collecting validation issues...');
       DEBUG_LOGS&&console.log('[VALIDATION] Current section:', currentSection?.formSection);
-      DEBUG_LOGS&&console.log('[VALIDATION] Total fields in section:', currentSection?.fields?.length);
+      DEBUG_LOGS&&console.log('[VALIDATION] Total fields in section:', currentSectionRenderFields?.length);
     }
     
     const issues = [];
@@ -1922,6 +1967,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return;
       }
 
+      if (field.type === 'estateResidueGuided') {
+        getEstateResidueGuidedValidationIssues(formValues).forEach((i) => {
+          issues.push({ ...i, fieldId: field.id });
+        });
+        return;
+      }
+
       if (field.type === 'section' && field.subFields) {
         field.subFields.forEach(collectFromField);
         return;
@@ -1964,14 +2016,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
     };
 
-    currentSection.fields.forEach(collectFromField);
+    currentSectionRenderFields.forEach(collectFromField);
     
     if (isDev) {
       DEBUG_LOGS&&console.log('[VALIDATION] Total issues collected:', issues.length);
       DEBUG_LOGS&&console.log('[VALIDATION] Issues:', issues);
     }
     return issues;
-  }, [currentSection, formValues, evaluateFieldConditions, solicitorMode, isDev]);
+  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, solicitorMode, isDev]);
 
   // ---------------------------
   // Navigation Logic
@@ -3965,6 +4017,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
               ) : null}
 
+              {!hideOtherProvisionsTopChrome && (
+                <>
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 leading-tight">
                   {formData.formTitle || 'Legacy Last Will & Testament Questionnaire'}
@@ -4156,9 +4210,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   {currentSection.formSection}
                 </h2>
               </div>
+                </>
+              )}
 
               <div className="space-y-3">
-                {currentSection.fields.map((field, idx) => {
+                {currentSectionRenderFields.map((field, idx) => {
                   // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
                   if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;

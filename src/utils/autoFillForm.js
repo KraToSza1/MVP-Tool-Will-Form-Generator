@@ -887,10 +887,6 @@ export const generateDummyFormData = (formData) => {
     leavePetCareFund: 'Yes',
     personalGiftToPetCarer: 'Yes',
     relieveDebts: 'Yes',
-    includeReceiptByMinors: 'Yes',
-    includeCypresClause: 'Yes',
-    bringLifetimeGiftsIntoAccount: 'Yes',
-    specifyLifetimeLoansGifts: 'Yes',
     howResidueDistributed: 'IntoFLIT', // Changed from 'AsShares' to unlock FLIT fields
     specifyFurtherResidualGiftsOnFail: 'Yes',
     failedResiduePassProportionately: 'Yes',
@@ -918,8 +914,6 @@ export const generateDummyFormData = (formData) => {
     failedPropertyGiftPassProportionately: 'Yes',
     spouseBenefitOnDivorce: 'No',
     stopGiftToChildrenOnFail: 'Yes',
-    stepProvisionsApply: 'AllStandardSpecialInclude',
-    excludeSpecificStepProvisions: 'No',
     powerToRevokeLifeInterest: 'Yes',
     appointSeparateTrusteesFLIT: 'Yes', // Changed from 'No' to unlock separate trustees FLIT section
     gender: 'Male',
@@ -1098,6 +1092,10 @@ export const generateDummyFormData = (formData) => {
     
     fields.forEach((field) => {
       if (!field || !field.id) {
+        skippedCount++;
+        return;
+      }
+      if (field._hiddenFromClient) {
         skippedCount++;
         return;
       }
@@ -1305,30 +1303,124 @@ export const generateDummyFormData = (formData) => {
         return;
       }
       if (field.type === 'otherProvisionsGuided') {
+        /** Mariyam / Aristone — full “Other Provisions” guided path: pets + care fund + gift to carer + RSPCA + debts released (PersonRecord-shaped rows). */
         dummyData.provisionsForPets = 'Yes';
-        dummyData.petCarerData = [{ ...DEMO.petCarer, _personRecordId: 'demo-pet-carer' }];
+        dummyData.petCarerData = [
+          row({
+            title: DEMO.petCarer.title,
+            firstName: DEMO.petCarer.firstName,
+            lastName: DEMO.petCarer.lastName,
+            relationship: DEMO.petCarer.relationship,
+            address1: DEMO.petCarer.address1,
+            address2: DEMO.petCarer.address2,
+            address3: DEMO.petCarer.address3,
+            postcode: DEMO.petCarer.postcode,
+            mobile: DEMO.petCarer.mobile,
+            email: DEMO.petCarer.email,
+            dateOfBirth: DEMO.petCarer.dateOfBirth,
+            gender: DEMO.petCarer.gender,
+            middleName: '',
+            occupation: 'Retail manager (demo autofill)',
+            nationalityCountry: 'United Kingdom',
+            countryOfResidence: 'United Kingdom',
+          }),
+        ];
         dummyData.substitutePetCarer = 'Yes';
-        dummyData.substitutePetCarerData = [{ ...DEMO.petCarerSub, _personRecordId: 'demo-pet-sub' }];
+        dummyData.substitutePetCarerData = [
+          row({
+            title: DEMO.petCarerSub.title,
+            firstName: DEMO.petCarerSub.firstName,
+            lastName: DEMO.petCarerSub.lastName,
+            relationship: DEMO.petCarerSub.relationship,
+            address1: DEMO.petCarerSub.address1,
+            address2: DEMO.petCarerSub.address2,
+            address3: DEMO.petCarerSub.address3,
+            postcode: DEMO.petCarerSub.postcode,
+            mobile: DEMO.petCarerSub.mobile,
+            email: DEMO.petCarerSub.email,
+            dateOfBirth: DEMO.petCarerSub.dateOfBirth,
+            gender: DEMO.petCarerSub.gender,
+            middleName: '',
+            occupation: 'Engineer (demo autofill)',
+            nationalityCountry: 'United Kingdom',
+            countryOfResidence: 'United Kingdom',
+          }),
+        ];
         dummyData.petsCaredForByRSPCA = 'No';
         dummyData.leavePetCareFund = 'Yes';
         dummyData.amountToLeaveForPetCare = '5000';
         dummyData.petCarerGift = '5000';
         dummyData.personalGiftToPetCarer = 'Yes';
         dummyData.petCarerPersonalGift = '500';
-        processedCount += 8;
+        dummyData.relieveDebts = 'Yes';
+        dummyData.forgiveDebt = 'Yes';
+        {
+          const debt = row({
+            title: 'Mr',
+            firstName: 'Darren',
+            lastName: 'Debtor',
+            gender: 'Male',
+            dateOfBirth: '14/08/1974',
+            mobile: '07700111142',
+            email: 'darren.debtor.demo@example.com',
+            address1: '13 Debtor Street',
+            address2: 'Wimbledon',
+            address3: 'London',
+            postcode: 'SW19 1DB',
+            occupation: 'Contractor (demo autofill)',
+            nationalityCountry: 'United Kingdom',
+            countryOfResidence: 'United Kingdom',
+            relationship: 'Former colleague',
+          });
+          debt._debtId = 'opg-demo-debt-1';
+          debt.debtAmount = '£2,500';
+          debt.debtNotes = 'Informal loan noted for executors (demo autofill).';
+          dummyData.debtorData = [debt];
+        }
+        processedCount += 18;
         return;
       }
       if (field.type === 'administrativeProvisionsGuided') {
+        /** Mariyam handoff — all five questions + same strings used for will/PDF. */
         dummyData.includeReceiptByMinors = 'Yes';
         dummyData.includeCypresClause = 'Yes';
         dummyData.bringLifetimeGiftsIntoAccount = 'Yes';
         dummyData.specifyLifetimeLoansGifts = 'Yes';
-        dummyData.specifyLoansGiftsText = `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase.${DEMO_TEXT_TAG}`;
+        dummyData.specifyLoansGiftsText = `I wish my executors to be aware of a loan of £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase; not repaid. Bring into account for residue if appropriate.${DEMO_TEXT_TAG}`;
         dummyData.stepProvisionsApply = 'AllStandardSpecialInclude';
         dummyData.excludeSpecificStepProvisions = 'No';
         dummyData.stepProvisionToExcludeOne = '';
         dummyData.stepProvisionsToExcludeMultiple = '';
-        processedCount += 7;
+        processedCount += 9;
+        return;
+      }
+      if (field.type === 'estateResidueGuided') {
+        /** FLIT path: matches unlock workflow + IHT default Ratcliffe. */
+        dummyData.howResidueDistributed = 'IntoFLIT';
+        dummyData.powerToRevokeLifeInterest = 'Yes';
+        dummyData.appointSeparateTrusteesFLIT = 'No';
+        dummyData.separateTrusteeData = [];
+        dummyData.flitLifeTenantName = `${DEMO.partner.firstName} ${DEMO.partner.lastName}`.trim();
+        dummyData.flitLifeTenantRel = 'spouse / civil partner (demo autofill)';
+        dummyData.lifeTenantDetails = `${dummyData.flitLifeTenantName} (${dummyData.flitLifeTenantRel})`;
+        dummyData.beneficiariesDetails = `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName} in equal shares (demo).`;
+        dummyData.flitTrustEndMode = 'to-beneficiaries';
+        dummyData._flitTrustEndMode = 'to-beneficiaries';
+        dummyData.trustEndDistributionDetails =
+          'Equally to the trust beneficiaries named above (or as my solicitor shall confirm in the will).';
+        dummyData.residualGiftsDetails = '';
+        dummyData.specifyFurtherResidualGiftsOnFail = 'No';
+        dummyData.furtherResidualGiftsDetails = '';
+        dummyData.furtherResidualFallbackRows = [];
+        dummyData.failedResiduePassProportionately = '';
+        dummyData.give10PercentToCharity = 'No';
+        dummyData.charityGiftOnlyIfIHTDue = '';
+        dummyData.splitCharitableGift = '';
+        dummyData.charityBenefitDetails = '';
+        dummyData.minimumCharityAmount = '';
+        dummyData.minimumCharityAmountValue = '';
+        dummyData.howIHTDealtWithSplitting = 'BeforeTax';
+        processedCount += 18;
         return;
       }
       if (field.type === 'display' || field.type === 'button') {
@@ -1548,13 +1640,7 @@ export const generateDummyFormData = (formData) => {
     propertyTrustTerms: 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.',
     bprTrustDetails: 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.',
     bprTrustTerms: 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.',
-    furtherResidualGiftsDetails: `If any of the above gifts fail, I give the failed share equally to my siblings ${DEMO.siblings.brother.firstName} ${DEMO.siblings.brother.lastName} and ${DEMO.siblings.sister.firstName} ${DEMO.siblings.sister.lastName}.${DEMO_TEXT_TAG}`,
-    residualGiftsDetails: `I give 50% of my residuary estate to ${DEMO.partner.fullName} absolutely, 25% to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName}, 25% to ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
-    specifyLoansGiftsText: `I loaned £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase.${DEMO_TEXT_TAG}`,
-    charityBenefitDetails: 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)',
-    lifeTenantDetails: `My wife ${DEMO.partner.fullName}`,
-    beneficiariesDetails: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
-    trustEndDistributionDetails: `Upon the death of the life tenant, the trust passes equally to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} and ${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}.${DEMO_TEXT_TAG}`,
+    /** Residuary / FLIT / charity gift details — owned by `estateResidueGuided` autofill when that block runs. */
     funeralWishes: 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.',
     otherFuneralRequirements: 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.',
     physicalHealthDescription: 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.',
@@ -1576,8 +1662,6 @@ export const generateDummyFormData = (formData) => {
     willExecutionDate: new Date().toISOString().split('T')[0],
     nativeLanguage: 'English',
     foreignWillLocation: 'France',
-    stepProvisionToExcludeOne: '1',
-    stepProvisionsToExcludeMultiple: '1, 2 & 3',
     executorSpecifyAge: 25,
     aristoneProfessionalFeesAck: [...ESTATE_DEMO.feesAck],
     estateApproxValue: ESTATE_DEMO.approxValue,
@@ -1621,6 +1705,7 @@ export const generateDummyFormData = (formData) => {
     'deliberateExclusionsGuided',
     'otherProvisionsGuided',
     'administrativeProvisionsGuided',
+    'estateResidueGuided',
     'businessInterestsGuided',
     'guardianFlow',
   ]);
@@ -1628,6 +1713,7 @@ export const generateDummyFormData = (formData) => {
     if (!fields || !Array.isArray(fields)) return ids;
     fields.forEach((f) => {
       if (!f?.id) return;
+      if (f._hiddenFromClient) return;
       if (['display', 'button', 'hidden', 'signature'].includes(f.type)) return;
       if (GUIDED_SHELL_FIELD_TYPES.has(f.type)) return;
       ids.add(f.id);
@@ -1636,7 +1722,10 @@ export const generateDummyFormData = (formData) => {
     return ids;
   };
   const allIds = new Set();
-  formData.formSections?.forEach((s) => collectAllFieldIds(s.fields, allIds));
+  formData.formSections?.forEach((s) => {
+    if (s?._hiddenFromClient) return;
+    collectAllFieldIds(s.fields, allIds);
+  });
   const missingIds = [...allIds].filter((id) => dummyData[id] === undefined || dummyData[id] === null || dummyData[id] === '');
   console.log(`[AUTOFILL GENERATE] 🔍 Found ${missingIds.length} missing field IDs, filling with defaults...`);
   missingIds.forEach((id) => {

@@ -62,6 +62,7 @@ import PersonalChattelsGuided from './PersonalChattelsGuided.jsx';
 import DeliberateExclusionsGuided from './DeliberateExclusionsGuided.jsx';
 import OtherProvisionsGuided from './OtherProvisionsGuided.jsx';
 import AdministrativeProvisionsGuided from './AdministrativeProvisionsGuided.jsx';
+import EstateResidueGuided from './EstateResidueGuided.jsx';
 import {
   MonetaryGiftsLeaveQuestion,
   MonetaryGiftsListPanel,
@@ -336,6 +337,14 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     return (
       <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate" data-field-id={field.id}>
         <AdministrativeProvisionsGuided field={field} formValues={formValues} setFormValues={setFormValues} />
+      </div>
+    );
+  }
+
+  if (field.type === 'estateResidueGuided') {
+    return (
+      <div className="min-w-0 max-w-full overflow-x-hidden relative z-[1] isolate" data-field-id={field.id}>
+        <EstateResidueGuided field={field} formValues={formValues} setFormValues={setFormValues} />
       </div>
     );
   }
@@ -1709,7 +1718,7 @@ export default React.memo(FieldRenderer, (prevProps, nextProps) => {
   if (prevProps.field.id !== nextProps.field.id) return false;
   if (prevProps.field.type !== nextProps.field.type) return false;
   // Guardian embedded flow uses many slices of formValues + fresh inline callbacks; never skip updates.
-  if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided' || prevProps.field.type === 'propertyGiftsGuided' || prevProps.field.type === 'propertyTrustGuided' || prevProps.field.type === 'personalChattelsGuided' || prevProps.field.type === 'deliberateExclusionsGuided' || prevProps.field.type === 'otherProvisionsGuided' || prevProps.field.type === 'administrativeProvisionsGuided') {
+  if (prevProps.field.type === 'guardianFlow' || prevProps.field.type === 'businessInterestsGuided' || prevProps.field.type === 'propertyGiftsGuided' || prevProps.field.type === 'propertyTrustGuided' || prevProps.field.type === 'personalChattelsGuided' || prevProps.field.type === 'deliberateExclusionsGuided' || prevProps.field.type === 'otherProvisionsGuided' || prevProps.field.type === 'administrativeProvisionsGuided' || prevProps.field.type === 'estateResidueGuided') {
     return false;
   }
   if (

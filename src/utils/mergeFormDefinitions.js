@@ -49,6 +49,62 @@ function pinSpecificGiftsFieldsFromBundle(merged, bundle) {
 }
 
 /**
+ * Administrative Provisions: remote copies of the same field ids can omit
+ * _hiddenFromClient (older questionnaire saves). Reconcile with the
+ * bundle so client-hidden legacy rows match the current factory JSON; custom
+ * fields are preserved.
+ */
+function pinAdministrativeProvisionsFromBundle(merged, bundle) {
+  const bundleSec = bundle.formSections?.find((s) => s.formSection === 'Administrative Provisions');
+  const mergedIdx = merged.formSections?.findIndex((s) => s.formSection === 'Administrative Provisions');
+  if (!bundleSec?.fields || mergedIdx < 0) return;
+
+  const bundleById = new Map(
+    (bundleSec.fields || []).filter((f) => f.id).map((f) => [f.id, f])
+  );
+  const mergedSec = merged.formSections[mergedIdx];
+  const existing = mergedSec.fields || [];
+  const out = existing.map((f) => {
+    if (!f?.id || String(f.id).startsWith('custom_')) return f;
+    const b = bundleById.get(f.id);
+    if (b) return JSON.parse(JSON.stringify(b));
+    return f;
+  });
+  const got = new Set(out.map((f) => f.id).filter(Boolean));
+  for (const b of bundleSec.fields) {
+    if (b.id && !got.has(b.id)) {
+      out.push(JSON.parse(JSON.stringify(b)));
+    }
+  }
+  mergedSec.fields = out;
+}
+
+function pinEstateResidueFromBundle(merged, bundle) {
+  const bundleSec = bundle.formSections?.find((s) => s.formSection === 'Estate Administration/Residue');
+  const mergedIdx = merged.formSections?.findIndex((s) => s.formSection === 'Estate Administration/Residue');
+  if (!bundleSec?.fields || mergedIdx < 0) return;
+
+  const bundleById = new Map(
+    (bundleSec.fields || []).filter((f) => f.id).map((f) => [f.id, f])
+  );
+  const mergedSec = merged.formSections[mergedIdx];
+  const existing = mergedSec.fields || [];
+  const out = existing.map((f) => {
+    if (!f?.id || String(f.id).startsWith('custom_')) return f;
+    const b = bundleById.get(f.id);
+    if (b) return JSON.parse(JSON.stringify(b));
+    return f;
+  });
+  const got = new Set(out.map((f) => f.id).filter(Boolean));
+  for (const b of bundleSec.fields) {
+    if (b.id && !got.has(b.id)) {
+      out.push(JSON.parse(JSON.stringify(b)));
+    }
+  }
+  mergedSec.fields = out;
+}
+
+/**
  * Merge a Supabase-saved questionnaire with the bundled factory default.
  *
  * Priority: Supabase wins for everything it already has (labels, placeholders,
@@ -126,6 +182,8 @@ export function mergeFormDefinitions(remote, bundle) {
 
   pinGuardianFieldsFromBundle(merged, bundle);
   pinSpecificGiftsFieldsFromBundle(merged, bundle);
+  pinAdministrativeProvisionsFromBundle(merged, bundle);
+  pinEstateResidueFromBundle(merged, bundle);
 
   return merged;
 }
