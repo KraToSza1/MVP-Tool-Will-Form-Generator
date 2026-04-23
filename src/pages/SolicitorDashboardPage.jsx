@@ -113,6 +113,19 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function firstNameFromDisplay(display) {
+  if (!display || typeof display !== 'string') return 'there';
+  const part = display.trim().split(/\s+/)[0];
+  return part || 'there';
+}
+
 function getMatterDisplayData(matter) {
   const outstandingCategories = getMatterOutstandingCategories(matter);
   const hasOutstandingCategories = outstandingCategories.length > 0;
@@ -133,7 +146,7 @@ function getMatterDisplayData(matter) {
 }
 
 export default function SolicitorDashboardPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, profile } = useAuth();
   const mattersLoadRunRef = useRef(0);
   const pageMountT0 = useRef(typeof performance !== 'undefined' ? performance.now() : 0);
   const [matters, setMatters] = useState([]);
@@ -339,6 +352,7 @@ export default function SolicitorDashboardPage() {
   }, [outstandingGroups]);
 
   const showEmptyState = !loading && matters.length === 0 && !search && status === 'all' && !assignedOnly;
+  const tcDueCount = outstandingGroups[OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]?.length ?? 0;
   const filtersActive = status !== 'all' || search.trim() !== '' || assignedOnly;
   const clearFilters = () => {
     setSearch('');
@@ -359,6 +373,25 @@ export default function SolicitorDashboardPage() {
 
   return (
     <div className="space-y-6 min-w-0 w-full max-w-full">
+      {!showEmptyState && !loading && (
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:px-6 sm:py-5 dark:border-slate-600 dark:bg-slate-900/50">
+          <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-xl">
+            {getGreeting()}, {firstNameFromDisplay(profile?.display_name || profile?.email)}
+          </h2>
+          <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {' '}
+            · {outstandingFileCount} matter{outstandingFileCount === 1 ? '' : 's'} with at least one outstanding action
+            {tcDueCount > 0 ? (
+              <>
+                {' '}
+                · <span className="font-medium text-amber-800 dark:text-amber-200">{tcDueCount} TC assessment(s) incomplete</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+      )}
+
       {showEmptyState && (
         <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-6 shadow-sm">
           <div className="flex gap-4">
@@ -496,45 +529,65 @@ export default function SolicitorDashboardPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3 text-slate-600">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/40">
+          <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
             <BriefcaseBusiness size={18} />
             <span className="text-sm font-medium">Total matters</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-slate-900">{stats.total}</p>
+          <p className="mt-4 text-3xl font-bold text-slate-900 dark:text-slate-100">{stats.total}</p>
         </div>
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-          <div className="flex items-center gap-3 text-blue-800">
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-500/30 dark:bg-blue-950/25">
+          <div className="flex items-center gap-3 text-blue-800 dark:text-blue-200">
             <FileClock size={18} />
             <span className="text-sm font-medium">Submitted</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-blue-900">{stats.submitted}</p>
+          <p className="mt-4 text-3xl font-bold text-blue-900 dark:text-blue-100">{stats.submitted}</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm" title="Matters where client ID or verification is still outstanding">
-          <div className="flex items-center gap-3 text-amber-800">
+        <div
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/25"
+          title="Matters where client ID or verification is still outstanding"
+        >
+          <div className="flex items-center gap-3 text-amber-800 dark:text-amber-200">
             <ShieldAlert size={18} />
             <span className="text-sm font-medium">ID needed</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-amber-900">{stats.idNeeded}</p>
+          <p className="mt-4 text-3xl font-bold text-amber-900 dark:text-amber-100">{stats.idNeeded}</p>
         </div>
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm" title="Matters with status In progress (under your review; Testamentary Capacity can be completed)">
-          <div className="flex items-center gap-3 text-indigo-800">
+        <div
+          className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-950/25"
+          title="Matters with status In progress (under your review; Testamentary Capacity can be completed)"
+        >
+          <div className="flex items-center gap-3 text-indigo-800 dark:text-indigo-200">
             <ClipboardCheck size={18} />
             <span className="text-sm font-medium">In progress</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-indigo-900">{stats.in_review}</p>
+          <p className="mt-4 text-3xl font-bold text-indigo-900 dark:text-indigo-100">{stats.in_review}</p>
         </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-          <div className="flex items-center gap-3 text-emerald-800">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-3 text-emerald-800 dark:text-emerald-200">
             <ClipboardCheck size={18} />
             <span className="text-sm font-medium">Completed</span>
           </div>
-          <p className="mt-4 text-3xl font-bold text-emerald-900">{stats.completed}</p>
+          <p className="mt-4 text-3xl font-bold text-emerald-900 dark:text-emerald-100">{stats.completed}</p>
+        </div>
+        <div
+          className="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm dark:border-rose-500/35 dark:bg-rose-950/25"
+          title="Testamentary Capacity still required on the merged matter record"
+        >
+          <div className="flex items-center gap-3 text-rose-800 dark:text-rose-200">
+            <ClipboardCheck size={18} />
+            <span className="text-sm font-medium">TC due</span>
+          </div>
+          <p className="mt-4 text-3xl font-bold text-rose-900 dark:text-rose-100">{tcDueCount}</p>
+          <p className="mt-1 text-xs text-rose-800/90 dark:text-rose-200/80">Before final PDF</p>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden solicitor-dashboard-section">
+      <section
+        id="solicitor-matters-list"
+        className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden solicitor-dashboard-section dark:border-slate-600 dark:bg-slate-900/30"
+      >
         {/* Header: title + actions — solicitor-dashboard-header for dark theme */}
         <div className="solicitor-dashboard-header border-b border-slate-100 bg-slate-50/50 px-4 sm:px-6 py-4 sm:py-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

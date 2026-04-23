@@ -11,6 +11,8 @@ import MatterDetailPage from "./pages/MatterDetailPage.jsx";
 import MatterEditorPage from "./pages/MatterEditorPage.jsx";
 import QuestionnaireEditorPage from "./pages/QuestionnaireEditorPage.jsx";
 import GuardianFlowDemoPage from "./pages/GuardianFlowDemoPage.jsx";
+import SolicitorPlaceholderPage from "./pages/SolicitorPlaceholderPage.jsx";
+import SolicitorUrgentPage from "./pages/SolicitorUrgentPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
@@ -76,9 +78,37 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/solicitor" element={<SolicitorLayout />}>
             <Route index element={<SolicitorDashboardPage />} />
-          <Route path="matters/:matterId" element={<MatterDetailPage />} />
-          <Route path="matters/:matterId/form" element={<MatterEditorPage />} />
-          <Route path="questionnaire" element={<QuestionnaireEditorPage />} />
+            <Route path="urgent" element={<SolicitorUrgentPage />} />
+            <Route
+              path="calendar"
+              element={
+                <SolicitorPlaceholderPage
+                  title="Calendar"
+                  description="Firm calendar and client appointments will appear here. This view is on the product roadmap and is not connected to your data yet."
+                />
+              }
+            />
+            <Route
+              path="availability"
+              element={
+                <SolicitorPlaceholderPage
+                  title="Availability"
+                  description="Set recurring availability and booking slots for clients. Coming in a later release; use your usual practice diary until then."
+                />
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <SolicitorPlaceholderPage
+                  title="Reports"
+                  description="Firm-level reporting on Will Tool matters and throughput will be available here. Not yet available in this build."
+                />
+              }
+            />
+            <Route path="matters/:matterId" element={<MatterDetailPage />} />
+            <Route path="matters/:matterId/form" element={<MatterEditorPage />} />
+            <Route path="questionnaire" element={<QuestionnaireEditorPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

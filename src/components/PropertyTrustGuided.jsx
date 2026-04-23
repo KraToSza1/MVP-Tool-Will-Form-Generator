@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Check, Home, Info, Plus, X } from 'lucide-react';
-import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import { formatPropertyTrustClientSummaryFromState, getPropertyAddressCandidates } from '../utils/propertyTrustFormat.js';
 
 function uid() {
@@ -49,8 +48,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
   const modalTitleId = useId();
   const [modalOpen, setModalOpen] = useState(false);
   const [pickPropertyId, setPickPropertyId] = useState('');
-  const [pickAddressContactId, setPickAddressContactId] = useState('');
-  const [pickContactId, setPickContactId] = useState('');
   const [addr1, setAddr1] = useState('');
   const [addr2, setAddr2] = useState('');
   const [town, setTown] = useState('');
@@ -66,11 +63,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
   const fn = formValues.propertyTrustLifeTenantFirstName || '';
   const ln = formValues.propertyTrustLifeTenantLastName || '';
   const rel = formValues.propertyTrustLifeTenantRelationship || '';
-
-  const contactOptions = useMemo(() => {
-    const raw = getContactCandidates(formValues || {});
-    return raw.filter((c) => personDisplayNameForGift(c.data) !== '');
-  }, [formValues]);
 
   const addressCandidates = useMemo(() => getPropertyAddressCandidates(formValues || {}), [formValues]);
 
@@ -138,7 +130,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
 
   const openModal = () => {
     setPickPropertyId('');
-    setPickAddressContactId('');
     setAddr1('');
     setAddr2('');
     setTown('');
@@ -154,7 +145,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
 
   const onPickExistingProperty = (id) => {
     setPickPropertyId(id);
-    setPickAddressContactId('');
     if (!id) return;
     const c = addressCandidates.find((x) => x.id === id);
     if (c) {
@@ -164,26 +154,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
       setPostcode(c.postcode);
       setTenure(c.tenure);
     }
-  };
-
-  const onPickAddressFromContact = (id) => {
-    setPickAddressContactId(id);
-    if (!id) {
-      return;
-    }
-    const c = contactOptions.find((x) => x.id === id);
-    if (!c) return;
-    setPickPropertyId('');
-    const d = c.data && typeof c.data === 'object' ? c.data : {};
-    const a1 = String(d.address1 || '').trim();
-    const a2 = String(d.address2 || '').trim();
-    const a3 = String(d.address3 || '').trim();
-    const pc = String(d.postcode || '').trim();
-    setAddr1(a1);
-    setAddr2(a2);
-    setTown(a3);
-    setPostcode(pc);
-    setTenure('');
   };
 
   const saveProperty = () => {
@@ -218,45 +188,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
       const prevList = Array.isArray(prev.propertyTrustPropertiesList) ? prev.propertyTrustPropertiesList : [];
       return { ...prev, propertyTrustPropertiesList: prevList.filter((p) => p.id !== id) };
     });
-  };
-
-  const onLifeTenantContactChange = (id) => {
-    setPickContactId(id);
-    if (!id) {
-      return;
-    }
-    const c = contactOptions.find((x) => x.id === id);
-    if (!c || !c.data) return;
-    const d = c.data;
-    const first = String(d.firstName || '').trim();
-    const last = String(d.lastName || '').trim();
-    const r = String(d.relationship || d.rel || '').trim();
-    let description = '';
-    if (first || last || r) {
-      syncLifeTenantName({
-        propertyTrustLifeTenantFirstName: first,
-        propertyTrustLifeTenantLastName: last,
-        propertyTrustLifeTenantRelationship: r,
-      });
-      const full = [first, last].filter(Boolean).join(' ').trim();
-      description = full ? (r ? `${full} — ${r}` : full) : r;
-    } else {
-      const name = personDisplayNameForGift(d);
-      if (name) {
-        const parts = name.split(/\s+/).filter(Boolean);
-        const lastPart = parts.length > 1 ? parts.pop() : '';
-        const firstPart = parts.join(' ') || name;
-        syncLifeTenantName({
-          propertyTrustLifeTenantFirstName: firstPart,
-          propertyTrustLifeTenantLastName: lastPart,
-          propertyTrustLifeTenantRelationship: r,
-        });
-        description = r ? `${name} — ${r}` : name;
-      }
-    }
-    if (description) {
-      toast.success('Life tenant set', { description });
-    }
   };
 
   return (
@@ -405,33 +336,10 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
               The person who can live in or benefit from the property during their lifetime — often a spouse or partner.
             </p>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800/60 sm:px-4">
-              <div className="mb-3">
-                <label className="mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="pt-pick-life">
-                  Select from people already in this form
-                </label>
-                <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
-                  Includes you, your partner, saved contacts, and people from gift lists. You can still edit the fields
-                  below.
-                </p>
-                <select
-                  id="pt-pick-life"
-                  className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                  value={pickContactId}
-                  onChange={(e) => onLifeTenantContactChange(e.target.value)}
-                >
-                  <option value="">Type manually (no selection)</option>
-                  {contactOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                {contactOptions.length === 0 ? (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    No saved people yet. Complete About you and other sections first, or type the life tenant below.
-                  </p>
-                ) : null}
-              </div>
+              <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
+                Enter the life tenant in full, or the same details you used in About you / your partner. There is no
+                separate &quot;contact&quot; list here — use the name fields.
+              </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-slate-800 dark:text-slate-200" htmlFor="pt-fn">
@@ -442,7 +350,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                     className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     value={fn}
                     onChange={(e) => {
-                      setPickContactId('');
                       syncLifeTenantName({ propertyTrustLifeTenantFirstName: e.target.value });
                     }}
                     placeholder="First name"
@@ -457,7 +364,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                     className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                     value={ln}
                     onChange={(e) => {
-                      setPickContactId('');
                       syncLifeTenantName({ propertyTrustLifeTenantLastName: e.target.value });
                     }}
                     placeholder="Last name"
@@ -473,7 +379,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                   className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   value={rel}
                   onChange={(e) => {
-                    setPickContactId('');
                     applyPatch({ propertyTrustLifeTenantRelationship: e.target.value });
                   }}
                   placeholder="e.g. my spouse, my partner"
@@ -584,42 +489,10 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                   <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
                     <p className="m-0 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
-                      Your solicitor will use the address to identify the property on the title register. You can
-                      prefill from someone you already added, or reuse an address already used elsewhere on this
-                      will, then adjust the lines if needed.
+                      Your solicitor will use the address to identify the property on the title register. Prefill from a
+                      saved address already used on this will (your home, partner, other gifts, or this trust), or type
+                      the full address manually.
                     </p>
-                  </div>
-
-                  <div>
-                    <label
-                      className="m-0 mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200"
-                      htmlFor="pt-addr-person"
-                    >
-                      Select an address from people already in this form
-                    </label>
-                    <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
-                      Uses saved contact addresses (e.g. your home or your partner&apos;s). Add details in About you
-                      first if empty.
-                    </p>
-                    <select
-                      id="pt-addr-person"
-                      className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                      value={pickAddressContactId}
-                      onChange={(e) => onPickAddressFromContact(e.target.value)}
-                    >
-                      <option value="">None — use options below or type manually</option>
-                      {contactOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                    {contactOptions.length === 0 ? (
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        No saved people yet. Complete About you, your partner, or other people sections first, or type
-                        the full address below.
-                      </p>
-                    ) : null}
                   </div>
 
                   <div>
@@ -627,10 +500,11 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                       className="m-0 mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-500"
                       htmlFor="pt-same-prop"
                     >
-                      Reuse a property address from this will
+                      Select a saved address
                     </label>
                     <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
-                      Your address, property gifts, or properties already added to this trust.
+                      Your home, your partner, property gifts, or properties already in this trust (same list as
+                      elsewhere in the questionnaire).
                     </p>
                     <select
                       id="pt-same-prop"
@@ -647,8 +521,8 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                     </select>
                     {addressCandidates.length === 0 ? (
                       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        No other property addresses on this will yet. Type the address below, or use &quot;people
-                        already in this form&quot; above.
+                        No saved addresses on this will yet. Add your address in About you (and partner if relevant), or
+                        type the full address below.
                       </p>
                     ) : null}
                   </div>
@@ -666,7 +540,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                       onChange={(e) => {
                         setAddr1(e.target.value);
                         setPickPropertyId('');
-                        setPickAddressContactId('');
                       }}
                       placeholder="House number and street"
                     />
@@ -682,7 +555,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                       onChange={(e) => {
                         setAddr2(e.target.value);
                         setPickPropertyId('');
-                        setPickAddressContactId('');
                       }}
                     />
                   </div>
@@ -700,7 +572,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                         onChange={(e) => {
                           setTown(e.target.value);
                           setPickPropertyId('');
-                          setPickAddressContactId('');
                         }}
                       />
                     </div>
@@ -717,7 +588,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                         onChange={(e) => {
                           setPostcode(e.target.value);
                           setPickPropertyId('');
-                          setPickAddressContactId('');
                         }}
                       />
                     </div>
@@ -733,7 +603,6 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                       onChange={(e) => {
                         setTenure(e.target.value);
                         setPickPropertyId('');
-                        setPickAddressContactId('');
                       }}
                     >
                       {TENURE_OPTS.map((o) => (

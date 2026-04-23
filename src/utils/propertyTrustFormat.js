@@ -43,6 +43,22 @@ export function getPropertyAddressCandidates(formValues) {
     });
   }
 
+  const pAddr1 = trim(formValues.partnerAddress1);
+  if (pAddr1) {
+    const pLine2 = trim(formValues.partnerAddress2);
+    const pLine3 = trim(formValues.partnerAddress3);
+    const pPc = trim(formValues.partnerPostcode);
+    out.push({
+      id: '__partner_home__',
+      label: `${[pAddr1, pLine2, pLine3, pPc].filter(Boolean).join(', ')} (partner / spouse)`,
+      addressLine1: pAddr1,
+      addressLine2: pLine2,
+      town: pLine3,
+      postcode: pPc,
+      tenure: '',
+    });
+  }
+
   const gifts = formValues.propertyGiftsList;
   if (Array.isArray(gifts)) {
     gifts.forEach((g, i) => {

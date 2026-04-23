@@ -6,18 +6,11 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Check, Home, Info, Plus, X } from 'lucide-react';
-import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import { formatPropertyGiftsDetailsFromList } from '../utils/propertyGiftsFormat.js';
+import { getPropertyAddressCandidates } from '../utils/propertyTrustFormat.js';
 
 function uid() {
   return `pg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function relationshipFromPick(source, data) {
-  const fromData = data && typeof data === 'object' ? String(data.relationship || '').trim() : '';
-  if (fromData) return fromData;
-  if (source === 'partner') return 'Partner / spouse';
-  return '';
 }
 
 const CONDITION_OPTIONS = [
@@ -42,7 +35,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
   const uidStr = useId();
   const modalTitleId = useId();
   const [modalOpen, setModalOpen] = useState(false);
-  const [pickContactId, setPickContactId] = useState('');
+  const [pickAddressId, setPickAddressId] = useState('');
   const [addr1, setAddr1] = useState('');
   const [addr2, setAddr2] = useState('');
   const [town, setTown] = useState('');
@@ -62,10 +55,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
   const q1 = formValues.leavePropertyGifts;
   const showPanel = q1 === 'Yes';
 
-  const contactPickOptions = useMemo(() => {
-    const raw = getContactCandidates(formValues || {});
-    return raw.filter((c) => personDisplayNameForGift(c.data) !== '');
-  }, [formValues]);
+  const addressPickOptions = useMemo(() => getPropertyAddressCandidates(formValues || {}), [formValues]);
 
   useEffect(() => {
     const raw = formValues.propertyGiftsList;
@@ -110,7 +100,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
   };
 
   const openModal = () => {
-    setPickContactId('');
+    setPickAddressId('');
     setAddr1('');
     setAddr2('');
     setTown('');
@@ -128,23 +118,16 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
 
   const closeModal = () => setModalOpen(false);
 
-  const applyPickedContact = (id) => {
-    setPickContactId(id);
+  const applyPickedAddress = (id) => {
+    setPickAddressId(id);
     if (!id) return;
-    const c = contactPickOptions.find((x) => x.id === id);
+    const c = addressPickOptions.find((x) => x.id === id);
     if (!c) return;
-    setRecipient(personDisplayNameForGift(c.data));
-    setRelationship(relationshipFromPick(c.source, c.data));
-    // If this contact has a saved address, prefill the property address (e.g. main home / their address on file)
-    const d = c.data && typeof c.data === 'object' ? c.data : {};
-    const a1 = String(d.address1 || '').trim();
-    const a2 = String(d.address2 || '').trim();
-    const a3 = String(d.address3 || '').trim();
-    const pc = String(d.postcode || '').trim();
-    if (a1) setAddr1(a1);
-    if (a2) setAddr2(a2);
-    if (a3) setTown(a3);
-    if (pc) setPostcode(pc);
+    setAddr1(c.addressLine1 || '');
+    setAddr2(c.addressLine2 || '');
+    setTown(c.town || '');
+    setPostcode(c.postcode || '');
+    setTenure(typeof c.tenure === 'string' ? c.tenure : '');
   };
 
   const saveGift = () => {
@@ -469,44 +452,44 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                   <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden="true" />
                     <p className="m-0 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
-                      Enter the full address and the name of the person who should receive it, or start by choosing
-                      someone you already added below. If we have a saved address for them, it can prefill the property
-                      fields. Add one property at a time.
+                      Use a saved address to fill the property fields, then type who should receive it. You can add one
+                      property gift at a time. Addresses come from your details, your partner, and properties you
+                      already added elsewhere in this form (other gifts or the property trust).
                     </p>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="pg-pick">
-                      Select from people already in this form
-                    </label>
-                    <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
-                      Includes you, your partner, saved contacts, and people from other gift sections. Fills
-                      name, relationship, and address when we have them.
-                    </p>
-                    <select
-                      id="pg-pick"
-                      className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
-                      value={pickContactId}
-                      onChange={(e) => applyPickedContact(e.target.value)}
-                    >
-                      <option value="">Type manually (no selection)</option>
-                      {contactPickOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                    {contactPickOptions.length === 0 ? (
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        No saved people yet. Complete About you, your partner, or other sections first — or enter the
-                        recipient and address below.
-                      </p>
-                    ) : null}
                   </div>
 
                   <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
                     The property
                   </p>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="pg-pick-addr">
+                      Select a saved address
+                    </label>
+                    <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
+                      Fills the property address and tenure (when we have them). The recipient is entered separately
+                      below.
+                    </p>
+                    <select
+                      id="pg-pick-addr"
+                      className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
+                      value={pickAddressId}
+                      onChange={(e) => applyPickedAddress(e.target.value)}
+                    >
+                      <option value="">Type the address manually (no selection)</option>
+                      {addressPickOptions.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    {addressPickOptions.length === 0 ? (
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        No saved addresses yet. Add your home address and partner in About you, or enter this property
+                        address manually.
+                      </p>
+                    ) : null}
+                  </div>
                   <div>
                     <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor="pg-addr1">
                       Address line 1 <span className="text-red-600 dark:text-red-400">*</span>
@@ -517,7 +500,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                         errors.addr1 ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                       }`}
                       value={addr1}
-                      onChange={(e) => setAddr1(e.target.value)}
+                      onChange={(e) => {
+                        setPickAddressId('');
+                        setAddr1(e.target.value);
+                      }}
                       placeholder="House number and street"
                     />
                   </div>
@@ -529,7 +515,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                       id="pg-addr2"
                       className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                       value={addr2}
-                      onChange={(e) => setAddr2(e.target.value)}
+                      onChange={(e) => {
+                        setPickAddressId('');
+                        setAddr2(e.target.value);
+                      }}
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -543,7 +532,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                           errors.town ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                         }`}
                         value={town}
-                        onChange={(e) => setTown(e.target.value)}
+                        onChange={(e) => {
+                          setPickAddressId('');
+                          setTown(e.target.value);
+                        }}
                       />
                     </div>
                     <div>
@@ -556,7 +548,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                           errors.postcode ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                         }`}
                         value={postcode}
-                        onChange={(e) => setPostcode(e.target.value)}
+                        onChange={(e) => {
+                          setPickAddressId('');
+                          setPostcode(e.target.value);
+                        }}
                       />
                     </div>
                   </div>
@@ -569,7 +564,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                         id="pg-tenure"
                         className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                         value={tenure}
-                        onChange={(e) => setTenure(e.target.value)}
+                        onChange={(e) => {
+                          setPickAddressId('');
+                          setTenure(e.target.value);
+                        }}
                       >
                         <option value="">Not sure / don&apos;t know</option>
                         <option value="freehold">Freehold</option>
@@ -615,8 +613,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                     Who receives this property
                   </p>
                   <p className="m-0 text-xs text-slate-600 dark:text-slate-400">
-                    You can change the name and relationship after using the list above, or if you didn&apos;t use it,
-                    type them here.
+                    The address list only fills the property. Enter the person who should receive this property here.
                   </p>
                   <div>
                     <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor="pg-rec">
@@ -628,10 +625,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                         errors.recipient ? 'border-red-500 dark:border-red-400' : 'border-slate-300 dark:border-slate-600'
                       }`}
                       value={recipient}
-                      onChange={(e) => {
-                        setRecipient(e.target.value);
-                        if (pickContactId) setPickContactId('');
-                      }}
+                      onChange={(e) => setRecipient(e.target.value)}
                     />
                   </div>
                   <div>
@@ -642,10 +636,7 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                       id="pg-rel"
                       className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                       value={relationship}
-                      onChange={(e) => {
-                        setRelationship(e.target.value);
-                        if (pickContactId) setPickContactId('');
-                      }}
+                      onChange={(e) => setRelationship(e.target.value)}
                     />
                   </div>
 
