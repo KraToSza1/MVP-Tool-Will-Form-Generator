@@ -64,6 +64,29 @@ export function getPropertyAddressCandidates(formValues) {
     });
   }
 
+  const trustList = formValues.propertyTrustPropertiesList;
+  if (Array.isArray(trustList)) {
+    trustList.forEach((p, i) => {
+      if (!p || typeof p !== 'object') return;
+      const line1 = trim(p.addressLine1);
+      if (!line1) return;
+      const tTen = trim(p.tenure);
+      const id = p.id != null && String(p.id) !== '' ? `ptrust:${p.id}` : `ptrust:idx:${i}`;
+      const addrShort = [line1, trim(p.town), trim(p.postcode)].filter(Boolean).join(', ');
+      out.push({
+        id,
+        label: tTen
+          ? `Property already in this trust — ${addrShort} (${tTen})`
+          : `Property already in this trust — ${addrShort}`,
+        addressLine1: line1,
+        addressLine2: trim(p.addressLine2),
+        town: trim(p.town),
+        postcode: trim(p.postcode),
+        tenure: tTen,
+      });
+    });
+  }
+
   return out;
 }
 

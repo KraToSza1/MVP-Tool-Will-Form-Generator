@@ -3028,8 +3028,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       }
     });
     
-    // Scan formValues for placeholder text
+    // Scan formValues for placeholder text (skip JSON / internal state: patterns like `[]` or
+    // the word "null" in JSON wrongly match `\[.*?\]` and `undefined|null` in placeholderPatterns)
+    const skipFormValuePlaceholderScan = (key) =>
+      key === 'guardianFlowState' || (typeof key === 'string' && key.endsWith('FlowState'));
     Object.entries(formValues).forEach(([key, value]) => {
+      if (skipFormValuePlaceholderScan(key)) return;
       if (typeof value === 'string' && value.trim()) {
         placeholderPatterns.forEach(pattern => {
           if (pattern.test(value)) {

@@ -5,7 +5,7 @@
 import React, { useCallback, useId, useMemo, useState } from 'react';
 import { FileText, Info, Landmark, Plus, Trash2, CircleHelp } from 'lucide-react';
 import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
-import { emptyPersonRecord } from '../utils/personRecordSpecs.js';
+import { emptyPersonRecord, PERSON_RECORD_SPECS } from '../utils/personRecordSpecs.js';
 import { TRUST_END, textForTrustEnd } from '../utils/estateResidueGuidedShared.js';
 
 const uid = () => `er-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -126,6 +126,36 @@ function EstateResidueGuided({ field: _field, formValues, setFormValues }) {
     apply({ separateTrusteeData: n });
   };
 
+  const addSeparateTrusteeFromContact = useCallback(
+    (contactId) => {
+      const opt = contactOpts.find((c) => c.id === contactId);
+      if (!opt?.data) return;
+      const d = opt.data;
+      const row = { ...emptyPersonRecord(), _personRecordId: uid() };
+      for (const spec of PERSON_RECORD_SPECS) {
+        const k = spec.key;
+        const v = d[k];
+        if (v != null && String(v).trim() !== '') row[k] = String(v).trim();
+      }
+      let fn = String(row.firstName || '').trim();
+      let ln = String(row.lastName || '').trim();
+      if (!fn && !ln) {
+        const name = personDisplayNameForGift(d) || String(d.fullName || '').trim();
+        if (name) {
+          const parts = name.split(/\s+/).filter(Boolean);
+          const lastPart = parts.length > 1 ? parts.pop() : '';
+          row.firstName = parts.join(' ') || name;
+          row.lastName = lastPart;
+        }
+      }
+      fn = String(row.firstName || '').trim();
+      ln = String(row.lastName || '').trim();
+      if (!fn && !ln) return;
+      apply({ separateTrusteeData: [...separateRows, row] });
+    },
+    [apply, contactOpts, separateRows]
+  );
+
   const addFurtherRow = () => {
     const n = String(furtherName || '').trim();
     if (!n) return;
@@ -198,7 +228,7 @@ function EstateResidueGuided({ field: _field, formValues, setFormValues }) {
           <p className="text-sm font-bold text-orange-900 dark:text-orange-200">Solicitor action (FLIT)</p>
           <p className="mt-1 text-xs sm:text-sm text-orange-800 dark:text-orange-100/90 break-words">
             You have chosen a life-interest trust. Your solicitor will use your answers to draft the full trust wording, residual gift clause, and
-            trustee powers. The PDF may show placeholders where formal drafting is still required in some firm workflows.
+            trustee powers.
           </p>
         </div>
       ) : null}
@@ -295,6 +325,39 @@ function EstateResidueGuided({ field: _field, formValues, setFormValues }) {
               {separateRows.length === 0 ? (
                 <p className="text-xs text-slate-500 dark:text-slate-400">Add at least one trustee (same person as elsewhere on the form, or a new name).</p>
               ) : null}
+              <div className="mb-3 mt-2">
+                <label className="text-sm font-medium text-slate-800 dark:text-slate-100" htmlFor={`${id}-sep-from-contact`}>
+                  Select from people already in this form
+                </label>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 break-words">
+                  Adds a row from the testator, partner, contact registry, executors, or people from gift lists. You can
+                  edit all fields after.
+                </p>
+                <select
+                  id={`${id}-sep-from-contact`}
+                  key={`er-sep-trustee-pick-${separateRows.length}`}
+                  className="mt-2 w-full min-h-[44px] max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    addSeparateTrusteeFromContact(v);
+                  }}
+                >
+                  <option value="">Choose someone to add as a trustee…</option>
+                  {contactOpts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                {contactOpts.length === 0 ? (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 break-words">
+                    No saved people yet. Use &quot;Add trustee&quot; and type details, or complete About you and other
+                    sections first.
+                  </p>
+                ) : null}
+              </div>
               {separateRows.map((row, i) => (
                 <div key={row._personRecordId || i} className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
                   <div className="sm:col-span-2">

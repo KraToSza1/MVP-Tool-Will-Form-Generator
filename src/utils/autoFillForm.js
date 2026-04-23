@@ -15,6 +15,7 @@ import { formatMonetaryGiftsDetailsFromList } from './monetaryGiftsFormat.js';
 import { formatSpecificGiftsDetailsFromList } from './specificGiftsFormat.js';
 import { formatPropertyGiftsDetailsFromList } from './propertyGiftsFormat.js';
 import { formatPropertyTrustClientSummaryFromState } from './propertyTrustFormat.js';
+import { getMissingIdVerificationDocs } from '../lib/matterOutstanding.js';
 
 /**
  * Recursively collect every field `id` from the form definition (including nested sections
@@ -82,6 +83,42 @@ export function filterAutofillPayloadToFormSchema(payload, formData) {
   return out;
 }
 
+/** Walk every field in the form definition (including nested sections and option-level fields). */
+function forEachFormField(formData, fn) {
+  for (const section of formData?.formSections || []) {
+    const walk = (fields) => {
+      for (const field of fields || []) {
+        if (!field) continue;
+        fn(field, section);
+        if (field.type === 'section' && field.subFields) walk(field.subFields);
+        if (Array.isArray(field.options)) {
+          for (const opt of field.options) {
+            if (opt?.fields) walk(opt.fields);
+          }
+        }
+      }
+    };
+    walk(section.fields);
+  }
+}
+
+function buildFieldByIdMap(formData) {
+  const map = new Map();
+  forEachFormField(formData, (field) => {
+    if (field.id) map.set(field.id, field);
+  });
+  return map;
+}
+
+function autofillValueNeedsTopUp(v) {
+  if (v === undefined || v === null) return true;
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (t === '' || t === 'Standard value') return true;
+  }
+  return false;
+}
+
 /** Must match `Complete-WillSuite-Form-Data.json` appointGuardians option value. */
 const APPOINT_GUARDIANS_DIFFERENT = 'Yes, but appoint different guardians for children';
 
@@ -92,7 +129,8 @@ const ARISTONE_EXECUTOR_LINE =
  * Suffix for generated demo prose. Do not use `[` or `]` here — PDF completeness checks treat
  * square brackets as unresolved placeholders.
  */
-const DEMO_TEXT_TAG = ' — Will Tool demo data';
+/** Em dash + NBSP before "demo" so PDF line break cannot merge "Tool" and "demo". */
+const DEMO_TEXT_TAG = ' \u2014 Will Tool\u00A0demo data';
 
 /**
  * Distinct demo identities so every role is visibly different in the UI (names, emails, phones, streets).
@@ -232,6 +270,26 @@ const DEMO = {
     postcode: 'RG1 1AA',
   },
 };
+
+/** Minimal 1×1 PNG data URL — autofill only; submit still runs image compression. */
+const AUTOFILL_DEMO_ID_IMAGE_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** Populate all four ID slots so client final step and matter submit see “complete” demo attachments. */
+function applyIdentityVerificationAutofill(dummyData) {
+  dummyData.identityVerification = {
+    identityVerificationPhotoId: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
+    identityVerificationProofOfAddress1: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
+    identityVerificationProofOfAddress2: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
+    identityVerificationSelfieWithId: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
+  };
+  dummyData.identityVerificationFileNames = {
+    identityVerificationPhotoId: 'demo-photo-id.png',
+    identityVerificationProofOfAddress1: 'demo-proof-of-address-1.png',
+    identityVerificationProofOfAddress2: 'demo-proof-of-address-2.png',
+    identityVerificationSelfieWithId: 'demo-selfie-with-id.png',
+  };
+}
 
 /**
  * Estate Overview — used by autofill so checkbox/radio/text stay consistent
@@ -887,6 +945,8 @@ export const generateDummyFormData = (formData) => {
     });
     return dummyData;
   }
+
+  const fieldById = buildFieldByIdMap(formData);
   
   console.log('[AUTOFILL GENERATE] 📊 Form structure:', {
     sectionsCount: formData.formSections.length,
@@ -1070,7 +1130,10 @@ export const generateDummyFormData = (formData) => {
         if (field.id === 'minimumCharityAmountValue') return '50000';
         if (field.id === 'stepProvisionToExcludeOne') return '1';
         if (field.id === 'stepProvisionsToExcludeMultiple') return '1, 2 & 3';
-        return 'Standard value';
+        {
+          const lab = (field.label || field.id || 'field').replace(/[[\]]/g, '');
+          return `Demo autofill: ${lab}.${DEMO_TEXT_TAG}`;
+        }
 
       case 'textarea':
         if (field.id.includes('charity') || field.id === 'charityBenefitDetails') return 'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)';
@@ -1106,7 +1169,10 @@ export const generateDummyFormData = (formData) => {
         if (field.id.includes('funeralWishes')) return 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.';
         if (field.id.includes('otherFuneralRequirements')) return 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.';
         if (field.id.includes('physicalHealthDescription')) return 'The testator is in good physical and mental health and fully understands the nature and effect of this Will.';
-        return `Please provide details for ${field.label || field.id}.`;
+        {
+          const lab = (field.label || field.id || 'field').replace(/[[\]]/g, '');
+          return `Demo autofill: ${lab}.${DEMO_TEXT_TAG}`;
+        }
 
       case 'date':
         if (field.id === 'partnerDateOfBirth') return DEMO.partner.dateOfBirth;
@@ -1128,6 +1194,9 @@ export const generateDummyFormData = (formData) => {
         }
         if (field.id === 'aristoneProfessionalFeesAck') return [...ESTATE_DEMO.feesAck];
         return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
+
+      case 'signature':
+        return AUTOFILL_DEMO_ID_IMAGE_DATA_URL;
 
       default:
         return null;
@@ -1452,7 +1521,7 @@ export const generateDummyFormData = (formData) => {
         dummyData.includeCypresClause = 'Yes';
         dummyData.bringLifetimeGiftsIntoAccount = 'Yes';
         dummyData.specifyLifetimeLoansGifts = 'Yes';
-        dummyData.specifyLoansGiftsText = `I wish my executors to be aware of a loan of £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in January 2022 for a house purchase; not repaid. Bring into account for residue if appropriate.${DEMO_TEXT_TAG}`;
+        dummyData.specifyLoansGiftsText = `I wish my executors to be aware of a loan of £10,000 to ${DEMO.children.son.firstName} ${DEMO.children.son.lastName} in March 2019 for a house purchase; not repaid. Bring into account for residue if appropriate.${DEMO_TEXT_TAG}`;
         dummyData.stepProvisionsApply = 'AllStandardSpecialInclude';
         dummyData.excludeSpecificStepProvisions = 'No';
         dummyData.stepProvisionToExcludeOne = '';
@@ -1486,6 +1555,20 @@ export const generateDummyFormData = (formData) => {
         dummyData.minimumCharityAmountValue = '';
         dummyData.howIHTDealtWithSplitting = 'BeforeTax';
         processedCount += 18;
+        return;
+      }
+      if (field.type === 'guardianFlow') {
+        return;
+      }
+      if (field.type === 'businessInterestsGuided') {
+        dummyData.hasBusinessInterests = dummyData.hasBusinessInterests || 'Yes';
+        dummyData.trusteePowerCarryOnBusiness = dummyData.trusteePowerCarryOnBusiness || 'Yes';
+        dummyData.appointSeparateBusinessTrustee = dummyData.appointSeparateBusinessTrustee || 'Yes';
+        dummyData.businessInterestType = dummyData.businessInterestType || 'ltd-shares';
+        dummyData.businessInterestValueRange = dummyData.businessInterestValueRange || '250k-1m';
+        dummyData.shareholderAgreementInPlace = dummyData.shareholderAgreementInPlace || 'Unsure';
+        dummyData.bprTrustClientIntent = dummyData.bprTrustClientIntent || 'Yes';
+        processedCount += 1;
         return;
       }
       if (field.type === 'display' || field.type === 'button') {
@@ -1794,7 +1877,15 @@ export const generateDummyFormData = (formData) => {
   const missingIds = [...allIds].filter((id) => dummyData[id] === undefined || dummyData[id] === null || dummyData[id] === '');
   console.log(`[AUTOFILL GENERATE] 🔍 Found ${missingIds.length} missing field IDs, filling with defaults...`);
   missingIds.forEach((id) => {
-    let defaultVal = 'Standard value';
+    const f = fieldById.get(id);
+    if (f) {
+      const fromGetter = getFieldValue(f, dummyData);
+      if (fromGetter != null && fromGetter !== '') {
+        dummyData[id] = fromGetter;
+        return;
+      }
+    }
+    let defaultVal = `Questionnaire demo: ${id}.${DEMO_TEXT_TAG}`;
     if (id === 'firstName') defaultVal = DEMO.testator.firstName;
     else if (id === 'lastName') defaultVal = DEMO.testator.lastName;
     else if (id.startsWith('witness1')) {
@@ -1813,12 +1904,35 @@ export const generateDummyFormData = (formData) => {
     else if (id === 'estateApproxLiabilities') defaultVal = ESTATE_DEMO.approxLiabilities;
     else if (id === 'estateOwnProperty') defaultVal = ESTATE_DEMO.ownProperty;
     else if (id === 'estateBusinessInterests') defaultVal = ESTATE_DEMO.businessInterests;
-    else if (id.includes('Details') || id.includes('details')) defaultVal = `Please provide details as required for this field.${DEMO_TEXT_TAG}`;
+    else if (id.includes('Details') || id.includes('details')) {
+      defaultVal = `Demo details for this field.${DEMO_TEXT_TAG}`;
+    }
     dummyData[id] = defaultVal;
   });
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);
 
   applyRichPersonDemoOverrides(dummyData);
+  applyIdentityVerificationAutofill(dummyData);
+
+  const SHELL_TYPES_NO_TOPUP = new Set(GUIDED_SHELL_FIELD_TYPES);
+  SHELL_TYPES_NO_TOPUP.add('guardianFlow');
+  SHELL_TYPES_NO_TOPUP.add('businessInterestsGuided');
+  let topUpApplied = 0;
+  for (const f of fieldById.values()) {
+    if (!f.id) continue;
+    if (SHELL_TYPES_NO_TOPUP.has(f.type) || f.type === 'section' || f.type === 'display' || f.type === 'button' || f.type === 'hidden') {
+      continue;
+    }
+    if (!autofillValueNeedsTopUp(dummyData[f.id])) continue;
+    const v = getFieldValue(f, dummyData);
+    if (v != null && v !== '') {
+      dummyData[f.id] = v;
+      topUpApplied++;
+    }
+  }
+  if (import.meta.env.DEV) {
+    console.log('[AUTOFILL GENERATE] schema top-up pass:', { topUpApplied });
+  }
 
   const estRec = getAristoneEstateRecommendationState(dummyData);
   const ex = dummyData.executorData;
@@ -1865,6 +1979,8 @@ export const generateDummyFormData = (formData) => {
         ? { _debtId: debt0._debtId, debtAmount: debt0.debtAmount, hasNotes: !!debt0.debtNotes }
         : null,
     },
+    identityVerificationDemoSlotsOk:
+      getMissingIdVerificationDocs({ identityVerification: dummyData.identityVerification }).length === 0,
   });
   console.log('[AUTOFILL GENERATE] ========== GENERATION COMPLETE ==========');
 

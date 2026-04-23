@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, XCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, X, XCircle, Trash2 } from 'lucide-react';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -117,38 +118,152 @@ const ID_DOC_LABELS = {
   identityVerificationSelfieWithId: 'Selfie with ID',
 };
 
+/**
+ * Renders a single ID doc from `identityVerification` (already loaded on the matter from Supabase).
+ * Large `data:` URLs do not work reliably in `<a target="_blank">`, so we open a modal instead.
+ */
 function IdDocPreview({ label, dataUrl }) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
   if (!dataUrl || typeof dataUrl !== 'string') return null;
-  const isImage = dataUrl.startsWith('data:image/');
-  const isPdf = dataUrl.startsWith('data:application/pdf');
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="mt-3 flex flex-wrap items-start gap-3">
-        {isImage && (
-          <img
-            src={dataUrl}
-            alt={label}
-            className="max-h-40 rounded-lg border border-slate-200 object-contain"
-          />
-        )}
-        {isPdf && (
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <FileText size={20} className="text-red-600" />
-            <span className="text-sm font-medium text-slate-700">PDF document</span>
-          </div>
-        )}
-        <a
-          href={dataUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-200"
+
+  const isHttp = /^https?:\/\//i.test(dataUrl);
+  const pathForExt = (isHttp ? dataUrl.split('?')[0] : dataUrl) || dataUrl;
+  const isPdf =
+    dataUrl.startsWith('data:application/pdf') || /\.pdf(\?|#|$)/i.test(pathForExt);
+  const isImage = dataUrl.startsWith('data:image/') || (isHttp && !isPdf);
+  const downloadName = `id-doc-${String(label)
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase() || 'document'}.${isPdf ? 'pdf' : 'jpg'}`;
+
+  const modal =
+    open &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[200] flex min-h-0 items-center justify-center bg-black/75 p-3 sm:p-4"
+        role="presentation"
+        onClick={close}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={label}
+          className="flex max-h-[min(90vh,900px)] w-full max-w-5xl min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-600 bg-slate-900 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
         >
-          <ExternalLink size={14} />
-          {isImage ? 'Open full size' : 'Open document'}
-        </a>
+          <div className="flex shrink-0 min-h-[44px] items-center justify-between gap-2 border-b border-slate-700 px-3 py-2 sm:px-4 sm:py-3">
+            <p className="min-w-0 break-words pr-2 text-sm font-semibold text-slate-100">{label}</p>
+            <button
+              type="button"
+              onClick={close}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-auto bg-slate-950/80 p-2 sm:p-4">
+            {isPdf ? (
+              <iframe
+                title={label}
+                src={dataUrl}
+                className="h-[min(80vh,800px)] w-full min-w-0 max-w-full rounded-lg border border-slate-700 bg-slate-900"
+              />
+            ) : isImage ? (
+              <img
+                src={dataUrl}
+                alt={label}
+                className="mx-auto max-h-[min(85vh,880px)] w-auto max-w-full object-contain"
+              />
+            ) : (
+              <p className="text-slate-300">Preview is not available for this file type. Use download or open in a new tab.</p>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-700 bg-slate-900 px-3 py-2 sm:px-4">
+            {dataUrl.startsWith('data:') && (isImage || isPdf) ? (
+              <a
+                href={dataUrl}
+                download={downloadName}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-500 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <Download size={16} />
+                Download
+              </a>
+            ) : null}
+            {isHttp ? (
+              <a
+                href={dataUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-500 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <ExternalLink size={16} />
+                Open in new tab
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+
+  return (
+    <>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <div className="mt-3 flex min-w-0 flex-wrap items-start gap-3">
+          {isImage && (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="shrink-0 cursor-zoom-in rounded-lg border-0 bg-transparent p-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              aria-label={`View full size: ${label}`}
+            >
+              <img
+                src={dataUrl}
+                alt={label}
+                className="pointer-events-none max-h-40 rounded-lg border border-slate-200 object-contain"
+              />
+            </button>
+          )}
+          {isPdf && (
+            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <FileText size={20} className="shrink-0 text-red-600" aria-hidden />
+              <span className="text-sm font-medium text-slate-700">PDF document</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex min-h-[44px] min-w-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            <ExternalLink size={16} className="shrink-0" />
+            {isImage ? 'View full size' : isPdf ? 'View document' : 'View'}
+          </button>
+        </div>
       </div>
-    </div>
+      {modal}
+    </>
   );
 }
 

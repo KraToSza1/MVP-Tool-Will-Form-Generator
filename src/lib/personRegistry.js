@@ -213,6 +213,7 @@ export function getContactCandidates(formValues) {
   };
   addGiftRecipientCandidates(formValues.specificGiftsList, 'specificGiftsList', 'Specific gift');
   addGiftRecipientCandidates(formValues.monetaryGiftsList, 'monetaryGiftsList', 'Cash gift');
+  addGiftRecipientCandidates(formValues.propertyGiftsList, 'propertyGiftsList', 'Property gift');
 
   logPerson('candidates_built', { count: out.length, keys: out.map((o) => o.id) });
   return out;

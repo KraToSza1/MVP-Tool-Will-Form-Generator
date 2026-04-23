@@ -241,7 +241,12 @@ function waitForVideoRef(videoRef, maxFrames = 150) {
   });
 }
 
-export default function IdentityVerification({ formValues, setFormValues, submittedMatterId = null }) {
+export default function IdentityVerification({
+  formValues,
+  setFormValues,
+  submittedMatterId = null,
+  isStandaloneStep = false,
+}) {
   const data = formValues.identityVerification || {};
   const fileNames = formValues.identityVerificationFileNames || {};
   const isPostSubmission = Boolean(submittedMatterId);
@@ -510,7 +515,9 @@ export default function IdentityVerification({ formValues, setFormValues, submit
   return (
     <div
       id="identity-verification-section"
-      className="id-verification-block -mx-4 mt-8 min-w-0 scroll-mt-24 rounded-xl border border-slate-200 border-t-2 border-t-amber-500 bg-white px-4 py-6 pt-8 shadow-lg dark:border-slate-600 dark:border-t-amber-400/80 dark:bg-slate-900/95"
+      className={`id-verification-block -mx-4 min-w-0 scroll-mt-24 rounded-xl border border-slate-200 border-t-2 border-t-amber-500 bg-white px-4 py-6 pt-8 shadow-lg dark:border-slate-600 dark:border-t-amber-400/80 dark:bg-slate-900/95 ${
+        isStandaloneStep ? 'mt-2' : 'mt-8'
+      }`}
     >
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300/90">
         {isPostSubmission ? 'Next step — submit ID for review' : 'Verification stage — before solicitor meeting'}

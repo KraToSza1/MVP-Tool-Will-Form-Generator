@@ -163,6 +163,13 @@ function getSectionRenderFields(section) {
   return section.fields;
 }
 
+/** Client flow only: final step in the stepper — upload ID after all questionnaire fields (not in the JSON). */
+const IDENTITY_VERIFICATION_ONLY_SECTION = {
+  formSection: 'Identity verification',
+  fields: [],
+  _identityVerificationStep: true,
+};
+
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
   const { formData } = useFormDefinition();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -335,7 +342,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // (guided shells replace legacy questions; values still live in formValues + buildClauses / PDF).
   const visibleSections = useMemo(() => {
     if (!formData?.formSections) return [];
-    return formData.formSections
+    const mapped = formData.formSections
       .filter((s) => {
         if (s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE && !solicitorMode) return false;
         if (s._hiddenFromClient && !solicitorMode) return false;
@@ -355,6 +362,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           });
         return changed ? { ...s, fields: visibleFields } : s;
       });
+    if (!solicitorMode) {
+      return [...mapped, IDENTITY_VERIFICATION_ONLY_SECTION];
+    }
+    return mapped;
   }, [solicitorMode, formData?.formSections]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
@@ -416,7 +427,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const section = visibleSections[currentIndex];
     if (!section || !formData?.formSections) return currentIndex;
     const i = formData.formSections.indexOf(section);
-    return i >= 0 ? i : currentIndex;
+    if (i >= 0) return i;
+    if (section?._identityVerificationStep) {
+      return Math.max(0, formData.formSections.length - 1);
+    }
+    return currentIndex;
   }, [currentIndex, solicitorMode, visibleSections, formData?.formSections]);
 
   useEffect(() => {
@@ -429,6 +444,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const currentSection = visibleSections[currentIndex] || formData.formSections[actualSectionIndex];
   /** Guided Other Provisions: first real heading is inside OtherProvisionsGuided — hide duplicate page chrome for this step. */
   const hideOtherProvisionsTopChrome = currentSection?.formSection === 'Other Provisions';
+  const isClientIdentityOnlyStep = !solicitorMode && !!currentSection?._identityVerificationStep;
   const currentSectionRenderFields = useMemo(
     () => getSectionRenderFields(currentSection),
     [currentSection]
@@ -575,6 +591,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
     }, 120);
   }, []);
+  /** After submit, client is already on the identity step; only scroll if ID was incomplete (reminder to add docs). */
+  const closeCompletionModalAsClient = useCallback(() => {
+    closeCompletionModal({ scrollToIdentity: submittedWithIncompleteId });
+  }, [closeCompletionModal, submittedWithIncompleteId]);
 
   // Handle scroll to show/hide back to top button
   useEffect(() => {
@@ -599,7 +619,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
         if (submitted) {
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing completion modal with Escape key');
-          if (!solicitorMode) closeCompletionModal();
+          if (!solicitorMode) closeCompletionModalAsClient();
           else setSubmitted(false);
         }
       }
@@ -647,7 +667,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModal]);
+  }, [validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModalAsClient]);
 
   const scrollToTop = () => {
     DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
@@ -2771,7 +2791,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(filteredToSchema).length} fields (client mode — includes Estate Overview demo; solicitor-only steps omitted). Open Trustees/Executors to see Aristone recommendation if eligible.`
+            ? `Filled ${Object.keys(filteredToSchema).length} fields (client mode — Estate Overview + demo ID image slots; solicitor-only steps omitted). Use Next to reach the Identity verification step; Submit runs the same checks as a real send.`
             : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
         duration: 5000
       });
@@ -4189,7 +4209,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       <p>
                         {submittedMatterId
                           ? 'Upload ID documents below, then click Update submission to attach them to the same matter for solicitor review.'
-                          : 'Submit ID next, then the solicitor reviews your questionnaire and arranges the in-person signing appointment.'}
+                          : isClientIdentityOnlyStep
+                            ? 'Upload your documents below, then click Submit. The solicitor will review your questionnaire and arrange the in-person signing appointment.'
+                            : 'Submit ID on the final step, then the solicitor reviews your questionnaire and arranges the in-person signing appointment.'}
                       </p>
                     </div>
                     )}
@@ -4208,19 +4230,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-indigo-600">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-indigo-600" />
+              {!isClientIdentityOnlyStep && (
+                <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-indigo-600">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-slate-100">
+                    {currentSection.formSection}
+                  </h2>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-slate-100">
-                  {currentSection.formSection}
-                </h2>
-              </div>
+              )}
                 </>
               )}
 
               <div className="space-y-3">
-                {currentSectionRenderFields.map((field, idx) => {
+                {isClientIdentityOnlyStep ? (
+                  <IdentityVerification
+                    formValues={formValues}
+                    setFormValues={setFormValues}
+                    submittedMatterId={submittedMatterId}
+                    isStandaloneStep
+                  />
+                ) : (
+                currentSectionRenderFields.map((field, idx) => {
                   // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
                   if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
                     return null;
@@ -4294,14 +4326,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       />
                     </div>
                   );
-                }).filter(Boolean)}
-                {/* #8 Identity verification - client mode, post-completion section on last step */}
-                {!solicitorMode && currentIndex === visibleSections.length - 1 && (
-                  <IdentityVerification
-                    formValues={formValues}
-                    setFormValues={setFormValues}
-                    submittedMatterId={submittedMatterId}
-                  />
+                }).filter(Boolean)
                 )}
               </div>
 
@@ -4377,7 +4402,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     onClick={() => handleAutoFill()}
                     className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 active:from-purple-700 active:to-purple-800 text-white px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-md transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto"
                     type="button"
-                    title="Fill the entire form with dummy data for testing - all fields will be populated!"
+                    title="Fill the form with current demo data (including four tiny placeholder ID images for the final step). Not real documents."
                   >
                     <Zap size={18} className="sm:w-5 sm:h-5" />
                     <span className="whitespace-nowrap">Auto-Fill Form (Test Data)</span>
@@ -5748,7 +5773,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               </div>
               <button
                 type="button"
-                onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
+                onClick={() => (!solicitorMode ? closeCompletionModalAsClient() : setSubmitted(false))}
                 className="rounded-xl border border-white/30 bg-white/10 p-2.5 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60"
                 aria-label="Close"
               >
@@ -5806,8 +5831,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white shadow">1</div>
                     <div className="min-w-0 flex-1">
-                      <p className="mb-1 font-semibold text-slate-100">Submit ID</p>
-                      <p className="text-sm leading-relaxed text-slate-400">Upload photo ID and proof of address next. You can do that immediately from this same secure link.</p>
+                      <p className="mb-1 font-semibold text-slate-100">ID documents</p>
+                      <p className="text-sm leading-relaxed text-slate-400">Complete or update uploads on the step behind this message, then use Update submission if the solicitor should receive new images.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
@@ -5834,7 +5859,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   <div>
                     <p className="mb-1 text-sm font-semibold text-blue-100">Close to return to your submitted form</p>
                     <p className="text-sm leading-relaxed text-blue-200/90">
-                      {solicitorMode ? 'Close this message to return to the form.' : 'Close this message to upload ID now, make any final corrections, or use the same secure link later.'}
+                      {solicitorMode
+                        ? 'Close this message to return to the form.'
+                        : 'You are still on the Identity verification step. Close to return to the form, add or change ID if needed, then use Update submission when ready.'}
                     </p>
                   </div>
                 </div>
@@ -5845,7 +5872,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             <div className="completion-modal-footer flex flex-col gap-3 border-t border-slate-600 bg-slate-900 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
-                onClick={() => (!solicitorMode ? closeCompletionModal() : setSubmitted(false))}
+                onClick={() => (!solicitorMode ? closeCompletionModalAsClient() : setSubmitted(false))}
                 className="order-2 inline-flex items-center justify-center rounded-xl border border-slate-500 bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:order-1"
               >
                 Close
@@ -5870,14 +5897,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </button>
               </div>
               ) : (
-              <div className="flex w-full flex-col gap-2 order-1 sm:order-2 sm:w-auto sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => closeCompletionModal({ scrollToIdentity: true })}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-                >
-                  Upload ID now
-                </button>
+              <div className="flex w-full flex-col gap-2 order-1 sm:order-2 sm:w-auto sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={startOverAfterSubmit}

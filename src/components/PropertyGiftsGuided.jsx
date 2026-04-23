@@ -134,6 +134,16 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
     if (!c) return;
     setRecipient(personDisplayNameForGift(c.data));
     setRelationship(relationshipFromPick(c.source, c.data));
+    // If this contact has a saved address, prefill the property address (e.g. main home / their address on file)
+    const d = c.data && typeof c.data === 'object' ? c.data : {};
+    const a1 = String(d.address1 || '').trim();
+    const a2 = String(d.address2 || '').trim();
+    const a3 = String(d.address3 || '').trim();
+    const pc = String(d.postcode || '').trim();
+    if (a1) setAddr1(a1);
+    if (a2) setAddr2(a2);
+    if (a3) setTown(a3);
+    if (pc) setPostcode(pc);
   };
 
   const saveGift = () => {
@@ -454,8 +464,39 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                   <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden="true" />
                     <p className="m-0 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
-                      Enter the full address and the name of the person who should receive it. Add one property at a time.
+                      Enter the full address and the name of the person who should receive it, or start by choosing
+                      someone you already added below. If we have a saved address for them, it can prefill the property
+                      fields. Add one property at a time.
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="pg-pick">
+                      Select from people already in this form
+                    </label>
+                    <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
+                      Includes you, your partner, saved contacts, and people from other gift sections. Fills
+                      name, relationship, and address when we have them.
+                    </p>
+                    <select
+                      id="pg-pick"
+                      className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:ring-indigo-500/40"
+                      value={pickContactId}
+                      onChange={(e) => applyPickedContact(e.target.value)}
+                    >
+                      <option value="">Type manually (no selection)</option>
+                      {contactPickOptions.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    {contactPickOptions.length === 0 ? (
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        No saved people yet. Complete About you, your partner, or other sections first — or enter the
+                        recipient and address below.
+                      </p>
+                    ) : null}
                   </div>
 
                   <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
@@ -568,26 +609,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
                   <p className="m-0 border-b border-slate-200 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-white/10 dark:text-slate-500">
                     Who receives this property
                   </p>
-                  {contactPickOptions.length > 0 ? (
-                    <div>
-                      <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor="pg-pick">
-                        Same person or new <span className="text-slate-500">(optional)</span>
-                      </label>
-                      <select
-                        id="pg-pick"
-                        className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                        value={pickContactId}
-                        onChange={(e) => applyPickedContact(e.target.value)}
-                      >
-                        <option value="">Enter a new person</option>
-                        {contactPickOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
+                  <p className="m-0 text-xs text-slate-600 dark:text-slate-400">
+                    You can change the name and relationship after using the list above, or if you didn&apos;t use it,
+                    type them here.
+                  </p>
                   <div>
                     <label className="mb-1.5 block text-xs text-slate-700 dark:text-slate-300" htmlFor="pg-rec">
                       Recipient&apos;s full name <span className="text-red-600 dark:text-red-400">*</span>
