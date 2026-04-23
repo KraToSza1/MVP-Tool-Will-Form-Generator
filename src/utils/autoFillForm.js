@@ -913,6 +913,54 @@ function applyRichPersonDemoOverrides(dummyData) {
     dummyData.shareholderAgreementInPlace = dummyData.shareholderAgreementInPlace || 'Unsure';
   }
 
+  if (dummyData.leavePropertyGifts === 'Yes') {
+    if (!Array.isArray(dummyData.propertyGiftsList) || dummyData.propertyGiftsList.length === 0) {
+      const list = [
+        {
+          id: 'demo-pg-1',
+          addressLine1: DEMO.testator.address1,
+          addressLine2: DEMO.testator.address2 || '',
+          town: DEMO.testator.address3 || '',
+          postcode: DEMO.testator.postcode,
+          tenure: 'freehold',
+          hasMortgage: 'no',
+          mortgageInstruction: '',
+          recipientName: DEMO.partner.fullName,
+          recipientRelationship: 'Partner / spouse',
+          conditionKey: '',
+          conditionLabel: 'None',
+          lapseKey: 'residue',
+          lapseLabel: 'Falls into the residue of my estate (default)',
+        },
+        {
+          id: 'demo-pg-2',
+          addressLine1: '88 Investment Court',
+          addressLine2: 'Canary Wharf',
+          town: 'London',
+          postcode: 'E14 5HP',
+          tenure: 'leasehold',
+          hasMortgage: 'yes',
+          mortgageInstruction: 'paid-from-estate',
+          recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+          recipientRelationship: 'son',
+          conditionKey: 'age-25',
+          conditionLabel: 'Only when they reach the age of 25',
+          lapseKey: 'residue',
+          lapseLabel: 'Falls into the residue of my estate (default)',
+        },
+      ];
+      dummyData.propertyGiftsList = list;
+      dummyData.propertyGiftsDetails = `${formatPropertyGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+    }
+    if (
+      dummyData.failedPropertyGiftPassProportionately == null ||
+      dummyData.failedPropertyGiftPassProportionately === '' ||
+      dummyData.failedPropertyGiftPassProportionately === 'Standard value'
+    ) {
+      dummyData.failedPropertyGiftPassProportionately = 'Yes';
+    }
+  }
+
   console.log('[AUTOFILL GENERATE] 🧑‍🤝‍🧑 Rich person demo pass:', {
     contactRegistryEntries: dummyData[CONTACT_REGISTRY_KEY]?.length ?? 0,
     appointGuardians: dummyData.appointGuardians,
@@ -1311,6 +1359,22 @@ export const generateDummyFormData = (formData) => {
             recipientRelationship: 'Partner / spouse',
             conditionKey: '',
             conditionLabel: 'None',
+            lapseKey: 'residue',
+            lapseLabel: 'Falls into the residue of my estate (default)',
+          },
+          {
+            id: 'demo-pg-2',
+            addressLine1: '88 Investment Court',
+            addressLine2: 'Canary Wharf',
+            town: 'London',
+            postcode: 'E14 5HP',
+            tenure: 'leasehold',
+            hasMortgage: 'yes',
+            mortgageInstruction: 'paid-from-estate',
+            recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+            recipientRelationship: 'son',
+            conditionKey: 'age-25',
+            conditionLabel: 'Only when they reach the age of 25',
             lapseKey: 'residue',
             lapseLabel: 'Falls into the residue of my estate (default)',
           },

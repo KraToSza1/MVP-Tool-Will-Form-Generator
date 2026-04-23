@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { Check, Home, Info, Plus, X } from 'lucide-react';
 import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import { formatPropertyTrustClientSummaryFromState, getPropertyAddressCandidates } from '../utils/propertyTrustFormat.js';
@@ -205,6 +206,10 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
       const prevList = Array.isArray(prev.propertyTrustPropertiesList) ? prev.propertyTrustPropertiesList : [];
       return { ...prev, propertyTrustPropertiesList: [...prevList, entry] };
     });
+    const addressLine = [entry.addressLine1, entry.town, entry.postcode].filter(Boolean).join(', ');
+    toast.success('Trust property saved', {
+      description: addressLine || 'Property added to this trust',
+    });
     closeModal();
   };
 
@@ -226,12 +231,15 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
     const first = String(d.firstName || '').trim();
     const last = String(d.lastName || '').trim();
     const r = String(d.relationship || d.rel || '').trim();
+    let description = '';
     if (first || last || r) {
       syncLifeTenantName({
         propertyTrustLifeTenantFirstName: first,
         propertyTrustLifeTenantLastName: last,
         propertyTrustLifeTenantRelationship: r,
       });
+      const full = [first, last].filter(Boolean).join(' ').trim();
+      description = full ? (r ? `${full} — ${r}` : full) : r;
     } else {
       const name = personDisplayNameForGift(d);
       if (name) {
@@ -243,7 +251,11 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
           propertyTrustLifeTenantLastName: lastPart,
           propertyTrustLifeTenantRelationship: r,
         });
+        description = r ? `${name} — ${r}` : name;
       }
+    }
+    if (description) {
+      toast.success('Life tenant set', { description });
     }
   };
 

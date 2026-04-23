@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { Check, Home, Info, Plus, X } from 'lucide-react';
 import { getContactCandidates, personDisplayNameForGift } from '../lib/personRegistry.js';
 import { formatPropertyGiftsDetailsFromList } from '../utils/propertyGiftsFormat.js';
@@ -178,6 +179,10 @@ export default function PropertyGiftsGuided({ field: _field, formValues, setForm
     applyPatch((prev) => {
       const prevList = Array.isArray(prev.propertyGiftsList) ? prev.propertyGiftsList : [];
       return { ...prev, propertyGiftsList: [...prevList, entry] };
+    });
+    const addressLine = [entry.addressLine1, entry.town, entry.postcode].filter(Boolean).join(', ');
+    toast.success('Property gift saved', {
+      description: `${entry.recipientName}${addressLine ? ` — ${addressLine}` : ''}`,
     });
     closeModal();
   };
