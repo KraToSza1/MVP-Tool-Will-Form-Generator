@@ -20,6 +20,46 @@ function formatAddressLine(p) {
   return parts.join(', ');
 }
 
+/** Normalize for comparison (not for display). */
+function normalizeForDedupe(s) {
+  if (s == null || s === '') return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/[.,;]+/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function normalizePostcodeForDedupe(s) {
+  if (s == null || s === '') return '';
+  return String(s).trim().toUpperCase().replace(/\s/g, '');
+}
+
+/**
+ * Same property often appears on testator, partner, gifts, and trust. Town/line2 are split inconsistently, so
+ * we key on address line 1 + postcode only—enough to collapse "your address" / "partner" / repeated gift rows.
+ * Distinct units at the same number should use different line 1 (e.g. include flat) or line 2.
+ */
+function addressCandidateDedupeKey(c) {
+  const a1 = normalizeForDedupe(c?.addressLine1);
+  const pc = normalizePostcodeForDedupe(c?.postcode);
+  if (!a1 && !pc) return `id:${c?.id ?? 'unknown'}`;
+  return `${a1}::${pc}`;
+}
+
+function dedupeAddressCandidates(candidates) {
+  const seen = new Set();
+  const out = [];
+  for (const item of candidates) {
+    if (!item || typeof item !== 'object') continue;
+    const k = addressCandidateDedupeKey(item);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(item);
+  }
+  return out;
+}
+
 /**
  * @param {Record<string, unknown>} formValues
  * @returns {{ id: string, label: string, addressLine1: string, addressLine2: string, town: string, postcode: string, tenure: string }[]}
@@ -103,7 +143,7 @@ export function getPropertyAddressCandidates(formValues) {
     });
   }
 
-  return out;
+  return dedupeAddressCandidates(out);
 }
 
 /**
