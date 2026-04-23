@@ -24,10 +24,10 @@ function initialsFromName(name) {
   return `${parts[0][0] || ''}${parts[parts.length - 1][0] || ''}`.toUpperCase() || '—';
 }
 
-/** Primary links inside the nav pill (dark / light). */
+/** Primary links inside the nav pill (dark / light) — compact so the full bar fits on typical widths. */
 function navPillLinkClass(isActive, isDark, variant = 'default') {
   const base =
-    'inline-flex min-h-[40px] sm:min-h-[42px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-0';
+    'inline-flex min-h-[44px] shrink-0 sm:min-h-[44px] items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-150 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-0';
   if (isActive) {
     if (variant === 'urgent') {
       return `${base} bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/40 dark:bg-amber-500/20 dark:text-amber-50`;
@@ -105,7 +105,7 @@ export default function SolicitorLayout() {
   const navPillSurface = isDark
     ? 'rounded-2xl border border-slate-600/50 bg-slate-900/50 p-1 shadow-inner shadow-black/20 ring-1 ring-white/[0.04]'
     : 'rounded-2xl border border-slate-200/90 bg-slate-100/90 p-1 shadow-sm ring-1 ring-slate-900/[0.04]';
-  const navDivider = isDark ? 'hidden h-9 w-px shrink-0 bg-slate-600/70 sm:block' : 'hidden h-9 w-px shrink-0 bg-slate-300/80 sm:block';
+  const inPillDivider = isDark ? 'h-8 w-px shrink-0 self-center bg-slate-600/70' : 'h-8 w-px shrink-0 self-center bg-slate-300/80';
 
   return (
     <div className={shellClass}>
@@ -130,77 +130,76 @@ export default function SolicitorLayout() {
             </div>
 
             <nav
-              className="order-3 flex w-full min-w-0 flex-1 flex-col items-stretch gap-2.5 sm:order-2 sm:items-center lg:justify-center"
+              className="order-3 flex w-full min-w-0 flex-1 flex-col items-stretch sm:order-2 sm:items-center lg:min-w-0 lg:flex-1 lg:justify-center"
               aria-label="Portal navigation"
             >
-              <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-center sm:gap-3">
-                <div
-                  className={`${navPillSurface} flex w-full min-w-0 flex-wrap items-center justify-center gap-0.5 sm:justify-start`}
+              <div
+                className={`${navPillSurface} flex w-full min-w-0 max-w-full flex-nowrap items-center justify-center gap-0 self-center overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:thin] sm:w-auto sm:max-w-none lg:max-w-[min(100%,56rem)]`}
+              >
+                <NavLink
+                  to="/solicitor"
+                  end
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Dashboard and matters"
                 >
-                  <NavLink
-                    to="/solicitor"
-                    end
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                    title="Dashboard and matters"
-                  >
-                    <BriefcaseBusiness size={16} className="shrink-0 opacity-90" aria-hidden />
-                    <span className="whitespace-nowrap">Dashboard</span>
-                  </NavLink>
-                  <NavLink
-                    to="/solicitor/calendar"
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                    title="Calendar (coming soon)"
-                  >
-                    <Calendar size={16} className="shrink-0 opacity-90" aria-hidden />
-                    <span className="whitespace-nowrap">Calendar</span>
-                  </NavLink>
-                  <NavLink
-                    to="/solicitor/availability"
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                    title="Availability (coming soon)"
-                  >
-                    <Clock size={16} className="shrink-0 opacity-90" aria-hidden />
-                    <span className="whitespace-nowrap">Availability</span>
-                  </NavLink>
-                  <NavLink
-                    to="/solicitor/reports"
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                    title="Reports (coming soon)"
-                  >
-                    <BarChart3 size={16} className="shrink-0 opacity-90" aria-hidden />
-                    <span className="whitespace-nowrap">Reports</span>
-                  </NavLink>
-                  <NavLink
-                    to="/solicitor/urgent"
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'urgent')}
-                    title="Matters with outstanding actions"
-                  >
-                    <AlertTriangle size={16} className="shrink-0 opacity-95" aria-hidden />
-                    <span className="whitespace-nowrap">Urgent</span>
-                  </NavLink>
-                </div>
-
-                <div className={navDivider} aria-hidden="true" />
-
-                <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-1.5 sm:w-auto sm:justify-end">
-                  <NavLink
-                    to="/solicitor/questionnaire"
-                    className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                    title="Edit questionnaire schema"
-                  >
-                    <FileEdit size={16} className="shrink-0 opacity-90" aria-hidden />
-                    <span className="whitespace-nowrap">Questionnaire</span>
-                  </NavLink>
-                  <a
-                    href="/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`inline-flex min-h-[44px] w-full min-w-0 max-w-full items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition-colors sm:w-auto sm:max-w-none ${previewLinkClass}`}
-                  >
-                    <Home size={16} className="shrink-0" aria-hidden />
-                    <span className="whitespace-nowrap">Client intake</span>
-                  </a>
-                </div>
+                  <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Dashboard</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/calendar"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Calendar (coming soon)"
+                >
+                  <Calendar className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Calendar</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/availability"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Availability (coming soon)"
+                >
+                  <Clock className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Availability</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/reports"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Reports (coming soon)"
+                >
+                  <BarChart3 className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Reports</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/urgent"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'urgent')}
+                  title="Matters with outstanding actions"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 opacity-95 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Urgent</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/questionnaire"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Edit questionnaire schema"
+                >
+                  <FileEdit className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Questionnaire</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <a
+                  href="/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors sm:min-h-[44px] sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-sm ${previewLinkClass}`}
+                >
+                  <Home className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Client intake</span>
+                </a>
               </div>
             </nav>
 

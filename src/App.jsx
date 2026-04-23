@@ -84,7 +84,12 @@ export default function App() {
               element={
                 <SolicitorPlaceholderPage
                   title="Calendar"
-                  description="Firm calendar and client appointments will appear here. This view is on the product roadmap and is not connected to your data yet."
+                  description="Firm and client meetings will show here once we can connect to your work calendar. This screen is a preview only and does not read your diary yet."
+                  roadmapItems={[
+                    "Sign in with your work Microsoft 365 or Google account (or link that account) so the portal recognises your firm email.",
+                    "With your consent, connect Microsoft Outlook or Google Calendar so we can read busy and free time (not full email or attachments).",
+                    "Show a solicitor-friendly schedule inside the tool and help avoid double-booking with client work.",
+                  ]}
                 />
               }
             />
@@ -93,7 +98,12 @@ export default function App() {
               element={
                 <SolicitorPlaceholderPage
                   title="Availability"
-                  description="Set recurring availability and booking slots for clients. Coming in a later release; use your usual practice diary until then."
+                  description="You will be able to define when clients can book, checked against your real calendar. That needs the same work-email and calendar link as the Calendar view."
+                  roadmapItems={[
+                    "Use your work identity so availability matches the diary your firm already uses.",
+                    "Propose or confirm time slots from free/busy information we get from Outlook or Google Calendar (subject to what your organisation allows).",
+                    "Optionally set rules, buffers, and working hours in the product once the integration is live.",
+                  ]}
                 />
               }
             />

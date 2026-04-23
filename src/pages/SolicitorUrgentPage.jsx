@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { listMatters } from '../lib/matters.js';
 import { getMatterOutstandingCategories, OUTSTANDING_CATEGORY } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
@@ -23,8 +24,35 @@ function formatDate(value) {
 
 export default function SolicitorUrgentPage() {
   const { user, loading: authLoading } = useAuth();
+  const { isDark } = useTheme();
   const [matters, setMatters] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const backClass = isDark
+    ? 'text-indigo-400 hover:text-indigo-300'
+    : 'text-indigo-600 hover:text-indigo-800';
+  const headingClass = isDark ? 'text-slate-100' : 'text-slate-900';
+  const subClass = isDark ? 'text-slate-400' : 'text-slate-600';
+  const mutedClass = isDark ? 'text-slate-400' : 'text-slate-500';
+  const countBadgeClass = isDark
+    ? 'border-rose-500/50 bg-rose-950/40 text-rose-200'
+    : 'border-rose-200 bg-rose-50 text-rose-900';
+  const countIconClass = isDark ? 'text-rose-200' : 'text-rose-700';
+  const emptyClass = isDark
+    ? 'border-emerald-500/30 bg-emerald-950/20'
+    : 'border-emerald-200 bg-emerald-50';
+  const emptyTitleClass = isDark ? 'text-emerald-100' : 'text-emerald-900';
+  const cardClass = isDark
+    ? 'rounded-2xl border border-slate-600 bg-slate-900/80 p-4 ring-1 ring-white/5'
+    : 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm';
+  const refLabelClass = isDark ? 'text-slate-500' : 'text-slate-500';
+  const nameClass = isDark ? 'text-slate-200' : 'text-slate-800';
+  const matterLinkClass = isDark
+    ? 'text-indigo-400 hover:text-indigo-300 break-all'
+    : 'text-indigo-600 hover:text-indigo-800 break-all';
+  const catClass = isDark
+    ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+    : 'border-amber-200 bg-amber-50 text-amber-900';
 
   useEffect(() => {
     if (authLoading) return;
@@ -54,36 +82,37 @@ export default function SolicitorUrgentPage() {
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6">
-      <Link
-        to="/solicitor"
-        className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-indigo-400 hover:text-indigo-300"
-      >
+      <Link to="/solicitor" className={`inline-flex min-h-[44px] items-center gap-2 text-sm font-medium ${backClass}`}>
         <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
         Back to dashboard
       </Link>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-slate-100 sm:text-2xl">Urgent &amp; outstanding</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className={`text-xl font-bold tracking-tight sm:text-2xl ${headingClass}`}>Urgent &amp; outstanding</h1>
+          <p className={`mt-1 text-sm ${subClass}`}>
             Matters that still need ID verification, BPR or property trust follow-up, or Testamentary Capacity.
           </p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-rose-500/50 bg-rose-950/40 px-3 py-1.5 text-xs font-semibold text-rose-200">
-          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+        <span
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${countBadgeClass}`}
+        >
+          <AlertTriangle className={`h-3.5 w-3.5 ${countIconClass}`} aria-hidden />
           {urgent.length} matter{urgent.length === 1 ? '' : 's'}
         </span>
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        <div className={`flex items-center gap-2 text-sm ${mutedClass}`}>
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
           Loading…
         </div>
       ) : urgent.length === 0 ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-8 text-center sm:px-6">
-          <p className="text-sm font-medium text-emerald-100">Nothing urgent right now</p>
-          <p className="mt-2 text-sm text-slate-400">All visible matters are clear of outstanding solicitor actions, or you have no matters yet.</p>
+        <div className={`rounded-2xl border px-4 py-8 text-center sm:px-6 ${emptyClass}`}>
+          <p className={`text-sm font-medium ${emptyTitleClass}`}>Nothing urgent right now</p>
+          <p className={`mt-2 text-sm ${subClass}`}>
+            All visible matters are clear of outstanding solicitor actions, or you have no matters yet.
+          </p>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -92,27 +121,29 @@ export default function SolicitorUrgentPage() {
             return (
               <li
                 key={matter.id}
-                className="rounded-2xl border border-slate-600 bg-slate-900/60 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
+                className={`min-w-0 sm:flex sm:items-center sm:justify-between sm:gap-4 ${cardClass}`}
               >
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Reference</p>
-                  <Link to={`/solicitor/matters/${matter.id}`} className="text-base font-semibold text-indigo-400 hover:text-indigo-300 break-all">
+                  <p className={`text-xs font-semibold uppercase tracking-wide ${refLabelClass}`}>Reference</p>
+                  <Link to={`/solicitor/matters/${matter.id}`} className={`text-base font-semibold ${matterLinkClass}`}>
                     {matter.client_reference}
                   </Link>
-                  <p className="mt-1 text-sm text-slate-200">{matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">Last activity {formatDate(matter.last_activity_at)}</p>
+                  <p className={`mt-1 text-sm ${nameClass}`}>
+                    {matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}
+                  </p>
+                  <p className={`mt-0.5 text-xs ${mutedClass}`}>Last activity {formatDate(matter.last_activity_at)}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {categories.map((c) => (
                       <span
                         key={c}
-                        className="inline-flex rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-100"
+                        className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${catClass}`}
                       >
                         {CATEGORY_SHORT[c] || c}
                       </span>
                     ))}
                   </div>
                 </div>
-                <div className="mt-4 flex flex-shrink-0 flex-col items-stretch gap-2 sm:mt-0 sm:items-end">
+                <div className="mt-4 flex shrink-0 flex-col items-stretch gap-2 sm:mt-0 sm:items-end">
                   <MatterStatusBadge status={matter.status} />
                   <Link
                     to={`/solicitor/matters/${matter.id}`}
