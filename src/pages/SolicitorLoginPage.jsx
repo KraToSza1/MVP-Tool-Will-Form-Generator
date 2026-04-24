@@ -28,39 +28,46 @@ export default function SolicitorLoginPage() {
   const [adminFixSql, setAdminFixSql] = useState(null);
   const [inIframe, setInIframe] = useState(false);
   const staffDeniedToastRef = useRef(false);
+  const oauthReturnHandledRef = useRef(false);
 
   useEffect(() => {
     setInIframe(typeof window !== 'undefined' && window.self !== window.top);
   }, []);
 
-  /** After OAuth, Supabase / provider may add ?error= or #...error= to this page — log for debugging (no tokens). */
+  /** After OAuth, Supabase may add ?error= / ?code= — log, toast on failure, strip params from URL. */
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const { search, hash } = window.location;
-    const fromQuery = new URLSearchParams(search);
-    const qError = fromQuery.get('error');
-    const qDesc = fromQuery.get('error_description');
+    const fromQuery = new URLSearchParams(window.location.search);
+    let err = fromQuery.get('error');
+    let desc = fromQuery.get('error_description');
+    if (!err && window.location.hash && window.location.hash.length > 1) {
+      const h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      err = h.get('error');
+      desc = h.get('error_description');
+      if (h.get('access_token') || h.get('provider_token')) {
+        console.info('[WillTool M365 Auth] return URL: auth fragment present (token exchange path)');
+      }
+    }
     if (fromQuery.get('code')) {
       console.info('[WillTool M365 Auth] return URL: ?code= present (Supabase will exchange for session)');
     }
-    if (qError || qDesc) {
-      console.warn('[WillTool M365 Auth] return URL (search params)', {
-        error: qError,
-        error_description: qDesc,
-      });
-    }
-    if (hash && hash.length > 1) {
-      const h = new URLSearchParams(hash.replace(/^#/, ''));
-      const hError = h.get('error');
-      const hDesc = h.get('error_description');
-      if (hError || hDesc) {
-        console.warn('[WillTool M365 Auth] return URL (hash fragment)', {
-          error: hError,
-          error_description: hDesc,
+    if (err || desc) {
+      const decoded = desc ? decodeURIComponent(desc.replace(/\+/g, ' ')) : '';
+      console.warn('[WillTool M365 Auth] OAuth return error', { error: err, error_description: decoded });
+      if (!oauthReturnHandledRef.current) {
+        oauthReturnHandledRef.current = true;
+        const isExchange = /exchange|external code/i.test(decoded || '');
+        toast.error('Microsoft sign-in could not finish', {
+          id: 'oauth-return-error',
+          description: isExchange
+            ? `${decoded || err} — Usually: wrong or expired Client Secret in Supabase (paste a new secret Value from Azure), or Client ID mismatch, or missing “Grant admin consent” on the app’s Microsoft Graph permissions. Check Supabase Dashboard → Logs → Auth for details.`
+            : decoded || err || 'Unknown OAuth error',
+          duration: 22000,
         });
-      }
-      if (h.get('access_token') || h.get('provider_token')) {
-        console.info('[WillTool M365 Auth] return URL: auth fragment present (access_token / session exchange)');
+        const u = new URL(window.location.href);
+        u.search = '';
+        u.hash = '';
+        window.history.replaceState({}, '', `${u.pathname}${u.search}`);
       }
     }
   }, [location.pathname, location.search, location.hash]);
