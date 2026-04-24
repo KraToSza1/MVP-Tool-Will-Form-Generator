@@ -33,6 +33,38 @@ export default function SolicitorLoginPage() {
     setInIframe(typeof window !== 'undefined' && window.self !== window.top);
   }, []);
 
+  /** After OAuth, Supabase / provider may add ?error= or #...error= to this page — log for debugging (no tokens). */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const { search, hash } = window.location;
+    const fromQuery = new URLSearchParams(search);
+    const qError = fromQuery.get('error');
+    const qDesc = fromQuery.get('error_description');
+    if (fromQuery.get('code')) {
+      console.info('[WillTool M365 Auth] return URL: ?code= present (Supabase will exchange for session)');
+    }
+    if (qError || qDesc) {
+      console.warn('[WillTool M365 Auth] return URL (search params)', {
+        error: qError,
+        error_description: qDesc,
+      });
+    }
+    if (hash && hash.length > 1) {
+      const h = new URLSearchParams(hash.replace(/^#/, ''));
+      const hError = h.get('error');
+      const hDesc = h.get('error_description');
+      if (hError || hDesc) {
+        console.warn('[WillTool M365 Auth] return URL (hash fragment)', {
+          error: hError,
+          error_description: hDesc,
+        });
+      }
+      if (h.get('access_token') || h.get('provider_token')) {
+        console.info('[WillTool M365 Auth] return URL: auth fragment present (access_token / session exchange)');
+      }
+    }
+  }, [location.pathname, location.search, location.hash]);
+
   /** Signed in (e.g. Microsoft) but not in staff list / role */
   useEffect(() => {
     if (loading || staffDeniedToastRef.current) return;
@@ -167,10 +199,13 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
     const result = await startMicrosoft365SignIn();
     setMsSigningIn(false);
     if (result?.error) {
+      console.warn('[WillTool M365 Auth] start failed (stayed on this page)', { error: result.error });
       toast.error('Could not start Microsoft 365 sign-in', {
         description: result.error,
         duration: 14000,
       });
+    } else if (result?.ok) {
+      console.info('[WillTool M365 Auth] browser navigating away to Microsoft/Supabase (if you see this, redirect was quick)');
     }
   };
 

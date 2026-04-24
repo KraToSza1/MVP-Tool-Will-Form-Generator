@@ -369,8 +369,29 @@ export async function signInSolicitor({ email, password }) {
  * “Additional redirect URLs”: `https://<your-app-origin>/solicitor/login` (e.g. production + localhost for dev).
  * Supabase callback URL must be in Azure app Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
  */
+function logM365Auth(phase, detail) {
+  if (typeof console !== 'undefined' && console.info) {
+    console.info(`[WillTool M365 Auth] ${phase}`, detail ?? '');
+  }
+}
+
+function safeParseAuthRedirectUrl(url) {
+  try {
+    const u = new URL(url);
+    return {
+      host: u.host,
+      path: u.pathname,
+      provider: u.searchParams.get('provider'),
+      redirect_to: u.searchParams.get('redirect_to'),
+    };
+  } catch {
+    return { parseFailed: true };
+  }
+}
+
 export async function startMicrosoft365SignIn() {
   if (!isSupabaseConfigured() || !supabase) {
+    logM365Auth('abort', { reason: 'Supabase not configured' });
     return { error: 'Supabase not configured' };
   }
   if (typeof window === 'undefined') {
@@ -378,6 +399,11 @@ export async function startMicrosoft365SignIn() {
   }
   const origin = window.location.origin;
   const redirectTo = `${origin}/solicitor/login`;
+  logM365Auth('start', {
+    supabaseHost: getSupabaseProjectHost(),
+    origin,
+    redirectTo,
+  });
   authLog('startMicrosoft365SignIn: signInWithOAuth azure', { redirectTo, host: getSupabaseProjectHost() });
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'azure',
@@ -390,13 +416,21 @@ export async function startMicrosoft365SignIn() {
     },
   });
   if (error) {
+    logM365Auth('signInWithOAuth error', {
+      message: error.message,
+      name: error.name,
+      status: error.status,
+      code: error.code,
+    });
     authError('startMicrosoft365SignIn failed', error);
     return { error: error.message || 'Could not start Microsoft sign-in' };
   }
   if (data?.url) {
+    logM365Auth('redirect (next navigation — Supabase → Microsoft)', safeParseAuthRedirectUrl(data.url));
     window.location.assign(data.url);
     return { ok: true };
   }
+  logM365Auth('unexpected response', { hasData: !!data, dataKeys: data ? Object.keys(data) : [] });
   return { error: 'No sign-in URL returned. Enable the Azure provider in the Supabase project and try again.' };
 }
 
