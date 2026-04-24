@@ -11,8 +11,11 @@ import MatterDetailPage from "./pages/MatterDetailPage.jsx";
 import MatterEditorPage from "./pages/MatterEditorPage.jsx";
 import QuestionnaireEditorPage from "./pages/QuestionnaireEditorPage.jsx";
 import GuardianFlowDemoPage from "./pages/GuardianFlowDemoPage.jsx";
-import SolicitorPlaceholderPage from "./pages/SolicitorPlaceholderPage.jsx";
 import SolicitorUrgentPage from "./pages/SolicitorUrgentPage.jsx";
+import SolicitorCalendarPage from "./pages/SolicitorCalendarPage.jsx";
+import SolicitorAvailabilityPage from "./pages/SolicitorAvailabilityPage.jsx";
+import SolicitorReportsPage from "./pages/SolicitorReportsPage.jsx";
+import SolicitorStaffPage from "./pages/SolicitorStaffPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
@@ -79,43 +82,10 @@ export default function App() {
           <Route path="/solicitor" element={<SolicitorLayout />}>
             <Route index element={<SolicitorDashboardPage />} />
             <Route path="urgent" element={<SolicitorUrgentPage />} />
-            <Route
-              path="calendar"
-              element={
-                <SolicitorPlaceholderPage
-                  title="Calendar"
-                  description="Firm and client meetings will show here once we can connect to your work calendar. This screen is a preview only and does not read your diary yet."
-                  roadmapItems={[
-                    "Sign in with your work Microsoft 365 or Google account (or link that account) so the portal recognises your firm email.",
-                    "With your consent, connect Microsoft Outlook or Google Calendar so we can read busy and free time (not full email or attachments).",
-                    "Show a solicitor-friendly schedule inside the tool and help avoid double-booking with client work.",
-                  ]}
-                />
-              }
-            />
-            <Route
-              path="availability"
-              element={
-                <SolicitorPlaceholderPage
-                  title="Availability"
-                  description="You will be able to define when clients can book, checked against your real calendar. That needs the same work-email and calendar link as the Calendar view."
-                  roadmapItems={[
-                    "Use your work identity so availability matches the diary your firm already uses.",
-                    "Propose or confirm time slots from free/busy information we get from Outlook or Google Calendar (subject to what your organisation allows).",
-                    "Optionally set rules, buffers, and working hours in the product once the integration is live.",
-                  ]}
-                />
-              }
-            />
-            <Route
-              path="reports"
-              element={
-                <SolicitorPlaceholderPage
-                  title="Reports"
-                  description="Firm-level reporting on Will Tool matters and throughput will be available here. Not yet available in this build."
-                />
-              }
-            />
+            <Route path="calendar" element={<SolicitorCalendarPage />} />
+            <Route path="availability" element={<SolicitorAvailabilityPage />} />
+            <Route path="reports" element={<SolicitorReportsPage />} />
+            <Route path="staff" element={<SolicitorStaffPage />} />
             <Route path="matters/:matterId" element={<MatterDetailPage />} />
             <Route path="matters/:matterId/form" element={<MatterEditorPage />} />
             <Route path="questionnaire" element={<QuestionnaireEditorPage />} />

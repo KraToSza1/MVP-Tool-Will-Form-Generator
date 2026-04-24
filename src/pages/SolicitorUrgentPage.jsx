@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Loader2, UserCheck, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
@@ -27,6 +27,7 @@ export default function SolicitorUrgentPage() {
   const { isDark } = useTheme();
   const [matters, setMatters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState('firm');
 
   const backClass = isDark
     ? 'text-indigo-400 hover:text-indigo-300'
@@ -80,6 +81,12 @@ export default function SolicitorUrgentPage() {
     return matters.filter((m) => (getMatterOutstandingCategories(m) || []).length > 0);
   }, [matters]);
 
+  const visibleUrgent = useMemo(() => {
+    if (scope === 'mine') return urgent.filter((m) => m.assigned_solicitor_id === user?.id);
+    if (scope === 'unassigned') return urgent.filter((m) => !m.assigned_solicitor_id);
+    return urgent;
+  }, [scope, urgent, user?.id]);
+
   return (
     <div className="min-w-0 w-full max-w-full space-y-6">
       <Link to="/solicitor" className={`inline-flex min-h-[44px] items-center gap-2 text-sm font-medium ${backClass}`}>
@@ -98,8 +105,36 @@ export default function SolicitorUrgentPage() {
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${countBadgeClass}`}
         >
           <AlertTriangle className={`h-3.5 w-3.5 ${countIconClass}`} aria-hidden />
-          {urgent.length} matter{urgent.length === 1 ? '' : 's'}
+          {visibleUrgent.length} matter{visibleUrgent.length === 1 ? '' : 's'}
         </span>
+      </div>
+
+      <div className={`flex flex-wrap gap-2 rounded-2xl border p-2 ${isDark ? 'border-slate-700 bg-slate-900/70' : 'border-slate-200 bg-white shadow-sm'}`}>
+        {[
+          { value: 'firm', label: 'Firm urgent', icon: Users },
+          { value: 'mine', label: 'My urgent', icon: UserCheck },
+          { value: 'unassigned', label: 'Unassigned', icon: AlertTriangle },
+        ].map((item) => {
+          const Icon = item.icon;
+          const active = scope === item.value;
+          return (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setScope(item.value)}
+              className={`inline-flex min-h-[40px] items-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
+                active
+                  ? 'bg-indigo-600 text-white'
+                  : isDark
+                    ? 'text-slate-200 hover:bg-white/[0.06]'
+                    : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -107,7 +142,7 @@ export default function SolicitorUrgentPage() {
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
           Loading…
         </div>
-      ) : urgent.length === 0 ? (
+      ) : visibleUrgent.length === 0 ? (
         <div className={`rounded-2xl border px-4 py-8 text-center sm:px-6 ${emptyClass}`}>
           <p className={`text-sm font-medium ${emptyTitleClass}`}>Nothing urgent right now</p>
           <p className={`mt-2 text-sm ${subClass}`}>
@@ -116,7 +151,7 @@ export default function SolicitorUrgentPage() {
         </div>
       ) : (
         <ul className="space-y-3">
-          {urgent.map((matter) => {
+          {visibleUrgent.map((matter) => {
             const categories = getMatterOutstandingCategories(matter);
             return (
               <li

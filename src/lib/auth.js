@@ -368,6 +368,10 @@ export async function signInSolicitor({ email, password }) {
  * Configure Azure in Supabase Dashboard (Authentication → Providers → Azure) and add this redirect URL to
  * “Additional redirect URLs”: `https://<your-app-origin>/solicitor/login` (e.g. production + localhost for dev).
  * Supabase callback URL must be in Azure app Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
+ *
+ * If you see "Unable to exchange external code" after Microsoft login, that is Supabase’s server failing the
+ * token request to Entra (wrong/missing **client secret Value**, ID/secret from different apps, or wrong tenant).
+ * In Entra, register the callback as a **Web** redirect URI, not "Single-page application" (SPA-only + secret mismatch is a common cause; see supabase/auth#551). Supabase → Authentication → Logs shows the real AAD error.
  */
 function logM365Auth(phase, detail) {
   if (typeof console !== 'undefined' && console.info) {

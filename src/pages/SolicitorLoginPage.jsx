@@ -5,12 +5,25 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
 import { isMicrosoftSignInEnabled, startMicrosoft365SignIn } from '../lib/auth.js';
+import { POST_CALENDAR_CONNECT_RETURN_KEY } from '../lib/staffCalendar.js';
 
 const REMEMBER_EMAIL_KEY = 'solicitor-remember-email';
 
 function getStoredEmail() {
   try {
     return typeof window !== 'undefined' ? window.localStorage.getItem(REMEMBER_EMAIL_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
+function takePostCalendarConnectReturnPath() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const value = window.sessionStorage.getItem(POST_CALENDAR_CONNECT_RETURN_KEY);
+    if (!value) return null;
+    window.sessionStorage.removeItem(POST_CALENDAR_CONNECT_RETURN_KEY);
+    return value.startsWith('/solicitor') ? value : null;
   } catch {
     return null;
   }
@@ -87,7 +100,7 @@ export default function SolicitorLoginPage() {
   }, [loading, isAuthenticated, isStaff, user]);
 
   if (!loading && isAuthenticated && isStaff) {
-    const target = location.state?.from?.pathname || '/solicitor';
+    const target = takePostCalendarConnectReturnPath() || location.state?.from?.pathname || '/solicitor';
     return <Navigate to={target} replace />;
   }
 

@@ -10,6 +10,7 @@ import {
   HelpCircle,
   Home,
   LogOut,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
@@ -185,10 +186,19 @@ export default function SolicitorLayout() {
                 <NavLink
                   to="/solicitor/reports"
                   className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                  title="Reports (coming soon)"
+                  title="Reports"
                 >
                   <BarChart3 className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
                   <span className="whitespace-nowrap">Reports</span>
+                </NavLink>
+                <div className={inPillDivider} aria-hidden="true" />
+                <NavLink
+                  to="/solicitor/staff"
+                  className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                  title="Staff and calendar links"
+                >
+                  <Users className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                  <span className="whitespace-nowrap">Staff</span>
                 </NavLink>
                 <div className={inPillDivider} aria-hidden="true" />
                 <NavLink
