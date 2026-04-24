@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Copy, ExternalLink, LockKeyhole, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
+import { isMicrosoftSignInEnabled, startMicrosoft365SignIn } from '../lib/auth.js';
 
 const REMEMBER_EMAIL_KEY = 'solicitor-remember-email';
 
@@ -18,17 +19,33 @@ function getStoredEmail() {
 export default function SolicitorLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isStaff, loading, signIn } = useAuth();
+  const { isAuthenticated, isStaff, loading, signIn, user } = useAuth();
   const [email, setEmail] = useState(() => getStoredEmail() || '');
   const [password, setPassword] = useState('');
   const [rememberEmail, setRememberEmail] = useState(() => !!getStoredEmail());
   const [submitting, setSubmitting] = useState(false);
+  const [msSigningIn, setMsSigningIn] = useState(false);
   const [adminFixSql, setAdminFixSql] = useState(null);
   const [inIframe, setInIframe] = useState(false);
+  const staffDeniedToastRef = useRef(false);
 
   useEffect(() => {
     setInIframe(typeof window !== 'undefined' && window.self !== window.top);
   }, []);
+
+  /** Signed in (e.g. Microsoft) but not in staff list / role */
+  useEffect(() => {
+    if (loading || staffDeniedToastRef.current) return;
+    if (isAuthenticated && user && !isStaff) {
+      staffDeniedToastRef.current = true;
+      toast.error('Solicitor access not enabled for this sign-in', {
+        id: 'solicitor-staff-denied',
+        description:
+          'Microsoft accepted your sign-in, but this account is not on the staff list for the Will Tool yet. Ask your firm administrator to add your work email, or use email and password if your firm set that up.',
+        duration: 16000,
+      });
+    }
+  }, [loading, isAuthenticated, isStaff, user]);
 
   if (!loading && isAuthenticated && isStaff) {
     const target = location.state?.from?.pathname || '/solicitor';
@@ -138,9 +155,28 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
   const directLoginUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/solicitor/login` : '/solicitor/login';
 
+  const handleMicrosoftSignIn = async () => {
+    if (inIframe) {
+      toast.error('Open in a full browser tab', {
+        description: 'Microsoft sign-in usually does not work inside an embedded page. Use “Open solicitor login in new tab” first, then try again.',
+        duration: 12000,
+      });
+      return;
+    }
+    setMsSigningIn(true);
+    const result = await startMicrosoft365SignIn();
+    setMsSigningIn(false);
+    if (result?.error) {
+      toast.error('Could not start Microsoft 365 sign-in', {
+        description: result.error,
+        duration: 14000,
+      });
+    }
+  };
+
   return (
-    <div className="min-h-dvh bg-slate-100 flex items-center justify-center px-4 py-6">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-xl p-8 relative">
+    <div className="min-h-dvh flex items-center justify-center bg-slate-100 px-4 py-6 dark:bg-slate-950">
+      <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-700 dark:bg-slate-900">
         <div className="absolute right-4 top-4">
           <ThemeToggleButton compact />
         </div>
@@ -157,8 +193,8 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
           <div className="mx-auto h-14 w-14 rounded-2xl bg-slate-950 text-white flex items-center justify-center mb-4">
             <LockKeyhole size={24} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Solicitor sign in</h1>
-          <p className="text-sm text-slate-600 mt-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Solicitor sign in</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             Use your Aristone Solicitors account to access client matters and solicitor-only workflow.
           </p>
         </div>
@@ -182,6 +218,37 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
               <ExternalLink size={16} aria-hidden />
               Open solicitor login in new tab
             </a>
+          </div>
+        )}
+
+        {isMicrosoftSignInEnabled() && (
+          <div className="mb-6 space-y-3">
+            <button
+              type="button"
+              onClick={handleMicrosoftSignIn}
+              disabled={msSigningIn || submitting}
+              className="flex w-full min-h-[48px] items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
+                <svg viewBox="0 0 23 23" className="h-6 w-6" role="img" aria-label="Microsoft">
+                  <path fill="#f35325" d="M1 1h10v10H1z" />
+                  <path fill="#81bc06" d="M12 1h10v10H12z" />
+                  <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                  <path fill="#ffba08" d="M12 12h10v10H12z" />
+                </svg>
+              </span>
+              {msSigningIn ? 'Redirecting to Microsoft…' : 'Continue with Microsoft 365'}
+            </button>
+            <p className="text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Sign in with your work email. If your firm uses 2FA, Microsoft will send the code to you or your IT
+              process — nothing extra to &quot;approve&quot; in the Will Tool.
+            </p>
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 top-1/2 h-px bg-slate-200 dark:bg-slate-600" aria-hidden />
+              <span className="relative z-10 bg-white px-3 text-xs font-medium text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+                or use email
+              </span>
+            </div>
           </div>
         )}
 

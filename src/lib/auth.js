@@ -153,6 +153,44 @@ function withTimeout(promise, ms, message = 'Sign-in timed out') {
   ]);
 }
 
+/**
+ * Load public.profiles after sign-in; if missing, run ensure_profile_from_auth then re-fetch.
+ * Used for password and Microsoft 365 (OAuth) flows.
+ */
+async function fetchProfileWithEnsure(userId) {
+  if (!userId || !supabase) {
+    return { profile: null, error: null };
+  }
+  let fetchResult = await withTimeout(
+    fetchProfileRow(userId),
+    PROFILE_FETCH_TIMEOUT_MS,
+    'Profile lookup timed out',
+  );
+  if (fetchResult.error) {
+    return { profile: null, error: fetchResult.error };
+  }
+  let profile = fetchResult.profile;
+  if (!profile) {
+    authLog('fetchProfileWithEnsure: no profile — calling ensure_profile_from_auth', { userId });
+    const { error: rpcError } = await supabase.rpc('ensure_profile_from_auth');
+    if (rpcError) {
+      authError('fetchProfileWithEnsure: ensure_profile_from_auth failed', rpcError);
+    } else {
+      authLog('fetchProfileWithEnsure: re-fetching profiles', { userId });
+    }
+    fetchResult = await withTimeout(
+      fetchProfileRow(userId),
+      PROFILE_FETCH_TIMEOUT_MS,
+      'Profile lookup timed out',
+    );
+    if (fetchResult.error) {
+      return { profile: null, error: fetchResult.error };
+    }
+    profile = fetchResult.profile;
+  }
+  return { profile, error: null };
+}
+
 async function signInWithPasswordOnce(email, password) {
   const t0 = nowPerfMs();
   authLog('signInWithPassword: inner await start', {
@@ -267,19 +305,14 @@ export async function signInSolicitor({ email, password }) {
   }
 
   const userId = data.user?.id ?? null;
-  authLog('step 3/4: public.profiles SELECT', { userId, sincePipelineMs: Math.round(nowPerfMs() - pipelineStart) });
+  authLog('step 3/4: public.profiles (with ensure)', { userId, sincePipelineMs: Math.round(nowPerfMs() - pipelineStart) });
   let profile = null;
   if (userId) {
     try {
-      let fetchResult = await withTimeout(
-        fetchProfileRow(userId),
-        PROFILE_FETCH_TIMEOUT_MS,
-        'Profile lookup timed out'
-      );
-
+      const { profile: p, error: profErr } = await fetchProfileWithEnsure(userId);
       mark('step 3/4: profile fetch completed');
-      if (fetchResult.error) {
-        authError('step 3 FAILED: profiles SELECT', fetchResult.error);
+      if (profErr) {
+        authError('step 3 FAILED: profiles', profErr);
         activeAuthPipelineStart = null;
         return {
           code: 'profile_fetch_failed',
@@ -290,35 +323,7 @@ export async function signInSolicitor({ email, password }) {
           profile: null,
         };
       }
-
-      profile = fetchResult.profile;
-
-      // auth.users row exists but public.profiles row missing (trigger/backfill gap) — sync once via RPC
-      if (!profile) {
-        authLog('step 3b: no profile row — calling RPC ensure_profile_from_auth', { userId });
-        const rpc0 = nowPerfMs();
-        const { error: rpcError } = await supabase.rpc('ensure_profile_from_auth');
-        authLog('step 3b: RPC ensure_profile_from_auth finished', { rpcMs: Math.round(nowPerfMs() - rpc0) });
-        if (rpcError) {
-          authError('step 3b FAILED: RPC ensure_profile_from_auth (run migration 20260327120000 if missing)', rpcError);
-        } else {
-          authLog('step 3b OK: RPC finished, re-fetching profiles', {});
-          fetchResult = await fetchProfileRow(userId);
-          if (fetchResult.error) {
-            authError('step 3 FAILED: profiles SELECT after RPC', fetchResult.error);
-            activeAuthPipelineStart = null;
-            return {
-              code: 'profile_fetch_failed',
-              error:
-                'We could not load your staff account from the server. Please try again in a moment. If this continues, contact technical support.',
-              session: data.session ?? null,
-              user: data.user ?? null,
-              profile: null,
-            };
-          }
-          profile = fetchResult.profile;
-        }
-      }
+      profile = p;
     } catch (err) {
       authError('step 3 FAILED: exception during profile load', err);
       activeAuthPipelineStart = null;
@@ -358,6 +363,48 @@ export async function signInSolicitor({ email, password }) {
   return { session: data.session ?? null, user: data.user ?? null, profile };
 }
 
+/**
+ * Start Microsoft 365 (Entra / Azure AD) sign-in via Supabase OAuth.
+ * Configure Azure in Supabase Dashboard (Authentication → Providers → Azure) and add this redirect URL to
+ * “Additional redirect URLs”: `https://<your-app-origin>/solicitor/login` (e.g. production + localhost for dev).
+ * Supabase callback URL must be in Azure app Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
+ */
+export async function startMicrosoft365SignIn() {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { error: 'Supabase not configured' };
+  }
+  if (typeof window === 'undefined') {
+    return { error: 'Microsoft sign-in is only available in the browser' };
+  }
+  const origin = window.location.origin;
+  const redirectTo = `${origin}/solicitor/login`;
+  authLog('startMicrosoft365SignIn: signInWithOAuth azure', { redirectTo, host: getSupabaseProjectHost() });
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'azure',
+    options: {
+      redirectTo,
+      scopes: 'email openid profile',
+      queryParams: {
+        prompt: 'select_account',
+      },
+    },
+  });
+  if (error) {
+    authError('startMicrosoft365SignIn failed', error);
+    return { error: error.message || 'Could not start Microsoft sign-in' };
+  }
+  if (data?.url) {
+    window.location.assign(data.url);
+    return { ok: true };
+  }
+  return { error: 'No sign-in URL returned. Enable the Azure provider in the Supabase project and try again.' };
+}
+
+/** @returns {boolean} */
+export function isMicrosoftSignInEnabled() {
+  return import.meta.env.VITE_MICROSOFT_SIGNIN_ENABLED !== 'false';
+}
+
 export async function signOutSolicitor() {
   if (!supabase) {
     authLog('signOut: no Supabase client (UI should still clear session)', {});
@@ -392,14 +439,10 @@ export function subscribeToAuthChanges(callback) {
         let profile = null;
         if (user?.id) {
           try {
-            const fetchResult = await withTimeout(
-              fetchProfileRow(user.id),
-              PROFILE_FETCH_TIMEOUT_MS,
-              'Profile lookup timed out'
-            );
-            profile = fetchResult.profile;
-            if (fetchResult.error) {
-              authError('onAuthStateChange: profiles.select failed', fetchResult.error);
+            const { profile: p, error: profErr } = await fetchProfileWithEnsure(user.id);
+            profile = p;
+            if (profErr) {
+              authError('onAuthStateChange: profile load failed', profErr);
             }
           } catch (err) {
             authError('onAuthStateChange: profile fetch exception', err);
