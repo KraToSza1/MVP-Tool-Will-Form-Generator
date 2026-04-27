@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Loader2, RefreshCw, ShieldAlert, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -62,7 +62,17 @@ function itemHeightPercent(start, end) {
   return Math.max(7, Math.min(100, (diffMinutes / total) * 100));
 }
 
+/** Apply HH:mm (rules) on a calendar day for positioning the “available” band. */
+function timeOnDay(day, timeStr) {
+  const raw = typeof timeStr === 'string' && timeStr.length >= 4 ? timeStr : '09:00';
+  const [h, m] = raw.slice(0, 5).split(':').map((n) => parseInt(n, 10));
+  const d = new Date(day);
+  d.setHours(Number.isFinite(h) ? h : 9, Number.isFinite(m) ? m : 0, 0, 0);
+  return d;
+}
+
 export default function SolicitorCalendarPage() {
+  const navigate = useNavigate();
   const { user, loading: authLoading, profile } = useAuth();
   const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
@@ -253,9 +263,12 @@ export default function SolicitorCalendarPage() {
       ) : (
         <section className={`overflow-hidden rounded-2xl border ${panelClass}`}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Five-day schedule</h2>
               <p className={`mt-1 text-xs ${mutedClass}`}>{rules?.timezone || 'Africa/Johannesburg'} · {CALENDAR_START_HOUR}:00 to {CALENDAR_END_HOUR}:00</p>
+              <p className={`mt-2 max-w-xl text-xs leading-relaxed ${mutedClass}`}>
+                Indigo blocks are busy time from Microsoft Calendar. Green <strong className="font-semibold text-emerald-700 dark:text-emerald-200">Available window</strong> means no busy events that day; tap it to change your default appointment hours (same for all working days).
+              </p>
             </div>
             {graphError ? (
               <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
@@ -305,15 +318,30 @@ export default function SolicitorCalendarPage() {
                         </div>
                       );
                     })}
-                    {!dayItems.length ? (
-                      <div className="absolute inset-x-5 top-24 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
-                        <div className="flex items-center gap-2 font-semibold">
-                          <Clock className="h-3.5 w-3.5" aria-hidden />
-                          Available window
-                        </div>
-                        <p className="mt-1">{rules?.start_time || '09:00'} - {rules?.end_time || '17:00'}</p>
-                      </div>
-                    ) : null}
+                    {!dayItems.length ? (() => {
+                      const winStart = timeOnDay(day, rules?.start_time);
+                      const winEnd = timeOnDay(day, rules?.end_time);
+                      const top = itemTopPercent(winStart);
+                      const height = itemHeightPercent(winStart, winEnd);
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/solicitor/availability')}
+                          className="absolute left-5 right-5 min-h-[44px] overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-left text-xs text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-500/15"
+                          style={{ top: `${top}%`, height: `${height}%` }}
+                          aria-label={`Open appointment availability to edit your default hours (${rules?.start_time || '09:00'} to ${rules?.end_time || '17:00'})`}
+                        >
+                          <div className="flex items-center gap-2 font-semibold">
+                            <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Available window
+                          </div>
+                          <p className="mt-1 break-words">{rules?.start_time || '09:00'} – {rules?.end_time || '17:00'}</p>
+                          <p className={`mt-1.5 text-[10px] font-medium ${isDark ? 'text-emerald-200/90' : 'text-emerald-800'}`}>
+                            Tap to edit in Appointment availability
+                          </p>
+                        </button>
+                      );
+                    })() : null}
                   </div>
                 </div>
               );
