@@ -596,6 +596,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     closeCompletionModal({ scrollToIdentity: submittedWithIncompleteId });
   }, [closeCompletionModal, submittedWithIncompleteId]);
 
+  /** Completion modal shortcut: close and return user to Identity upload area. */
+  const returnToIdentityUploads = useCallback(() => {
+    closeCompletionModal({ scrollToIdentity: true });
+  }, [closeCompletionModal]);
+
   // Handle scroll to show/hide back to top button
   useEffect(() => {
     const handleScroll = () => {
@@ -5828,13 +5833,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 ) : (
                 <div className="space-y-3 text-slate-300">
                   <p className="mb-3 font-medium text-amber-200/95">Questionnaire complete — this is intake only. Legal signing happens in person later.</p>
-                  <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={returnToIdentityUploads}
+                    className="group flex w-full items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 text-left shadow-sm transition hover:border-indigo-500/60 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white shadow">1</div>
                     <div className="min-w-0 flex-1">
-                      <p className="mb-1 font-semibold text-slate-100">ID documents</p>
+                      <p className="mb-1 font-semibold text-slate-100 group-hover:text-indigo-200">ID documents</p>
                       <p className="text-sm leading-relaxed text-slate-400">Complete or update uploads on the step behind this message, then use Update submission if the solicitor should receive new images.</p>
+                      <p className="mt-2 text-xs font-medium text-indigo-300">Click to return to Identity verification uploads</p>
                     </div>
-                  </div>
+                  </button>
                   <div className="flex items-start gap-3 rounded-xl border border-slate-600 bg-slate-800/90 p-4 shadow-sm">
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow">2</div>
                     <div className="min-w-0 flex-1">
@@ -5898,6 +5908,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               </div>
               ) : (
               <div className="flex w-full flex-col gap-2 order-1 sm:order-2 sm:w-auto sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={returnToIdentityUploads}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-500/60 bg-indigo-600/20 px-5 py-3 text-sm font-semibold text-indigo-100 hover:bg-indigo-600/30 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  Upload ID documents
+                </button>
                 <button
                   type="button"
                   onClick={startOverAfterSubmit}

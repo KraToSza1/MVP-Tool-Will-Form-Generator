@@ -69,8 +69,17 @@ export function isTestamentaryCapacityComplete(payload) {
   return TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.every((fieldId) => hasMeaningfulAnswer(payload?.[fieldId]));
 }
 
+/**
+ * Testamentary Capacity is solicitor workflow. Use solicitor_payload only so legacy client payload
+ * values never mark this checklist as complete by mistake.
+ */
+function getTestamentaryCapacityPayloadForMatter(matter) {
+  const solicitorPayload = matter?.solicitor_payload;
+  return solicitorPayload && typeof solicitorPayload === 'object' ? solicitorPayload : {};
+}
+
 export function isMatterTestamentaryCapacityOutstanding(matter) {
-  return !isTestamentaryCapacityComplete(getMergedMatterPayload(matter));
+  return !isTestamentaryCapacityComplete(getTestamentaryCapacityPayloadForMatter(matter));
 }
 
 export function isMatterBprTrustRequiredOutstanding(matter) {
@@ -142,7 +151,7 @@ export function getMissingIdVerificationDocs(payload) {
  * @returns {{ fieldId: string, label: string }[]}
  */
 export function getMissingTestamentaryCapacityFields(matter) {
-  const payload = getMergedMatterPayload(matter);
+  const payload = getTestamentaryCapacityPayloadForMatter(matter);
   return TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.filter(
     (fieldId) => !hasMeaningfulAnswer(payload?.[fieldId])
   ).map((fieldId) => ({

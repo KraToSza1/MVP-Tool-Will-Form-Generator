@@ -99,6 +99,7 @@ export default function SolicitorAvailabilityPage() {
   const [busyItems, setBusyItems] = useState([]);
   const [graphError, setGraphError] = useState('');
   const [hasProviderToken, setHasProviderToken] = useState(false);
+  const [calendarFeatureMissing, setCalendarFeatureMissing] = useState(false);
 
   const loadAvailability = async () => {
     setLoading(true);
@@ -107,19 +108,24 @@ export default function SolicitorAvailabilityPage() {
       getMyAvailabilityRules(),
       listCalendarConnections(),
     ]);
+    const featureMissing = Boolean(rulesResult.featureMissing || connectionsResult.featureMissing);
+    setCalendarFeatureMissing(featureMissing);
+    if (featureMissing) {
+      setGraphError('Staff calendar tables are not installed. Run the migration in `supabase/migrations/20260424000000_staff_calendar_and_availability.sql`, then refresh this page.');
+    }
     const nextRules = rulesResult.data || DEFAULT_AVAILABILITY_RULES;
     setRules(nextRules);
 
     let nextConnection = (connectionsResult.data || []).find((c) => c.profile_id === user?.id) || null;
     const providerToken = await getCurrentProviderToken();
     setHasProviderToken(Boolean(providerToken));
-    if (providerToken) {
+    if (providerToken && !featureMissing) {
       const synced = await syncCurrentCalendarConnection();
       if (synced.data) nextConnection = synced.data;
     }
     setConnection(nextConnection);
 
-    if (providerToken) {
+    if (providerToken && !featureMissing) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
       const end = new Date(start.getTime() + 16 * DAY_MS);
@@ -180,6 +186,13 @@ export default function SolicitorAvailabilityPage() {
   };
 
   const handleSave = async () => {
+    if (calendarFeatureMissing) {
+      toast.error('Could not save availability', {
+        description: 'Staff calendar tables are missing. Run migration `supabase/migrations/20260424000000_staff_calendar_and_availability.sql` in Supabase SQL Editor, then try again.',
+        duration: 14000,
+      });
+      return;
+    }
     setSaving(true);
     const result = await saveMyAvailabilityRules(rules);
     setSaving(false);
@@ -192,6 +205,13 @@ export default function SolicitorAvailabilityPage() {
   };
 
   const handleConnect = async () => {
+    if (calendarFeatureMissing) {
+      toast.error('Calendar setup incomplete', {
+        description: 'Run migration `supabase/migrations/20260424000000_staff_calendar_and_availability.sql` first, then connect Microsoft calendar.',
+        duration: 14000,
+      });
+      return;
+    }
     setConnecting(true);
     const result = await startMicrosoftCalendarConnect({ redirectPath: '/solicitor/availability' });
     setConnecting(false);
@@ -203,6 +223,10 @@ export default function SolicitorAvailabilityPage() {
     : 'border-slate-200 bg-white shadow-sm';
   const softClass = isDark ? 'border-slate-700 bg-slate-950/35' : 'border-slate-200 bg-slate-50/80';
   const mutedClass = isDark ? 'text-slate-400' : 'text-slate-600';
+  const hasCalendarConnectionRow = Boolean(connection?.calendar_email);
+  const connectButtonLabel = hasProviderToken
+    ? (hasCalendarConnectionRow ? 'Reconnect Microsoft calendar' : 'Connect Microsoft calendar')
+    : (hasCalendarConnectionRow ? 'Connect this browser session' : 'Connect Microsoft calendar');
   const inputClass = isDark
     ? 'w-full rounded-xl border border-slate-600 bg-slate-950/50 px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500'
     : 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500';
@@ -231,6 +255,11 @@ export default function SolicitorAvailabilityPage() {
               <div>
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Calendar check</p>
                 <p className={`mt-1 text-xs ${mutedClass}`}>{connection?.calendar_email || profile?.email || 'No Microsoft calendar linked'}</p>
+                {!hasProviderToken && hasCalendarConnectionRow ? (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    Connected previously. Reconnect in this browser to refresh live busy-time checks.
+                  </p>
+                ) : null}
               </div>
               {calendarChecked ? (
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
@@ -241,11 +270,11 @@ export default function SolicitorAvailabilityPage() {
             <button
               type="button"
               onClick={handleConnect}
-              disabled={connecting}
+              disabled={connecting || calendarFeatureMissing}
               className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
             >
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarCheck className="h-4 w-4" aria-hidden />}
-              Connect Microsoft calendar
+              {connectButtonLabel}
             </button>
           </div>
         </div>
@@ -346,7 +375,7 @@ export default function SolicitorAvailabilityPage() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || calendarFeatureMissing}
                 className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-500"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}

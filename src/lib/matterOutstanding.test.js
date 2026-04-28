@@ -40,6 +40,13 @@ describe('matterOutstanding', () => {
     })).toBe(true);
   });
 
+  it('does not treat client payload answers as solicitor Testamentary Capacity completion', () => {
+    expect(isMatterTestamentaryCapacityOutstanding({
+      client_payload: completeCapacityPayload,
+      solicitor_payload: {},
+    })).toBe(true);
+  });
+
   it('returns both outstanding categories when verification and capacity are incomplete', () => {
     expect(getMatterOutstandingCategories({
       outstanding_verification: true,
