@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, X, XCircle, Trash2 } from 'lucide-react';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
@@ -9,7 +9,15 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
-import { isMatterTestamentaryCapacityOutstanding, getMissingIdVerificationDocs, getMissingTestamentaryCapacityFields, ID_VERIFICATION_DOC_LABELS } from '../lib/matterOutstanding.js';
+import {
+  isMatterTestamentaryCapacityOutstanding,
+  getMissingIdVerificationDocs,
+  getMissingTestamentaryCapacityFields,
+  ID_VERIFICATION_DOC_LABELS,
+  TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS,
+  TESTAMENTARY_CAPACITY_FIELD_LABELS,
+  hasMeaningfulAnswer,
+} from '../lib/matterOutstanding.js';
 import {
   TESTAMENTARY_CAPACITY_SECTION_INDEX,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
@@ -270,6 +278,7 @@ function IdDocPreview({ label, dataUrl }) {
 export default function MatterDetailPage() {
   const { matterId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [matter, setMatter] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -375,11 +384,30 @@ export default function MatterDetailPage() {
       .filter((d) => d.dataUrl);
   }, [mergedPayload?.identityVerification]);
 
+  const tcAnswerRows = useMemo(() => {
+    return TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.map((fieldId) => {
+      const value = mergedPayload?.[fieldId];
+      const text = Array.isArray(value) ? value.join(', ') : String(value ?? '').trim();
+      return {
+        fieldId,
+        label: TESTAMENTARY_CAPACITY_FIELD_LABELS[fieldId] || fieldId,
+        answered: hasMeaningfulAnswer(value),
+        valueText: text,
+      };
+    });
+  }, [mergedPayload]);
+
   const scrollToClientId = () => {
     setTimeout(() => {
       clientIdSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
   };
+
+  useEffect(() => {
+    if (!matter || !location.state?.scrollToIdDocs) return;
+    scrollToClientId();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matter, location.state?.scrollToIdDocs]);
 
   const handleDownloadPDF = async () => {
     console.log('[WillTool Flow] Solicitor generating PDF for matter', { matterId, phase: 'solicitor_pdf_start' });
@@ -588,16 +616,53 @@ export default function MatterDetailPage() {
 
   const clientEmail = matter?.client_email || clientSnapshot?.email || '';
   const clientName = matter?.client_name || clientSnapshot?.fullName || 'Client';
-  const emailClientHref = useMemo(() => {
+  const emailDraft = useMemo(() => {
     if (!clientEmail) return null;
-    const subject = encodeURIComponent(`Your Will – ${matter?.client_reference || 'next steps'}`);
-    const body = encodeURIComponent(
-      `Dear ${clientName},\n\nThank you for submitting your Will instructions.\n\n` +
+    const subjectText = `Your Will - ${matter?.client_reference || 'next steps'}`;
+    const bodyText =
+      `Dear ${clientName},\n\n` +
+      `Thank you for submitting your Will instructions.\n\n` +
       `You can complete or review your form here: ${getClientWillToolUrl()}\n\n` +
-      `If you have any questions, please contact us.\n\nKind regards`
-    );
-    return `mailto:${clientEmail}?subject=${subject}&body=${body}`;
+      `If you have any questions, please contact us.\n\n` +
+      `Kind regards`;
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(bodyText);
+    return {
+      to: clientEmail,
+      subjectText,
+      bodyText,
+      mailtoHref: `mailto:${clientEmail}?subject=${subject}&body=${body}`,
+      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(clientEmail)}&subject=${subject}&body=${body}`,
+    };
   }, [clientEmail, clientName, matter?.client_reference]);
+
+  const handleCopyEmailDraft = async () => {
+    if (!emailDraft) return;
+    try {
+      await navigator.clipboard.writeText(
+        `To: ${emailDraft.to}\nSubject: ${emailDraft.subjectText}\n\n${emailDraft.bodyText}`
+      );
+      toast.success('Email draft copied', { description: 'Paste into Outlook or any email client.' });
+    } catch {
+      toast.error('Copy failed', { description: 'Could not copy email draft.' });
+    }
+  };
+
+  const handleEmailClientClick = (e) => {
+    if (!emailDraft) return;
+    e.preventDefault();
+    window.location.href = emailDraft.mailtoHref;
+    toast('If your email app did not open', {
+      description: 'Use Outlook Web fallback or copy the draft.',
+      action: {
+        label: 'Open Outlook Web',
+        onClick: () => {
+          window.open(emailDraft.outlookWebHref, '_blank', 'noopener,noreferrer');
+        },
+      },
+      duration: 9000,
+    });
+  };
 
   const handleReminderDateChange = async (e) => {
     const value = e.target.value;
@@ -650,15 +715,27 @@ export default function MatterDetailPage() {
             <Copy size={14} />
             Copy client link
           </button>
-          {emailClientHref && (
+          {emailDraft && (
             <a
-              href={emailClientHref}
+              href={emailDraft.mailtoHref}
+              onClick={handleEmailClientClick}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               title="Open email to client with pre-filled template"
             >
               <Mail size={14} />
               Email client
             </a>
+          )}
+          {emailDraft && (
+            <button
+              type="button"
+              onClick={handleCopyEmailDraft}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              title="Copy email recipient, subject and body"
+            >
+              <Copy size={14} />
+              Copy email draft
+            </button>
           )}
         </div>
 
@@ -798,7 +875,20 @@ export default function MatterDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-900">Testamentary Capacity</p>
                     {testamentaryCapacityComplete ? (
-                      <p className="mt-0.5 text-sm text-slate-600">All required capacity questions have been completed.</p>
+                      <>
+                        <p className="mt-0.5 text-sm text-slate-600">All required capacity questions have been completed.</p>
+                        <details className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                          <summary className="cursor-pointer text-sm font-semibold text-emerald-900 dark:text-emerald-200">Review saved answers</summary>
+                          <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                            {tcAnswerRows.map((row) => (
+                              <li key={row.fieldId} className="rounded-lg border border-emerald-100 bg-white/80 px-3 py-2 dark:border-slate-600 dark:bg-slate-800/70">
+                                <p className="font-medium text-slate-900 dark:text-slate-100">{row.label}</p>
+                                <p className="mt-1 text-slate-700 dark:text-slate-300">{row.valueText || 'Not answered'}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      </>
                     ) : (
                       <>
                         <p className="mt-1 text-sm text-slate-600">The following questions are still unanswered:</p>
@@ -815,6 +905,24 @@ export default function MatterDetailPage() {
                           <FilePenLine size={16} />
                           Open form at Testamentary Capacity
                         </Link>
+                        <details className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                          <summary className="cursor-pointer text-sm font-semibold text-amber-900 dark:text-amber-200">Review saved answers</summary>
+                          <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                            {tcAnswerRows.map((row) => (
+                              <li key={row.fieldId} className="rounded-lg border border-amber-100 bg-white/80 px-3 py-2 dark:border-slate-600 dark:bg-slate-800/70">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="font-medium text-slate-900 dark:text-slate-100">{row.label}</p>
+                                  {!row.answered ? (
+                                    <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/15 dark:text-amber-200">
+                                      Missing
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 text-slate-700 dark:text-slate-300">{row.valueText || 'Not answered'}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
                       </>
                     )}
                   </div>

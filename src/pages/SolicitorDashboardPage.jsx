@@ -22,6 +22,7 @@ import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All matters' },
+  { value: 'outstanding_only', label: 'Outstanding only' },
   { value: MATTER_STATUS.SUBMITTED, label: 'Submitted' },
   { value: MATTER_STATUS.VERIFICATION_PENDING, label: 'ID needed' },
   { value: MATTER_STATUS.IN_REVIEW, label: 'In progress' },
@@ -157,9 +158,11 @@ export default function SolicitorDashboardPage() {
   const [sortBy, setSortBy] = useState('last_activity_at');
   const [statusHelpOpen, setStatusHelpOpen] = useState(false);
   const [activeOutstandingCategory, setActiveOutstandingCategory] = useState(null);
+  const [matterListOutstandingCategory, setMatterListOutstandingCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [matterToDelete, setMatterToDelete] = useState(null);
+  const mattersListRef = useRef(null);
 
   useEffect(() => {
     mattersLoadTrace('SolicitorDashboardPage mounted', {
@@ -227,7 +230,7 @@ export default function SolicitorDashboardPage() {
 
     const tFiltered = typeof performance !== 'undefined' ? performance.now() : 0;
     const pFiltered = listMatters(
-      { search, status, assignedOnly, userId: user?.id, sortBy },
+      { search, status: status === 'outstanding_only' ? 'all' : status, assignedOnly, userId: user?.id, sortBy },
       'dashboard_filtered',
     ).then((r) => {
       if (typeof performance !== 'undefined') {
@@ -351,13 +354,65 @@ export default function SolicitorDashboardPage() {
     return ids.size;
   }, [outstandingGroups]);
 
+  const visibleMatters = useMemo(() => {
+    let next = matters;
+    if (status === 'outstanding_only') {
+      next = next.filter((matter) => (getMatterOutstandingCategories(matter) || []).length > 0);
+    }
+    if (matterListOutstandingCategory) {
+      next = next.filter((matter) => (getMatterOutstandingCategories(matter) || []).includes(matterListOutstandingCategory));
+    }
+    return next;
+  }, [matters, matterListOutstandingCategory, status]);
+
   const showEmptyState = !loading && matters.length === 0 && !search && status === 'all' && !assignedOnly;
   const tcDueCount = outstandingGroups[OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]?.length ?? 0;
-  const filtersActive = status !== 'all' || search.trim() !== '' || assignedOnly;
+  const filtersActive = status !== 'all' || search.trim() !== '' || assignedOnly || !!matterListOutstandingCategory;
   const clearFilters = () => {
     setSearch('');
     setStatus('all');
     setAssignedOnly(false);
+    setMatterListOutstandingCategory(null);
+  };
+
+  const handleOutstandingCardClick = (categoryKey) => {
+    setActiveOutstandingCategory(categoryKey);
+    setMatterListOutstandingCategory(categoryKey);
+    setStatus('outstanding_only');
+    window.setTimeout(() => {
+      mattersListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
+  const getOutstandingBadgeLink = (matterId, category) => {
+    if (category === OUTSTANDING_CATEGORY.ID_VERIFICATION) {
+      return {
+        to: `/solicitor/matters/${matterId}`,
+        state: { scrollToIdDocs: true },
+      };
+    }
+    if (category === OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY) {
+      return {
+        to: `/solicitor/matters/${matterId}/form`,
+        state: { openAtSectionTitle: 'Testamentary Capacity' },
+      };
+    }
+    if (category === OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED || category === OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW) {
+      return {
+        to: `/solicitor/matters/${matterId}/form`,
+        state: { openAtSectionTitle: 'Business Interests' },
+      };
+    }
+    if (category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED || category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW) {
+      return {
+        to: `/solicitor/matters/${matterId}/form`,
+        state: { openAtSectionTitle: 'Property Trust' },
+      };
+    }
+    return {
+      to: `/solicitor/matters/${matterId}`,
+      state: undefined,
+    };
   };
 
   const clientWillToolUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '';
@@ -448,7 +503,7 @@ export default function SolicitorDashboardPage() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setActiveOutstandingCategory(item.key)}
+                  onClick={() => handleOutstandingCardClick(item.key)}
                   className={`rounded-2xl border p-5 text-left transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${isActive ? item.activeClasses : item.inactiveClasses}`}
                   aria-pressed={isActive}
                 >
@@ -502,13 +557,33 @@ export default function SolicitorDashboardPage() {
                       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                         {outstandingCategories.map((category) => {
                           const meta = OUTSTANDING_CATEGORY_META[category];
+                          const target = getOutstandingBadgeLink(matter.id, category);
                           return (
-                            <span key={category} className={`rounded-full border px-3 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+                            <Link
+                              key={category}
+                              to={target.to}
+                              state={target.state}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${meta.badgeClasses}`}
+                              title={`Open ${meta.shortLabel} section for this matter`}
+                            >
                               {meta.shortLabel}
-                            </span>
+                            </Link>
                           );
                         })}
-                        <MatterStatusBadge status={matter.status} />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatus(matter.status || 'all');
+                            setMatterListOutstandingCategory(null);
+                            window.setTimeout(() => {
+                              mattersListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 80);
+                          }}
+                          className="focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full"
+                          title="Filter matters list to this status"
+                        >
+                          <MatterStatusBadge status={matter.status} />
+                        </button>
                         <Link
                           to={`/solicitor/matters/${matter.id}`}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -586,6 +661,7 @@ export default function SolicitorDashboardPage() {
 
       <section
         id="solicitor-matters-list"
+        ref={mattersListRef}
         className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden solicitor-dashboard-section dark:border-slate-600 dark:bg-slate-900/30"
       >
         {/* Header: title + actions — solicitor-dashboard-header for dark theme */}
@@ -669,6 +745,11 @@ export default function SolicitorDashboardPage() {
             {filtersActive && (
               <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2">
                 <span className="text-xs text-slate-500">Filters are hiding some matters.</span>
+                {matterListOutstandingCategory ? (
+                  <span className="text-xs font-semibold text-indigo-700">
+                    Category: {OUTSTANDING_CATEGORY_META[matterListOutstandingCategory]?.shortLabel || 'Outstanding'}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={clearFilters}
@@ -712,7 +793,7 @@ export default function SolicitorDashboardPage() {
         {/* Mobile / tablet: stacked cards (no horizontal scroll). Desktop: full table. */}
         {loading ? (
           <div className="px-4 py-8 sm:px-6 text-sm text-slate-600">Loading matters…</div>
-        ) : matters.length === 0 ? (
+        ) : visibleMatters.length === 0 ? (
           <div className="px-4 py-10 sm:px-6 text-center">
             <p className="text-sm font-medium text-slate-700">No matters match the current filters.</p>
             <p className="mt-2 text-sm text-slate-500 max-w-md mx-auto">
@@ -732,7 +813,7 @@ export default function SolicitorDashboardPage() {
         ) : (
           <>
             <div className="lg:hidden space-y-3 px-4 pb-4 sm:px-6">
-              {matters.map((matter) => {
+              {visibleMatters.map((matter) => {
                 const { outstandingCategories, hasOutstandingCategories, displayPhone, partnerLabel } = getMatterDisplayData(matter);
                 return (
                   <div
@@ -826,7 +907,7 @@ export default function SolicitorDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {matters.map((matter) => {
+                  {visibleMatters.map((matter) => {
                     const { outstandingCategories, hasOutstandingCategories, displayPhone, partnerLabel } = getMatterDisplayData(matter);
                     return (
                       <tr key={matter.id} className={hasOutstandingCategories ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}>

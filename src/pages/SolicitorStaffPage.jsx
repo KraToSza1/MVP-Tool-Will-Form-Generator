@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { listMatters, listStaffProfiles, MATTER_STATUS } from '../lib/matters.js';
 import { getMatterOutstandingCategories } from '../lib/matterOutstanding.js';
-import { listCalendarConnections, startMicrosoftCalendarConnect } from '../lib/staffCalendar.js';
+import { getCurrentProviderToken, listCalendarConnections, startMicrosoftCalendarConnect } from '../lib/staffCalendar.js';
 
 function initials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -29,6 +29,7 @@ export default function SolicitorStaffPage() {
   const [matters, setMatters] = useState([]);
   const [connections, setConnections] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState('all');
+  const [hasProviderToken, setHasProviderToken] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -38,7 +39,8 @@ export default function SolicitorStaffPage() {
       listStaffProfiles(),
       listMatters({ search: '', status: 'all', assignedOnly: false, userId: user?.id, sortBy: 'last_activity_at' }, 'staff_workload'),
       listCalendarConnections(),
-    ]).then(([staffResult, mattersResult, calendarResult]) => {
+      getCurrentProviderToken(),
+    ]).then(([staffResult, mattersResult, calendarResult, providerToken]) => {
       if (!active) return;
       if (staffResult.error) toast.error('Could not load staff', { description: staffResult.error });
       if (mattersResult.error) toast.error('Could not load matters', { description: mattersResult.error });
@@ -46,6 +48,7 @@ export default function SolicitorStaffPage() {
       setStaff(staffResult.data || []);
       setMatters(mattersResult.data || []);
       setConnections(calendarResult.data || []);
+      setHasProviderToken(Boolean(providerToken));
       setLoading(false);
     });
     return () => {
@@ -58,6 +61,10 @@ export default function SolicitorStaffPage() {
     connections.forEach((c) => map.set(c.profile_id, c));
     return map;
   }, [connections]);
+  const myConnection = connectionByProfile.get(user?.id);
+  const connectButtonLabel = hasProviderToken
+    ? (myConnection ? 'Reconnect my Microsoft calendar' : 'Connect my Microsoft calendar')
+    : (myConnection ? 'Connect this browser session' : 'Connect my Microsoft calendar');
 
   const workload = useMemo(() => {
     const map = new Map(staff.map((s) => [s.id, {
@@ -149,8 +156,13 @@ export default function SolicitorStaffPage() {
               className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Calendar className="h-4 w-4" aria-hidden />}
-              Connect my Microsoft calendar
+              {connectButtonLabel}
             </button>
+            {!hasProviderToken && myConnection ? (
+              <p className={`mt-2 text-xs ${mutedClass}`}>
+                Calendar is linked on your profile. Reconnect in this browser session to run live Microsoft checks.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>

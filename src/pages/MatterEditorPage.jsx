@@ -4,10 +4,12 @@ import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import FormRenderer from '../components/FormRenderer.jsx';
 import { getMatterDetail, saveSolicitorMatter, updateMatterStatus, MATTER_STATUS } from '../lib/matters.js';
+import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 
 export default function MatterEditorPage() {
   const { matterId } = useParams();
   const location = useLocation();
+  const { formData } = useFormDefinition();
   const [matter, setMatter] = useState(null);
   const [initialValues, setInitialValues] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,8 @@ export default function MatterEditorPage() {
   useEffect(() => {
     let active = true;
     const openAtSection = location.state?.openAtSection;
-    console.log('[WillTool Flow] Solicitor opening matter editor', { matterId, openAtSection, phase: 'solicitor_editor_open_start' });
+    const openAtSectionTitle = location.state?.openAtSectionTitle;
+    console.log('[WillTool Flow] Solicitor opening matter editor', { matterId, openAtSection, openAtSectionTitle, phase: 'solicitor_editor_open_start' });
 
     getMatterDetail(matterId).then((result) => {
       if (!active) return;
@@ -25,13 +28,20 @@ export default function MatterEditorPage() {
       } else {
         setMatter(result.matter || null);
         const stepFromMatter = result.matter?.current_step ?? 0;
-        const initialStep = typeof openAtSection === 'number' && openAtSection >= 0 ? openAtSection : stepFromMatter;
+        const titleIndex = openAtSectionTitle && Array.isArray(formData?.formSections)
+          ? formData.formSections.findIndex((s) => s?.formSection === openAtSectionTitle)
+          : -1;
+        const initialStep = typeof openAtSection === 'number' && openAtSection >= 0
+          ? openAtSection
+          : titleIndex >= 0
+            ? titleIndex
+            : stepFromMatter;
         setInitialValues({
           formValues: result.mergedPayload || {},
           currentIndex: initialStep,
           referenceNumber: result.matter?.client_reference || result.matter?.session_ref || 'SOLICITOR',
         });
-        console.log('[WillTool Flow] Matter editor loaded; form ready for solicitor', { matterId, clientRef: result.matter?.client_reference, currentStep: initialStep, openAtSection: openAtSection ?? '(none)' });
+        console.log('[WillTool Flow] Matter editor loaded; form ready for solicitor', { matterId, clientRef: result.matter?.client_reference, currentStep: initialStep, openAtSection: openAtSection ?? '(none)', openAtSectionTitle: openAtSectionTitle ?? '(none)', resolvedTitleIndex: titleIndex });
       }
       setLoading(false);
     });
@@ -39,7 +49,7 @@ export default function MatterEditorPage() {
     return () => {
       active = false;
     };
-  }, [matterId, location.state]);
+  }, [formData?.formSections, matterId, location.state]);
 
   const persistenceAdapter = useMemo(() => {
     if (!matter) return null;
