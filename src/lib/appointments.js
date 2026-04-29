@@ -1,17 +1,19 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 
 /**
- * Firm-wide default appointment rules. Mirrors `DEFAULT_AVAILABILITY_RULES`
- * so that the public client booking modal works even before any solicitor
- * has saved their personal rules. Future: fetch a per-solicitor override
- * via a public RPC once the matter has an assigned solicitor.
+ * Firm-wide default appointment rules. Mirrors the firm's everyday booking
+ * pattern (09:00–16:00, 30-minute slots, 15-minute buffer). The public
+ * booking modal still always tries to load the assigned solicitor's saved
+ * rules first — these defaults are only used when no per-solicitor rules
+ * exist (e.g. the matter is unassigned, or the new appointments
+ * session-helpers migration hasn't been run yet).
  */
 export const DEFAULT_APPOINTMENT_RULES = {
   timezone: 'Africa/Johannesburg',
   working_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
   start_time: '09:00',
-  end_time: '17:00',
-  slot_minutes: 60,
+  end_time: '16:00',
+  slot_minutes: 30,
   buffer_minutes: 15,
 };
 
@@ -32,6 +34,41 @@ function isMissingAppointmentsMigration(error) {
   if (!error) return false;
   const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
   return error?.code === '42P01' || text.includes('appointments') && text.includes('does not exist');
+}
+
+/**
+ * Detect "session helpers migration not yet run" so callers can fall back to
+ * the legacy single-RPC flow. The new helpers (get_session_appointment_context,
+ * cancel_appointment_by_session, reschedule_appointment_by_session) live in
+ * `20260430000000_appointments_session_helpers.sql`.
+ */
+function isMissingSessionHelpersMigration(error) {
+  if (!error) return false;
+  const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+  return (
+    error?.code === '42883' // function does not exist
+    || (text.includes('get_session_appointment_context') && text.includes('does not exist'))
+    || (text.includes('cancel_appointment_by_session') && text.includes('does not exist'))
+    || (text.includes('reschedule_appointment_by_session') && text.includes('does not exist'))
+  );
+}
+
+/**
+ * Normalise rules returned by `get_session_appointment_context` into the
+ * shape used by `buildSlotsForDay`. Falls back to firm-wide defaults if the
+ * solicitor has not configured availability rules yet.
+ */
+function normalizeRulesFromRpc(raw) {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_APPOINTMENT_RULES };
+  const merged = { ...DEFAULT_APPOINTMENT_RULES, ...raw };
+  if (typeof merged.slot_minutes === 'string') merged.slot_minutes = Number(merged.slot_minutes) || DEFAULT_APPOINTMENT_RULES.slot_minutes;
+  if (typeof merged.buffer_minutes === 'string') merged.buffer_minutes = Number(merged.buffer_minutes) || DEFAULT_APPOINTMENT_RULES.buffer_minutes;
+  if (!Array.isArray(merged.working_days) || merged.working_days.length === 0) {
+    merged.working_days = [...DEFAULT_APPOINTMENT_RULES.working_days];
+  }
+  if (typeof merged.start_time !== 'string' || !merged.start_time) merged.start_time = DEFAULT_APPOINTMENT_RULES.start_time;
+  if (typeof merged.end_time !== 'string' || !merged.end_time) merged.end_time = DEFAULT_APPOINTMENT_RULES.end_time;
+  return merged;
 }
 
 function pad(n) {
@@ -296,4 +333,140 @@ export function formatDurationMinutes(minutes) {
 export function localDateKey(date) {
   if (!(date instanceof Date)) return '';
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * Fetch the matter's solicitor availability rules + active appointment for
+ * the public booking modal. Result shape:
+ *   { rules, appointment, solicitor, matter, featureMissing }
+ *
+ * - `rules` is always populated (solicitor's saved rules if present, else
+ *   firm-wide defaults). Always safe to feed into `buildSlotsForDay`.
+ * - `appointment` is `null` unless there's a future, non-cancelled booking
+ *   for this session — in which case we expose its id/start/end so the modal
+ *   can render the "Change / Cancel" management view.
+ */
+export async function getSessionAppointmentContext({ ref, secret }) {
+  if (!isSupabaseConfigured()) {
+    return { rules: { ...DEFAULT_APPOINTMENT_RULES }, appointment: null, solicitor: null, matter: null, error: 'Supabase not configured' };
+  }
+  if (!ref || !secret) {
+    return { rules: { ...DEFAULT_APPOINTMENT_RULES }, appointment: null, solicitor: null, matter: null, error: 'Missing reference or session secret' };
+  }
+  const { data, error } = await callAnonRpc('get_session_appointment_context', {
+    p_ref: ref,
+    p_secret: secret,
+  });
+  if (error) {
+    // Helpful debug breadcrumb for production issues: keeps the UI resilient
+    // (fallback defaults) while still exposing the full RPC failure details in
+    // browser console when Supabase returns 5xx.
+    console.warn('[WillTool Flow] get_session_appointment_context error', {
+      ref,
+      code: error.code || null,
+      message: error.message || null,
+      details: error.details || null,
+      hint: error.hint || null,
+      status: error.status || null,
+    });
+    if (isMissingAppointmentsMigration(error) || isMissingSessionHelpersMigration(error)) {
+      return {
+        rules: { ...DEFAULT_APPOINTMENT_RULES },
+        appointment: null,
+        solicitor: null,
+        matter: null,
+        featureMissing: true,
+        error: null,
+      };
+    }
+    return {
+      rules: { ...DEFAULT_APPOINTMENT_RULES },
+      appointment: null,
+      solicitor: null,
+      matter: null,
+      error: error.message || 'Could not load booking context',
+    };
+  }
+  const payload = data && typeof data === 'object' ? data : {};
+  const rules = normalizeRulesFromRpc(payload.rules);
+  const apptRaw = payload.appointment;
+  const appointment = apptRaw
+    ? {
+        id: apptRaw.id,
+        start: apptRaw.start_at ? new Date(apptRaw.start_at) : null,
+        end: apptRaw.end_at ? new Date(apptRaw.end_at) : null,
+        status: apptRaw.status || 'requested',
+        notes: apptRaw.notes || '',
+        clientName: apptRaw.client_name || '',
+        clientEmail: apptRaw.client_email || '',
+      }
+    : null;
+  return {
+    rules,
+    appointment,
+    solicitor: payload.solicitor || null,
+    matter: payload.matter || null,
+    featureMissing: false,
+    error: null,
+  };
+}
+
+/**
+ * Cancel an existing appointment from the public client modal. Authorisation
+ * is enforced server-side: the appointment must belong to (ref, secret).
+ */
+export async function cancelAppointmentBySession({ ref, secret, appointmentId }) {
+  if (!isSupabaseConfigured()) return { error: 'Supabase not configured' };
+  if (!ref || !secret || !appointmentId) {
+    return { error: 'Missing reference, secret or appointment id' };
+  }
+  const { data, error } = await callAnonRpc('cancel_appointment_by_session', {
+    p_ref: ref,
+    p_secret: secret,
+    p_appointment_id: appointmentId,
+  });
+  if (error) {
+    if (isMissingAppointmentsMigration(error) || isMissingSessionHelpersMigration(error)) {
+      return { error: 'Cancel is not available yet. Run the appointments session-helpers migration.', featureMissing: true };
+    }
+    return { error: error.message || 'Could not cancel appointment' };
+  }
+  return { data };
+}
+
+/**
+ * Cancel-and-rebook in one server-side transaction so we never end up with
+ * two active appointments for the same session. Surfaces unique-violation
+ * conflicts from the partial unique index on `appointments.start_at`.
+ */
+export async function rescheduleAppointmentBySession({
+  ref,
+  secret,
+  appointmentId,
+  startIso,
+  durationMinutes = 60,
+  notes,
+}) {
+  if (!isSupabaseConfigured()) return { error: 'Supabase not configured' };
+  if (!ref || !secret || !appointmentId || !startIso) {
+    return { error: 'Missing reference, secret, appointment id or new start time' };
+  }
+  const { data, error } = await callAnonRpc('reschedule_appointment_by_session', {
+    p_ref: ref,
+    p_secret: secret,
+    p_appointment_id: appointmentId,
+    p_new_start: startIso,
+    p_duration_minutes: durationMinutes,
+    p_notes: notes ?? null,
+  });
+  if (error) {
+    if (isMissingAppointmentsMigration(error) || isMissingSessionHelpersMigration(error)) {
+      return { error: 'Reschedule is not available yet. Run the appointments session-helpers migration.', featureMissing: true };
+    }
+    if (error.code === '23505' || /unique|already|duplicate/i.test(error.message || '')) {
+      return { error: 'That slot was just taken. Please pick another time.', conflict: true };
+    }
+    return { error: error.message || 'Could not reschedule appointment' };
+  }
+  return { data };
 }

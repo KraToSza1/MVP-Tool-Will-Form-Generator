@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Clock, Loader2, Mail, Phone, X } from 'lucide-react';
+import { CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Clock, Edit3, Loader2, Mail, Phone, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DEFAULT_APPOINTMENT_RULES,
   buildSlotsForDay,
   buildWorkingDayList,
+  cancelAppointmentBySession,
   formatDurationMinutes,
   formatSlotLabel,
+  getSessionAppointmentContext,
   listTakenAppointmentSlots,
   localDateKey,
   requestAppointment,
+  rescheduleAppointmentBySession,
 } from '../lib/appointments.js';
 import { getAristoneContactDetails, ARISTONE_PROFILE } from '../constants/aristoneSolicitors.js';
 
@@ -54,13 +57,34 @@ export default function BookAppointmentModal({
   clientEmail = '',
   matterId = null,
   rules: rulesProp,
+  onAppointmentChange,
 }) {
-  const rules = useMemo(() => ({ ...DEFAULT_APPOINTMENT_RULES, ...(rulesProp || {}) }), [rulesProp]);
-  const slotMinutes = rules.slot_minutes || DEFAULT_APPOINTMENT_RULES.slot_minutes;
   const contact = useMemo(() => getAristoneContactDetails(), []);
 
+  // The active rules are loaded from the server (solicitor's saved
+  // availability) when the modal opens; the prop is only used as a temporary
+  // seed before the RPC resolves.
+  const [rules, setRules] = useState(() => ({
+    ...DEFAULT_APPOINTMENT_RULES,
+    ...(rulesProp || {}),
+  }));
+  const [rulesSource, setRulesSource] = useState('firm_default');
+  const [solicitor, setSolicitor] = useState(null);
+  const [existingAppointment, setExistingAppointment] = useState(null);
+
+  // mode: 'view' shows manage UI for an existing booking,
+  //       'pick' shows the slot picker (new booking or reschedule),
+  // The mode is computed from `existingAppointment` + an explicit
+  // `manualReschedule` flag so the user can hop into reschedule mode.
+  const [manualReschedule, setManualReschedule] = useState(false);
+
+  const slotMinutes = rules.slot_minutes || DEFAULT_APPOINTMENT_RULES.slot_minutes;
+  const bufferMinutes = rules.buffer_minutes ?? DEFAULT_APPOINTMENT_RULES.buffer_minutes;
+
   const [loading, setLoading] = useState(false);
+  const [contextLoading, setContextLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [featureMissing, setFeatureMissing] = useState(false);
   const [taken, setTaken] = useState([]);
@@ -70,8 +94,12 @@ export default function BookAppointmentModal({
   const [notes, setNotes] = useState('');
   const [contactEmail, setContactEmail] = useState(clientEmail || '');
   const [bookedSlot, setBookedSlot] = useState(null);
+  const [bookingMode, setBookingMode] = useState('book'); // 'book' | 'reschedule'
   const dialogRef = useRef(null);
   const closeBtnRef = useRef(null);
+
+  const hasFutureAppointment = !!(existingAppointment && existingAppointment.start && existingAppointment.start.getTime() > Date.now());
+  const showManageView = hasFutureAppointment && !manualReschedule && !bookedSlot;
 
   const days = useMemo(() => buildWorkingDayList(rules, DAYS_AHEAD, now), [rules, now]);
 
@@ -129,16 +157,44 @@ export default function BookAppointmentModal({
     setLoading(false);
   }, [referenceNumber, sessionSecret]);
 
+  /**
+   * Pulls solicitor availability rules + any existing future appointment for
+   * this session from the server. Without this we previously fell back to the
+   * firm-wide default (60-min slots, 09:00–17:00) which did not match what the
+   * solicitor had saved in their staff availability page.
+   */
+  const refreshContext = useCallback(async () => {
+    if (!referenceNumber || !sessionSecret) return;
+    setContextLoading(true);
+    const ctx = await getSessionAppointmentContext({
+      ref: referenceNumber,
+      secret: sessionSecret,
+    });
+    setContextLoading(false);
+    if (ctx?.rules) {
+      setRules({ ...DEFAULT_APPOINTMENT_RULES, ...ctx.rules });
+      setRulesSource(ctx.rules.source || 'firm_default');
+    }
+    setSolicitor(ctx?.solicitor || null);
+    setExistingAppointment(ctx?.appointment || null);
+    if (ctx?.featureMissing) {
+      setFeatureMissing(true);
+    }
+  }, [referenceNumber, sessionSecret]);
+
   useEffect(() => {
     if (!open) return undefined;
     setBookedSlot(null);
     setSelectedSlot(null);
     setNotes('');
     setContactEmail(clientEmail || '');
+    setManualReschedule(false);
+    setBookingMode('book');
     setNow(new Date());
+    void refreshContext();
     void refreshTaken();
     return undefined;
-  }, [open, clientEmail, refreshTaken]);
+  }, [open, clientEmail, refreshContext, refreshTaken]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -180,15 +236,25 @@ export default function BookAppointmentModal({
     if (!selectedSlot || submitting) return;
     setSubmitting(true);
     setErrorMessage('');
-    const result = await requestAppointment({
-      ref: referenceNumber,
-      secret: sessionSecret,
-      startIso: selectedSlot.start.toISOString(),
-      durationMinutes: slotMinutes,
-      notes: notes.trim(),
-      email: contactEmail.trim() || clientEmail || '',
-      name: clientName || '',
-    });
+    const isReschedule = bookingMode === 'reschedule' && existingAppointment?.id;
+    const result = isReschedule
+      ? await rescheduleAppointmentBySession({
+          ref: referenceNumber,
+          secret: sessionSecret,
+          appointmentId: existingAppointment.id,
+          startIso: selectedSlot.start.toISOString(),
+          durationMinutes: slotMinutes,
+          notes: notes.trim() || undefined,
+        })
+      : await requestAppointment({
+          ref: referenceNumber,
+          secret: sessionSecret,
+          startIso: selectedSlot.start.toISOString(),
+          durationMinutes: slotMinutes,
+          notes: notes.trim(),
+          email: contactEmail.trim() || clientEmail || '',
+          name: clientName || '',
+        });
     setSubmitting(false);
     if (result.error) {
       if (result.conflict) {
@@ -203,17 +269,73 @@ export default function BookAppointmentModal({
         setFeatureMissing(true);
       }
       setErrorMessage(result.error);
-      toast.error('Could not book appointment', { description: result.error });
+      toast.error('Could not save appointment', { description: result.error });
       return;
     }
     setBookedSlot({
       start: selectedSlot.start,
       end: selectedSlot.end,
       id: result.data?.id,
+      rescheduled: !!isReschedule,
     });
-    toast.success('Appointment requested', {
-      description: `${formatSlotLabel(selectedSlot.start)} — we will email a confirmation.`,
+    setBookingMode('book');
+    setManualReschedule(false);
+    onAppointmentChange?.();
+    void refreshContext();
+    toast.success(isReschedule ? 'Appointment rescheduled' : 'Appointment requested', {
+      description: `${formatSlotLabel(selectedSlot.start)} · we will notify ${
+        solicitor?.email || 'the firm'
+      }.`,
     });
+  };
+
+  /**
+   * Cancels the existing appointment via the secured session-helpers RPC.
+   * Returns silently if there's nothing to cancel.
+   */
+  const handleCancelExisting = async () => {
+    if (!existingAppointment?.id || cancelling) return;
+    setCancelling(true);
+    setErrorMessage('');
+    const result = await cancelAppointmentBySession({
+      ref: referenceNumber,
+      secret: sessionSecret,
+      appointmentId: existingAppointment.id,
+    });
+    setCancelling(false);
+    if (result.error) {
+      if (result.featureMissing) setFeatureMissing(true);
+      setErrorMessage(result.error);
+      toast.error('Could not cancel appointment', { description: result.error });
+      return;
+    }
+    toast.success('Appointment cancelled', {
+      description: 'You can book a new slot whenever you are ready.',
+    });
+    setExistingAppointment(null);
+    setBookedSlot(null);
+    setManualReschedule(false);
+    setBookingMode('book');
+    onAppointmentChange?.();
+    void refreshContext();
+    void refreshTaken();
+  };
+
+  /**
+   * Switch to reschedule mode: re-uses the slot picker but Confirm fires the
+   * reschedule RPC instead of request_appointment.
+   */
+  const handleStartReschedule = () => {
+    setManualReschedule(true);
+    setBookingMode('reschedule');
+    setSelectedSlot(null);
+    setBookedSlot(null);
+  };
+
+  const handleBackToManage = () => {
+    setManualReschedule(false);
+    setBookingMode('book');
+    setSelectedSlot(null);
   };
 
   const goPrevDay = () => {
@@ -230,6 +352,25 @@ export default function BookAppointmentModal({
   if (!open) return null;
 
   const mailHref = buildMailtoFallback({ contact, referenceNumber, clientName });
+
+  /**
+   * Compute the actual duration from a booked/existing appointment's
+   * start/end pair. Falls back to the loaded `slotMinutes` if the
+   * end is missing. This keeps the displayed duration truthful even when
+   * rules are out of sync (e.g. an older 60-min booking exists but the
+   * solicitor has since moved to 30-min slots).
+   */
+  const minutesBetween = (start, end) => {
+    if (!(start instanceof Date) || !(end instanceof Date)) return slotMinutes;
+    const diff = Math.round((end.getTime() - start.getTime()) / 60000);
+    return diff > 0 ? diff : slotMinutes;
+  };
+  const bookedDurationMinutes = bookedSlot
+    ? minutesBetween(bookedSlot.start, bookedSlot.end)
+    : slotMinutes;
+  const existingDurationMinutes = existingAppointment
+    ? minutesBetween(existingAppointment.start, existingAppointment.end)
+    : slotMinutes;
 
   return (
     <div
@@ -253,12 +394,22 @@ export default function BookAppointmentModal({
             </span>
             <div className="min-w-0">
               <h2 id="book-appointment-title" className="text-lg font-semibold leading-tight sm:text-xl">
-                Book your signing appointment
+                {showManageView
+                  ? 'Manage your appointment'
+                  : bookingMode === 'reschedule'
+                    ? 'Reschedule your appointment'
+                    : 'Book your signing appointment'}
               </h2>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300 break-words">
                 {bookedSlot
-                  ? 'Your slot has been requested. The firm will confirm shortly.'
-                  : `${formatDurationMinutes(slotMinutes)} appointment with ${ARISTONE_PROFILE.firmName}.`}
+                  ? bookedSlot.rescheduled
+                    ? 'Your appointment has been moved.'
+                    : 'Your slot has been requested. The firm will confirm shortly.'
+                  : showManageView
+                    ? 'Change the time or cancel without leaving this page.'
+                    : `${formatDurationMinutes(slotMinutes)} appointment with ${ARISTONE_PROFILE.firmName}${
+                      solicitor?.display_name ? ` · ${solicitor.display_name}` : ''
+                    }.`}
               </p>
             </div>
           </div>
@@ -279,9 +430,9 @@ export default function BookAppointmentModal({
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-7 w-7" />
                 <div>
-                  <p className="text-base font-semibold">Appointment requested</p>
+                  <p className="text-base font-semibold">{bookedSlot.rescheduled ? 'Appointment rescheduled' : 'Appointment requested'}</p>
                   <p className="text-sm">
-                    {formatSlotLabel(bookedSlot.start)} ({formatDurationMinutes(slotMinutes)})
+                    {formatSlotLabel(bookedSlot.start)} ({formatDurationMinutes(bookedDurationMinutes)})
                   </p>
                 </div>
               </div>
@@ -292,19 +443,96 @@ export default function BookAppointmentModal({
                 </span>{' '}
                 to confirm. Reference{referenceNumber ? `: ${referenceNumber}` : ''}.
               </p>
+              {solicitor?.email ? (
+                <p className="mt-2 text-xs text-emerald-900/80 dark:text-emerald-100/80 break-all">
+                  Your solicitor <span className="font-medium">{solicitor.display_name || solicitor.email}</span> ({solicitor.email}) has been notified by the system.
+                </p>
+              ) : null}
               <p className="mt-2 text-xs text-emerald-900/80 dark:text-emerald-100/80">
-                If you need to change this, contact us at{' '}
-                <a className="underline" href={`mailto:${contact.email}`}>
-                  {contact.email}
-                </a>
-                .
+                Need to change this later? Open the questionnaire link again — the booking modal lets you change or cancel without contacting the firm.
               </p>
+            </div>
+          ) : showManageView ? (
+            <div className="space-y-4">
+              {errorMessage ? (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-100">
+                  {errorMessage}
+                </div>
+              ) : null}
+              <div className="rounded-2xl border border-indigo-300 bg-indigo-50 p-5 text-indigo-900 dark:border-indigo-500/60 dark:bg-indigo-600/15 dark:text-indigo-100">
+                <div className="flex items-start gap-3">
+                  <CalendarCheck className="mt-0.5 h-7 w-7 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold">You already have an appointment</p>
+                    <p className="text-sm break-words">
+                      {formatSlotLabel(existingAppointment.start)}
+                      {existingAppointment.end ? (
+                        <>
+                          {' – '}
+                          {existingAppointment.end.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        </>
+                      ) : null}
+                      {' '}
+                      ({formatDurationMinutes(existingDurationMinutes)})
+                    </p>
+                    {solicitor?.display_name ? (
+                      <p className="mt-1 text-xs text-indigo-900/80 dark:text-indigo-100/80 break-all">
+                        With <span className="font-medium">{solicitor.display_name}</span>
+                        {solicitor.email ? <> · {solicitor.email}</> : null}
+                      </p>
+                    ) : null}
+                    {existingAppointment.notes ? (
+                      <p className="mt-2 text-xs text-indigo-900/80 dark:text-indigo-100/80 break-words">
+                        Notes: {existingAppointment.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleStartReschedule}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus:ring-offset-slate-900"
+                  >
+                    <Edit3 className="h-4 w-4" /> Change appointment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelExisting()}
+                    disabled={cancelling}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-400/60 dark:bg-rose-500/10 dark:text-rose-200 dark:hover:bg-rose-500/20"
+                  >
+                    {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {cancelling ? 'Cancelling…' : 'Cancel appointment'}
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                <p>
+                  Cancelling instantly frees the slot for other clients. Changing the time will move you to a new slot — no double-booking.
+                </p>
+                {rulesSource === 'firm_default' ? (
+                  <p className="mt-1.5">
+                    Showing the firm-wide default availability because no solicitor has published availability rules yet.
+                  </p>
+                ) : rulesSource === 'fallback_staff' ? (
+                  <p className="mt-1.5">
+                    No solicitor is assigned yet, so we're showing the firm's currently published availability.
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : (
             <>
               {errorMessage ? (
                 <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-100">
                   {errorMessage}
+                </div>
+              ) : null}
+
+              {contextLoading ? (
+                <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading your solicitor's availability…
                 </div>
               ) : null}
 
@@ -465,10 +693,14 @@ export default function BookAppointmentModal({
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="inline-flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5" /> {formatDurationMinutes(slotMinutes)} block · firm capacity
+                      <Clock className="h-3.5 w-3.5" />
+                      {formatDurationMinutes(slotMinutes)} block
+                      {bufferMinutes ? ` · ${bufferMinutes} min buffer` : ''}
+                      {' · '}
+                      {rules.start_time}–{rules.end_time}
                     </span>
                     <span className="inline-flex items-center gap-1.5 break-all">
-                      <Mail className="h-3.5 w-3.5" /> {contact.email}
+                      <Mail className="h-3.5 w-3.5" /> {solicitor?.email || contact.email}
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <Phone className="h-3.5 w-3.5" /> {contact.phone}
@@ -477,6 +709,17 @@ export default function BookAppointmentModal({
                   <p className="mt-1.5">
                     Times shown in your local timezone. Already-booked slots are hidden so there are no
                     double bookings.
+                    {rulesSource === 'firm_default' ? (
+                      <>
+                        {' '}
+                        Showing firm-wide default availability — no solicitor has published availability rules yet.
+                      </>
+                    ) : rulesSource === 'fallback_staff' ? (
+                      <>
+                        {' '}
+                        No solicitor is assigned to this matter yet — showing the firm's currently published availability.
+                      </>
+                    ) : null}
                   </p>
                 </div>
               </div>
@@ -490,12 +733,20 @@ export default function BookAppointmentModal({
               <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-4 w-4" /> {formatSlotLabel(bookedSlot.start)}
               </span>
+            ) : showManageView ? (
+              <span className="inline-flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300">
+                <CalendarCheck className="h-4 w-4" /> Currently booked: {formatSlotLabel(existingAppointment.start)}
+              </span>
             ) : selectedSlot ? (
               <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
                 <CalendarCheck className="h-4 w-4" /> {formatSlotLabel(selectedSlot.start)}
               </span>
             ) : (
-              <span className="text-slate-500 dark:text-slate-400">Pick a day and time to continue.</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {bookingMode === 'reschedule'
+                  ? 'Pick a new day and time to move your appointment.'
+                  : 'Pick a day and time to continue.'}
+              </span>
             )}
           </div>
           <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -509,12 +760,18 @@ export default function BookAppointmentModal({
             ) : null}
             <button
               type="button"
-              onClick={onClose}
+              onClick={bookingMode === 'reschedule' && existingAppointment ? handleBackToManage : onClose}
               className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              {bookedSlot ? 'Done' : 'Cancel'}
+              {bookedSlot
+                ? 'Done'
+                : showManageView
+                  ? 'Close'
+                  : bookingMode === 'reschedule' && existingAppointment
+                    ? 'Back'
+                    : 'Cancel'}
             </button>
-            {!bookedSlot ? (
+            {!bookedSlot && !showManageView ? (
               <button
                 type="button"
                 disabled={!selectedSlot || submitting || featureMissing}
@@ -522,7 +779,9 @@ export default function BookAppointmentModal({
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus:ring-offset-slate-900"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}
-                {submitting ? 'Booking…' : 'Confirm booking'}
+                {submitting
+                  ? bookingMode === 'reschedule' ? 'Saving…' : 'Booking…'
+                  : bookingMode === 'reschedule' ? 'Confirm new time' : 'Confirm booking'}
               </button>
             ) : null}
           </div>

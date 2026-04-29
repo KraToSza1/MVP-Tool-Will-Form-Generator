@@ -88,6 +88,7 @@ import {
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
 import BookAppointmentModal from './BookAppointmentModal.jsx';
+import { getSessionAppointmentContext, formatSlotLabel } from '../lib/appointments.js';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
@@ -339,6 +340,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [idVerificationIncompleteModalOpen, setIdVerificationIncompleteModalOpen] = useState(false);
   const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
+  // Mirrors the active appointment so the post-submit button reflects the
+  // booking state ("Book appointment" vs "Manage appointment · 14:30 Tue 4 May").
+  // Only loaded once we know the session ref + secret are valid.
+  const [activeAppointment, setActiveAppointment] = useState(null);
+  const [appointmentLoading, setAppointmentLoading] = useState(false);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
@@ -620,6 +626,35 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const closeBookAppointmentModal = useCallback(() => {
     setShowBookAppointment(false);
   }, []);
+
+  /**
+   * Pulls the latest active (future, non-cancelled) appointment for this
+   * session so the post-submit screen can show "Manage appointment · time"
+   * instead of always saying "Book appointment". Safe to call multiple times.
+   */
+  const refreshActiveAppointment = useCallback(async () => {
+    if (!referenceNumber || !sessionSecret) return;
+    setAppointmentLoading(true);
+    try {
+      const ctx = await getSessionAppointmentContext({
+        ref: referenceNumber,
+        secret: sessionSecret,
+      });
+      setActiveAppointment(ctx?.appointment || null);
+    } catch {
+      // Non-fatal: button just falls back to "Book appointment".
+    } finally {
+      setAppointmentLoading(false);
+    }
+  }, [referenceNumber, sessionSecret]);
+
+  // Whenever the user sees the "completed submission" screen, sync the active
+  // appointment so the button label is correct from the first paint.
+  useEffect(() => {
+    if (submitted && referenceNumber && sessionSecret) {
+      void refreshActiveAppointment();
+    }
+  }, [submitted, referenceNumber, sessionSecret, refreshActiveAppointment]);
 
   // Handle scroll to show/hide back to top button
   useEffect(() => {
@@ -5968,9 +6003,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <button
                   type="button"
                   onClick={handleBookAppointment}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-emerald-500/60 dark:bg-emerald-600/20 dark:text-emerald-100 dark:hover:bg-emerald-600/30"
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border px-5 py-3 text-sm font-semibold focus:outline-none focus:ring-2 ${
+                    activeAppointment && activeAppointment.start
+                      ? 'border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 focus:ring-indigo-500 dark:border-indigo-500/60 dark:bg-indigo-600/20 dark:text-indigo-100 dark:hover:bg-indigo-600/30'
+                      : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-500 dark:border-emerald-500/60 dark:bg-emerald-600/20 dark:text-emerald-100 dark:hover:bg-emerald-600/30'
+                  }`}
+                  title={
+                    activeAppointment?.start
+                      ? `Booked for ${formatSlotLabel(new Date(activeAppointment.start))}. Click to change or cancel.`
+                      : 'Click to book your signing appointment'
+                  }
                 >
-                  Book appointment
+                  {appointmentLoading
+                    ? 'Loading appointment…'
+                    : activeAppointment?.start
+                      ? `Change or cancel · ${formatSlotLabel(new Date(activeAppointment.start))}`
+                      : 'Book appointment'}
                 </button>
                 <button
                   type="button"
@@ -6039,6 +6087,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         clientName={formValues?.fullName || ''}
         clientEmail={formValues?.email || ''}
         matterId={submittedMatterId}
+        onAppointmentChange={refreshActiveAppointment}
       />
     </div>
   );
