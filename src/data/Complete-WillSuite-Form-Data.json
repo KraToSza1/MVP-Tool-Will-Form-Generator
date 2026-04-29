@@ -3489,15 +3489,6 @@
                     "subLabel": "Sign below:",
                     "value": "",
                     "required": false
-                },
-                {
-                    "id": "clientSignature",
-                    "type": "signature",
-                    "label": "Client's Signature",
-                    "infoText": "The client's signature. Optional - can be signed on printed copy.",
-                    "subLabel": "Sign below:",
-                    "value": "",
-                    "required": false
                 }
             ]
         }

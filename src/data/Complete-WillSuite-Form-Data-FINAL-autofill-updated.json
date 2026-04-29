@@ -5390,19 +5390,6 @@
                         }
                     ],
                     "value": ""
-                },
-                {
-                    "id": "clientSignature",
-                    "type": "signature",
-                    "label": "Client's Signature",
-                    "subLabel": "Sign below:",
-                    "actions": [
-                        {
-                            "label": "Clear",
-                            "action": "clearSignature"
-                        }
-                    ],
-                    "value": ""
                 }
             ]
         }

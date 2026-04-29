@@ -198,7 +198,7 @@ export const CLIENT_VISIBLE_MAX_SECTION_INDEX = TESTAMENTARY_CAPACITY_SECTION_IN
 // Field IDs that are solicitor-only (hidden in client mode): execution/witnesses + professional executor workflow
 export const SOLICITOR_ONLY_FIELD_IDS = new Set([
   'includeWitnessDetails', 'witness1Section', 'witness2Section',
-  'willExecutionDate', 'testatorSignature', 'consultantSignature', 'clientSignature',
+  'willExecutionDate', 'testatorSignature', 'consultantSignature',
   'inabilityToSignProvisions', 'signingOnBehalfSection', 'interpreterSection', 'nativeLanguage',
   'witness1StatusDisplay', 'addWitness1Button', 'witness1Data',
   'witness2StatusDisplay', 'addWitness2Button', 'witness2Data',

@@ -87,6 +87,7 @@ import {
 } from '../constants/clientMode.js';
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
+import BookAppointmentModal from './BookAppointmentModal.jsx';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
@@ -97,8 +98,8 @@ import {
   formatProfessionalOtherDetailsForClause,
 } from '../utils/appointmentPersonFormat.js';
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
+import { toProperNameCase, toProperAddressCase, normalizePostcode } from '../utils/nameCase.js';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
-import { getAristoneContactDetails } from '../constants/aristoneSolicitors.js';
 
 const DEBUG_LOGS = false; // Set true for verbose console logging
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -204,7 +205,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const idx = saved != null ? Number(saved) : 0;
     return Number.isFinite(idx) && idx >= 0 ? idx : 0;
   });
-  const appointmentContact = getAristoneContactDetails();
+
   
   // Add global success handlers
   useEffect(() => {
@@ -337,6 +338,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [submittedMatterId, setSubmittedMatterId] = useState(null);
   const [idVerificationIncompleteModalOpen, setIdVerificationIncompleteModalOpen] = useState(false);
   const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
+  const [showBookAppointment, setShowBookAppointment] = useState(false);
   const autosaveTimerRef = useRef(null);
   const clauseUpdateTimerRef = useRef(null);
   const latestPersistRef = useRef({ formValues: {}, currentIndex: 0 });
@@ -605,19 +607,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     closeCompletionModal({ scrollToIdentity: true });
   }, [closeCompletionModal]);
 
+  /**
+   * Open the in-app booking modal so the client can pick an appointment slot
+   * directly. The modal hides already-booked slots (DB has a unique index on
+   * active slots so two clients can never grab the same time). When the cloud
+   * tables are not yet available, the modal exposes a mailto: fallback.
+   */
   const handleBookAppointment = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const subject = encodeURIComponent(
-      `Will signing appointment request${referenceNumber ? ` (Ref ${referenceNumber})` : ''}`
-    );
-    const body = encodeURIComponent(
-      `Hello ${appointmentContact.firmName},\n\nI would like to request a will signing appointment.\n${
-        referenceNumber ? `Reference: ${referenceNumber}\n` : ''
-      }\nPlease contact me with available dates/times.\n\nThank you.`
-    );
-    const mailto = `mailto:${appointmentContact.email}?subject=${subject}&body=${body}`;
-    window.location.href = mailto;
-  }, [appointmentContact.email, appointmentContact.firmName, referenceNumber]);
+    setShowBookAppointment(true);
+  }, []);
+
+  const closeBookAppointmentModal = useCallback(() => {
+    setShowBookAppointment(false);
+  }, []);
 
   // Handle scroll to show/hide back to top button
   useEffect(() => {
@@ -737,6 +739,31 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     if (typeof text !== 'string') {
       return text;
     }
+
+    /**
+     * Decide whether a placeholder value should be re-cased before insertion
+     * into clause text. We only auto-correct names/addresses (the fields the
+     * client most often types in ALL CAPS); everything else is returned as-is.
+     */
+    const NAME_FIELD_IDS = new Set([
+      'fullName', 'firstName', 'middleName', 'middleNames', 'lastName', 'name',
+      'displayName', 'partnerFullName', 'partnerFirstName', 'partnerLastName',
+      'childFirstName', 'childLastName', 'title',
+    ]);
+    const ADDRESS_FIELD_IDS = new Set([
+      'address', 'address1', 'address2', 'address3',
+      'addressLine1', 'addressLine2', 'town', 'city', 'county',
+    ]);
+    const normalizeFieldCase = (sectionId, subField, raw) => {
+      if (raw == null) return '';
+      const str = String(raw);
+      if (!str) return str;
+      const key = subField || sectionId || '';
+      if (key === 'postcode') return normalizePostcode(str);
+      if (NAME_FIELD_IDS.has(key)) return toProperNameCase(str);
+      if (ADDRESS_FIELD_IDS.has(key)) return toProperAddressCase(str);
+      return str;
+    };
 
     const fallbackMap = {
       guardiansSection: 'guardianData',
@@ -942,11 +969,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               }
               
               if (sectionData.length > 0) {
-                // CRITICAL FIX: Get testator name for validation BEFORE processing items
-                const testatorFirstName = values.firstName || '';
-                const testatorLastName = values.lastName || '';
-                const testatorMiddleName = values.middleName || '';
-                const testatorTitle = values.title || '';
+                // CRITICAL FIX: Get testator name for validation BEFORE processing items.
+                // Title-case the parts so the comparison still matches when items are
+                // also title-cased on output (avoids "MARCUS ELLWOOD" !== "Marcus Ellwood").
+                const testatorFirstName = toProperNameCase(values.firstName || '');
+                const testatorLastName = toProperNameCase(values.lastName || '');
+                const testatorMiddleName = toProperNameCase(values.middleName || '');
+                const testatorTitle = toProperNameCase(values.title || '');
                 const testatorFullName = [testatorTitle, testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
                 const testatorNameWithoutTitle = [testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
                 
@@ -1012,21 +1041,27 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 
                 if (!item || typeof item !== 'object') return '';
                 
-                // Format as: "relationship name of address" (e.g., "Friend Charlie Pet Carer of 789 Pet Street, Animal District, London, SW1A 2BB")
+                // Format as: "relationship name of address" (e.g., "Friend Charlie Pet Carer of 789 Pet Street, Animal District, London, SW1A 2BB").
+                // Names + address fragments are run through nameCase helpers so ALL CAPS / all-lowercase input
+                // becomes "First letter capital, rest lowercase" in the rendered Will/PDF.
                 const relationship = item.relationship || item.relationshipToTestator || '';
                 const nameParts = [
-                  item.title,
-                  item.firstName,
-                  item.lastName
+                  toProperNameCase(item.title),
+                  toProperNameCase(item.firstName),
+                  toProperNameCase(item.lastName)
                 ].filter(Boolean);
                 const name = nameParts.join(' ');
-                const nameWithoutTitle = [item.firstName, item.middleName, item.lastName].filter(Boolean).join(' ');
+                const nameWithoutTitle = [
+                  toProperNameCase(item.firstName),
+                  toProperNameCase(item.middleName),
+                  toProperNameCase(item.lastName),
+                ].filter(Boolean).join(' ');
                 const addressParts = [
-                  item.address1,
-                  item.address2,
-                  item.address3,
-                  item.city,
-                  item.postcode
+                  toProperAddressCase(item.address1),
+                  toProperAddressCase(item.address2),
+                  toProperAddressCase(item.address3),
+                  toProperAddressCase(item.city),
+                  normalizePostcode(item.postcode),
                 ].filter(Boolean);
                 const address = addressParts.join(', ');
                 
@@ -1101,10 +1136,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               
               // CRITICAL FIX: Validate result doesn't contain testator name
               // Check if result matches testator name pattern (firstName + lastName)
-              const testatorFirstName = values.firstName || '';
-              const testatorLastName = values.lastName || '';
-              const testatorMiddleName = values.middleName || '';
-              const testatorTitle = values.title || '';
+              const testatorFirstName = toProperNameCase(values.firstName || '');
+              const testatorLastName = toProperNameCase(values.lastName || '');
+              const testatorMiddleName = toProperNameCase(values.middleName || '');
+              const testatorTitle = toProperNameCase(values.title || '');
               const testatorFullName = [testatorTitle, testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
               const testatorNameWithoutTitle = [testatorFirstName, testatorMiddleName, testatorLastName].filter(Boolean).join(' ').trim();
               const testatorFirstNameLastName = [testatorFirstName, testatorLastName].filter(Boolean).join(' ').trim();
@@ -1372,11 +1407,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                          values[`${sectionId}${subField}`] || 
                          values[`${sectionId}_${subField}`] ||
                          values[`${sectionId}.${subField}`];
-      if (customValue) return customValue;
+      if (customValue) return normalizeFieldCase(sectionId, subField, customValue);
 
       const value = values[fullKey] || values[sectionId] || '';
       const result = (typeof value === 'string' || typeof value === 'number') && value !== '' ? value.toString() : '';
-      return result;
+      return normalizeFieldCase(sectionId, subField, result);
     });
 
     let processed = interpolated;
@@ -3563,7 +3598,6 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       const testatorSignature = extractSignature(formValues.testatorSignature);
       const consultantSignature = extractSignature(formValues.consultantSignature);
-      const clientSignature = extractSignature(formValues.clientSignature);
       
       // Final aggressive deep clean: recursively remove any corrupted data
       const deepClean = (obj) => {
@@ -3740,8 +3774,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         howResidueDistributed: sanitizedValues.howResidueDistributed,
         appointSeparateTrusteesFLIT: sanitizedValues.appointSeparateTrusteesFLIT,
         hasTestatorSignature: !!testatorSignature,
-        hasConsultantSignature: !!consultantSignature,
-        hasClientSignature: !!clientSignature
+        hasConsultantSignature: !!consultantSignature
       });
       
       if (sanitizedValues.separateTrusteeData) {
@@ -3758,8 +3791,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       const isClientPDF = clientCopy || !solicitorMode;
       const pdfResult = await generatePDFWithJSPDF(sanitizedValues, {
         testatorSignature,
-        consultantSignature,
-        clientSignature
+        consultantSignature
       }, { isClientPDF, formSchema: formData });
       
       console.log('[WillTool Flow] PDF generation completed', { hasDoc: !!pdfResult?.doc, hasPlaceholders: pdfResult?.hasPlaceholders, phase: 'client_pdf_done' });
@@ -5998,6 +6030,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           </div>
         </div>
       )}
+
+      <BookAppointmentModal
+        open={showBookAppointment}
+        onClose={closeBookAppointmentModal}
+        referenceNumber={referenceNumber}
+        sessionSecret={sessionSecret}
+        clientName={formValues?.fullName || ''}
+        clientEmail={formValues?.email || ''}
+        matterId={submittedMatterId}
+      />
     </div>
   );
 }

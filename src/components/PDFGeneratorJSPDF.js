@@ -1888,8 +1888,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
 
     const {
       testatorSignature = null,
-      consultantSignature = null,
-      clientSignature = null
+      consultantSignature = null
     } = signatures || {};
     const doc = new jsPDF({
       unit: 'mm',
@@ -4170,7 +4169,8 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const witness1Details = getWitnessDetails(1);
       const witness2Details = getWitnessDetails(2);
       drawWitnessBox(doc, w1x, y, colW, boxH, 'Witness 1', consultantSignature, witness1Details);
-      drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2', clientSignature, witness2Details);
+      // Witness 2: digital signature removed; the witness signs in pen on the printed copy.
+      drawWitnessBox(doc, w2x, y, colW, boxH, 'Witness 2', null, witness2Details);
     }
 
     // ===== VALIDATION ERRORS APPENDIX (AT THE END) =====

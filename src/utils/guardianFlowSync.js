@@ -4,6 +4,7 @@
  */
 import { formatAppointmentPersonListForClause } from './appointmentPersonFormat.js';
 import { pickPersonFieldsForModal } from './personRecordSpecs.js';
+import { toProperNameCase } from './nameCase.js';
 
 /** Empty GuardianFlow `PersonModal` row (single source of truth with GuardianFlow.jsx). */
 export const GUARDIAN_FLOW_MODAL_EMPTY = {
@@ -192,8 +193,8 @@ export function buildGuardianshipDetailsClause(children) {
   if (!Array.isArray(children) || children.length === 0) return '';
   const parts = [];
   for (const ch of children) {
-    const fn = String(ch.childFirstName || ch.firstName || '').trim();
-    const ln = String(ch.childLastName || ch.lastName || '').trim();
+    const fn = toProperNameCase(String(ch.childFirstName || ch.firstName || '').trim());
+    const ln = toProperNameCase(String(ch.childLastName || ch.lastName || '').trim());
     const dob = formatDobForClause(ch.dob || ch.dateOfBirth || '');
     const childLabel = [fn, ln].filter(Boolean).join(' ').trim();
     const guardians = Array.isArray(ch.guardians)
@@ -223,8 +224,8 @@ export function buildGuardianshipDetailsClauseSameGuardians(guardians, children)
   if (!gPhrase) return '';
   const parts = [];
   for (const ch of children) {
-    const fn = String(ch.childFirstName || ch.firstName || '').trim();
-    const ln = String(ch.childLastName || ch.lastName || '').trim();
+    const fn = toProperNameCase(String(ch.childFirstName || ch.firstName || '').trim());
+    const ln = toProperNameCase(String(ch.childLastName || ch.lastName || '').trim());
     const dob = formatDobForClause(ch.dob || ch.dateOfBirth || '');
     const childLabel = [fn, ln].filter(Boolean).join(' ').trim();
     if (!childLabel) continue;

@@ -5,6 +5,8 @@
  * Legal-style wording: "Mrs Kate Paul of 50 Napier Road, Luton, Bedfordshire, LU1 1RG" (name + " of " + comma-separated address).
  * Objects are reduced to modal fields only so stray keys (email, internal ids) never affect output.
  */
+import { toProperNameCase, toProperAddressCase, normalizePostcode } from './nameCase.js';
+
 export function normalizeCountySpellingInLine(s) {
   return String(s).replace(/\bBedforshire\b/gi, 'Bedfordshire');
 }
@@ -25,11 +27,26 @@ export const EXCLUDED_PERSON_FIELD_SPECS = [
   { key: 'postcode', label: 'Postcode', type: 'text' },
 ];
 
+/** Casing keys: which person-record fields are name-shaped vs address-shaped. */
+const NAME_FIELD_KEYS = new Set(['title', 'firstName', 'middleName', 'lastName']);
+const ADDRESS_FIELD_KEYS = new Set(['address1', 'address2', 'address3']);
+
 function pickAllowedPersonFields(item) {
   const out = {};
   for (const spec of EXCLUDED_PERSON_FIELD_SPECS) {
     const v = item[spec.key];
-    if (v != null && String(v).trim() !== '') out[spec.key] = String(v).trim();
+    if (v != null && String(v).trim() !== '') {
+      const trimmed = String(v).trim();
+      if (NAME_FIELD_KEYS.has(spec.key)) {
+        out[spec.key] = toProperNameCase(trimmed);
+      } else if (ADDRESS_FIELD_KEYS.has(spec.key)) {
+        out[spec.key] = toProperAddressCase(trimmed);
+      } else if (spec.key === 'postcode') {
+        out[spec.key] = normalizePostcode(trimmed);
+      } else {
+        out[spec.key] = trimmed;
+      }
+    }
   }
   return out;
 }

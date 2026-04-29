@@ -17,17 +17,52 @@ import {
   isMatterTestamentaryCapacityOutstanding,
 } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
+import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 
+/**
+ * Status filter options. The `outstanding:<category>` values are dashboard-only
+ * filters that re-use the existing matter list and pinpoint a single
+ * outstanding category, so the user can deal with one type of work at a time.
+ */
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All matters' },
-  { value: 'outstanding_only', label: 'Outstanding only' },
+  { value: 'outstanding_only', label: 'Outstanding only (any)' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.ID_VERIFICATION}`, label: 'Outstanding · ID verification' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY}`, label: 'Outstanding · Testamentary Capacity' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED}`, label: 'Outstanding · BPR (required)' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW}`, label: 'Outstanding · BPR (review)' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED}`, label: 'Outstanding · Property trust (required)' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW}`, label: 'Outstanding · Property trust (review)' },
   { value: MATTER_STATUS.SUBMITTED, label: 'Submitted' },
   { value: MATTER_STATUS.VERIFICATION_PENDING, label: 'ID needed' },
   { value: MATTER_STATUS.IN_REVIEW, label: 'In progress' },
   { value: MATTER_STATUS.COMPLETED, label: 'Completed' },
 ];
+
+/**
+ * Sort options. Anything with the `outstanding:<category>` prefix is a
+ * client-side priority sort: matters where that category is outstanding bubble
+ * to the top, then ties are broken by last activity (newest first).
+ */
+const SORT_OPTIONS = [
+  { value: 'last_activity_at', label: 'Last activity (newest first)' },
+  { value: 'submitted_at', label: 'Received date (newest first)' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.ID_VERIFICATION}`, label: 'ID verification first' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY}`, label: 'Testamentary Capacity first' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED}`, label: 'BPR (required) first' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW}`, label: 'BPR (review) first' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED}`, label: 'Property trust (required) first' },
+  { value: `outstanding:${OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW}`, label: 'Property trust (review) first' },
+];
+
+const SUPABASE_SORT_VALUES = new Set(['last_activity_at', 'submitted_at']);
+
+function parseOutstandingCategoryFromValue(value) {
+  if (typeof value !== 'string' || !value.startsWith('outstanding:')) return null;
+  return value.slice('outstanding:'.length) || null;
+}
 
 const STATUS_HELP = [
   { status: 'Submitted', explanation: 'Client submitted. Awaiting your review.', action: 'Open matter and review.' },
@@ -127,6 +162,93 @@ function firstNameFromDisplay(display) {
   return part || 'there';
 }
 
+/**
+ * One presentational unit for the dashboard stats grid. Renders a coloured
+ * card that, on click, applies a status filter to the matters list and
+ * scrolls to it. Includes a tiny "what to do" hint line so a solicitor can
+ * see at a glance which pile each card represents and the suggested action.
+ */
+function StatCard({
+  tone, // 'slate' | 'blue' | 'amber' | 'indigo' | 'emerald' | 'rose'
+  icon: Icon,
+  label,
+  count,
+  hint,
+  isActive,
+  onClick,
+  ariaLabel,
+}) {
+  const TONE_STYLES = {
+    slate: {
+      base: 'border-slate-200 bg-white text-slate-900 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-100',
+      hover: 'hover:border-slate-300 hover:bg-slate-50 dark:hover:border-slate-500 dark:hover:bg-slate-800/60',
+      active: 'border-slate-400 ring-2 ring-slate-400/50 shadow dark:border-slate-300 dark:ring-slate-300/30',
+      iconRow: 'text-slate-600 dark:text-slate-300',
+      count: 'text-slate-900 dark:text-slate-100',
+      hint: 'text-slate-500 dark:text-slate-400',
+    },
+    blue: {
+      base: 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-500/30 dark:bg-blue-950/25 dark:text-blue-100',
+      hover: 'hover:border-blue-300 hover:bg-blue-100 dark:hover:border-blue-400/50 dark:hover:bg-blue-900/40',
+      active: 'border-blue-500 ring-2 ring-blue-400/60 shadow dark:border-blue-300 dark:ring-blue-300/40',
+      iconRow: 'text-blue-800 dark:text-blue-200',
+      count: 'text-blue-900 dark:text-blue-100',
+      hint: 'text-blue-800/85 dark:text-blue-200/85',
+    },
+    amber: {
+      base: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/25 dark:text-amber-100',
+      hover: 'hover:border-amber-300 hover:bg-amber-100 dark:hover:border-amber-400/50 dark:hover:bg-amber-900/40',
+      active: 'border-amber-500 ring-2 ring-amber-400/60 shadow dark:border-amber-300 dark:ring-amber-300/40',
+      iconRow: 'text-amber-800 dark:text-amber-200',
+      count: 'text-amber-900 dark:text-amber-100',
+      hint: 'text-amber-800/90 dark:text-amber-200/85',
+    },
+    indigo: {
+      base: 'border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-950/25 dark:text-indigo-100',
+      hover: 'hover:border-indigo-300 hover:bg-indigo-100 dark:hover:border-indigo-400/50 dark:hover:bg-indigo-900/40',
+      active: 'border-indigo-500 ring-2 ring-indigo-400/60 shadow dark:border-indigo-300 dark:ring-indigo-300/40',
+      iconRow: 'text-indigo-800 dark:text-indigo-200',
+      count: 'text-indigo-900 dark:text-indigo-100',
+      hint: 'text-indigo-800/85 dark:text-indigo-200/85',
+    },
+    emerald: {
+      base: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-950/20 dark:text-emerald-100',
+      hover: 'hover:border-emerald-300 hover:bg-emerald-100 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-900/40',
+      active: 'border-emerald-500 ring-2 ring-emerald-400/60 shadow dark:border-emerald-300 dark:ring-emerald-300/40',
+      iconRow: 'text-emerald-800 dark:text-emerald-200',
+      count: 'text-emerald-900 dark:text-emerald-100',
+      hint: 'text-emerald-800/85 dark:text-emerald-200/85',
+    },
+    rose: {
+      base: 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-500/35 dark:bg-rose-950/25 dark:text-rose-100',
+      hover: 'hover:border-rose-300 hover:bg-rose-100 dark:hover:border-rose-400/50 dark:hover:bg-rose-900/40',
+      active: 'border-rose-500 ring-2 ring-rose-400/60 shadow dark:border-rose-300 dark:ring-rose-300/40',
+      iconRow: 'text-rose-800 dark:text-rose-200',
+      count: 'text-rose-900 dark:text-rose-100',
+      hint: 'text-rose-800/90 dark:text-rose-200/85',
+    },
+  };
+  const tones = TONE_STYLES[tone] || TONE_STYLES.slate;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
+      aria-label={ariaLabel || label}
+      title={hint ? `${label} — ${hint}` : label}
+      className={`text-left rounded-2xl border p-5 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-slate-900 min-h-[44px] ${tones.base} ${tones.hover} ${isActive ? tones.active : ''}`}
+    >
+      <div className={`flex items-center gap-3 ${tones.iconRow}`}>
+        <Icon size={18} />
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      <p className={`mt-4 text-3xl font-bold ${tones.count}`}>{count}</p>
+      {hint ? <p className={`mt-1 text-xs ${tones.hint}`}>{hint}</p> : null}
+      <p className={`mt-2 text-xs font-semibold ${tones.iconRow} opacity-80`}>{isActive ? 'Filter on · tap to clear' : 'Tap to filter list'}</p>
+    </button>
+  );
+}
+
 function getMatterDisplayData(matter) {
   const outstandingCategories = getMatterOutstandingCategories(matter);
   const hasOutstandingCategories = outstandingCategories.length > 0;
@@ -162,7 +284,24 @@ export default function SolicitorDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [matterToDelete, setMatterToDelete] = useState(null);
+  const [quickAction, setQuickAction] = useState(null); // { matter, category }
   const mattersListRef = useRef(null);
+
+  /**
+   * Supabase ordering only understands real columns. For the new
+   * `outstanding:<category>` sorts, send `last_activity_at` to the server and
+   * apply the priority ordering client-side in `visibleMatters`.
+   */
+  const supabaseSortBy = SUPABASE_SORT_VALUES.has(sortBy) ? sortBy : 'last_activity_at';
+
+  const filterOutstandingCategory = useMemo(
+    () => parseOutstandingCategoryFromValue(status),
+    [status],
+  );
+  const sortPriorityCategory = useMemo(
+    () => parseOutstandingCategoryFromValue(sortBy),
+    [sortBy],
+  );
 
   useEffect(() => {
     mattersLoadTrace('SolicitorDashboardPage mounted', {
@@ -229,8 +368,19 @@ export default function SolicitorDashboardPage() {
     });
 
     const tFiltered = typeof performance !== 'undefined' ? performance.now() : 0;
+    // Status values that aren't real DB statuses (outstanding_only / outstanding:<category>)
+    // get widened to 'all' on the server; the client-side filter in `visibleMatters`
+    // performs the actual narrowing using outstanding-category logic.
+    const isClientSideStatus =
+      status === 'outstanding_only' || (typeof status === 'string' && status.startsWith('outstanding:'));
     const pFiltered = listMatters(
-      { search, status: status === 'outstanding_only' ? 'all' : status, assignedOnly, userId: user?.id, sortBy },
+      {
+        search,
+        status: isClientSideStatus ? 'all' : status,
+        assignedOnly,
+        userId: user?.id,
+        sortBy: supabaseSortBy,
+      },
       'dashboard_filtered',
     ).then((r) => {
       if (typeof performance !== 'undefined') {
@@ -359,15 +509,41 @@ export default function SolicitorDashboardPage() {
     if (status === 'outstanding_only') {
       next = next.filter((matter) => (getMatterOutstandingCategories(matter) || []).length > 0);
     }
+    if (filterOutstandingCategory) {
+      next = next.filter((matter) =>
+        (getMatterOutstandingCategories(matter) || []).includes(filterOutstandingCategory),
+      );
+    }
     if (matterListOutstandingCategory) {
-      next = next.filter((matter) => (getMatterOutstandingCategories(matter) || []).includes(matterListOutstandingCategory));
+      next = next.filter((matter) =>
+        (getMatterOutstandingCategories(matter) || []).includes(matterListOutstandingCategory),
+      );
+    }
+    if (sortPriorityCategory) {
+      // Stable priority sort: matters with the chosen outstanding category first,
+      // then preserve the existing order (Supabase already sorted by last_activity_at).
+      const decorated = next.map((matter, index) => ({
+        matter,
+        index,
+        priority: (getMatterOutstandingCategories(matter) || []).includes(sortPriorityCategory) ? 0 : 1,
+      }));
+      decorated.sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return a.index - b.index;
+      });
+      next = decorated.map((entry) => entry.matter);
     }
     return next;
-  }, [matters, matterListOutstandingCategory, status]);
+  }, [filterOutstandingCategory, matters, matterListOutstandingCategory, sortPriorityCategory, status]);
 
   const showEmptyState = !loading && matters.length === 0 && !search && status === 'all' && !assignedOnly;
   const tcDueCount = outstandingGroups[OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]?.length ?? 0;
-  const filtersActive = status !== 'all' || search.trim() !== '' || assignedOnly || !!matterListOutstandingCategory;
+  const filtersActive =
+    status !== 'all'
+    || search.trim() !== ''
+    || assignedOnly
+    || !!matterListOutstandingCategory
+    || !!filterOutstandingCategory;
   const clearFilters = () => {
     setSearch('');
     setStatus('all');
@@ -383,6 +559,87 @@ export default function SolicitorDashboardPage() {
       mattersListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
   };
+
+  /**
+   * Apply a status-style filter from the stat-card grid. If the same filter is
+   * already active, clicking the card clears it (toggle behaviour, with a
+   * little hint in the card's footer line). Search and per-category outstanding
+   * narrows are reset so the user gets the full sub-list every time.
+   */
+  const handleStatCardClick = (targetStatus) => {
+    setMatterListOutstandingCategory(null);
+    setActiveOutstandingCategory(null);
+    setSearch('');
+    setStatus((prev) => (prev === targetStatus ? 'all' : targetStatus));
+    window.setTimeout(() => {
+      mattersListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
+  // Stat-card definitions. Order matches the existing grid so visually nothing moves;
+  // this just centralises labels, hints and target filters in one place.
+  const statCards = [
+    {
+      key: 'total',
+      tone: 'slate',
+      icon: BriefcaseBusiness,
+      label: 'Total matters',
+      count: stats.total,
+      hint: 'Every matter on file',
+      filter: 'all',
+      ariaLabel: 'Show all matters',
+    },
+    {
+      key: 'submitted',
+      tone: 'blue',
+      icon: FileClock,
+      label: 'Submitted',
+      count: stats.submitted,
+      hint: 'Awaiting your first review',
+      filter: MATTER_STATUS.SUBMITTED,
+      ariaLabel: 'Filter to submitted matters',
+    },
+    {
+      key: 'idNeeded',
+      tone: 'amber',
+      icon: ShieldAlert,
+      label: 'ID needed',
+      count: stats.idNeeded,
+      hint: 'Chase or verify client ID',
+      filter: `outstanding:${OUTSTANDING_CATEGORY.ID_VERIFICATION}`,
+      ariaLabel: 'Filter to matters with ID outstanding',
+    },
+    {
+      key: 'in_review',
+      tone: 'indigo',
+      icon: ClipboardCheck,
+      label: 'In progress',
+      count: stats.in_review,
+      hint: 'Continue review · finish TC',
+      filter: MATTER_STATUS.IN_REVIEW,
+      ariaLabel: 'Filter to in-progress matters',
+    },
+    {
+      key: 'completed',
+      tone: 'emerald',
+      icon: ClipboardCheck,
+      label: 'Completed',
+      count: stats.completed,
+      hint: 'Ready for execution / archive',
+      filter: MATTER_STATUS.COMPLETED,
+      ariaLabel: 'Filter to completed matters',
+    },
+    {
+      key: 'tcDue',
+      tone: 'rose',
+      icon: ClipboardCheck,
+      label: 'TC due',
+      count: tcDueCount,
+      hint: 'Before final PDF',
+      filter: `outstanding:${OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY}`,
+      ariaLabel: 'Filter to matters needing Testamentary Capacity',
+    },
+  ];
 
   const getOutstandingBadgeLink = (matterId, category) => {
     if (category === OUTSTANDING_CATEGORY.ID_VERIFICATION) {
@@ -604,59 +861,23 @@ export default function SolicitorDashboardPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-600 dark:bg-slate-900/40">
-          <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-            <BriefcaseBusiness size={18} />
-            <span className="text-sm font-medium">Total matters</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-slate-900 dark:text-slate-100">{stats.total}</p>
-        </div>
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-500/30 dark:bg-blue-950/25">
-          <div className="flex items-center gap-3 text-blue-800 dark:text-blue-200">
-            <FileClock size={18} />
-            <span className="text-sm font-medium">Submitted</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-blue-900 dark:text-blue-100">{stats.submitted}</p>
-        </div>
-        <div
-          className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/25"
-          title="Matters where client ID or verification is still outstanding"
-        >
-          <div className="flex items-center gap-3 text-amber-800 dark:text-amber-200">
-            <ShieldAlert size={18} />
-            <span className="text-sm font-medium">ID needed</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-amber-900 dark:text-amber-100">{stats.idNeeded}</p>
-        </div>
-        <div
-          className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-500/30 dark:bg-indigo-950/25"
-          title="Matters with status In progress (under your review; Testamentary Capacity can be completed)"
-        >
-          <div className="flex items-center gap-3 text-indigo-800 dark:text-indigo-200">
-            <ClipboardCheck size={18} />
-            <span className="text-sm font-medium">In progress</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-indigo-900 dark:text-indigo-100">{stats.in_review}</p>
-        </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-3 text-emerald-800 dark:text-emerald-200">
-            <ClipboardCheck size={18} />
-            <span className="text-sm font-medium">Completed</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-emerald-900 dark:text-emerald-100">{stats.completed}</p>
-        </div>
-        <div
-          className="rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-sm dark:border-rose-500/35 dark:bg-rose-950/25"
-          title="Testamentary Capacity still required on the merged matter record"
-        >
-          <div className="flex items-center gap-3 text-rose-800 dark:text-rose-200">
-            <ClipboardCheck size={18} />
-            <span className="text-sm font-medium">TC due</span>
-          </div>
-          <p className="mt-4 text-3xl font-bold text-rose-900 dark:text-rose-100">{tcDueCount}</p>
-          <p className="mt-1 text-xs text-rose-800/90 dark:text-rose-200/80">Before final PDF</p>
-        </div>
+      <section
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6"
+        aria-label="Matter status summary — tap a card to filter the list below"
+      >
+        {statCards.map((card) => (
+          <StatCard
+            key={card.key}
+            tone={card.tone}
+            icon={card.icon}
+            label={card.label}
+            count={card.count}
+            hint={card.hint}
+            isActive={status === card.filter}
+            ariaLabel={card.ariaLabel}
+            onClick={() => handleStatCardClick(card.filter)}
+          />
+        ))}
       </section>
 
       <section
@@ -729,8 +950,9 @@ export default function SolicitorDashboardPage() {
                 onChange={(event) => setSortBy(event.target.value)}
                 className="solicitor-dashboard-input w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="last_activity_at">Last activity (newest first)</option>
-                <option value="submitted_at">Received date (newest first)</option>
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </label>
             <label className="solicitor-dashboard-input flex items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2.5 min-h-[42px] cursor-pointer hover:bg-slate-50 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-0 focus-within:border-indigo-500">
@@ -843,9 +1065,15 @@ export default function SolicitorDashboardPage() {
                         {outstandingCategories.map((category) => {
                           const meta = OUTSTANDING_CATEGORY_META[category];
                           return (
-                            <span key={category} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+                            <button
+                              key={category}
+                              type="button"
+                              onClick={() => setQuickAction({ matter, category })}
+                              className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${meta.badgeClasses}`}
+                              title={`Complete ${meta.shortLabel} from the dashboard`}
+                            >
                               {meta.shortLabel}
-                            </span>
+                            </button>
                           );
                         })}
                       </div>
@@ -934,9 +1162,15 @@ export default function SolicitorDashboardPage() {
                               {outstandingCategories.map((category) => {
                                 const meta = OUTSTANDING_CATEGORY_META[category];
                                 return (
-                                  <span key={category} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.badgeClasses}`}>
+                                  <button
+                                    key={category}
+                                    type="button"
+                                    onClick={() => setQuickAction({ matter, category })}
+                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${meta.badgeClasses}`}
+                                    title={`Complete ${meta.shortLabel} from the dashboard`}
+                                  >
                                     {meta.shortLabel}
-                                  </span>
+                                  </button>
                                 );
                               })}
                             </div>
@@ -983,6 +1217,22 @@ export default function SolicitorDashboardPage() {
           </>
         )}
       </section>
+
+      <MatterQuickActionModal
+        open={!!quickAction}
+        matter={quickAction?.matter || null}
+        category={quickAction?.category || null}
+        onClose={() => setQuickAction(null)}
+        onSaved={(updated) => {
+          if (!updated || !updated.id) return;
+          // Replace the row in both the filtered list and the stats list so badges
+          // disappear immediately without waiting for a full re-fetch.
+          setMatters((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+          setAllMattersForStats((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+          );
+        }}
+      />
 
       <ConfirmModal
         open={!!matterToDelete}

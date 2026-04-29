@@ -534,6 +534,77 @@ export async function saveSolicitorMatter(matterId, formValues, currentIndex) {
   return { data };
 }
 
+/**
+ * Merge a partial object into the matter's `solicitor_payload`. Used by the
+ * dashboard quick-action modal so a solicitor can save just the few fields
+ * relevant to one outstanding category (TC, BPR Trust, Property Trust, …)
+ * without re-saving every other field via `saveSolicitorMatter`.
+ *
+ * Optional `extraColumns` patches sibling columns at the same time
+ * (currently `outstanding_verification` for the ID-verification quick action).
+ *
+ * Returns `{ data: <full matter row>, error? }`.
+ */
+export async function patchMatterSolicitorPayload(matterId, partial, extraColumns = {}) {
+  if (!supabase) return { error: 'Supabase not configured' };
+  if (!matterId) return { error: 'matterId is required' };
+  const safePartial = partial && typeof partial === 'object' ? partial : {};
+
+  const { data: existing, error: readError } = await supabase
+    .from('matters')
+    .select('id, solicitor_payload')
+    .eq('id', matterId)
+    .maybeSingle();
+  if (readError) {
+    console.error('[WillTool Flow] patchMatterSolicitorPayload read error:', readError);
+    return { error: readError.message };
+  }
+  if (!existing) return { error: 'Matter not found' };
+
+  const currentPayload =
+    existing.solicitor_payload && typeof existing.solicitor_payload === 'object'
+      ? existing.solicitor_payload
+      : {};
+  const mergedPayload = { ...currentPayload, ...safePartial };
+
+  const updatePatch = {
+    solicitor_payload: mergedPayload,
+    last_activity_at: new Date().toISOString(),
+    ...(extraColumns && typeof extraColumns === 'object' ? extraColumns : {}),
+  };
+
+  const { data, error } = await supabase
+    .from('matters')
+    .update(updatePatch)
+    .eq('id', matterId)
+    .select(STAFF_MATTER_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    console.error('[WillTool Flow] patchMatterSolicitorPayload update error:', error);
+    return { error: error.message };
+  }
+
+  await supabase.from('matter_activity').insert({
+    matter_id: matterId,
+    actor_type: 'solicitor',
+    actor_profile_id: (await supabase.auth.getUser()).data.user?.id ?? null,
+    action: 'solicitor_quick_action',
+    metadata: {
+      patched_keys: Object.keys(safePartial),
+      extra_columns: Object.keys(extraColumns || {}),
+    },
+  });
+
+  console.log('[WillTool Flow] Solicitor quick action saved', {
+    matterId,
+    patchedKeys: Object.keys(safePartial),
+    extraColumns: Object.keys(extraColumns || {}),
+    phase: 'solicitor_quick_action_save',
+  });
+
+  return { data };
+}
+
 export async function deleteMatter(matterId) {
   if (!supabase) return { error: 'Supabase not configured' };
 
