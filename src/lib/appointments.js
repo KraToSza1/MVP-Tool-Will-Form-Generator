@@ -211,6 +211,47 @@ function callAnonRpc(name, body) {
 }
 
 /**
+ * Best-effort nudge to drain the appointment email outbox immediately after a
+ * booking/cancel/reschedule event. This calls the Supabase Edge Function:
+ *   /functions/v1/process-appointment-outbox
+ *
+ * Notes:
+ * - Non-blocking: failures are logged, but never fail booking UX.
+ * - Requires the function to be deployed (and typically deployed with
+ *   --no-verify-jwt for public client flows).
+ */
+async function triggerAppointmentOutboxSend(reason = 'unknown') {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!baseUrl || !anonKey) return;
+  const url = `${String(baseUrl).replace(/\/$/, '')}/functions/v1/process-appointment-outbox`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn('[WillTool Flow] process-appointment-outbox trigger failed', {
+        reason,
+        status: res.status,
+        body: text?.slice?.(0, 300) || '',
+      });
+    }
+  } catch (err) {
+    console.warn('[WillTool Flow] process-appointment-outbox trigger error', {
+      reason,
+      message: err?.message || String(err),
+    });
+  }
+}
+
+/**
  * Fetch active (non-cancelled) appointment ranges that the public booking
  * modal must avoid. Uses anon-key fetch (the RPC is SECURITY DEFINER and
  * verifies ref/secret) so it works without the client being logged in.
@@ -285,6 +326,7 @@ export async function requestAppointment({
     }
     return { error: error.message || 'Could not request appointment' };
   }
+  void triggerAppointmentOutboxSend('request_appointment');
   return { data };
 }
 
@@ -431,6 +473,7 @@ export async function cancelAppointmentBySession({ ref, secret, appointmentId })
     }
     return { error: error.message || 'Could not cancel appointment' };
   }
+  void triggerAppointmentOutboxSend('cancel_appointment_by_session');
   return { data };
 }
 
@@ -468,5 +511,6 @@ export async function rescheduleAppointmentBySession({
     }
     return { error: error.message || 'Could not reschedule appointment' };
   }
+  void triggerAppointmentOutboxSend('reschedule_appointment_by_session');
   return { data };
 }
