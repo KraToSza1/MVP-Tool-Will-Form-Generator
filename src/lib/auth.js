@@ -145,6 +145,56 @@ export async function getCurrentSession() {
 /** Embedded iframes (e.g. WordPress) can be slow or throttle auth; allow longer wait. */
 const SIGN_IN_TIMEOUT_MS = 60_000;
 const PROFILE_FETCH_TIMEOUT_MS = 35_000;
+export const SOLICITOR_ALLOWED_EMAIL_DOMAIN = 'aristonesolicitors.co.uk';
+export const SOLICITOR_ADMIN_OVERRIDE_EMAIL = 'raymondvdw@gmail.com';
+
+function hasAzureProviderIdentity(user) {
+  if (!user) return false;
+  if (user?.app_metadata?.provider === 'azure') return true;
+  if (Array.isArray(user?.app_metadata?.providers) && user.app_metadata.providers.includes('azure')) return true;
+  if (Array.isArray(user?.identities) && user.identities.some((identity) => identity?.provider === 'azure')) return true;
+  return false;
+}
+
+/**
+ * Solicitor access policy:
+ * - Must sign in via Microsoft 365 (Azure provider)
+ * - Must use firm email domain
+ */
+export function evaluateSolicitorAccessPolicy({ user, profile }) {
+  const role = profile?.role;
+  const isStaffRole = role === 'solicitor' || role === 'admin';
+  if (!isStaffRole) {
+    return { ok: true, reason: 'not_staff_role' };
+  }
+
+  const email = String(profile?.email || user?.email || '').trim().toLowerCase();
+  if (role === 'admin' && email === SOLICITOR_ADMIN_OVERRIDE_EMAIL) {
+    return { ok: true, reason: 'admin_override', email };
+  }
+
+  const hasAllowedDomain = email.endsWith(`@${SOLICITOR_ALLOWED_EMAIL_DOMAIN}`);
+  if (!hasAllowedDomain) {
+    return {
+      ok: false,
+      reason: 'invalid_domain',
+      email,
+      message: `Solicitor access is restricted to @${SOLICITOR_ALLOWED_EMAIL_DOMAIN} accounts.`,
+    };
+  }
+
+  const hasMicrosoftProvider = hasAzureProviderIdentity(user);
+  if (!hasMicrosoftProvider) {
+    return {
+      ok: false,
+      reason: 'not_microsoft_365',
+      email,
+      message: 'Solicitor access requires Microsoft 365 sign-in.',
+    };
+  }
+
+  return { ok: true, reason: 'ok', email };
+}
 
 function withTimeout(promise, ms, message = 'Sign-in timed out') {
   return Promise.race([
@@ -359,6 +409,30 @@ export async function signInSolicitor({ email, password }) {
     email: maskEmail(profile.email || ''),
     totalPipelineMs: Math.round(nowPerfMs() - pipelineStart),
   });
+
+  const policy = evaluateSolicitorAccessPolicy({ user: data.user ?? null, profile });
+  if (!policy.ok) {
+    authLog('pipeline end: BLOCKED by solicitor access policy', {
+      reason: policy.reason,
+      email: policy.email ? maskEmail(policy.email) : null,
+      role: profile.role,
+    });
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutErr) {
+      authError('policy block: signOut warning', signOutErr);
+    }
+    activeAuthPipelineStart = null;
+    return {
+      code: 'solicitor_policy_blocked',
+      policyReason: policy.reason,
+      error: policy.message,
+      session: null,
+      user: null,
+      profile: null,
+    };
+  }
+
   activeAuthPipelineStart = null;
   return { session: data.session ?? null, user: data.user ?? null, profile };
 }
@@ -456,6 +530,37 @@ export async function signOutSolicitor() {
   }
   authLog('signOut: supabase.auth.signOut completed', {});
   return { ok: true };
+}
+
+export async function updateMyDisplayName(nextDisplayName) {
+  if (!supabase || !isSupabaseConfigured()) {
+    return { error: 'Supabase not configured' };
+  }
+  const displayName = String(nextDisplayName || '').trim();
+  if (!displayName) {
+    return { error: 'Display name is required' };
+  }
+  if (displayName.length > 80) {
+    return { error: 'Display name is too long (max 80 characters)' };
+  }
+
+  const { data: authData, error: authUserError } = await supabase.auth.getUser();
+  if (authUserError || !authData?.user?.id) {
+    return { error: authUserError?.message || 'Could not determine signed-in user' };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ display_name: displayName })
+    .eq('id', authData.user.id)
+    .select('id, email, display_name, role')
+    .maybeSingle();
+
+  if (error) {
+    authError('updateMyDisplayName failed', error);
+    return { error: error.message || 'Could not update profile name' };
+  }
+  return { data };
 }
 
 export function subscribeToAuthChanges(callback) {

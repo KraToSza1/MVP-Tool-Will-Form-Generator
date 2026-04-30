@@ -1,21 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, ExternalLink, LockKeyhole, Mail } from 'lucide-react';
+import { ArrowLeft, ExternalLink, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
-import { isMicrosoftSignInEnabled, startMicrosoft365SignIn } from '../lib/auth.js';
+import {
+  SOLICITOR_ADMIN_OVERRIDE_EMAIL,
+  SOLICITOR_ALLOWED_EMAIL_DOMAIN,
+  isMicrosoftSignInEnabled,
+  startMicrosoft365SignIn,
+} from '../lib/auth.js';
 import { POST_CALENDAR_CONNECT_RETURN_KEY } from '../lib/staffCalendar.js';
-
-const REMEMBER_EMAIL_KEY = 'solicitor-remember-email';
-
-function getStoredEmail() {
-  try {
-    return typeof window !== 'undefined' ? window.localStorage.getItem(REMEMBER_EMAIL_KEY) : null;
-  } catch {
-    return null;
-  }
-}
 
 function takePostCalendarConnectReturnPath() {
   if (typeof window === 'undefined') return null;
@@ -32,13 +27,11 @@ function takePostCalendarConnectReturnPath() {
 export default function SolicitorLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isStaff, loading, signIn, user } = useAuth();
-  const [email, setEmail] = useState(() => getStoredEmail() || '');
-  const [password, setPassword] = useState('');
-  const [rememberEmail, setRememberEmail] = useState(() => !!getStoredEmail());
-  const [submitting, setSubmitting] = useState(false);
+  const { isAuthenticated, isStaff, loading, user, signIn } = useAuth();
   const [msSigningIn, setMsSigningIn] = useState(false);
-  const [adminFixSql, setAdminFixSql] = useState(null);
+  const [adminEmail, setAdminEmail] = useState(SOLICITOR_ADMIN_OVERRIDE_EMAIL);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
   const [inIframe, setInIframe] = useState(false);
   const staffDeniedToastRef = useRef(false);
   const oauthReturnHandledRef = useRef(false);
@@ -93,7 +86,7 @@ export default function SolicitorLoginPage() {
       toast.error('Solicitor access not enabled for this sign-in', {
         id: 'solicitor-staff-denied',
         description:
-          'Microsoft accepted your sign-in, but this account is not on the staff list for the Will Tool yet. Ask your firm administrator to add your work email, or use email and password if your firm set that up.',
+          `Use a Microsoft 365 account on @${SOLICITOR_ALLOWED_EMAIL_DOMAIN} that is on the solicitor staff list.`,
         duration: 16000,
       });
     }
@@ -103,106 +96,6 @@ export default function SolicitorLoginPage() {
     const target = takePostCalendarConnectReturnPath() || location.state?.from?.pathname || '/solicitor';
     return <Navigate to={target} replace />;
   }
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const emailTrimmed = email.trim();
-    const uiT0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    console.log('[WillTool Auth UI] form submit start', {
-      email: emailTrimmed ? `${emailTrimmed.slice(0, 2)}***` : '(empty)',
-      rememberEmail,
-    });
-    setSubmitting(true);
-    setAdminFixSql(null);
-    let result;
-    try {
-      // Timeouts are handled inside signInSolicitor (can exceed 45s when it retries once + profile fetch).
-      result = await signIn({ email: emailTrimmed, password });
-      const uiMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - uiT0;
-      console.log('[WillTool Auth UI] signIn promise settled', {
-        uiTotalMs: Math.round(uiMs),
-        hasError: !!result?.error,
-        code: result?.code ?? null,
-      });
-    } catch (err) {
-      const uiMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - uiT0;
-      console.error('[WillTool Auth UI] signIn threw', err, { uiTotalMs: Math.round(uiMs) });
-      const isTimeout = err?.message === 'Sign-in timed out';
-      const inIframe = typeof window !== 'undefined' && window.self !== window.top;
-      toast.error('Sign-in failed', {
-        description: isTimeout
-          ? inIframe
-            ? 'Sign-in often times out inside an embedded page (e.g. WordPress). Open solicitor login in a new tab using the link below, then sign in there.'
-            : 'Request took too long. Try again, or open this page in a new tab. Check your connection.'
-          : (err?.message || 'Network or unexpected error. Check the console.'),
-        duration: 16000,
-      });
-      setSubmitting(false);
-      return;
-    }
-    setSubmitting(false);
-    console.log('[WillTool Auth UI] signIn result (post-try)', {
-      hasError: !!result?.error,
-      error: result?.error,
-      hasProfile: !!result?.profile,
-      role: result?.profile?.role,
-    });
-
-    if (result?.error) {
-      const isNotConfigured = result.error === 'Supabase not configured';
-      const isNoProfile =
-        result.code === 'no_staff_profile' ||
-        result.error.includes('No solicitor profile') ||
-        result.error.includes('not in the staff list');
-      const isInvalidCreds = (result.code === 'invalid_credentials') || /invalid login|invalid credentials/i.test(result.error || '');
-      let description = result.error;
-      if (isNotConfigured) {
-        description = import.meta.env.DEV
-          ? 'Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env, then restart the dev server (npm run dev).'
-          : 'This site is not fully configured. Please contact technical support.';
-      } else if (isNoProfile) {
-        description =
-          'Your email and password were accepted, but this account is not set up for staff access yet. Please contact your firm administrator so they can enable your account.';
-        if (import.meta.env.DEV) {
-          const sql = `INSERT INTO public.profiles (id, email, display_name, role)
-SELECT id, email, COALESCE(raw_user_meta_data->>'display_name', split_part(COALESCE(email,''), '@', 1)), 'admin'
-FROM auth.users WHERE email = ${emailTrimmed ? `'${emailTrimmed.replace(/'/g, "''")}'` : "'YOUR_EMAIL@example.com'"}
-ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
-          setAdminFixSql(sql);
-        }
-      } else if (isInvalidCreds) {
-        description = 'Wrong email or password. Check your credentials and try again.';
-      }
-      toast.error('Unable to open staff workspace', { description, duration: 14000 });
-      return;
-    }
-
-    if (result?.profile?.role !== 'solicitor' && result?.profile?.role !== 'admin') {
-      toast.error('Access not enabled', {
-        description:
-          'This account does not have solicitor access. Ask your firm administrator to assign you the correct role in the staff list.',
-        duration: 12000,
-      });
-      return;
-    }
-
-    if (rememberEmail && emailTrimmed) {
-      try {
-        window.localStorage.setItem(REMEMBER_EMAIL_KEY, emailTrimmed);
-      } catch {
-        /* ignore */
-      }
-    } else {
-      try {
-        window.localStorage.removeItem(REMEMBER_EMAIL_KEY);
-      } catch {
-        /* ignore */
-      }
-    }
-
-    toast.success('Signed in', { description: 'Secure solicitor workspace ready.' });
-    navigate(location.state?.from?.pathname || '/solicitor', { replace: true });
-  };
 
   const directLoginUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/solicitor/login` : '/solicitor/login';
@@ -227,6 +120,31 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
     } else if (result?.ok) {
       console.info('[WillTool M365 Auth] browser navigating away to Microsoft/Supabase (if you see this, redirect was quick)');
     }
+  };
+
+  const handleAdminFallbackSignIn = async (event) => {
+    event.preventDefault();
+    const email = String(adminEmail || '').trim().toLowerCase();
+    if (email !== SOLICITOR_ADMIN_OVERRIDE_EMAIL) {
+      toast.error('Admin fallback restricted', {
+        description: `Only ${SOLICITOR_ADMIN_OVERRIDE_EMAIL} can use this fallback.`,
+      });
+      return;
+    }
+    if (!adminPassword) {
+      toast.error('Password required', { description: 'Enter your password for the admin account.' });
+      return;
+    }
+    setAdminSubmitting(true);
+    const result = await signIn({ email, password: adminPassword });
+    setAdminSubmitting(false);
+    if (result?.error) {
+      toast.error('Admin sign-in failed', { description: result.error });
+      return;
+    }
+    setAdminPassword('');
+    toast.success('Signed in', { description: 'Admin fallback access granted.' });
+    navigate(location.state?.from?.pathname || '/solicitor', { replace: true });
   };
 
   return (
@@ -281,7 +199,7 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
             <button
               type="button"
               onClick={handleMicrosoftSignIn}
-              disabled={msSigningIn || submitting}
+              disabled={msSigningIn}
               className="flex w-full min-h-[48px] items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
@@ -295,98 +213,50 @@ ON CONFLICT (id) DO UPDATE SET role = 'admin', email = EXCLUDED.email;`;
               {msSigningIn ? 'Redirecting to Microsoft…' : 'Continue with Microsoft 365'}
             </button>
             <p className="text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-              Sign in with your work email. If your firm uses 2FA, Microsoft will send the code to you or your IT
-              process — nothing extra to &quot;approve&quot; in the Will Tool.
+              Sign in with your work Microsoft account. If your firm uses 2FA, Microsoft will send the code to you or
+              your IT process — nothing extra to &quot;approve&quot; in the Will Tool.
             </p>
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 top-1/2 h-px bg-slate-200 dark:bg-slate-600" aria-hidden />
-              <span className="relative z-10 bg-white px-3 text-xs font-medium text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-                or use email
-              </span>
-            </div>
           </div>
         )}
-
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Email address</span>
-            <div className="mt-2 relative">
-              <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                className="w-full rounded-2xl border border-slate-300 px-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="name@aristonesolicitors.co.uk"
-              />
-            </div>
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 dark:border-indigo-500/40 dark:bg-indigo-950/30 dark:text-indigo-100">
+          <p className="font-semibold">Sign-in policy</p>
+          <p className="mt-1 wrap-break-word">
+            Solicitor access is Microsoft 365 only and must use <strong>@{SOLICITOR_ALLOWED_EMAIL_DOMAIN}</strong>, with a single admin fallback for platform owner testing.
+          </p>
+        </div>
+        <form onSubmit={handleAdminFallbackSignIn} className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/60">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Admin fallback (owner only)</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+            Reserved for platform admin testing. Only <strong>{SOLICITOR_ADMIN_OVERRIDE_EMAIL}</strong> is accepted.
+          </p>
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Admin email</span>
+            <input
+              type="email"
+              value={adminEmail}
+              onChange={(event) => setAdminEmail(event.target.value)}
+              required
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+            />
           </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Password</span>
+          <label className="mt-3 block">
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Admin password</span>
             <input
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
               required
-              className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Enter your password"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
             />
           </label>
-
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={rememberEmail}
-              onChange={(e) => setRememberEmail(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span className="text-sm text-slate-700">Remember my email on this device</span>
-          </label>
-
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full rounded-2xl bg-slate-950 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={adminSubmitting || msSigningIn}
+            className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-700"
           >
-            {submitting ? 'Signing in...' : 'Sign in securely'}
+            {adminSubmitting ? 'Signing in…' : 'Sign in as admin'}
           </button>
         </form>
-
-        {import.meta.env.DEV && adminFixSql && (
-          <div className="solicitor-login-fix-box mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">Developer: add profile in Supabase</p>
-            <p className="mt-1 text-xs text-amber-800">Local dev only — Supabase → SQL Editor → paste and Run, then sign in again.</p>
-            <pre className="mt-3 overflow-x-auto rounded-lg bg-amber-100/80 p-3 text-xs text-amber-950 whitespace-pre font-mono">
-              {adminFixSql}
-            </pre>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(adminFixSql);
-                    toast.success('SQL copied', { description: 'Paste in Supabase SQL Editor (dev only).' });
-                  } catch {
-                    toast.error('Copy failed');
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-white hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              >
-                <Copy size={14} />
-                Copy SQL
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdminFixSql(null)}
-                className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

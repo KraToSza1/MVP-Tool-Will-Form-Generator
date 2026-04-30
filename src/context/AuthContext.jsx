@@ -1,6 +1,13 @@
 /* eslint-disable react-refresh/only-export-components -- provider + hook pattern */
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { signInSolicitor, signOutSolicitor, subscribeToAuthChanges } from '../lib/auth.js';
+import { toast } from 'sonner';
+import {
+  evaluateSolicitorAccessPolicy,
+  signInSolicitor,
+  signOutSolicitor,
+  subscribeToAuthChanges,
+  updateMyDisplayName,
+} from '../lib/auth.js';
 import { AuthContext } from './authContext.js';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 
@@ -11,6 +18,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const gotInitial = useRef(false);
   const authBootT0 = useRef(typeof performance !== 'undefined' ? performance.now() : 0);
+  const policyToastShownRef = useRef(false);
 
   useEffect(() => {
     mattersLoadTrace('AuthProvider snapshot', {
@@ -41,6 +49,17 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const updateDisplayName = useCallback(async (nextDisplayName) => {
+    const result = await updateMyDisplayName(nextDisplayName);
+    if (result?.data) {
+      setProfile((prev) => ({
+        ...(prev || {}),
+        ...result.data,
+      }));
+    }
+    return result;
+  }, []);
+
   useEffect(() => {
     let active = true;
     const FALLBACK_MS = 6_000;
@@ -67,6 +86,29 @@ export function AuthProvider({ children }) {
           role: result?.profile?.role ?? null,
         });
       }
+
+      const policy = evaluateSolicitorAccessPolicy({ user: result?.user ?? null, profile: result?.profile ?? null });
+      if (result?.session && !policy.ok) {
+        if (!policyToastShownRef.current) {
+          policyToastShownRef.current = true;
+          toast.error('Solicitor sign-in restricted', {
+            id: 'solicitor-access-policy',
+            description: policy.message,
+            duration: 12000,
+          });
+        }
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        void signOutSolicitor();
+        return;
+      }
+
+      if (policy.ok) {
+        policyToastShownRef.current = false;
+      }
+
       setSession(result.session ?? null);
       setUser(result.user ?? null);
       setProfile(result.profile ?? null);
@@ -105,7 +147,8 @@ export function AuthProvider({ children }) {
     isStaff: profile?.role === 'solicitor' || profile?.role === 'admin',
     signIn: signInSolicitor,
     signOut,
-  }), [loading, profile, session, signOut, user]);
+    updateDisplayName,
+  }), [loading, profile, session, signOut, updateDisplayName, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

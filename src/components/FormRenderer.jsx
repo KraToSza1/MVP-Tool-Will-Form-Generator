@@ -180,6 +180,8 @@ const IDENTITY_VERIFICATION_ONLY_SECTION = {
   _identityVerificationStep: true,
 };
 
+const CLIENT_SIGNATURE_SECTION_TITLE = 'Client signature';
+
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
   const navigate = useNavigate();
   const { isDark } = useTheme();
@@ -190,12 +192,39 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const hasCloudRefAndSecret = REF_REGEX.test(refFromUrl) && secretFromUrl.length >= 8;
   const useExternalPersistence = !!externalPersistence;
   const solicitorMode = isSolicitorMode();
+  const allowClientSignatureRequest =
+    !solicitorMode
+    && (
+      urlParams?.get('client_sign') === '1'
+      || urlParams?.get('clientSign') === '1'
+      || urlParams?.get('client_sign') === 'true'
+      || urlParams?.get('clientSign') === 'true'
+    );
   const useCloud = !useExternalPersistence && typeof window !== 'undefined' && isSupabaseConfigured();
   const matterIdFromPath = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const match = window.location.pathname.match(/\/solicitor\/matters\/([^/]+)/i);
     return match?.[1] || '';
   }, []);
+
+  const clientSignatureFieldDefinition = useMemo(() => {
+    const sections = Array.isArray(formData?.formSections) ? formData.formSections : [];
+    for (const section of sections) {
+      const fields = Array.isArray(section?.fields) ? section.fields : [];
+      const direct = fields.find((f) => f?.id === 'testatorSignature');
+      if (direct) return direct;
+    }
+    return null;
+  }, [formData?.formSections]);
+
+  const clientSignatureOnlySection = useMemo(() => {
+    if (!clientSignatureFieldDefinition) return null;
+    return {
+      formSection: CLIENT_SIGNATURE_SECTION_TITLE,
+      fields: [{ ...clientSignatureFieldDefinition }],
+      _clientSignatureStep: true,
+    };
+  }, [clientSignatureFieldDefinition]);
 
   const [referenceNumber, setReferenceNumber] = useState(() => {
     if (initialFormState?.referenceNumber) return initialFormState.referenceNumber;
@@ -352,6 +381,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [idVerificationIncompleteModalOpen, setIdVerificationIncompleteModalOpen] = useState(false);
   const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
+  const [signatureRequestModalOpen, setSignatureRequestModalOpen] = useState(false);
+  const [signatureRequestEmail, setSignatureRequestEmail] = useState('');
   // Mirrors the active appointment so the post-submit button reflects the
   // booking state ("Book appointment" vs "Manage appointment · 14:30 Tue 4 May").
   // Only loaded once we know the session ref + secret are valid.
@@ -387,10 +418,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return changed ? { ...s, fields: visibleFields } : s;
       });
     if (!solicitorMode) {
-      return [...mapped, IDENTITY_VERIFICATION_ONLY_SECTION];
+      const clientSteps = [...mapped, IDENTITY_VERIFICATION_ONLY_SECTION];
+      if (allowClientSignatureRequest && clientSignatureOnlySection) {
+        clientSteps.push(clientSignatureOnlySection);
+      }
+      return clientSteps;
     }
     return mapped;
-  }, [solicitorMode, formData?.formSections]);
+  }, [allowClientSignatureRequest, clientSignatureOnlySection, solicitorMode, formData?.formSections]);
 
   // Aristone as executor (quick pick or professional Aristone): trustees must match executors — hide "different trustees?" and force No.
   useEffect(() => {
@@ -473,6 +508,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     () => getSectionRenderFields(currentSection),
     [currentSection]
   );
+  const shouldHideSolicitorOnlyFieldForClient = useCallback((fieldId) => {
+    if (solicitorMode) return false;
+    if (!SOLICITOR_ONLY_FIELD_IDS.has(fieldId)) return false;
+    return !(allowClientSignatureRequest && fieldId === 'testatorSignature');
+  }, [allowClientSignatureRequest, solicitorMode]);
   const uploadedIdDocumentCount = useMemo(() => {
     const identityVerification = formValues?.identityVerification;
     if (!identityVerification || typeof identityVerification !== 'object') return 0;
@@ -636,6 +676,115 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     navigate(`/solicitor/matters/${matterIdFromPath}`, { state: { scrollToIdDocs: true } });
   }, [matterIdFromPath, navigate]);
 
+  const clientSignatureRequestUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const u = new URL(window.location.origin + '/');
+    if (referenceNumber) u.searchParams.set('ref', referenceNumber);
+    if (sessionSecret) u.searchParams.set('s', sessionSecret);
+    u.searchParams.set('client_sign', '1');
+    return u.toString();
+  }, [referenceNumber, sessionSecret]);
+
+  const signatureRequestRecipient = useMemo(() => {
+    const candidates = [
+      formValues?.client_email,
+      formValues?.email,
+      formValues?.emailAddress,
+      formValues?.clientEmail,
+    ];
+    const first = candidates.find((v) => typeof v === 'string' && v.includes('@'));
+    return first ? String(first).trim() : '';
+  }, [formValues]);
+
+  useEffect(() => {
+    if (!signatureRequestModalOpen) return;
+    setSignatureRequestEmail(signatureRequestRecipient || '');
+  }, [signatureRequestModalOpen, signatureRequestRecipient]);
+
+  const signatureRequestDraft = useMemo(() => {
+    const to = String(signatureRequestEmail || signatureRequestRecipient || '').trim();
+    const clientFullName = String(
+      formValues?.clientName
+      || formValues?.fullName
+      || `${formValues?.firstName || ''} ${formValues?.lastName || ''}`.trim()
+      || 'Client'
+    ).trim();
+    const subjectText = `Action required: Signature request (${referenceNumber || 'Will matter'})`;
+    const bodyText =
+      `Dear ${clientFullName},\n\n` +
+      `Reference number: ${referenceNumber || 'Not provided'}\n\n` +
+      `Your solicitor has requested your signature for your Will instructions.\n\n` +
+      `Please complete the following steps:\n` +
+      `1) Open your secure signing link:\n${clientSignatureRequestUrl}\n` +
+      `2) Review your details\n` +
+      `3) Add your signature and submit\n\n` +
+      `If the link does not open, copy and paste it into your browser.\n\n` +
+      `If you need help, please reply to this email quoting your reference number.\n\n` +
+      `Kind regards,\n` +
+      `Aristone Solicitors`;
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(bodyText);
+    return {
+      to,
+      subjectText,
+      bodyText,
+      mailtoHref: `mailto:${to}?subject=${subject}&body=${body}`,
+      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${subject}&body=${body}`,
+    };
+  }, [clientSignatureRequestUrl, formValues?.clientName, formValues?.firstName, formValues?.fullName, formValues?.lastName, referenceNumber, signatureRequestEmail, signatureRequestRecipient]);
+
+  const copyClientSignatureLink = useCallback(async () => {
+    if (!clientSignatureRequestUrl) return;
+    try {
+      await navigator.clipboard.writeText(clientSignatureRequestUrl);
+      toast.success('Signature link copied', {
+        description: 'Send this secure link to the client so they can sign remotely.',
+      });
+    } catch {
+      toast.error('Copy failed', { description: 'Could not copy signature link.' });
+    }
+  }, [clientSignatureRequestUrl]);
+
+  const openSignatureRequestModal = useCallback(() => {
+    if (!clientSignatureRequestUrl) {
+      toast.error('Could not build signature link', { description: 'Missing session details for this matter.' });
+      return;
+    }
+    setSignatureRequestModalOpen(true);
+  }, [clientSignatureRequestUrl]);
+
+  const closeSignatureRequestModal = useCallback(() => {
+    setSignatureRequestModalOpen(false);
+  }, []);
+
+  const openOutlookSignatureDraft = useCallback(() => {
+    const to = String(signatureRequestDraft.to || '').trim();
+    if (!to || !to.includes('@')) {
+      toast.error('Client email required', { description: 'Enter a valid client email before opening Outlook draft.' });
+      return;
+    }
+    window.open(signatureRequestDraft.outlookWebHref, '_blank', 'noopener,noreferrer');
+    toast.success('Outlook draft opened', {
+      description: 'Please send from your Microsoft 365 account.',
+    });
+  }, [signatureRequestDraft]);
+
+  const copySignatureEmailDraft = useCallback(async () => {
+    const to = String(signatureRequestDraft.to || '').trim();
+    if (!to || !to.includes('@')) {
+      toast.error('Client email required', { description: 'Enter a valid client email before copying draft.' });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(
+        `To: ${to}\nSubject: ${signatureRequestDraft.subjectText}\n\n${signatureRequestDraft.bodyText}`
+      );
+      toast.success('Email draft copied', { description: 'Paste into Outlook if needed.' });
+    } catch {
+      toast.error('Copy failed', { description: 'Could not copy email draft.' });
+    }
+  }, [signatureRequestDraft]);
+
   /**
    * Open the in-app booking modal so the client can pick an appointment slot
    * directly. The modal hides already-booked slots (DB has a unique index on
@@ -696,6 +845,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       // Escape to close modals
       if (e.key === 'Escape') {
         DEBUG_LOGS&&console.log('[KEYBOARD] Escape key pressed');
+        if (signatureRequestModalOpen) {
+          setSignatureRequestModalOpen(false);
+        }
         if (validationModalOpen) {
           DEBUG_LOGS&&console.log('[KEYBOARD] Closing validation modal with Escape key');
           setValidationModalOpen(false);
@@ -750,7 +902,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModalAsClient]);
+  }, [signatureRequestModalOpen, validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModalAsClient]);
 
   const scrollToTop = () => {
     DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
@@ -1800,7 +1952,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const checkField = (field) => {
       DEBUG_LOGS&&console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
 
-      if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+      if (shouldHideSolicitorOnlyFieldForClient(field.id)) {
         return true;
       }
 
@@ -1905,13 +2057,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
     if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
-  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, solicitorMode, isDev]);
+  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, shouldHideSolicitorOnlyFieldForClient, isDev]);
 
   const isFormFullyCompleted = () => {
     try {
       return formData.formSections.every((section) => {
         const fieldFullyCompleted = (field) => {
-          if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) return true;
+          if (shouldHideSolicitorOnlyFieldForClient(field.id)) return true;
           if (field.conditions && !evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
           if (field.type === 'businessInterestsGuided') {
@@ -1986,7 +2138,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const collectFromField = (field) => {
       if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Checking field:`, field.id, field.label, 'required:', field.required);
 
-      if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+      if (shouldHideSolicitorOnlyFieldForClient(field.id)) {
         return;
       }
 
@@ -2159,7 +2311,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       DEBUG_LOGS&&console.log('[VALIDATION] Issues:', issues);
     }
     return issues;
-  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, solicitorMode, isDev]);
+  }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, shouldHideSolicitorOnlyFieldForClient, isDev]);
 
   // ---------------------------
   // Navigation Logic
@@ -4335,8 +4487,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         {submittedMatterId
                           ? 'Upload ID documents below, then click Update submission to attach them to the same matter for solicitor review.'
                           : isClientIdentityOnlyStep
-                            ? 'Upload your documents below, then click Submit. The solicitor will review your questionnaire and arrange the in-person signing appointment.'
-                            : 'Submit ID on the final step, then the solicitor reviews your questionnaire and arranges the in-person signing appointment.'}
+                            ? 'Upload your documents below, then click Submit. The solicitor will review your questionnaire and arrange signing (remote or in person).'
+                            : 'Submit ID on the final step, then the solicitor reviews your questionnaire and arranges signing (remote or in person).'}
                       </p>
                     </div>
                     )}
@@ -4416,7 +4568,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 ) : (
                 currentSectionRenderFields.map((field, idx) => {
                   // #3 Client mode: hide solicitor-only fields (witness, signatures, execution) in Testamentary Capacity
-                  if (!solicitorMode && SOLICITOR_ONLY_FIELD_IDS.has(field.id)) {
+                  if (shouldHideSolicitorOnlyFieldForClient(field.id)) {
                     return null;
                   }
                   // Skip fields that shouldn't be shown (conditions not met)
@@ -4478,6 +4630,35 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         animationFillMode: 'forwards'
                       }}
                     >
+                      {solicitorMode && field.id === 'testatorSignature' ? (
+                        <div className="mb-3 rounded-xl border border-violet-300 bg-violet-50 px-3 py-3 text-violet-900 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-100">
+                          <p className="text-sm font-semibold">Remote signature request</p>
+                          <p className="mt-1 text-xs sm:text-sm opacity-90">
+                            If the client is not in the office, send them a secure link so they can sign remotely.
+                          </p>
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                            <button
+                              type="button"
+                              onClick={openSignatureRequestModal}
+                              className="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            >
+                              Send client signature request
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { void copyClientSignatureLink(); }}
+                              className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-violet-300 bg-white px-3 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-violet-400/50 dark:bg-slate-900/50 dark:text-violet-100 dark:hover:bg-slate-900/70"
+                            >
+                              Copy signature link
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {!solicitorMode && allowClientSignatureRequest && field.id === 'testatorSignature' ? (
+                        <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs sm:text-sm text-emerald-900 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100">
+                          Signature request received: please sign below and submit to send it back to your solicitor.
+                        </div>
+                      ) : null}
                       <FieldRenderer
                         field={fieldForUi}
                         formValues={formValues}
@@ -4615,6 +4796,82 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           </div>
         </div>
       </main>
+
+          {signatureRequestModalOpen && (
+            <div
+              className="fixed inset-0 z-55 flex items-center justify-center bg-black/60 px-4 animate-fadeIn"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeSignatureRequestModal();
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Send client signature request"
+            >
+              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-600 dark:bg-slate-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Send client signature request</h3>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                      Opens an Outlook Web draft so you can send from your Microsoft account.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeSignatureRequestModal}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-800"
+                    aria-label="Close signature request modal"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <label className="mt-4 block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700 dark:text-slate-200">Client email</span>
+                  <input
+                    type="email"
+                    value={signatureRequestEmail}
+                    onChange={(e) => setSignatureRequestEmail(e.target.value)}
+                    placeholder="client@example.com"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                  />
+                </label>
+
+                <label className="mt-3 block text-sm">
+                  <span className="mb-1 block font-medium text-slate-700 dark:text-slate-200">Signature link</span>
+                  <input
+                    type="text"
+                    value={clientSignatureRequestUrl}
+                    readOnly
+                    className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs sm:text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                  />
+                </label>
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <button
+                    type="button"
+                    onClick={openOutlookSignatureDraft}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  >
+                    Open in Outlook (Microsoft 365)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void copySignatureEmailDraft(); }}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Copy email draft
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void copyClientSignatureLink(); }}
+                    className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-900 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:border-violet-500/50 dark:bg-violet-500/10 dark:text-violet-100 dark:hover:bg-violet-500/20"
+                  >
+                    Copy signature link
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Validation Modal */}
           {(() => {
@@ -6016,7 +6273,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-purple-600 text-sm font-bold text-white shadow">3</div>
                     <div className="min-w-0 flex-1">
                       <p className="mb-1 font-semibold text-slate-900 dark:text-slate-100">Review with client</p>
-                      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">Client reviews before appointment. Client signs in person with witnesses.</p>
+                      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">Client reviews before signing. Final execution follows your firm process (remote or in person, with witnesses where required).</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800/90">
@@ -6053,7 +6310,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-purple-600 text-sm font-bold text-white shadow">3</div>
                     <div className="min-w-0 flex-1">
                       <p className="mb-1 font-semibold text-slate-900 dark:text-slate-100">Signing</p>
-                      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">An appointment will be scheduled so you can sign your Will in person with witnesses present.</p>
+                      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">Your solicitor will confirm the final signing process (remote or in person), including witness requirements.</p>
                     </div>
                   </div>
                 </div>

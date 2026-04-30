@@ -10,8 +10,11 @@ import {
   HelpCircle,
   Home,
   LogOut,
+  PencilLine,
+  Save,
   Users,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import ThemeToggleButton from '../ThemeToggleButton.jsx';
@@ -50,11 +53,14 @@ function navPillLinkClass(isActive, isDark, variant = 'default') {
 }
 
 export default function SolicitorLayout() {
-  const { profile, signOut, user, loading: authLoading } = useAuth();
+  const { profile, signOut, user, loading: authLoading, updateDisplayName } = useAuth();
   const location = useLocation();
   const { isDark } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [editingDisplayName, setEditingDisplayName] = useState(false);
+  const [displayNameInput, setDisplayNameInput] = useState('');
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [urgentCount, setUrgentCount] = useState(null);
   const profileWrapRef = useRef(null);
 
@@ -102,6 +108,17 @@ export default function SolicitorLayout() {
     };
   }, [profileOpen]);
 
+  useEffect(() => {
+    if (!profileOpen) {
+      setEditingDisplayName(false);
+      setSavingDisplayName(false);
+    }
+  }, [profileOpen]);
+
+  useEffect(() => {
+    setDisplayNameInput(profile?.display_name || profile?.email || '');
+  }, [profile?.display_name, profile?.email]);
+
   const handleSignOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -111,6 +128,25 @@ export default function SolicitorLayout() {
     } finally {
       setSigningOut(false);
     }
+  };
+
+  const handleSaveDisplayName = async () => {
+    const next = String(displayNameInput || '').trim();
+    if (!next) {
+      toast.error('Display name required', { description: 'Please enter a name before saving.' });
+      return;
+    }
+    setSavingDisplayName(true);
+    const result = await updateDisplayName(next);
+    setSavingDisplayName(false);
+    if (result?.error) {
+      toast.error('Could not save profile', { description: result.error });
+      return;
+    }
+    setEditingDisplayName(false);
+    toast.success('Profile updated', {
+      description: 'Your display name is now visible across the solicitor portal.',
+    });
   };
 
   const shellClass = isDark
@@ -287,6 +323,65 @@ export default function SolicitorLayout() {
                           {profileEmail}
                         </p>
                       ) : null}
+                    </div>
+                    <div className={`border-b px-4 py-3 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
+                      {!editingDisplayName ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingDisplayName(true)}
+                          className={`inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                            isDark
+                              ? 'border-slate-500 bg-slate-800 text-slate-100 hover:bg-slate-700'
+                              : 'border-slate-300 bg-slate-50 text-slate-900 hover:bg-slate-100'
+                          }`}
+                        >
+                          <PencilLine size={16} className="shrink-0" />
+                          Edit display name
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <label className={`block text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                            Display name shown to staff
+                          </label>
+                          <input
+                            type="text"
+                            value={displayNameInput}
+                            onChange={(event) => setDisplayNameInput(event.target.value)}
+                            maxLength={80}
+                            className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                              isDark
+                                ? 'border-slate-500 bg-slate-800 text-slate-100'
+                                : 'border-slate-300 bg-white text-slate-900'
+                            }`}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={handleSaveDisplayName}
+                              disabled={savingDisplayName}
+                              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Save size={15} className="shrink-0" />
+                              {savingDisplayName ? 'Saving…' : 'Save name'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingDisplayName(false);
+                                setDisplayNameInput(profile?.display_name || profile?.email || '');
+                              }}
+                              disabled={savingDisplayName}
+                              className={`inline-flex min-h-[44px] items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold ${
+                                isDark
+                                  ? 'border-slate-500 text-slate-200 hover:bg-slate-800'
+                                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <a
                       href="mailto:it@aristone.co.uk?subject=Will%20Tool%20Solicitor%20Portal%20—%20help"

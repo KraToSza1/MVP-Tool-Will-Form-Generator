@@ -4,6 +4,7 @@ import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, X, XCircle, Trash2 } from 'lucide-react';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
+import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
@@ -16,6 +17,7 @@ import {
   ID_VERIFICATION_DOC_LABELS,
   TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS,
   TESTAMENTARY_CAPACITY_FIELD_LABELS,
+  OUTSTANDING_CATEGORY,
   hasMeaningfulAnswer,
 } from '../lib/matterOutstanding.js';
 import {
@@ -46,6 +48,44 @@ function toLocalDatetime(iso) {
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${y}-${m}-${day}T${h}:${min}`;
+}
+
+const SIGNING_DATE_FIELDS = [
+  'executionDate',
+  'dateSigned',
+  'willSigningDate',
+  'willExecutionDate',
+  'dateOfExecution',
+  'signingDate',
+];
+
+function parseDateLike(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const d = new Date(`${text}T09:00:00`);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+function inferTestatorSignedAt(payload, matter) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  for (const key of SIGNING_DATE_FIELDS) {
+    const d = parseDateLike(source[key]);
+    if (d) return d;
+  }
+  return parseDateLike(matter?.submitted_at);
+}
+
+function addWeeks(date, weeks) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + (weeks * 7));
+  return next;
 }
 
 /** Map activity action + metadata to plain English for lawyers. */
@@ -290,6 +330,7 @@ export default function MatterDetailPage() {
   const [reminderDate, setReminderDate] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [quickActionCategory, setQuickActionCategory] = useState(null);
   const clientIdSectionRef = useRef(null);
 
   const handleConfirmDelete = async () => {
@@ -370,6 +411,15 @@ export default function MatterDetailPage() {
     [matter?.client_payload, matter?.solicitor_payload]
   );
   const testamentaryCapacityComplete = useMemo(() => !isMatterTestamentaryCapacityOutstanding(matter), [matter]);
+  const testatorSignedAt = useMemo(() => inferTestatorSignedAt(mergedPayload, matter), [mergedPayload, matter]);
+  const sixWeekDueDateIso = useMemo(
+    () => (testatorSignedAt ? addWeeks(testatorSignedAt, 6).toISOString() : null),
+    [testatorSignedAt],
+  );
+  const sixWeekDueDateLocal = useMemo(
+    () => (sixWeekDueDateIso ? toLocalDatetime(sixWeekDueDateIso) : ''),
+    [sixWeekDueDateIso],
+  );
   const { formData } = useFormDefinition();
   const testamentaryCapacitySectionIndex = useMemo(() => {
     const i = formData?.formSections?.findIndex((s) => s.formSection === TESTAMENTARY_CAPACITY_SECTION_TITLE);
@@ -408,6 +458,11 @@ export default function MatterDetailPage() {
     scrollToClientId();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matter, location.state?.scrollToIdDocs]);
+
+  useEffect(() => {
+    if (!matter || matter.reminder_date || reminderDate || !sixWeekDueDateLocal) return;
+    setReminderDate(sixWeekDueDateLocal);
+  }, [matter, reminderDate, sixWeekDueDateLocal]);
 
   const handleDownloadPDF = async () => {
     console.log('[WillTool Flow] Solicitor generating PDF for matter', { matterId, phase: 'solicitor_pdf_start' });
@@ -636,6 +691,31 @@ export default function MatterDetailPage() {
     };
   }, [clientEmail, clientName, matter?.client_reference]);
 
+  const remoteTcEmailDraft = useMemo(() => {
+    if (!clientEmail) return null;
+    const dueDateText = sixWeekDueDateIso
+      ? new Date(sixWeekDueDateIso).toLocaleString('en-GB')
+      : null;
+    const subjectText = `Remote Testamentary Capacity / Signing Prompt - ${matter?.client_reference || 'Will matter'}`;
+    const bodyText =
+      `Dear ${clientName},\n\n` +
+      `We can complete your Testamentary Capacity and signing checks remotely.\n\n` +
+      `Please open your secure Will Tool link and complete any outstanding sections:\n` +
+      `${getClientWillToolUrl()}\n\n` +
+      (dueDateText ? `Target completion date: ${dueDateText}\n\n` : '') +
+      `If you have questions, reply to this email and we will guide you through the remote process.\n\n` +
+      `Kind regards`;
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(bodyText);
+    return {
+      to: clientEmail,
+      subjectText,
+      bodyText,
+      mailtoHref: `mailto:${clientEmail}?subject=${subject}&body=${body}`,
+      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(clientEmail)}&subject=${subject}&body=${body}`,
+    };
+  }, [clientEmail, clientName, matter?.client_reference, sixWeekDueDateIso]);
+
   const handleCopyEmailDraft = async () => {
     if (!emailDraft) return;
     try {
@@ -648,16 +728,16 @@ export default function MatterDetailPage() {
     }
   };
 
-  const handleEmailClientClick = (e) => {
-    if (!emailDraft) return;
+  const handleOpenEmailDraft = (draft, e) => {
+    if (!draft) return;
     e.preventDefault();
-    window.location.href = emailDraft.mailtoHref;
+    window.location.href = draft.mailtoHref;
     toast('If your email app did not open', {
       description: 'Use Outlook Web fallback or copy the draft.',
       action: {
         label: 'Open Outlook Web',
         onClick: () => {
-          window.open(emailDraft.outlookWebHref, '_blank', 'noopener,noreferrer');
+          window.open(draft.outlookWebHref, '_blank', 'noopener,noreferrer');
         },
       },
       duration: 9000,
@@ -678,6 +758,37 @@ export default function MatterDetailPage() {
     setMatter((prev) => prev ? { ...prev, reminder_date: result.data?.reminder_date ?? iso } : prev);
     if (value) toast.success('Reminder set', { description: 'Reminder date saved.' });
     else toast.success('Reminder cleared', { description: 'Reminder date removed.' });
+  };
+
+  const handleSetSixWeekDueDate = async () => {
+    if (!matter) return;
+    if (!sixWeekDueDateIso || !sixWeekDueDateLocal) {
+      toast.error('No signing date found', {
+        description: 'Add/sign the execution date first, then set the 6-week due date.',
+      });
+      return;
+    }
+    setReminderDate(sixWeekDueDateLocal);
+    const result = await updateMatterReminderDate(matter.id, sixWeekDueDateIso);
+    if (result.error) {
+      toast.error('Could not save reminder date', { description: result.error });
+      return;
+    }
+    setMatter((prev) => (prev ? { ...prev, reminder_date: result.data?.reminder_date ?? sixWeekDueDateIso } : prev));
+    toast.success('Due date set', { description: 'Reminder date set to 6 weeks after testator signing.' });
+  };
+
+  const openQuickAction = (category) => {
+    setQuickActionCategory(category);
+  };
+
+  const closeQuickAction = () => {
+    setQuickActionCategory(null);
+  };
+
+  const handleQuickActionSaved = (updatedMatter) => {
+    if (!updatedMatter) return;
+    setMatter(updatedMatter);
   };
 
   if (loading) {
@@ -718,12 +829,23 @@ export default function MatterDetailPage() {
           {emailDraft && (
             <a
               href={emailDraft.mailtoHref}
-              onClick={handleEmailClientClick}
+              onClick={(e) => handleOpenEmailDraft(emailDraft, e)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               title="Open email to client with pre-filled template"
             >
               <Mail size={14} />
               Email client
+            </a>
+          )}
+          {remoteTcEmailDraft && (
+            <a
+              href={remoteTcEmailDraft.mailtoHref}
+              onClick={(e) => handleOpenEmailDraft(remoteTcEmailDraft, e)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              title="Prompt client to complete Testamentary Capacity/signing remotely"
+            >
+              <Mail size={14} />
+              Email remote TC prompt
             </a>
           )}
           {emailDraft && (
@@ -784,7 +906,7 @@ export default function MatterDetailPage() {
         </div>
       </div>
       <p className="text-sm text-slate-600 -mt-2">
-        <strong>Edit questionnaire</strong> lets you change any client answers, complete Testamentary Capacity, and save to the matter. <strong>Download PDF</strong> builds the will from saved data for review.
+        <strong>Edit questionnaire</strong> lets you change any client answers, complete Testamentary Capacity (including remote workflows), and save to the matter. <strong>Download PDF</strong> builds the will from saved data for review.
       </p>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -841,9 +963,25 @@ export default function MatterDetailPage() {
                           <IdCard size={16} />
                           View ID documents section
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => openQuickAction(OUTSTANDING_CATEGORY.ID_VERIFICATION)}
+                          className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          Quick edit ID verification
+                        </button>
                       </>
                     ) : (
-                      <p className="mt-0.5 text-sm text-slate-600">All required ID documents have been received.</p>
+                      <>
+                        <p className="mt-0.5 text-sm text-slate-600">All required ID documents have been received.</p>
+                        <button
+                          type="button"
+                          onClick={() => openQuickAction(OUTSTANDING_CATEGORY.ID_VERIFICATION)}
+                          className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          Edit verification notes
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -857,6 +995,13 @@ export default function MatterDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-slate-900">Instructions complete (client submitted)</p>
                     <p className="mt-0.5 text-sm text-slate-600">Client has completed and submitted the questionnaire.</p>
+                    <Link
+                      to={`/solicitor/matters/${matter.id}/form`}
+                      className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <FilePenLine size={16} />
+                      Edit instructions now
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -877,6 +1022,13 @@ export default function MatterDetailPage() {
                     {testamentaryCapacityComplete ? (
                       <>
                         <p className="mt-0.5 text-sm text-slate-600">All required capacity questions have been completed.</p>
+                        <button
+                          type="button"
+                          onClick={() => openQuickAction(OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY)}
+                          className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          Edit TC answers
+                        </button>
                         <details className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
                           <summary className="cursor-pointer text-sm font-semibold text-emerald-900 dark:text-emerald-200">Review saved answers</summary>
                           <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
@@ -905,6 +1057,13 @@ export default function MatterDetailPage() {
                           <FilePenLine size={16} />
                           Open form at Testamentary Capacity
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => openQuickAction(OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY)}
+                          className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          Quick edit TC answers
+                        </button>
                         <details className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
                           <summary className="cursor-pointer text-sm font-semibold text-amber-900 dark:text-amber-200">Review saved answers</summary>
                           <ul className="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
@@ -1012,7 +1171,20 @@ export default function MatterDetailPage() {
                 onChange={handleReminderDateChange}
                 className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <p className="mt-1 text-xs text-slate-500">Optional. Set a follow-up or deadline for this matter.</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSetSixWeekDueDate}
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-900 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  Set to +6 weeks from signing
+                </button>
+                <p className="text-xs text-slate-500 wrap-break-word">
+                  {testatorSignedAt
+                    ? `Signing date source: ${testatorSignedAt.toLocaleString()}`
+                    : 'No signing date found yet; using manual reminder date until execution date is captured.'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1105,6 +1277,13 @@ export default function MatterDetailPage() {
           </p>
         </ConfirmModal>
       )}
+      <MatterQuickActionModal
+        open={!!quickActionCategory}
+        onClose={closeQuickAction}
+        matter={matter}
+        category={quickActionCategory}
+        onSaved={handleQuickActionSaved}
+      />
     </div>
   );
 }
