@@ -29,7 +29,7 @@ import { ThemeProvider } from './context/ThemeContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <Toaster richColors position="top-right" />
+    <Toaster richColors position="top-right" duration={1000} />
     <ErrorBoundary>
       <BrowserRouter>
         <ThemeProvider>

@@ -52,6 +52,7 @@
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import Sidebar from './Sidebar.jsx';
 import FieldRenderer from './FieldRenderer.jsx';
@@ -92,7 +93,12 @@ import { getSessionAppointmentContext, formatSlotLabel } from '../lib/appointmen
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
-import { ID_VERIFICATION_DOC_KEYS, getMissingIdVerificationDocs, hasMeaningfulAnswer } from '../lib/matterOutstanding.js';
+import {
+  ID_VERIFICATION_DOC_KEYS,
+  ID_VERIFICATION_DOC_LABELS,
+  getMissingIdVerificationDocs,
+  hasMeaningfulAnswer,
+} from '../lib/matterOutstanding.js';
 import { formatExcludedPersonForClause } from '../utils/excludedPersonFormat.js';
 import {
   formatAppointmentPersonListForClause,
@@ -175,6 +181,7 @@ const IDENTITY_VERIFICATION_ONLY_SECTION = {
 };
 
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
+  const navigate = useNavigate();
   const { isDark } = useTheme();
   const { formData } = useFormDefinition();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -184,6 +191,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const useExternalPersistence = !!externalPersistence;
   const solicitorMode = isSolicitorMode();
   const useCloud = !useExternalPersistence && typeof window !== 'undefined' && isSupabaseConfigured();
+  const matterIdFromPath = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const match = window.location.pathname.match(/\/solicitor\/matters\/([^/]+)/i);
+    return match?.[1] || '';
+  }, []);
 
   const [referenceNumber, setReferenceNumber] = useState(() => {
     if (initialFormState?.referenceNumber) return initialFormState.referenceNumber;
@@ -467,6 +479,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     return ID_VERIFICATION_DOC_KEYS.filter((key) => hasMeaningfulAnswer(identityVerification[key])).length;
   }, [formValues]);
   const hasUploadedIdDocuments = uploadedIdDocumentCount > 0;
+  const solicitorMissingIdDocs = useMemo(
+    () => getMissingIdVerificationDocs({ identityVerification: formValues?.identityVerification }),
+    [formValues?.identityVerification],
+  );
+  const solicitorIdVerificationPending = solicitorMode && solicitorMissingIdDocs.length > 0;
   
   const isDev = import.meta.env.DEV;
   const isFinalStep = currentIndex === visibleSections.length - 1;
@@ -612,6 +629,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const returnToIdentityUploads = useCallback(() => {
     closeCompletionModal({ scrollToIdentity: true });
   }, [closeCompletionModal]);
+
+  /** Solicitor mode: jump straight to matter detail ID review panel. */
+  const goToSolicitorIdReview = useCallback(() => {
+    if (!matterIdFromPath) return;
+    navigate(`/solicitor/matters/${matterIdFromPath}`, { state: { scrollToIdDocs: true } });
+  }, [matterIdFromPath, navigate]);
 
   /**
    * Open the in-app booking modal so the client can pick an appointment slot
@@ -2884,9 +2907,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.success('Form auto-filled ✓', {
         description:
           isClient
-            ? `Filled ${Object.keys(filteredToSchema).length} fields (client mode — Estate Overview + demo ID image slots; solicitor-only steps omitted). Use Next to reach the Identity verification step; Submit runs the same checks as a real send.`
-            : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode). All visible fields are now populated.`,
-        duration: 5000
+            ? `Filled ${Object.keys(filteredToSchema).length} fields for testing.`
+            : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode).`,
+        duration: 2200
       });
       
       if (import.meta.env.DEV) {
@@ -3606,7 +3629,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         clearTimeout(timeoutId);
         setIsGeneratingPDF(false);
         toast.dismiss(toastId);
-        setValidationIssues(preValidationIssues);
+        setValidationIssues(preValidationIssues.map((issue) => ({
+          ...issue,
+          blockingAction: 'download_pdf',
+        })));
         setValidationModalOpen(true);
         toast.error('Cannot generate PDF', {
           description: 'Missing schedule content detected. Please complete all schedule fields.',
@@ -3872,7 +3898,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }))
         ];
         clearTimeout(timeoutId);
-        setValidationIssues(allIssues);
+        setValidationIssues(allIssues.map((issue) => ({
+          ...issue,
+          blockingAction: 'download_pdf',
+        })));
         setValidationModalOpen(true);
         setIsGeneratingPDF(false);
         toast.dismiss(toastId);
@@ -3976,13 +4005,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             snippet: fieldHint,
             scheduleNumber: scheduleNumber, // Keep original for navigation
             fieldLabel: scheduleText,
-            missingFields: missingFields // List of missing field names
+            missingFields: missingFields, // List of missing field names
+            blockingAction: 'download_pdf'
           };
           
           return issueObject;
         });
         
-        setValidationIssues([...missingItems, ...scheduleIssues]);
+        setValidationIssues(
+          [...missingItems, ...scheduleIssues].map((issue) => ({
+            ...issue,
+            blockingAction: issue?.blockingAction || 'download_pdf',
+          }))
+        );
       }
       
       // Generate a descriptive filename with testator name and date
@@ -4330,6 +4365,43 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   </h2>
                 </div>
               )}
+
+              {solicitorMode ? (
+                <div
+                  className={`mb-4 rounded-xl border px-4 py-3 ${
+                    solicitorIdVerificationPending
+                      ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-600/15 dark:text-amber-100'
+                      : 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-600/15 dark:text-emerald-100'
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">
+                        ID Verification: {solicitorIdVerificationPending ? 'Verification pending' : 'Verification complete'}
+                      </p>
+                      <p className="mt-1 text-xs sm:text-sm opacity-90 break-words">
+                        {solicitorIdVerificationPending
+                          ? `${solicitorMissingIdDocs.length} document${solicitorMissingIdDocs.length === 1 ? '' : 's'} still missing.`
+                          : 'All required ID documents are present for this matter.'}
+                      </p>
+                      {solicitorIdVerificationPending ? (
+                        <p className="mt-1 text-[11px] sm:text-xs opacity-80 break-words">
+                          Missing: {solicitorMissingIdDocs.map((id) => ID_VERIFICATION_DOC_LABELS[id] || id).join(', ')}
+                        </p>
+                      ) : null}
+                    </div>
+                    {matterIdFromPath ? (
+                      <button
+                        type="button"
+                        onClick={goToSolicitorIdReview}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-current/30 bg-white/70 px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900/40 dark:hover:bg-slate-900/60"
+                      >
+                        Go to ID review
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
                 </>
               )}
 
@@ -4468,6 +4540,42 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </button>
               </div>
 
+              {solicitorMode ? (
+                <div
+                  className={`mt-3 rounded-xl border px-4 py-3 ${
+                    solicitorIdVerificationPending
+                      ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-600/15 dark:text-amber-100'
+                      : 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-600/15 dark:text-emerald-100'
+                  }`}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold">
+                      ID Verification: {solicitorIdVerificationPending ? 'Verification pending' : 'Verification complete'}
+                    </p>
+                    {matterIdFromPath ? (
+                      <button
+                        type="button"
+                        onClick={goToSolicitorIdReview}
+                        className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-current/30 bg-white/70 px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-900/40 dark:hover:bg-slate-900/60"
+                      >
+                        Open ID review
+                      </button>
+                    ) : null}
+                  </div>
+                  {solicitorIdVerificationPending ? (
+                    <p className="mt-1 text-xs sm:text-sm opacity-90 break-words">
+                      Missing {solicitorMissingIdDocs.length} document{solicitorMissingIdDocs.length === 1 ? '' : 's'}:
+                      {' '}
+                      {solicitorMissingIdDocs.map((id) => ID_VERIFICATION_DOC_LABELS[id] || id).join(', ')}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs sm:text-sm opacity-90">
+                      All required ID documents are present for this matter.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
 
               <div className="mt-4 flex flex-col gap-3 pb-20 lg:pb-0">
                 <div className="flex flex-col sm:flex-row flex-wrap gap-3">
@@ -4578,9 +4686,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">
-                    {validationIssues.some(issue => issue.fieldId) 
-                      ? 'Please Complete Required Fields'
-                      : 'Draft Will - Incomplete Items'}
+                    {validationIssues.some((issue) => issue.blockingAction === 'download_pdf')
+                      ? 'Cannot download PDF yet'
+                      : validationIssues.some((issue) => issue.fieldId)
+                        ? 'Please Complete Required Fields'
+                        : 'Draft Will - Incomplete Items'}
                   </h2>
                   <p className="text-sm text-red-100 mt-0.5">
                     {validationIssues.length} {validationIssues.length === 1 ? 'item needs' : 'items need'} to be completed
@@ -4599,9 +4709,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             {/* Content */}
             <div className="p-6 overflow-y-auto flex-1">
               <p className="text-gray-700 mb-4">
-                {validationIssues.some(issue => issue.fieldId) 
-                  ? 'Before you can proceed to the next section, please complete the following required fields:'
-                  : 'This PDF contains incomplete content. Please complete the following items:'}
+                {validationIssues.some((issue) => issue.blockingAction === 'download_pdf')
+                  ? 'Before downloading the PDF, please complete the following required fields:'
+                  : validationIssues.some((issue) => issue.fieldId)
+                    ? 'Before you can proceed to the next section, please complete the following required fields:'
+                    : 'This PDF contains incomplete content. Please complete the following items:'}
               </p>
               
               <div className="space-y-3">

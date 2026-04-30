@@ -85,6 +85,8 @@ export default function MatterEditorPage() {
 
         toast.success('Matter saved for review', {
           description: 'Solicitor-only changes were stored and the matter is now marked in review.',
+          duration: 1000,
+          id: 'matter-saved-for-review',
         });
         return { ok: true };
       },

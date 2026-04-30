@@ -25,6 +25,67 @@ function jsonResponse(status: number, payload: unknown) {
   });
 }
 
+function escapeHtml(input: string) {
+  return String(input || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function buildProfessionalEmailHtml({
+  recipientName,
+  subject,
+  body,
+}: {
+  recipientName: string;
+  subject: string;
+  body: string;
+}) {
+  const safeName = escapeHtml(recipientName || 'Client');
+  const safeSubject = escapeHtml(subject || 'Appointment Update');
+  const bodyHtml = escapeHtml(body || '').replaceAll('\n', '<br>');
+
+  return `
+  <div style="margin:0;padding:0;background:#f4f6fb;font-family:Segoe UI, Arial, sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fb;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+            <tr>
+              <td style="background:#0f172a;color:#ffffff;padding:18px 24px;">
+                <div style="font-size:20px;font-weight:700;letter-spacing:0.2px;">Aristone Solicitors</div>
+                <div style="margin-top:4px;font-size:12px;opacity:0.9;">Regulated legal services communication</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;">
+                <div style="font-size:14px;color:#334155;">Dear ${safeName},</div>
+                <h1 style="margin:12px 0 0 0;font-size:21px;line-height:1.3;color:#0f172a;">${safeSubject}</h1>
+                <div style="margin-top:16px;font-size:15px;line-height:1.7;color:#1e293b;">
+                  ${bodyHtml}
+                </div>
+                <div style="margin-top:20px;padding:14px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:13px;line-height:1.6;color:#334155;">
+                  Please do not reply to this automated confirmation if your matter requires urgent legal advice.
+                  For assistance, contact <strong>info@aristonesolicitors.co.uk</strong> or call <strong>01582 383 888</strong>.
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#475569;line-height:1.6;">
+                Aristone Solicitors<br>
+                Ground Floor, 12 Cardiff Road, Luton, LU1 1QG<br>
+                Authorised and regulated by the Solicitors Regulation Authority (SRA No. 649717).
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
 async function sendViaResend({
   accessToken,
   senderUser,
@@ -47,8 +108,12 @@ async function sendViaResend({
       message: {
         subject: row.subject || 'Appointment notification',
         body: {
-          contentType: 'Text',
-          content: row.body || '',
+          contentType: 'HTML',
+          content: buildProfessionalEmailHtml({
+            recipientName: row.recipient_name || '',
+            subject: row.subject || 'Appointment notification',
+            body: row.body || '',
+          }),
         },
         toRecipients: [
           {

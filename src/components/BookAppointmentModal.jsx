@@ -283,9 +283,7 @@ export default function BookAppointmentModal({
     onAppointmentChange?.();
     void refreshContext();
     toast.success(isReschedule ? 'Appointment rescheduled' : 'Appointment requested', {
-      description: `${formatSlotLabel(selectedSlot.start)} · we will notify ${
-        solicitor?.email || 'the firm'
-      }.`,
+      description: `${formatSlotLabel(selectedSlot.start)} · confirmation email sent.`,
     });
   };
 
