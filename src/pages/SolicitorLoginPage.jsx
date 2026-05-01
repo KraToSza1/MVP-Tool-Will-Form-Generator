@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,12 +29,17 @@ export default function SolicitorLoginPage() {
   const location = useLocation();
   const { isAuthenticated, isStaff, loading, user, signIn } = useAuth();
   const [msSigningIn, setMsSigningIn] = useState(false);
-  const [adminEmail, setAdminEmail] = useState(SOLICITOR_ADMIN_OVERRIDE_EMAIL);
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminSubmitting, setAdminSubmitting] = useState(false);
   const [inIframe, setInIframe] = useState(false);
   const staffDeniedToastRef = useRef(false);
   const oauthReturnHandledRef = useRef(false);
+  const ownerMode = useMemo(() => {
+    const q = new URLSearchParams(location.search);
+    const v = (q.get('owner') || '').toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes';
+  }, [location.search]);
 
   useEffect(() => {
     setInIframe(typeof window !== 'undefined' && window.self !== window.top);
@@ -102,9 +107,10 @@ export default function SolicitorLoginPage() {
 
   const handleMicrosoftSignIn = async () => {
     if (inIframe) {
-      toast.error('Open in a full browser tab', {
-        description: 'Microsoft sign-in usually does not work inside an embedded page. Use “Open solicitor login in new tab” first, then try again.',
-        duration: 12000,
+      toast('Open in a full browser tab', {
+        id: 'embedded-m365-open-tab',
+        description: 'Use "Open solicitor login in new tab" below, then continue with Microsoft 365 there.',
+        duration: 7000,
       });
       return;
     }
@@ -126,24 +132,24 @@ export default function SolicitorLoginPage() {
     event.preventDefault();
     const email = String(adminEmail || '').trim().toLowerCase();
     if (email !== SOLICITOR_ADMIN_OVERRIDE_EMAIL) {
-      toast.error('Admin fallback restricted', {
-        description: `Only ${SOLICITOR_ADMIN_OVERRIDE_EMAIL} can use this fallback.`,
+      toast.error('Owner login restricted', {
+        description: 'This owner-only path accepts the configured owner account only.',
       });
       return;
     }
     if (!adminPassword) {
-      toast.error('Password required', { description: 'Enter your password for the admin account.' });
+      toast.error('Password required', { description: 'Enter your owner account password.' });
       return;
     }
     setAdminSubmitting(true);
     const result = await signIn({ email, password: adminPassword });
     setAdminSubmitting(false);
     if (result?.error) {
-      toast.error('Admin sign-in failed', { description: result.error });
+      toast.error('Owner sign-in failed', { description: result.error });
       return;
     }
     setAdminPassword('');
-    toast.success('Signed in', { description: 'Admin fallback access granted.' });
+    toast.success('Signed in', { description: 'Owner access granted.' });
     navigate(location.state?.from?.pathname || '/solicitor', { replace: true });
   };
 
@@ -221,42 +227,45 @@ export default function SolicitorLoginPage() {
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 dark:border-indigo-500/40 dark:bg-indigo-950/30 dark:text-indigo-100">
           <p className="font-semibold">Sign-in policy</p>
           <p className="mt-1 wrap-break-word">
-            Solicitor access is Microsoft 365 only and must use <strong>@{SOLICITOR_ALLOWED_EMAIL_DOMAIN}</strong>, with a single admin fallback for platform owner testing.
+            Solicitor access is Microsoft 365 only and must use <strong>@{SOLICITOR_ALLOWED_EMAIL_DOMAIN}</strong>.
           </p>
         </div>
-        <form onSubmit={handleAdminFallbackSignIn} className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/60">
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Admin fallback (owner only)</p>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-            Reserved for platform admin testing. Only <strong>{SOLICITOR_ADMIN_OVERRIDE_EMAIL}</strong> is accepted.
-          </p>
-          <label className="mt-3 block">
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Admin email</span>
-            <input
-              type="email"
-              value={adminEmail}
-              onChange={(event) => setAdminEmail(event.target.value)}
-              required
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-          <label className="mt-3 block">
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Admin password</span>
-            <input
-              type="password"
-              value={adminPassword}
-              onChange={(event) => setAdminPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={adminSubmitting || msSigningIn}
-            className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-700"
-          >
-            {adminSubmitting ? 'Signing in…' : 'Sign in as admin'}
-          </button>
-        </form>
+        {ownerMode ? (
+          <form onSubmit={handleAdminFallbackSignIn} className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/60">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Owner access</p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              Hidden owner-only login mode.
+            </p>
+            <label className="mt-3 block">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Owner email</span>
+              <input
+                type="email"
+                value={adminEmail}
+                onChange={(event) => setAdminEmail(event.target.value)}
+                required
+                placeholder="Enter owner email"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Owner password</span>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                required
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-500 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={adminSubmitting || msSigningIn}
+              className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-600 dark:hover:bg-indigo-700"
+            >
+              {adminSubmitting ? 'Signing in…' : 'Sign in as owner'}
+            </button>
+          </form>
+        ) : null}
       </div>
     </div>
   );
