@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { Buffer } from "buffer";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
-import { LockKeyhole } from "lucide-react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import logo from "./assets/aristone-logo.svg";
 import { FormDefinitionProvider } from "./context/FormDefinitionContext.jsx";
 import PublicIntakePage from "./pages/PublicIntakePage.jsx";
@@ -19,6 +18,20 @@ import SolicitorStaffPage from "./pages/SolicitorStaffPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
+import { LEGACY_SOLICITOR_LOGIN_PATH, SOLICITOR_LOGIN_PATH } from "./lib/auth.js";
+
+function LegacySolicitorLoginRoute() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const hasOAuthQuery = params.has("code") || params.has("error") || params.has("error_description");
+  const hash = String(location.hash || "");
+  const hasOAuthHash = hash.includes("access_token=") || hash.includes("error=");
+
+  if (hasOAuthQuery || hasOAuthHash) {
+    return <SolicitorLoginPage />;
+  }
+  return <Navigate to="/" replace />;
+}
 
 function PublicShell() {
   return (
@@ -42,13 +55,6 @@ function PublicShell() {
 
                 <div className="flex flex-row flex-wrap items-center gap-2 sm:items-end">
                   <ThemeToggleButton compact />
-                  <Link
-                    to="/solicitor/login"
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-600 via-violet-600 to-purple-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:from-indigo-700 hover:via-violet-700 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <LockKeyhole size={16} />
-                    Solicitor login
-                  </Link>
                 </div>
               </div>
 
@@ -77,7 +83,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<PublicShell />} />
         <Route path="/dev/guardian-flow" element={<GuardianFlowDemoPage />} />
-        <Route path="/solicitor/login" element={<SolicitorLoginPage />} />
+        <Route path={SOLICITOR_LOGIN_PATH} element={<SolicitorLoginPage />} />
+        <Route path={LEGACY_SOLICITOR_LOGIN_PATH} element={<LegacySolicitorLoginRoute />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/solicitor" element={<SolicitorLayout />}>
             <Route index element={<SolicitorDashboardPage />} />

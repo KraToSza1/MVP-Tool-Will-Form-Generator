@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { SOLICITOR_LOGIN_PATH } from './auth.js';
 
 export const MICROSOFT_CALENDAR_SCOPES = 'email openid profile offline_access User.Read Calendars.ReadBasic';
 export const POST_CALENDAR_CONNECT_RETURN_KEY = 'willtool-post-calendar-connect-return';
@@ -84,7 +85,7 @@ export async function startMicrosoftCalendarConnect({ redirectPath = '/solicitor
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'azure',
     options: {
-      redirectTo: getBrowserRedirect('/solicitor/login'),
+      redirectTo: getBrowserRedirect(SOLICITOR_LOGIN_PATH),
       scopes: MICROSOFT_CALENDAR_SCOPES,
       queryParams: {
         prompt: 'consent',

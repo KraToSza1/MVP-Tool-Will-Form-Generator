@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
 import {
+  SOLICITOR_LOGIN_PATH,
   SOLICITOR_ADMIN_OVERRIDE_EMAIL,
   SOLICITOR_ALLOWED_EMAIL_DOMAIN,
   isMicrosoftSignInEnabled,
@@ -103,7 +104,7 @@ export default function SolicitorLoginPage() {
   }
 
   const directLoginUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}/solicitor/login` : '/solicitor/login';
+    typeof window !== 'undefined' ? `${window.location.origin}${SOLICITOR_LOGIN_PATH}` : SOLICITOR_LOGIN_PATH;
 
   const handleMicrosoftSignIn = async () => {
     if (inIframe) {
@@ -131,9 +132,11 @@ export default function SolicitorLoginPage() {
   const handleAdminFallbackSignIn = async (event) => {
     event.preventDefault();
     const email = String(adminEmail || '').trim().toLowerCase();
-    if (email !== SOLICITOR_ADMIN_OVERRIDE_EMAIL) {
+    const isOverrideEmail = email === SOLICITOR_ADMIN_OVERRIDE_EMAIL;
+    const isFirmDomainEmail = email.endsWith(`@${SOLICITOR_ALLOWED_EMAIL_DOMAIN}`);
+    if (!isOverrideEmail && !isFirmDomainEmail) {
       toast.error('Owner login restricted', {
-        description: 'This owner-only path accepts the configured owner account only.',
+        description: `Use the configured owner account or an admin @${SOLICITOR_ALLOWED_EMAIL_DOMAIN} address.`,
       });
       return;
     }
@@ -234,7 +237,7 @@ export default function SolicitorLoginPage() {
           <form onSubmit={handleAdminFallbackSignIn} className="mt-4 rounded-xl border border-slate-300 bg-slate-50 p-4 dark:border-slate-600 dark:bg-slate-800/60">
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Owner access</p>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              Hidden owner-only login mode.
+              Hidden owner-only login mode for emergency access.
             </p>
             <label className="mt-3 block">
               <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Owner email</span>

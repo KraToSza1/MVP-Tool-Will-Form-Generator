@@ -147,6 +147,8 @@ const SIGN_IN_TIMEOUT_MS = 60_000;
 const PROFILE_FETCH_TIMEOUT_MS = 35_000;
 export const SOLICITOR_ALLOWED_EMAIL_DOMAIN = 'aristonesolicitors.co.uk';
 export const SOLICITOR_ADMIN_OVERRIDE_EMAIL = 'raymondvdw@gmail.com';
+export const SOLICITOR_LOGIN_PATH = '/celista-login';
+export const LEGACY_SOLICITOR_LOGIN_PATH = '/solicitor/login';
 
 function hasAzureProviderIdentity(user) {
   if (!user) return false;
@@ -158,8 +160,8 @@ function hasAzureProviderIdentity(user) {
 
 /**
  * Solicitor access policy:
- * - Must sign in via Microsoft 365 (Azure provider)
- * - Must use firm email domain
+ * - Solicitor role: must sign in via Microsoft 365 (Azure provider) and use firm domain.
+ * - Admin role: firm-domain admins are allowed as break-glass owner access in hidden owner mode.
  */
 export function evaluateSolicitorAccessPolicy({ user, profile }) {
   const role = profile?.role;
@@ -181,6 +183,10 @@ export function evaluateSolicitorAccessPolicy({ user, profile }) {
       email,
       message: `Solicitor access is restricted to @${SOLICITOR_ALLOWED_EMAIL_DOMAIN} accounts.`,
     };
+  }
+
+  if (role === 'admin') {
+    return { ok: true, reason: 'admin_break_glass', email };
   }
 
   const hasMicrosoftProvider = hasAzureProviderIdentity(user);
@@ -440,7 +446,7 @@ export async function signInSolicitor({ email, password }) {
 /**
  * Start Microsoft 365 (Entra / Azure AD) sign-in via Supabase OAuth.
  * Configure Azure in Supabase Dashboard (Authentication → Providers → Azure) and add this redirect URL to
- * “Additional redirect URLs”: `https://<your-app-origin>/solicitor/login` (e.g. production + localhost for dev).
+ * “Additional redirect URLs”: `https://<your-app-origin>${SOLICITOR_LOGIN_PATH}` (e.g. production + localhost for dev).
  * Supabase callback URL must be in Azure app Redirect URIs: `https://<project-ref>.supabase.co/auth/v1/callback`
  *
  * If you see "Unable to exchange external code" after Microsoft login, that is Supabase’s server failing the
@@ -476,7 +482,7 @@ export async function startMicrosoft365SignIn() {
     return { error: 'Microsoft sign-in is only available in the browser' };
   }
   const origin = window.location.origin;
-  const redirectTo = `${origin}/solicitor/login`;
+  const redirectTo = `${origin}${SOLICITOR_LOGIN_PATH}`;
   logM365Auth('start', {
     supabaseHost: getSupabaseProjectHost(),
     origin,

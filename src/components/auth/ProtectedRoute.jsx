@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
+import { SOLICITOR_LOGIN_PATH } from '../../lib/auth.js';
 
 const FALLBACK_DELAY_MS = 6000;
 
@@ -40,7 +41,7 @@ export default function ProtectedRoute() {
           {showFallback && (
             <p className="mt-4 text-sm text-slate-600">
               Taking too long?{' '}
-              <Link to="/solicitor/login" state={{ from: location }} className="font-medium text-indigo-600 hover:text-indigo-700">
+              <Link to={SOLICITOR_LOGIN_PATH} state={{ from: location }} className="font-medium text-indigo-600 hover:text-indigo-700">
                 Sign in again
               </Link>
             </p>
@@ -51,7 +52,7 @@ export default function ProtectedRoute() {
   }
 
   if (!isAuthenticated || !isStaff) {
-    return <Navigate to="/solicitor/login" replace state={{ from: location }} />;
+    return <Navigate to={SOLICITOR_LOGIN_PATH} replace state={{ from: location }} />;
   }
 
   return <Outlet />;
