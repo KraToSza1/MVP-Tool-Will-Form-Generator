@@ -416,11 +416,10 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
     
     const validateName = (name) => {
       if (!name) return true; // Empty is okay, required validation handles that
-      // Name should be at least 2 characters, contain letters, spaces, hyphens, apostrophes
-      const nameRegex = /^[a-zA-Z\s\-']+$/;
-      if (name.length < 2) return false;
-      if (!nameRegex.test(name)) return false;
-      return true;
+      const trimmed = name.trim();
+      if (trimmed.length < 2) return false;
+      // Unicode letters (accented names, etc.), spaces, hyphens, apostrophes, periods for initials
+      return /^[\p{L}\s\-'.]+$/u.test(trimmed);
     };
     
     const handleChange = (e) => {
@@ -513,7 +512,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
       // Validate name fields
       if (isName && isBlur) {
         if (value && !validateName(value)) {
-          setValidationErrors((prev) => ({ ...prev, [field.id]: 'Please enter a valid name (letters only, at least 2 characters)' }));
+          setValidationErrors((prev) => ({
+            ...prev,
+            [field.id]:
+              'Please enter a valid name (at least 2 characters). Accented letters and hyphenated names are allowed.',
+          }));
         } else if (field.required && !value) {
           setValidationErrors((prev) => ({ ...prev, [field.id]: 'This field is required. Please enter a name.' }));
         } else {
