@@ -9,6 +9,7 @@ import {
   TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS,
   TESTAMENTARY_CAPACITY_FIELD_LABELS,
 } from '../../lib/matterOutstanding.js';
+import { buildPropertyTrustDetailsDraftFromClient } from '../../utils/propertyTrustFormat.js';
 
 /**
  * Field-set definition per outstanding category. Each entry is the minimum
@@ -134,9 +135,6 @@ export default function MatterQuickActionModal({
     () => mergeMatterPayloads(matter?.client_payload, matter?.solicitor_payload),
     [matter],
   );
-  const solicitorPayload = matter?.solicitor_payload && typeof matter.solicitor_payload === 'object'
-    ? matter.solicitor_payload
-    : {};
 
   const [fields, setFields] = useState({});
   const [saving, setSaving] = useState(false);
@@ -146,35 +144,40 @@ export default function MatterQuickActionModal({
   useEffect(() => {
     if (!open) return;
     setErrorMessage('');
+    const sp =
+      matter?.solicitor_payload && typeof matter.solicitor_payload === 'object'
+        ? matter.solicitor_payload
+        : {};
     if (category === OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY) {
       const initial = {};
       TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.forEach((id) => {
-        initial[id] = solicitorPayload[id] ?? '';
+        initial[id] = sp[id] ?? '';
       });
       setFields(initial);
     } else if (category === OUTSTANDING_CATEGORY.ID_VERIFICATION) {
-      setFields({ identityVerificationNotes: solicitorPayload.identityVerificationNotes ?? '' });
+      setFields({ identityVerificationNotes: sp.identityVerificationNotes ?? '' });
     } else if (category === OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED) {
       setFields({
-        bprTrustDetails: solicitorPayload.bprTrustDetails ?? merged?.bprTrustDetails ?? '',
-        bprTrustScheduleNumber: solicitorPayload.bprTrustScheduleNumber ?? merged?.bprTrustScheduleNumber ?? '',
-        bprTrustTerms: solicitorPayload.bprTrustTerms ?? merged?.bprTrustTerms ?? '',
+        bprTrustDetails: sp.bprTrustDetails ?? merged?.bprTrustDetails ?? '',
+        bprTrustScheduleNumber: sp.bprTrustScheduleNumber ?? merged?.bprTrustScheduleNumber ?? '',
+        bprTrustTerms: sp.bprTrustTerms ?? merged?.bprTrustTerms ?? '',
       });
     } else if (category === OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW) {
-      setFields({ bprTrustClientIntent: solicitorPayload.bprTrustClientIntent ?? '' });
+      setFields({ bprTrustClientIntent: sp.bprTrustClientIntent ?? '' });
     } else if (category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED) {
+      const existingDetails = String(sp.propertyTrustDetails ?? merged?.propertyTrustDetails ?? '').trim();
+      const draftFromClient = existingDetails ? '' : buildPropertyTrustDetailsDraftFromClient(merged || {});
       setFields({
-        propertyTrustDetails: solicitorPayload.propertyTrustDetails ?? merged?.propertyTrustDetails ?? '',
-        propertyTrustScheduleNumber:
-          solicitorPayload.propertyTrustScheduleNumber ?? merged?.propertyTrustScheduleNumber ?? '',
-        propertyTrustTerms: solicitorPayload.propertyTrustTerms ?? merged?.propertyTrustTerms ?? '',
+        propertyTrustDetails: existingDetails || draftFromClient,
+        propertyTrustScheduleNumber: sp.propertyTrustScheduleNumber ?? merged?.propertyTrustScheduleNumber ?? '',
+        propertyTrustTerms: sp.propertyTrustTerms ?? merged?.propertyTrustTerms ?? '',
       });
     } else if (category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW) {
-      setFields({ includePropertyTrust: solicitorPayload.includePropertyTrust ?? '' });
+      setFields({ includePropertyTrust: sp.includePropertyTrust ?? '' });
     } else {
       setFields({});
     }
-  }, [open, category, matter?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, category, matter, merged]);
 
   useEffect(() => {
     if (!open) return undefined;

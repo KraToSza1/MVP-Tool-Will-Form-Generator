@@ -2,6 +2,8 @@
  * Client-facing summary for Property Trust (guided) — for solicitor handoff, not the legal schedule text.
  */
 
+import { validateUKPostcode } from './ukValidations.js';
+
 const TRUST_TYPE_LABEL = {
   'life-interest': 'Life interest trust',
   discretionary: 'Discretionary trust',
@@ -60,6 +62,30 @@ function dedupeAddressCandidates(candidates) {
   return out;
 }
 
+/** UK postcode on last line — best-effort split for partner free-text address. */
+function splitPartnerAddressBlob(blob) {
+  const raw = trim(blob);
+  if (!raw) return null;
+  const lines = raw.split(/\r?\n/).map((l) => trim(l)).filter(Boolean);
+  if (!lines.length) return null;
+
+  const lastLine = trim(lines[lines.length - 1]);
+  const lastLooksLikePostcode = validateUKPostcode(lastLine);
+
+  let postcode = '';
+  let body = lines;
+  if (lastLooksLikePostcode) {
+    postcode = lastLine;
+    body = lines.slice(0, -1);
+  }
+
+  const addressLine1 = body[0] || raw;
+  const addressLine2 = body[1] || '';
+  const town = body.length > 2 ? body.slice(2).join(', ') : '';
+
+  return { addressLine1, addressLine2, town, postcode };
+}
+
 /**
  * @param {Record<string, unknown>} formValues
  * @returns {{ id: string, label: string, addressLine1: string, addressLine2: string, town: string, postcode: string, tenure: string }[]}
@@ -68,17 +94,26 @@ export function getPropertyAddressCandidates(formValues) {
   if (!formValues || typeof formValues !== 'object') return [];
   const out = [];
 
-  const a1 = trim(formValues.address1);
+  const a1 =
+    trim(formValues.personalinformationAddressAddress1) ||
+    trim(formValues.address1);
   if (a1) {
-    const line2 = trim(formValues.address2);
-    const line3 = trim(formValues.address3);
+    const line2 =
+      trim(formValues.personalinformationAddressAddress2) ||
+      trim(formValues.address2);
+    const line3 =
+      trim(formValues.personalinformationAddressAddress3) ||
+      trim(formValues.address3);
+    const pc =
+      trim(formValues.personalinformationAddressPostcode) ||
+      trim(formValues.postcode);
     out.push({
       id: '__testator_home__',
-      label: `${a1}, ${[line2, line3, trim(formValues.postcode)].filter(Boolean).join(', ')} (your address)`.replace(', ,', ','),
+      label: `${a1}, ${[line2, line3, pc].filter(Boolean).join(', ')} (your address)`.replace(', ,', ','),
       addressLine1: a1,
       addressLine2: line2,
       town: line3 || line2,
-      postcode: trim(formValues.postcode),
+      postcode: pc,
       tenure: '',
     });
   }
@@ -97,6 +132,21 @@ export function getPropertyAddressCandidates(formValues) {
       postcode: pPc,
       tenure: '',
     });
+  } else {
+    const blobSplit = splitPartnerAddressBlob(formValues.partnerAddress);
+    if (blobSplit && blobSplit.addressLine1) {
+      const { addressLine1, addressLine2, town, postcode } = blobSplit;
+      const labelTail = [addressLine2, town, postcode].filter(Boolean).join(', ');
+      out.push({
+        id: '__partner_home__',
+        label: labelTail ? `${addressLine1}, ${labelTail} (partner / spouse)` : `${addressLine1} (partner / spouse)`,
+        addressLine1,
+        addressLine2,
+        town,
+        postcode,
+        tenure: '',
+      });
+    }
   }
 
   const gifts = formValues.propertyGiftsList;
@@ -175,4 +225,22 @@ export function formatPropertyTrustClientSummaryFromState(formValues) {
   if (lifeLine) parts.push(lifeLine);
   if (propLines.length) parts.push(...propLines);
   return parts.join(' ').trim();
+}
+
+/**
+ * Draft solicitor wording from client's structured trust properties (schedule/terms still added by solicitor).
+ * @param {Record<string, unknown>} formValues
+ * @returns {string}
+ */
+export function buildPropertyTrustDetailsDraftFromClient(formValues) {
+  const list = Array.isArray(formValues?.propertyTrustPropertiesList)
+    ? formValues.propertyTrustPropertiesList
+    : [];
+  const lines = list.map((p) => formatAddressLine(p)).filter(Boolean);
+  if (!lines.length) return '';
+  if (lines.length === 1) {
+    return `The trust property at ${lines[0]}.`;
+  }
+  const numbered = lines.map((l, i) => `${i + 1}) ${l}`);
+  return `The trust properties are: ${numbered.join('; ')}.`;
 }
