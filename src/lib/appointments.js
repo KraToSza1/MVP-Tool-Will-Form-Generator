@@ -489,11 +489,13 @@ export async function rescheduleAppointmentBySession({
   startIso,
   durationMinutes = 60,
   notes,
+  clientEmail,
 }) {
   if (!isSupabaseConfigured()) return { error: 'Supabase not configured' };
   if (!ref || !secret || !appointmentId || !startIso) {
     return { error: 'Missing reference, secret, appointment id or new start time' };
   }
+  const trimmedEmail = clientEmail != null ? String(clientEmail).trim() : '';
   const { data, error } = await callAnonRpc('reschedule_appointment_by_session', {
     p_ref: ref,
     p_secret: secret,
@@ -501,6 +503,7 @@ export async function rescheduleAppointmentBySession({
     p_new_start: startIso,
     p_duration_minutes: durationMinutes,
     p_notes: notes ?? null,
+    p_client_email: trimmedEmail || null,
   });
   if (error) {
     if (isMissingAppointmentsMigration(error) || isMissingSessionHelpersMigration(error)) {

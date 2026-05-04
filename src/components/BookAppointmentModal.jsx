@@ -14,6 +14,7 @@ import {
   requestAppointment,
   rescheduleAppointmentBySession,
 } from '../lib/appointments.js';
+import { isUndeliverablePlaceholderEmail } from '../lib/placeholderEmail.js';
 import { getAristoneContactDetails, ARISTONE_PROFILE } from '../constants/aristoneSolicitors.js';
 
 const DAYS_AHEAD = 21;
@@ -100,6 +101,15 @@ export default function BookAppointmentModal({
 
   const hasFutureAppointment = !!(existingAppointment && existingAppointment.start && existingAppointment.start.getTime() > Date.now());
   const showManageView = hasFutureAppointment && !manualReschedule && !bookedSlot;
+
+  const resolvedContactEmail = useMemo(
+    () => (contactEmail.trim() || clientEmail || '').trim(),
+    [contactEmail, clientEmail],
+  );
+  const placeholderEmailBlocked = useMemo(
+    () => isUndeliverablePlaceholderEmail(resolvedContactEmail),
+    [resolvedContactEmail],
+  );
 
   const days = useMemo(() => buildWorkingDayList(rules, DAYS_AHEAD, now), [rules, now]);
 
@@ -234,6 +244,19 @@ export default function BookAppointmentModal({
 
   const handleConfirm = async () => {
     if (!selectedSlot || submitting) return;
+
+    const effectiveEmail = (contactEmail.trim() || clientEmail || '').trim();
+    if (isUndeliverablePlaceholderEmail(effectiveEmail)) {
+      const msg =
+        'This address is a demo/example inbox and cannot receive email. Enter your real email in Contact email, then confirm.';
+      setErrorMessage(msg);
+      toast.error('Confirmation cannot be sent to this email', {
+        description: msg,
+        duration: 9000,
+      });
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage('');
     const isReschedule = bookingMode === 'reschedule' && existingAppointment?.id;
@@ -245,6 +268,7 @@ export default function BookAppointmentModal({
           startIso: selectedSlot.start.toISOString(),
           durationMinutes: slotMinutes,
           notes: notes.trim() || undefined,
+          clientEmail: effectiveEmail,
         })
       : await requestAppointment({
           ref: referenceNumber,
@@ -252,7 +276,7 @@ export default function BookAppointmentModal({
           startIso: selectedSlot.start.toISOString(),
           durationMinutes: slotMinutes,
           notes: notes.trim(),
-          email: contactEmail.trim() || clientEmail || '',
+          email: effectiveEmail,
           name: clientName || '',
         });
     setSubmitting(false);
@@ -283,7 +307,7 @@ export default function BookAppointmentModal({
     onAppointmentChange?.();
     void refreshContext();
     toast.success(isReschedule ? 'Appointment rescheduled' : 'Appointment requested', {
-      description: `${formatSlotLabel(selectedSlot.start)} · confirmation email sent.`,
+      description: `${formatSlotLabel(selectedSlot.start)} · confirmation email queued.`,
     });
   };
 
@@ -659,6 +683,15 @@ export default function BookAppointmentModal({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
+                  {placeholderEmailBlocked ? (
+                    <div className="sm:col-span-2 rounded-xl border border-amber-400/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/55 dark:bg-amber-950/30 dark:text-amber-100">
+                      <p className="font-semibold">Demo email on file</p>
+                      <p className="mt-1 wrap-break-word opacity-95">
+                        Appointment emails were trying to reach a fictional address (often from test auto-fill). Replace{' '}
+                        <strong>Contact email</strong> with a real inbox before booking or rescheduling.
+                      </p>
+                    </div>
+                  ) : null}
                   <label className="block text-sm">
                     <span className="mb-1 block font-medium text-slate-700 dark:text-slate-200">
                       Contact email
@@ -772,7 +805,7 @@ export default function BookAppointmentModal({
             {!bookedSlot && !showManageView ? (
               <button
                 type="button"
-                disabled={!selectedSlot || submitting || featureMissing}
+                disabled={!selectedSlot || submitting || featureMissing || placeholderEmailBlocked}
                 onClick={() => void handleConfirm()}
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus:ring-offset-slate-900"
               >
