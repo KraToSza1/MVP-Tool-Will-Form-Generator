@@ -192,6 +192,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const hasCloudRefAndSecret = REF_REGEX.test(refFromUrl) && secretFromUrl.length >= 8;
   const useExternalPersistence = !!externalPersistence;
   const solicitorMode = isSolicitorMode();
+  /** Demo auto-fill fills fictional emails (e.g. marcus.ellwood.demo@example.com). Hide from real clients on hosted prod unless opted-in. */
+  const showAutoFillControls =
+    solicitorMode || import.meta.env.DEV || import.meta.env.VITE_SHOW_CLIENT_AUTOFILL === 'true';
   const allowClientSignatureRequest =
     !solicitorMode
     && (
@@ -3088,12 +3091,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     }
   }, [buildClauseDebugExport, formData, formValues, setFormValues, visibleSections, solicitorMode]);
 
-  // Expose auto-fill function to window for console access
+  // Expose auto-fill function to window for console access (dev / solicitors / explicit flag only)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return;
+    if (showAutoFillControls) {
       window.autoFillWillForm = handleAutoFill;
+    } else {
+      try {
+        delete window.autoFillWillForm;
+      } catch {
+        window.autoFillWillForm = undefined;
+      }
     }
-  }, [handleAutoFill]);
+  }, [handleAutoFill, showAutoFillControls]);
 
   const verifyNoTestPlaceholders = useCallback(() => {
     const testFields = Object.entries(formValues).filter((entry) => {
@@ -4777,19 +4787,26 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                     <RotateCcw size={18} className="sm:w-5 sm:h-5" />
                     <span className="whitespace-nowrap">Clear Data / Start Fresh</span>
                   </button>
-                  <button
-                    onClick={() => handleAutoFill()}
-                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 active:from-purple-700 active:to-purple-800 text-white px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-md transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto"
-                    type="button"
-                    title="Fill the form with current demo data (including four tiny placeholder ID images for the final step). Not real documents."
-                  >
-                    <Zap size={18} className="sm:w-5 sm:h-5" />
-                    <span className="whitespace-nowrap">Auto-Fill Form (Test Data)</span>
-                  </button>
+                  {showAutoFillControls ? (
+                    <button
+                      onClick={() => handleAutoFill()}
+                      className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 active:from-purple-700 active:to-purple-800 text-white px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-md transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto"
+                      type="button"
+                      title="Fill the form with current demo data (including four tiny placeholder ID images for the final step). Not real documents."
+                    >
+                      <Zap size={18} className="sm:w-5 sm:h-5" />
+                      <span className="whitespace-nowrap">Auto-Fill Form (Test Data)</span>
+                    </button>
+                  ) : null}
                 </div>
-                <p className="text-xs sm:text-sm text-gray-500 mt-2 flex items-start gap-2 px-1">
-                  <Info size={14} className="mt-0.5 flex-shrink-0" />
-                  <span><strong>Tip:</strong> Use "Clear Data / Start Fresh" to remove all saved information, or "Auto-Fill Form" to populate all fields with test data for testing.</span>
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-2 flex items-start gap-2 px-1 wrap-break-word">
+                  <Info size={14} className="mt-0.5 flex-shrink-0" aria-hidden />
+                  <span>
+                    <strong>Tip:</strong> Use &quot;Clear Data / Start Fresh&quot; to remove all saved information.
+                    {showAutoFillControls ? (
+                      <> On staging or dev you can also use &quot;Auto-Fill Form&quot; for fictional test data.</>
+                    ) : null}
+                  </span>
                 </p>
               </div>
             </section>

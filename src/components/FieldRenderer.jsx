@@ -621,6 +621,11 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         {isPhone && !validationErrors[field.id] && (
           <p className="text-xs text-gray-500 mt-1.5">UK phone number format: mobile 07123 456789, landline 020 1234 5678</p>
         )}
+        {isEmail && field.id === 'email' && !validationErrors[field.id] && (
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5 wrap-break-word">
+            Enter the contact email for the person this Will is about (the client / testator). This is not solicitor staff login.
+          </p>
+        )}
       </div>
     );
   }
