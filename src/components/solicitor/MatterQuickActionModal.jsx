@@ -10,6 +10,12 @@ import {
   TESTAMENTARY_CAPACITY_FIELD_LABELS,
 } from '../../lib/matterOutstanding.js';
 import { buildPropertyTrustDetailsDraftFromClient } from '../../utils/propertyTrustFormat.js';
+import {
+  formatBusinessInterestsIntakeRows,
+  formatPropertyTrustIntakeRows,
+  buildBprTrustTermsStub,
+  buildPropertyTrustTermsStub,
+} from '../../utils/solicitorClientSummaries.js';
 
 /**
  * Field-set definition per outstanding category. Each entry is the minimum
@@ -136,6 +142,12 @@ export default function MatterQuickActionModal({
     [matter],
   );
 
+  const isWideTrustModal =
+    category === OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED
+    || category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED;
+
+  const businessIntakeRows = useMemo(() => formatBusinessInterestsIntakeRows(merged || {}), [merged]);
+  const propertyTrustIntakeRows = useMemo(() => formatPropertyTrustIntakeRows(merged || {}), [merged]);
   const [fields, setFields] = useState({});
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -332,7 +344,9 @@ export default function MatterQuickActionModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-action-title"
-        className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl ring-1 ring-slate-200 animate-slideIn dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-600 max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh]"
+        className={`flex w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl ring-1 ring-slate-200 animate-slideIn dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-600 max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] ${
+          isWideTrustModal ? 'max-w-6xl' : 'max-w-2xl'
+        }`}
       >
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6 sm:py-5">
           <div className="min-w-0">
@@ -413,35 +427,78 @@ export default function MatterQuickActionModal({
           ) : null}
 
           {category === OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Saving these three fields clears the BPR Trust completion outstanding.
-              </p>
-              <TextField
-                id="qa-bpr-schedule"
-                label="Schedule number"
-                value={fields.bprTrustScheduleNumber}
-                onChange={(v) => setField('bprTrustScheduleNumber', v)}
-                placeholder="e.g. 1"
-              />
-              <TextareaField
-                id="qa-bpr-details"
-                label="Business property details"
-                value={fields.bprTrustDetails}
-                onChange={(v) => setField('bprTrustDetails', v)}
-                placeholder="Describe the qualifying business interests."
-                rows={3}
-              />
-              <TextareaField
-                id="qa-bpr-terms"
-                label="BPR Trust terms"
-                value={fields.bprTrustTerms}
-                onChange={(v) => setField('bprTrustTerms', v)}
-                placeholder="Trust terms agreed with the client."
-                rows={4}
-              />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
+              <div className="min-w-0 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client answers
+                </p>
+                <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
+                  {businessIntakeRows.length === 0 ? (
+                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
+                      No structured business intake captured.
+                    </p>
+                  ) : (
+                    <dl className="space-y-3">
+                      {businessIntakeRows.map((row) => (
+                        <div key={row.label} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
+                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0 space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Saving these three fields clears the BPR Trust completion outstanding.
+                </p>
+                <TextField
+                  id="qa-bpr-schedule"
+                  label="Schedule number"
+                  value={fields.bprTrustScheduleNumber}
+                  onChange={(v) => setField('bprTrustScheduleNumber', v)}
+                  placeholder="e.g. 1"
+                />
+                <TextareaField
+                  id="qa-bpr-details"
+                  label="Business property details"
+                  value={fields.bprTrustDetails}
+                  onChange={(v) => setField('bprTrustDetails', v)}
+                  placeholder="Describe the qualifying business interests."
+                  rows={3}
+                />
+                <TextareaField
+                  id="qa-bpr-terms"
+                  label="BPR Trust terms"
+                  value={fields.bprTrustTerms}
+                  onChange={(v) => setField('bprTrustTerms', v)}
+                  placeholder="Trust terms agreed with the client."
+                  rows={4}
+                />
+                <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 dark:border-slate-600 dark:bg-slate-950">
+                  <p className="m-0 text-xs font-semibold text-indigo-300">Clause assistant (draft stub)</p>
+                  <p className="m-0 mt-1 text-xs leading-relaxed text-slate-300">
+                    Inserts neutral wording based on client intake — replace with final solicitor terms before issue.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-violet-600 dark:hover:bg-violet-500"
+                    onClick={() => {
+                      const stub = buildBprTrustTermsStub(merged || {});
+                      setFields((prev) => {
+                        const cur = String(prev.bprTrustTerms || '').trim();
+                        return { ...prev, bprTrustTerms: cur ? `${stub}\n\n${cur}` : stub };
+                      });
+                    }}
+                  >
+                    Insert draft clause from intake
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
+
 
           {category === OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW ? (
             <div className="space-y-3">
@@ -461,33 +518,75 @@ export default function MatterQuickActionModal({
           ) : null}
 
           {category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Saving these three fields clears the Property Trust completion outstanding.
-              </p>
-              <TextField
-                id="qa-pt-schedule"
-                label="Schedule number"
-                value={fields.propertyTrustScheduleNumber}
-                onChange={(v) => setField('propertyTrustScheduleNumber', v)}
-                placeholder="e.g. 2"
-              />
-              <TextareaField
-                id="qa-pt-details"
-                label="Property details"
-                value={fields.propertyTrustDetails}
-                onChange={(v) => setField('propertyTrustDetails', v)}
-                placeholder="Address and tenure details for the trust property."
-                rows={3}
-              />
-              <TextareaField
-                id="qa-pt-terms"
-                label="Property Trust terms"
-                value={fields.propertyTrustTerms}
-                onChange={(v) => setField('propertyTrustTerms', v)}
-                placeholder="Trust terms agreed with the client."
-                rows={4}
-              />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
+              <div className="min-w-0 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client answers
+                </p>
+                <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
+                  {propertyTrustIntakeRows.length === 0 ? (
+                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
+                      No property trust intake captured.
+                    </p>
+                  ) : (
+                    <dl className="space-y-3">
+                      {propertyTrustIntakeRows.map((row, idx) => (
+                        <div key={`pt-row-${idx}-${row.label}`} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
+                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0 space-y-4">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Saving these three fields clears the Property Trust completion outstanding.
+                </p>
+                <TextField
+                  id="qa-pt-schedule"
+                  label="Schedule number"
+                  value={fields.propertyTrustScheduleNumber}
+                  onChange={(v) => setField('propertyTrustScheduleNumber', v)}
+                  placeholder="e.g. 2"
+                />
+                <TextareaField
+                  id="qa-pt-details"
+                  label="Property details"
+                  value={fields.propertyTrustDetails}
+                  onChange={(v) => setField('propertyTrustDetails', v)}
+                  placeholder="Address and tenure details for the trust property."
+                  rows={3}
+                />
+                <TextareaField
+                  id="qa-pt-terms"
+                  label="Property Trust terms"
+                  value={fields.propertyTrustTerms}
+                  onChange={(v) => setField('propertyTrustTerms', v)}
+                  placeholder="Trust terms agreed with the client."
+                  rows={4}
+                />
+                <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 dark:border-slate-600 dark:bg-slate-950">
+                  <p className="m-0 text-xs font-semibold text-indigo-300">Clause assistant (draft stub)</p>
+                  <p className="m-0 mt-1 text-xs leading-relaxed text-slate-300">
+                    Inserts neutral wording from the client property-trust intake — replace with final terms before issue.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-violet-600 dark:hover:bg-violet-500"
+                    onClick={() => {
+                      const stub = buildPropertyTrustTermsStub(merged || {});
+                      setFields((prev) => {
+                        const cur = String(prev.propertyTrustTerms || '').trim();
+                        return { ...prev, propertyTrustTerms: cur ? `${stub}\n\n${cur}` : stub };
+                      });
+                    }}
+                  >
+                    Insert draft clause from intake
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 

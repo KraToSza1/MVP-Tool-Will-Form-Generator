@@ -84,11 +84,17 @@ export function isMatterTestamentaryCapacityOutstanding(matter) {
 
 export function isMatterBprTrustRequiredOutstanding(matter) {
   const payload = getMergedMatterPayload(matter);
+  const biz = payload?.biz_has_interests;
+  if (biz === 'yes' || biz === 'unsure') {
+    return !isBprSolicitorPackageComplete(payload);
+  }
   return getBprTrustClientIntent(payload) === 'Yes' && !isBprSolicitorPackageComplete(payload);
 }
 
 export function isMatterBprTrustReviewOutstanding(matter) {
   const payload = getMergedMatterPayload(matter);
+  const biz = payload?.biz_has_interests;
+  if (biz === 'yes' || biz === 'unsure') return false;
   return getBprTrustClientIntent(payload) === 'Unsure';
 }
 

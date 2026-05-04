@@ -556,6 +556,24 @@ export const buildClauses = ({
       });
     }
 
+    if (
+      section.formSection === 'Business Interests' &&
+      formValues.hasBusinessInterests === 'Yes' &&
+      formValues.trusteePowerCarryOnBusiness === 'Yes' &&
+      formValues.appointSeparateBusinessTrustee === 'Yes'
+    ) {
+      const sepTemplate =
+        'Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests.';
+      addClause({
+        section,
+        field: { id: 'appointSeparateBusinessTrustee', label: 'Separate business trustee' },
+        template: sepTemplate,
+        text: interpolateText(sepTemplate, formValues),
+        id: `${section.formSection}-appointSeparateBusinessTrustee-guided`,
+        isConditional: false,
+      });
+    }
+
     if (section.formSection === 'Property Gifts' && formValues.leavePropertyGifts === 'Yes' && hasFieldValue('propertyGiftsDetails')) {
       const mainTemplate =
         'I make the following gifts of real property, to be distributed free of all taxes and duties: {{field:propertyGiftsDetails:value}}.';

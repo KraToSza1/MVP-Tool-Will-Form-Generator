@@ -2933,77 +2933,10 @@
             "formSection": "Business Interests",
             "fields": [
                 {
-                    "id": "hasBusinessInterests",
-                    "type": "radio",
-                    "label": "Does the Testator have any business interests?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null
-                },
-                {
-                    "id": "trusteePowerCarryOnBusiness",
-                    "type": "radio",
-                    "label": "Does the Testator wish to grant the trustees power to carry on business?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes"
-                        }
-                    ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "field": "hasBusinessInterests",
-                            "operator": "eq",
-                            "value": "Yes"
-                        }
-                    ]
-                },
-                {
-                    "id": "appointSeparateBusinessTrustee",
-                    "type": "radio",
-                    "label": "Does the Testator wish to appoint separate business trustee?",
-                    "options": [
-                        {
-                            "value": "No",
-                            "label": "No"
-                        },
-                        {
-                            "value": "Yes",
-                            "label": "Yes",
-                            "willClauseText": "Notwithstanding other appointments in this Will, I appoint {{field:separateTrusteesSection:fullDetails}} to serve solely as Trustee(s) for the purposes of managing my business interests. They shall have full power to make decisions regarding the continuation, management, or sale of these interests."
-                        }
-                    ],
-                    "value": null,
-                    "conditions": [
-                        {
-                            "operator": "AND",
-                            "clauses": [
-                                {
-                                    "field": "hasBusinessInterests",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                },
-                                {
-                                    "field": "trusteePowerCarryOnBusiness",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                }
-                            ]
-                        }
-                    ]
+                    "id": "businessInterestsGuided",
+                    "type": "businessInterestsGuided",
+                    "label": "",
+                    "excludeFromWill": true
                 },
                 {
                     "id": "separateTrusteesSection",
@@ -3011,42 +2944,17 @@
                     "label": "Who are the separate Trustees?",
                     "conditions": [
                         {
-                            "operator": "OR",
+                            "operator": "AND",
                             "clauses": [
                                 {
-                                    "operator": "AND",
-                                    "clauses": [
-                                        {
-                                            "field": "hasBusinessInterests",
-                                            "operator": "eq",
-                                            "value": "Yes"
-                                        },
-                                        {
-                                            "field": "trusteePowerCarryOnBusiness",
-                                            "operator": "eq",
-                                            "value": "Yes"
-                                        },
-                                        {
-                                            "field": "appointSeparateBusinessTrustee",
-                                            "operator": "eq",
-                                            "value": "Yes"
-                                        }
-                                    ]
+                                    "field": "howResidueDistributed",
+                                    "operator": "eq",
+                                    "value": "IntoFLIT"
                                 },
                                 {
-                                    "operator": "AND",
-                                    "clauses": [
-                                        {
-                                            "field": "howResidueDistributed",
-                                            "operator": "eq",
-                                            "value": "IntoFLIT"
-                                        },
-                                        {
-                                            "field": "appointSeparateTrusteesFLIT",
-                                            "operator": "eq",
-                                            "value": "Yes"
-                                        }
-                                    ]
+                                    "field": "appointSeparateTrusteesFLIT",
+                                    "operator": "eq",
+                                    "value": "Yes"
                                 }
                             ]
                         }
@@ -3238,7 +3146,8 @@
                             "value": null
                         }
                     ],
-                    "value": ""
+                    "value": "",
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "includeBPRTrust",
@@ -3261,7 +3170,8 @@
                             "operator": "eq",
                             "value": "Yes"
                         }
-                    ]
+                    ],
+                    "_hiddenFromClient": true
                 },
                 {
                     "id": "bprTrustSection",
@@ -3270,19 +3180,9 @@
                     "willClauseText": "I give such of my business assets as qualify for Business Property Relief from Inheritance Tax to my Trustees to hold on the terms of the Business Property Relief Trust detailed in Schedule {{field:bprTrustScheduleNumber:value}} of this Will.",
                     "conditions": [
                         {
-                            "operator": "AND",
-                            "clauses": [
-                                {
-                                    "field": "hasBusinessInterests",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                },
-                                {
-                                    "field": "includeBPRTrust",
-                                    "operator": "eq",
-                                    "value": "Yes"
-                                }
-                            ]
+                            "field": "hasBusinessInterests",
+                            "operator": "eq",
+                            "value": "Yes"
                         }
                     ],
                     "subFields": [
@@ -3311,7 +3211,8 @@
                             "value": ""
                         }
                     ],
-                    "value": ""
+                    "value": "",
+                    "_hiddenFromClient": true
                 }
             ]
         },

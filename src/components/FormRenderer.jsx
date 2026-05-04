@@ -77,6 +77,8 @@ import {
   isEstateResidueGuidedComplete,
   getEstateResidueGuidedValidationIssues,
 } from '../utils/estateResidueGuidedShared.js';
+import { isBusinessInterestsGuidedComplete } from '../lib/businessInterestsGuidedComplete.js';
+import { isPropertyTrustGuidedComplete, getPropertyTrustGuidedValidationIssues } from '../lib/propertyTrustGuidedComplete.js';
 import { toast } from 'sonner';
 import { useTheme } from '../context/ThemeContext.jsx';
 import {
@@ -1970,10 +1972,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
 
       if (field.type === 'businessInterestsGuided') {
-        if (formValues.hasBusinessInterests !== 'Yes') return true;
-        const intent = formValues.bprTrustClientIntent;
-        const ok = intent === 'Yes' || intent === 'No' || intent === 'Unsure';
-        DEBUG_LOGS&&console.log(`[VALIDATION] businessInterestsGuided BPR intent: "${intent}", valid: ${ok}`);
+        const ok = isBusinessInterestsGuidedComplete(formValues);
+        DEBUG_LOGS&&console.log(`[VALIDATION] businessInterestsGuided valid: ${ok}`);
         return ok;
       }
 
@@ -1991,15 +1991,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
 
       if (field.type === 'propertyTrustGuided') {
-        const inc = formValues.includePropertyTrust;
-        if (inc !== 'Yes') return true;
-        const typeOk = String(formValues.propertyTrustType || '').trim() !== '';
-        const fn = String(formValues.propertyTrustLifeTenantFirstName || '').trim();
-        const ln = String(formValues.propertyTrustLifeTenantLastName || '').trim();
-        const lifeOk = fn !== '' && ln !== '';
-        const props = formValues.propertyTrustPropertiesList;
-        const hasProps = Array.isArray(props) && props.length > 0;
-        return typeOk && lifeOk && hasProps;
+        const ok = isPropertyTrustGuidedComplete(formValues);
+        DEBUG_LOGS && console.log(`[VALIDATION] propertyTrustGuided valid: ${ok}`);
+        return ok;
       }
 
       if (field.type === 'personalChattelsGuided') {
@@ -2070,9 +2064,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           if (field.conditions && !evaluateFieldConditions(field)) return true;
           if (['button', 'hidden', 'display'].includes(field.type)) return true;
           if (field.type === 'businessInterestsGuided') {
-            if (formValues.hasBusinessInterests !== 'Yes') return true;
-            const intent = formValues.bprTrustClientIntent;
-            return intent === 'Yes' || intent === 'No' || intent === 'Unsure';
+            return isBusinessInterestsGuidedComplete(formValues);
           }
           if (field.type === 'propertyGiftsGuided') {
             if (formValues.leavePropertyGifts !== 'Yes') return true;
@@ -2082,13 +2074,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             return hasGifts && (lapse === 'Yes' || lapse === 'No' || lapse === 'Unsure');
           }
           if (field.type === 'propertyTrustGuided') {
-            if (formValues.includePropertyTrust !== 'Yes') return true;
-            const typeOk = String(formValues.propertyTrustType || '').trim() !== '';
-            const fn = String(formValues.propertyTrustLifeTenantFirstName || '').trim();
-            const ln = String(formValues.propertyTrustLifeTenantLastName || '').trim();
-            const lifeOk = fn !== '' && ln !== '';
-            const props = formValues.propertyTrustPropertiesList;
-            return typeOk && lifeOk && Array.isArray(props) && props.length > 0;
+            return isPropertyTrustGuidedComplete(formValues);
           }
           if (field.type === 'personalChattelsGuided') {
             return isPersonalChattelsGuidedComplete(formValues);
@@ -2156,17 +2142,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
 
       if (field.type === 'businessInterestsGuided') {
-        if (formValues.hasBusinessInterests === 'Yes') {
-          const intent = formValues.bprTrustClientIntent;
-          if (intent !== 'Yes' && intent !== 'No' && intent !== 'Unsure') {
-            issues.push({
-              fieldId: field.id,
-              fieldLabel: 'Business interests — BPR trust',
-              message:
-                'Please answer whether you want a Business Property Relief (BPR) trust, or select that you need advice first.',
-              type: 'required',
-            });
-          }
+        if (!isBusinessInterestsGuidedComplete(formValues)) {
+          issues.push({
+            fieldId: field.id,
+            fieldLabel: 'Business interests',
+            message:
+              'Please complete the business questions (type, ownership, how long held, value, agreement, trading nature, trustees, beneficiaries, separate trustee if applicable, and fallback). Your solicitor will refine everything at your appointment.',
+            type: 'required',
+          });
         }
         return;
       }
@@ -2198,35 +2181,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
 
       if (field.type === 'propertyTrustGuided') {
-        if (formValues.includePropertyTrust === 'Yes') {
-          if (String(formValues.propertyTrustType || '').trim() === '') {
-            issues.push({
-              fieldId: field.id,
-              fieldLabel: 'Property trust — type',
-              message: 'Please choose which type of property trust sounds closest, or select that you would like your solicitor to advise.',
-              type: 'required',
-            });
-          }
-          const fn = String(formValues.propertyTrustLifeTenantFirstName || '').trim();
-          const ln = String(formValues.propertyTrustLifeTenantLastName || '').trim();
-          if (!fn || !ln) {
-            issues.push({
-              fieldId: field.id,
-              fieldLabel: 'Property trust — life tenant',
-              message: 'Enter the life tenant’s first and last name (the person who will benefit during their lifetime), or pick someone already entered on the form.',
-              type: 'required',
-            });
-          }
-          const props = formValues.propertyTrustPropertiesList;
-          if (!Array.isArray(props) || props.length === 0) {
-            issues.push({
-              fieldId: field.id,
-              fieldLabel: 'Property trust — properties',
-              message: 'Add at least one property address to go into the trust, or change your answer if you no longer want a property trust.',
-              type: 'required',
-            });
-          }
-        }
+        getPropertyTrustGuidedValidationIssues(formValues, field.id).forEach((issue) => {
+          issues.push({
+            fieldId: issue.fieldId,
+            fieldLabel: issue.fieldLabel,
+            message: issue.message,
+            type: issue.type,
+          });
+        });
         return;
       }
 

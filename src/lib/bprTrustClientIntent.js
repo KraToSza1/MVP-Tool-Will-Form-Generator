@@ -5,6 +5,12 @@
 
 export function getBprTrustClientIntent(formValues) {
   if (!formValues || typeof formValues !== 'object') return '';
+  const biz = formValues.biz_has_interests;
+  if (biz === 'no') return 'No';
+  if (biz === 'yes' || biz === 'unsure') {
+    if (isBprSolicitorPackageComplete(formValues)) return 'Yes';
+    return 'Unsure';
+  }
   const v = formValues.bprTrustClientIntent;
   if (v === 'Yes' || v === 'No' || v === 'Unsure') return v;
   if (formValues.includeBPRTrust === 'Yes' || formValues.includeBPRTrust === true) return 'Yes';

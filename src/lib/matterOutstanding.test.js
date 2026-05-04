@@ -84,7 +84,7 @@ describe('matterOutstanding', () => {
     })).toEqual([OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]);
   });
 
-  it('flags BPR trust review when client was unsure', () => {
+  it('flags BPR trust review when client was unsure (legacy questionnaire)', () => {
     const matter = {
       client_payload: { bprTrustClientIntent: 'Unsure' },
       solicitor_payload: {},
@@ -95,6 +95,42 @@ describe('matterOutstanding', () => {
       client_payload: { bprTrustClientIntent: 'Unsure' },
       solicitor_payload: completeCapacityPayload,
     })).toEqual([OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]);
+  });
+
+  it('flags BPR trust required when biz disclosure yes and solicitor package incomplete', () => {
+    const matter = {
+      client_payload: { biz_has_interests: 'yes' },
+      solicitor_payload: { bprTrustDetails: 'x', bprTrustScheduleNumber: '', bprTrustTerms: 'y' },
+    };
+    expect(isMatterBprTrustRequiredOutstanding(matter)).toBe(true);
+  });
+
+  it('does not flag BPR trust review when biz gateway is yes or unsure', () => {
+    expect(
+      isMatterBprTrustReviewOutstanding({
+        client_payload: { biz_has_interests: 'yes' },
+        solicitor_payload: {},
+      })
+    ).toBe(false);
+    expect(
+      isMatterBprTrustReviewOutstanding({
+        client_payload: { biz_has_interests: 'unsure' },
+        solicitor_payload: {},
+      })
+    ).toBe(false);
+  });
+
+  it('clears BPR trust required when solicitor completes package after biz disclosure', () => {
+    expect(
+      isMatterBprTrustRequiredOutstanding({
+        client_payload: { biz_has_interests: 'unsure' },
+        solicitor_payload: {
+          bprTrustDetails: 'd',
+          bprTrustScheduleNumber: '2',
+          bprTrustTerms: 't',
+        },
+      })
+    ).toBe(false);
   });
 
   it('flags property trust required when client chose Yes and solicitor fields are incomplete', () => {

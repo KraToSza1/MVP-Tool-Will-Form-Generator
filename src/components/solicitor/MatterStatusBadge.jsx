@@ -24,13 +24,16 @@ const TOOLTIPS = {
   completed: 'Matter finished. Ready for execution.',
 };
 
-export default function MatterStatusBadge({ status }) {
+export default function MatterStatusBadge({ status, compact = false }) {
   const key = status || 'draft';
   const tooltip = TOOLTIPS[key] || TOOLTIPS.draft;
+  const sizeClasses = compact
+    ? 'rounded-md px-2 py-0.5 text-[10px] font-semibold leading-none'
+    : 'rounded-full px-3 py-1 text-xs font-semibold';
   return (
     <span
       title={tooltip}
-      className={`inline-flex cursor-help items-center rounded-full border px-3 py-1 text-xs font-semibold ${STYLES[key] || STYLES.draft}`}
+      className={`inline-flex cursor-help items-center border ${sizeClasses} ${STYLES[key] || STYLES.draft}`}
     >
       {LABELS[key] || key}
     </span>

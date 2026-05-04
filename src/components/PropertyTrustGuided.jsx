@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Check, Home, Info, Plus, X } from 'lucide-react';
 import { formatPropertyTrustClientSummaryFromState, getPropertyAddressCandidates } from '../utils/propertyTrustFormat.js';
+import { normalizePtReason } from '../lib/propertyTrustGuidedComplete.js';
 
 function uid() {
   return `pt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -42,6 +43,134 @@ const TENURE_OPTS = [
   { value: 'commonhold', label: 'Commonhold' },
 ];
 
+/** Maps guided trust-type card values to PDF-style pt_trust_type */
+const PT_TRUST_TYPE_BY_LEGACY = {
+  'life-interest': 'life_interest',
+  discretionary: 'discretionary',
+  'nil-rate-band': 'nrb',
+  'not-sure': 'advise',
+};
+
+const PT_TENURE_PILLS = [
+  { value: 'freehold', label: 'Freehold' },
+  { value: 'leasehold', label: 'Leasehold' },
+  { value: 'unsure', label: 'Not sure' },
+];
+
+const PT_OWNERSHIP_OPTS = [
+  {
+    value: 'sole_owner',
+    title: 'I own it entirely — sole owner',
+    hint: 'The whole property can be placed in the trust',
+  },
+  {
+    value: 'tic_50',
+    title: 'Tenants in common — 50% share',
+    hint: 'Only your share goes into the trust',
+  },
+  {
+    value: 'tic_other',
+    title: 'Tenants in common — a different percentage',
+    hint: 'You will confirm the exact split with your solicitor',
+  },
+  {
+    value: 'joint_tenants',
+    title: 'Joint tenants — I own it jointly',
+    hint: 'Your solicitor may need to sever the joint tenancy first — they will advise',
+  },
+  { value: 'unsure', title: 'Not sure — I’ll check', hint: '' },
+];
+
+const PT_RIGHTS_OPTS = [
+  {
+    value: 'occupy_free',
+    title: 'Right to live in the property rent-free for life',
+    hint: 'They can live there but not charge rent to others',
+  },
+  {
+    value: 'occupy_or_rent',
+    title: 'Right to live there OR let it out and keep the income',
+    hint: 'They can choose to rent it out if they prefer',
+  },
+  {
+    value: 'income_only',
+    title: 'Right to receive income from the property only',
+    hint: 'They do not live there but receive rent or investment income',
+  },
+  { value: 'discuss', title: 'I’m not sure — discuss with my solicitor', hint: '' },
+];
+
+const PT_SALE_OPTS = [
+  {
+    value: 'trustees_consent_reinvest',
+    title: 'Trustees can agree to sell — proceeds held for the life tenant',
+    hint: 'They can downsize or move; trust money follows the life tenant',
+  },
+  {
+    value: 'trustees_reinvest_new_property',
+    title: 'Trustees can buy a replacement property for the life tenant',
+    hint: 'The trust can purchase a new home if they need to move',
+  },
+  {
+    value: 'no_sale_without_all',
+    title: 'Property cannot be sold without consent of all trustees and remainder beneficiaries',
+    hint: 'More protection for those who ultimately inherit',
+  },
+  { value: 'discuss', title: 'I’m not sure — my solicitor should advise', hint: '' },
+];
+
+const PT_REMAINDER_OPTS = [
+  { value: 'children_equally', title: 'My children — equally between them', hint: '' },
+  {
+    value: 'children_specified',
+    title: 'My children — in proportions I’ll specify at my appointment',
+    hint: '',
+  },
+  {
+    value: 'named_others',
+    title: 'Named individuals — I’ll confirm at my appointment',
+    hint: '',
+  },
+  {
+    value: 'residue',
+    title: 'To fall into the rest of my estate (residue)',
+    hint: 'Divided like the rest of my estate',
+  },
+  { value: 'discuss', title: 'I’m not sure — discuss at my appointment', hint: '' },
+];
+
+const PT_OVER_OPTS = [
+  {
+    value: 'yes_include',
+    title: 'Yes — include overreaching protection so any future sale is straightforward',
+    hint: 'Recommended — your solicitor will ensure at least two trustees are appointed',
+  },
+  { value: 'discuss', title: 'I’m not sure — my solicitor should advise', hint: '' },
+];
+
+const PT_REASON_OPTS = [
+  {
+    value: 'protect_children',
+    title: 'Protect my children’s inheritance',
+    hint: 'Ensure they receive their share even if my spouse remarries',
+  },
+  {
+    value: 'care_fees',
+    title: 'Protect against care home fees',
+    hint: 'Shelter the property from local authority means-testing',
+  },
+  {
+    value: 'iht',
+    title: 'Reduce inheritance tax',
+    hint: 'Use nil-rate band efficiently',
+  },
+  {
+    value: 'family_home',
+    title: 'Keep my spouse/partner in the family home',
+    hint: 'They can stay while still protecting the children’s share',
+  },
+];
+
 /** @param {{ field: object, formValues: object, setFormValues: Function }} props */
 export default function PropertyTrustGuided({ field: _field, formValues, setFormValues }) {
   const uidStr = useId();
@@ -57,12 +186,14 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
   const prevOverflow = useRef('');
 
   const include = formValues.includePropertyTrust;
-  const showYesPanel = include === 'Yes';
+  const showDetailPanel = include === 'Yes' || include === 'Unsure';
   const list = Array.isArray(formValues.propertyTrustPropertiesList) ? formValues.propertyTrustPropertiesList : [];
   const trustType = formValues.propertyTrustType || '';
   const fn = formValues.propertyTrustLifeTenantFirstName || '';
   const ln = formValues.propertyTrustLifeTenantLastName || '';
   const rel = formValues.propertyTrustLifeTenantRelationship || '';
+  const ptTenure = formValues.pt_tenure || '';
+  const ptReasonSelected = normalizePtReason(formValues.pt_reason);
 
   const addressCandidates = useMemo(() => getPropertyAddressCandidates(formValues || {}), [formValues]);
 
@@ -78,7 +209,12 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
         const a = String(next.propertyTrustLifeTenantFirstName || '').trim();
         const b = String(next.propertyTrustLifeTenantLastName || '').trim();
         const full = [a, b].filter(Boolean).join(' ');
-        return { ...next, propertyTrustLifeTenantName: full || next.propertyTrustLifeTenantName || '' };
+        return {
+          ...next,
+          propertyTrustLifeTenantName: full || next.propertyTrustLifeTenantName || '',
+          pt_life_tenant_first: a,
+          pt_life_tenant_last: b,
+        };
       });
     },
     [setFormValues]
@@ -100,7 +236,23 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
     [setFormValues]
   );
 
-  const clearYesOnlyClientFields = () => ({
+  useEffect(() => {
+    const legacy = String(formValues.propertyTrustType || '').trim();
+    const pt = String(formValues.pt_trust_type || '').trim();
+    if (!legacy || pt) return;
+    const mapped = PT_TRUST_TYPE_BY_LEGACY[legacy];
+    if (mapped) applyPatch({ pt_trust_type: mapped });
+  }, [formValues.propertyTrustType, formValues.pt_trust_type, applyPatch]);
+
+  useEffect(() => {
+    const inc = formValues.includePropertyTrust;
+    const w = String(formValues.pt_wants_trust || '').trim();
+    if (inc === 'Yes' && !w) applyPatch({ pt_wants_trust: 'yes' });
+    else if (inc === 'Unsure' && !w) applyPatch({ pt_wants_trust: 'advise' });
+    else if (inc === 'No' && w !== 'no') applyPatch({ pt_wants_trust: 'no' });
+  }, [formValues.includePropertyTrust, formValues.pt_wants_trust, applyPatch]);
+
+  const clearPropertyTrustWhenOptOut = () => ({
     propertyTrustType: '',
     propertyTrustLifeTenantFirstName: '',
     propertyTrustLifeTenantLastName: '',
@@ -108,24 +260,47 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
     propertyTrustLifeTenantRelationship: '',
     propertyTrustPropertiesList: undefined,
     propertyTrustClientSummary: '',
+    pt_wants_trust: 'no',
+    pt_trust_type: '',
+    pt_life_tenant_first: '',
+    pt_life_tenant_last: '',
+    pt_life_tenant_rel: '',
+    pt_tenure: '',
+    pt_ownership_share: '',
+    pt_life_tenant_rights: '',
+    pt_sale_instruction: '',
+    pt_remainder_beneficiaries: '',
+    pt_overreaching: '',
+    pt_reason: [],
+    pt_notes: '',
   });
 
   const setInclude = (key) => {
     if (key === 'no') {
-      applyPatch({ includePropertyTrust: 'No', ...clearYesOnlyClientFields() });
+      applyPatch({ includePropertyTrust: 'No', ...clearPropertyTrustWhenOptOut() });
       return;
     }
     if (key === 'unsure') {
-      applyPatch({ includePropertyTrust: 'Unsure', ...clearYesOnlyClientFields() });
+      applyPatch({ includePropertyTrust: 'Unsure', pt_wants_trust: 'advise' });
       return;
     }
     if (key === 'yes') {
-      applyPatch({ includePropertyTrust: 'Yes' });
+      applyPatch({ includePropertyTrust: 'Yes', pt_wants_trust: 'yes' });
     }
   };
 
-  const setTrustType = (val) => {
-    applyPatch({ propertyTrustType: val });
+  const setTrustType = (legacyVal) => {
+    const ptVal = PT_TRUST_TYPE_BY_LEGACY[legacyVal] || '';
+    applyPatch({ propertyTrustType: legacyVal, pt_trust_type: ptVal });
+  };
+
+  const togglePtReason = (value) => {
+    applyPatch((prev) => {
+      const cur = normalizePtReason(prev.pt_reason);
+      const has = cur.includes(value);
+      const nextList = has ? cur.filter((x) => x !== value) : [...cur, value];
+      return { ...prev, pt_reason: nextList };
+    });
   };
 
   const openModal = () => {
@@ -275,9 +450,9 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
       </div>
 
       {include === 'Yes' ? (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2.5 dark:border-amber-500/50 dark:bg-amber-950/30">
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-500/50 dark:bg-amber-950/40">
           <p className="m-0 text-xs font-bold text-amber-900 dark:text-amber-100 sm:text-sm">Solicitor to complete</p>
-          <p className="m-0 mt-1 text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90">
+          <p className="m-0 mt-1 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
             You have asked for a property trust. Your solicitor will complete the formal Property Trust wording,
             schedule number, and terms before a final will PDF can be generated.
           </p>
@@ -285,16 +460,16 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
       ) : null}
 
       {include === 'Unsure' ? (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2.5 dark:border-amber-500/50 dark:bg-amber-950/30">
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-500/50 dark:bg-amber-950/40">
           <p className="m-0 text-xs font-bold text-amber-900 dark:text-amber-100 sm:text-sm">Needs review</p>
-          <p className="m-0 mt-1 text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90">
+          <p className="m-0 mt-1 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
             We&apos;ll discuss property trusts in your onboarding call. Your will can be drafted once you and your
-            solicitor have agreed the approach.
+            solicitor have agreed the approach. You can still add details below if you already know them.
           </p>
         </div>
       ) : null}
 
-      {showYesPanel ? (
+      {showDetailPanel ? (
         <div className="space-y-6">
           <div>
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">What type of property trust would you like?</h3>
@@ -307,8 +482,8 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                     key={t.value}
                     className={`block cursor-pointer rounded-[10px] border p-3.5 transition-colors min-h-[44px] ${
                       selected
-                        ? 'border-indigo-600 bg-indigo-50/90 dark:border-indigo-500 dark:bg-indigo-950/30'
-                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:border-slate-600 dark:bg-slate-900/50 dark:hover:border-indigo-500/50'
+                        ? 'border-indigo-600 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:border-slate-600 dark:bg-slate-900 dark:hover:border-indigo-500/50'
                     }`}
                   >
                     <input
@@ -379,7 +554,8 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                   className="w-full min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                   value={rel}
                   onChange={(e) => {
-                    applyPatch({ propertyTrustLifeTenantRelationship: e.target.value });
+                    const v = e.target.value;
+                    applyPatch({ propertyTrustLifeTenantRelationship: v, pt_life_tenant_rel: v });
                   }}
                   placeholder="e.g. my spouse, my partner"
                 />
@@ -389,7 +565,7 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
 
           <hr className="border-slate-200 dark:border-slate-600" />
 
-          <div className="rounded-[10px] border-l-4 border-indigo-600 bg-indigo-50/90 px-4 py-4 dark:border-indigo-500 dark:bg-slate-800/80 sm:px-5 sm:py-5">
+          <div className="rounded-[10px] border-l-4 border-indigo-600 bg-indigo-50 px-4 py-4 dark:border-indigo-500 dark:bg-slate-800 sm:px-5 sm:py-5">
             <p className="m-0 mb-1.5 text-base font-bold text-indigo-800 dark:text-indigo-200">Properties in the trust</p>
             <p className="m-0 mb-4 text-sm italic leading-relaxed text-slate-600 dark:text-slate-300">
               Add the full address of each property. Your solicitor will use this when drafting the trust and dealing with
@@ -437,9 +613,326 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
             </button>
           </div>
 
-          <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-3 dark:border-emerald-500/40 dark:bg-emerald-950/25">
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              Is the property freehold or leasehold?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
+              Your solicitor needs this when dealing with the title. If you add several properties, answer for the main one.
+            </p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Tenure of main trust property">
+              {PT_TENURE_PILLS.map((p) => {
+                const sel = ptTenure === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    aria-pressed={sel}
+                    onClick={() => applyPatch({ pt_tenure: p.value })}
+                    className={`min-h-[44px] rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-100'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-indigo-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-500'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              What share of the property do you own?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
+              This affects what goes into the trust. If you own jointly, typically only your share passes through your will.
+            </p>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Ownership share">
+              {PT_OWNERSHIP_OPTS.map((o) => {
+                const sel = formValues.pt_ownership_share === o.value;
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      name={`pt-own-${uidStr}`}
+                      checked={sel}
+                      onChange={() => applyPatch({ pt_ownership_share: o.value })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      {o.hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <div className="mb-2 flex min-w-0 items-start gap-2.5">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/40">
+                <Info className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="m-0 text-base font-bold text-slate-900 dark:text-slate-100">
+                  What rights should the life tenant have over the property?{' '}
+                  <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                    New
+                  </span>
+                </h3>
+                <p className="m-0 mt-1 text-xs italic leading-relaxed text-slate-600 dark:text-slate-300">
+                  WHY WE ASK: This tells your solicitor what to include in the trust clause — what the life tenant can and cannot do.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Life tenant rights">
+              {PT_RIGHTS_OPTS.map((o) => {
+                const sel = formValues.pt_life_tenant_rights === o.value;
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      name={`pt-rights-${uidStr}`}
+                      checked={sel}
+                      onChange={() => applyPatch({ pt_life_tenant_rights: o.value })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      {o.hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              What should happen if the life tenant wants to sell the property?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
+              Important for the trust wording — what trustees may do if the life tenant moves or wants to sell.
+            </p>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Sale instructions">
+              {PT_SALE_OPTS.map((o) => {
+                const sel = formValues.pt_sale_instruction === o.value;
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      name={`pt-sale-${uidStr}`}
+                      checked={sel}
+                      onChange={() => applyPatch({ pt_sale_instruction: o.value })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      {o.hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              After the life tenant dies, who should inherit the property?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
+              Remainder beneficiaries ultimately receive the property or its value when the trust ends.
+            </p>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Remainder beneficiaries">
+              {PT_REMAINDER_OPTS.map((o) => {
+                const sel = formValues.pt_remainder_beneficiaries === o.value;
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      name={`pt-rem-${uidStr}`}
+                      checked={sel}
+                      onChange={() => applyPatch({ pt_remainder_beneficiaries: o.value })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      {o.hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              Do you want a future buyer to get a clean title?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
+              <p className="m-0 text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
+                Plain English
+              </p>
+              <p className="m-0 mt-1 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                When trust property is sold, buyers usually need two trustees to give a clean receipt — overreaching. Most
+                property-trust wills include this automatically.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Overreaching protection">
+              {PT_OVER_OPTS.map((o) => {
+                const sel = formValues.pt_overreaching === o.value;
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      name={`pt-over-${uidStr}`}
+                      checked={sel}
+                      onChange={() => applyPatch({ pt_overreaching: o.value })}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      {o.hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
+              What is your main reason for wanting a property trust?{' '}
+              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
+                New
+              </span>
+            </h3>
+            <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">Select all that apply.</p>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {PT_REASON_OPTS.map((o) => {
+                const sel = ptReasonSelected.includes(o.value);
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors dark:border-slate-600 ${
+                      sel
+                        ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40'
+                        : 'border-slate-200 bg-white hover:border-indigo-300 dark:bg-slate-900 dark:hover:border-indigo-500/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600 dark:border-slate-600"
+                      checked={sel}
+                      onChange={() => togglePtReason(o.value)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{o.title}</span>
+                      <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{o.hint}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <hr className="border-slate-200 dark:border-slate-600" />
+
+          <div className="min-w-0">
+            <label className="m-0 mb-2 block text-base font-bold text-slate-900 dark:text-slate-100" htmlFor="pt-notes-area">
+              Anything else your solicitor should know?{' '}
+              <span className="text-xs font-normal text-slate-500 dark:text-slate-400">(optional)</span>
+            </label>
+            <textarea
+              id="pt-notes-area"
+              rows={4}
+              value={formValues.pt_notes || ''}
+              onChange={(e) => applyPatch({ pt_notes: e.target.value })}
+              placeholder="For example: mortgage, joint owners who must agree, fragile health, second property..."
+              className="w-full min-h-[88px] rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-3 dark:border-emerald-500/40 dark:bg-emerald-950/35">
             <p className="m-0 text-sm font-bold text-emerald-900 dark:text-emerald-100">What happens next</p>
-            <p className="m-0 mt-1 text-sm leading-relaxed text-emerald-900/95 dark:text-emerald-100/90">
+            <p className="m-0 mt-1 text-sm leading-relaxed text-emerald-900 dark:text-emerald-100">
               Your solicitor will draft the full trust terms, schedule, and conditions. You do not need to provide legal
               wording here.
             </p>
@@ -486,7 +979,7 @@ export default function PropertyTrustGuided({ field: _field, formValues, setForm
                 </div>
 
                 <div className="space-y-4 px-5 py-4">
-                  <div className="flex gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5 dark:border-slate-600/80 dark:bg-indigo-500/10">
+                  <div className="flex gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 dark:border-indigo-500/40 dark:bg-indigo-950/40">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-300" />
                     <p className="m-0 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
                       Your solicitor will use the address to identify the property on the title register. Prefill from a

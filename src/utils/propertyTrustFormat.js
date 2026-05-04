@@ -3,12 +3,61 @@
  */
 
 import { validateUKPostcode } from './ukValidations.js';
+import { normalizePtReason } from '../lib/propertyTrustGuidedComplete.js';
 
 const TRUST_TYPE_LABEL = {
   'life-interest': 'Life interest trust',
   discretionary: 'Discretionary trust',
   'nil-rate-band': 'Nil-rate band trust',
   'not-sure': 'To be confirmed with solicitor',
+};
+
+const PT_TENURE_LABEL = {
+  freehold: 'Freehold',
+  leasehold: 'Leasehold',
+  unsure: 'Not sure',
+};
+
+const PT_SHARE_LABEL = {
+  sole_owner: 'Sole owner',
+  tic_50: 'Tenants in common — 50%',
+  tic_other: 'Tenants in common — other split',
+  joint_tenants: 'Joint tenants',
+  unsure: 'Not sure — will check',
+};
+
+const PT_RIGHTS_LABEL = {
+  occupy_free: 'Live rent-free for life',
+  occupy_or_rent: 'Occupy or let and keep income',
+  income_only: 'Income only',
+  discuss: 'Discuss with solicitor',
+};
+
+const PT_SALE_LABEL = {
+  trustees_consent_reinvest: 'Sale with proceeds following life tenant',
+  trustees_reinvest_new_property: 'Replacement property for life tenant',
+  no_sale_without_all: 'No sale without full consent',
+  discuss: 'Discuss with solicitor',
+};
+
+const PT_REMAINDER_LABEL = {
+  children_equally: 'Children equally',
+  children_specified: 'Children — proportions later',
+  named_others: 'Named individuals — to confirm',
+  residue: 'Into residue',
+  discuss: 'Discuss at appointment',
+};
+
+const PT_OVER_LABEL = {
+  yes_include: 'Include overreaching protection',
+  discuss: 'Discuss with solicitor',
+};
+
+const PT_REASON_LABEL = {
+  protect_children: 'Protect children’s inheritance',
+  care_fees: 'Care fees / means-testing',
+  iht: 'Inheritance tax efficiency',
+  family_home: 'Keep spouse/partner in the home',
 };
 
 function trim(s) {
@@ -224,6 +273,31 @@ export function formatPropertyTrustClientSummaryFromState(formValues) {
   if (typeLabel) parts.push(`Trust type: ${typeLabel}.`);
   if (lifeLine) parts.push(lifeLine);
   if (propLines.length) parts.push(...propLines);
+
+  const tenure = trim(formValues.pt_tenure);
+  if (tenure) parts.push(`Tenure (main property): ${PT_TENURE_LABEL[tenure] || tenure}.`);
+
+  const share = trim(formValues.pt_ownership_share);
+  if (share) parts.push(`Ownership: ${PT_SHARE_LABEL[share] || share}.`);
+
+  const rights = trim(formValues.pt_life_tenant_rights);
+  if (rights) parts.push(`Life tenant rights: ${PT_RIGHTS_LABEL[rights] || rights}.`);
+
+  const sale = trim(formValues.pt_sale_instruction);
+  if (sale) parts.push(`If life tenant sells or moves: ${PT_SALE_LABEL[sale] || sale}.`);
+
+  const remainder = trim(formValues.pt_remainder_beneficiaries);
+  if (remainder) parts.push(`Remainder beneficiaries: ${PT_REMAINDER_LABEL[remainder] || remainder}.`);
+
+  const over = trim(formValues.pt_overreaching);
+  if (over) parts.push(`Overreaching: ${PT_OVER_LABEL[over] || over}.`);
+
+  const reasons = normalizePtReason(formValues.pt_reason).map((r) => PT_REASON_LABEL[r] || r);
+  if (reasons.length) parts.push(`Reasons: ${reasons.join('; ')}.`);
+
+  const notes = trim(formValues.pt_notes);
+  if (notes) parts.push(`Notes: ${notes}`);
+
   return parts.join(' ').trim();
 }
 

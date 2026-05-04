@@ -74,6 +74,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.ID_VERIFICATION]: {
     title: 'ID Verification Outstanding',
     shortLabel: 'ID verification',
+    tableChipLabel: 'ID',
     description: 'Files still missing client ID or verification documents. Click to view the affected files.',
     icon: ShieldAlert,
     badgeClasses: 'border-rose-200 bg-rose-100 text-rose-900',
@@ -85,6 +86,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]: {
     title: 'BPR Trust — solicitor completion required',
     shortLabel: 'BPR (required)',
+    tableChipLabel: 'BPR req',
     description:
       'Client requested a Business Property Relief Trust. Complete Business Property Details, Schedule Number, and BPR Trust Terms on the matter before generating the PDF.',
     icon: BriefcaseBusiness,
@@ -97,6 +99,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]: {
     title: 'BPR Trust — needs review',
     shortLabel: 'BPR (review)',
+    tableChipLabel: 'BPR rev',
     description:
       'Client was unsure about a BPR Trust — discuss on onboarding. PDF can still be generated; complete or clear the BPR fields when advice is finalised.',
     icon: BriefcaseBusiness,
@@ -109,6 +112,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED]: {
     title: 'Property Trust — solicitor completion required',
     shortLabel: 'Property trust (required)',
+    tableChipLabel: 'PT req',
     description:
       'Client requested a property trust. Complete Property Details, Schedule Number, and Property Trust Terms on the matter before generating the final PDF.',
     icon: Landmark,
@@ -121,6 +125,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]: {
     title: 'Property Trust — needs review',
     shortLabel: 'Property trust (review)',
+    tableChipLabel: 'PT rev',
     description:
       'Client was unsure about a property trust — discuss on onboarding. PDF can still be generated; complete or clear the trust fields when advice is finalised.',
     icon: Landmark,
@@ -133,6 +138,7 @@ const OUTSTANDING_CATEGORY_META = {
   [OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]: {
     title: 'Testamentary Capacity Outstanding',
     shortLabel: 'Testamentary Capacity',
+    tableChipLabel: 'TC',
     description: 'Files where the solicitor has not yet completed the Testamentary Capacity review. Click to view the affected files.',
     icon: ClipboardCheck,
     badgeClasses: 'border-amber-200 bg-amber-100 text-amber-900',
@@ -146,6 +152,17 @@ const OUTSTANDING_CATEGORY_META = {
 function formatDate(value) {
   if (!value) return 'Not yet';
   return new Date(value).toLocaleString();
+}
+
+function formatLocaleDateOnly(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+}
+
+function formatActivityParts(value) {
+  if (!value) return { date: 'Not yet', time: null };
+  const d = new Date(value);
+  return { date: d.toLocaleDateString(), time: d.toLocaleTimeString() };
 }
 
 function getGreeting() {
@@ -1018,46 +1035,85 @@ export default function SolicitorDashboardPage() {
               })}
             </div>
 
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="solicitor-matters-table min-w-[860px] w-full divide-y divide-slate-200">
+            <div className="hidden lg:block overflow-x-auto rounded-b-2xl">
+              <table className="solicitor-matters-table table-fixed min-w-[1000px] w-full border-collapse divide-y divide-slate-200">
+                <colgroup>
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '11%' }} />
+                </colgroup>
                 <thead className="bg-slate-50">
-                  <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <th className="px-4 xl:px-5 py-3">Client reference</th>
-                    <th className="px-4 xl:px-5 py-3">Client</th>
-                    <th className="px-4 xl:px-5 py-3">Partner / spouse</th>
-                    <th className="px-4 xl:px-5 py-3">Status</th>
-                    <th className="px-4 xl:px-5 py-3">Verification</th>
-                    <th className="px-4 xl:px-5 py-3">Outstanding</th>
-                    <th className="px-4 xl:px-5 py-3">Received</th>
-                    <th className="px-4 xl:px-5 py-3">Last activity</th>
-                    <th className="px-4 xl:px-5 py-3">Action</th>
+                  <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Reference</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-left">Client</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Partner</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Status</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">ID check</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Outstanding</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Received</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Activity</th>
+                    <th className="align-middle px-3 xl:px-4 py-2 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {visibleMatters.map((matter) => {
                     const { outstandingCategories, hasOutstandingCategories, displayPhone, partnerLabel } = getMatterDisplayData(matter);
+                    const clientLabel = matter.client_name || matter.client_snapshot?.fullName || 'Unknown client';
+                    const emailLine = matter.client_email || matter.client_snapshot?.email || 'No email captured';
+                    const activityParts = formatActivityParts(matter.last_activity_at);
                     return (
-                      <tr key={matter.id} className={hasOutstandingCategories ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'}>
-                        <td className="px-4 xl:px-5 py-4">
-                          <Link to={`/solicitor/matters/${matter.id}`} className="font-semibold text-indigo-700 hover:text-indigo-900">
+                      <tr
+                        key={matter.id}
+                        className={
+                          hasOutstandingCategories
+                            ? 'border-l-[3px] border-l-amber-400 bg-amber-50/40 hover:bg-amber-50 solicitor-matter-row-outstanding'
+                            : 'hover:bg-slate-50'
+                        }
+                      >
+                        <td className="align-middle px-3 xl:px-4 py-2 text-center">
+                          <Link
+                            to={`/solicitor/matters/${matter.id}`}
+                            className="solicitor-matter-ref-link mx-auto inline-block max-w-full rounded-lg bg-slate-100 px-2 py-1 text-center font-mono text-[11px] font-semibold leading-none text-indigo-700 break-all ring-1 ring-inset ring-slate-200/80 hover:bg-indigo-50 hover:text-indigo-900 hover:ring-indigo-200"
+                            title="Open matter"
+                          >
                             {matter.client_reference}
                           </Link>
                         </td>
-                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
-                          <p className="font-medium text-slate-900">{matter.client_name || matter.client_snapshot?.fullName || 'Unknown client'}</p>
-                          <p className="break-all">{matter.client_email || matter.client_snapshot?.email || 'No email captured'}</p>
-                          <p className="break-all">{displayPhone}</p>
+                        <td className="align-middle min-w-0 px-3 xl:px-4 py-2 text-left">
+                          <div className="min-w-0 space-y-0.5 leading-snug">
+                            <p className="text-sm font-semibold text-slate-900 line-clamp-2" title={clientLabel}>
+                              {clientLabel}
+                            </p>
+                            <p className="break-all text-xs text-slate-500">{emailLine}</p>
+                            <p className="tabular-nums text-xs text-slate-600">{displayPhone}</p>
+                          </div>
                         </td>
-                        <td className="max-w-[14rem] px-4 xl:px-5 py-4 text-sm text-slate-700" title={partnerLabel || undefined}>
-                          <span className="line-clamp-2">{partnerLabel || '—'}</span>
+                        <td className="align-middle min-w-0 px-3 xl:px-4 py-2 text-center text-sm text-slate-700" title={partnerLabel || undefined}>
+                          <span className="line-clamp-2 inline-block max-w-full text-center">{partnerLabel || '—'}</span>
                         </td>
-                        <td className="px-4 xl:px-5 py-4"><MatterStatusBadge status={matter.status} /></td>
-                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
-                          {matter.outstanding_verification ? 'Verification pending' : 'Complete'}
+                        <td className="align-middle whitespace-nowrap px-3 xl:px-4 py-2 text-center">
+                          <MatterStatusBadge status={matter.status} compact />
                         </td>
-                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">
+                        <td className="align-middle px-3 xl:px-4 py-2 text-center">
+                          {matter.outstanding_verification ? (
+                            <span className="matter-verification-pill matter-verification-pill-pending inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-px text-[10px] font-semibold leading-none text-amber-950">
+                              Pending
+                            </span>
+                          ) : (
+                            <span className="matter-verification-pill matter-verification-pill-complete inline-flex rounded border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold leading-none text-emerald-900">
+                              Verified
+                            </span>
+                          )}
+                        </td>
+                        <td className="align-middle min-w-0 px-3 xl:px-4 py-2 text-center">
                           {hasOutstandingCategories ? (
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex min-h-0 flex-wrap items-center justify-center gap-x-1 gap-y-0.5">
                               {outstandingCategories.map((category) => {
                                 const meta = OUTSTANDING_CATEGORY_META[category];
                                 return (
@@ -1065,25 +1121,38 @@ export default function SolicitorDashboardPage() {
                                     key={category}
                                     type="button"
                                     onClick={() => setQuickAction({ matter, category })}
-                                    className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${meta.badgeClasses}`}
-                                    title={`Complete ${meta.shortLabel} from the dashboard`}
+                                    className={`solicitor-outstanding-chip inline-flex max-w-full shrink-0 cursor-pointer items-center rounded border px-1 py-px text-[10px] font-semibold leading-none tracking-tight transition hover:brightness-110 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:ring-offset-0 ${meta.badgeClasses}`}
+                                    title={`${meta.title} — tap to complete (${meta.shortLabel})`}
                                   >
-                                    {meta.shortLabel}
+                                    {meta.tableChipLabel}
                                   </button>
                                 );
                               })}
                             </div>
                           ) : (
-                            <span className="text-slate-400">None</span>
+                            <span className="inline-block text-xs text-slate-400">None</span>
                           )}
                         </td>
-                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700" title={formatDate(matter.submitted_at)}>{matter.submitted_at ? new Date(matter.submitted_at).toLocaleDateString() : '—'}</td>
-                        <td className="px-4 xl:px-5 py-4 text-sm text-slate-700">{formatDate(matter.last_activity_at)}</td>
-                        <td className="px-4 xl:px-5 py-4">
-                          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+                        <td
+                          className="align-middle px-3 xl:px-4 py-2 text-center text-xs tabular-nums text-slate-700"
+                          title={matter.submitted_at ? formatDate(matter.submitted_at) : undefined}
+                        >
+                          {formatLocaleDateOnly(matter.submitted_at)}
+                        </td>
+                        <td
+                          className="align-middle min-w-0 px-3 xl:px-4 py-2 text-center text-xs tabular-nums text-slate-700"
+                          title={formatDate(matter.last_activity_at)}
+                        >
+                          <span className="block leading-tight">{activityParts.date}</span>
+                          {activityParts.time ? (
+                            <span className="matter-activity-time mt-0.5 block text-[11px] text-slate-500">{activityParts.time}</span>
+                          ) : null}
+                        </td>
+                        <td className="align-middle px-3 xl:px-4 py-2 text-center">
+                          <div className="flex flex-nowrap items-center justify-center gap-1.5 whitespace-nowrap">
                             <Link
                               to={`/solicitor/matters/${matter.id}`}
-                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 whitespace-nowrap min-h-[40px]"
+                              className="inline-flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 whitespace-nowrap"
                             >
                               Open matter
                             </Link>
@@ -1095,15 +1164,19 @@ export default function SolicitorDashboardPage() {
                                 setMatterToDelete(matter);
                               }}
                               disabled={deletingId === matter.id}
-                              className="solicitor-matter-delete-btn inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 min-h-[40px]"
+                              className="solicitor-matter-delete-btn inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-red-200 bg-white text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
                               title="Delete this matter (cannot be undone)"
+                              aria-label={
+                                deletingId === matter.id
+                                  ? 'Removing matter…'
+                                  : 'Delete this matter (cannot be undone)'
+                              }
                             >
                               {deletingId === matter.id ? (
-                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
+                                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-red-400 border-t-transparent" aria-hidden />
                               ) : (
-                                <Trash2 size={14} />
+                                <Trash2 size={14} className="shrink-0" aria-hidden />
                               )}
-                              Delete
                             </button>
                           </div>
                         </td>

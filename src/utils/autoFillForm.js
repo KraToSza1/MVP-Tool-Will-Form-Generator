@@ -59,10 +59,97 @@ const AUTOFILL_NON_FIELD_STATE_KEYS = new Set([
   'businessSeparateTrusteeAddress1',
   'businessSeparateTrusteeTown',
   'businessSeparateTrusteePostcode',
+  // Guided intake keys not declared as standalone field ids in Complete-WillSuite-Form-Data.json
+  'biz_has_interests',
+  'biz_type',
+  'biz_ownership_pct',
+  'biz_ownership_sole',
+  'biz_duration',
+  'biz_value',
+  'biz_agreement',
+  'biz_nature',
+  'biz_trustees_continue',
+  'biz_beneficiaries',
+  'biz_separate_trustee',
+  'biz_fallback',
+  'biz_notes',
+  'pt_wants_trust',
+  'pt_trust_type',
+  'pt_life_tenant_first',
+  'pt_life_tenant_last',
+  'pt_life_tenant_rel',
+  'pt_tenure',
+  'pt_ownership_share',
+  'pt_life_tenant_rights',
+  'pt_sale_instruction',
+  'pt_remainder_beneficiaries',
+  'pt_overreaching',
+  'pt_reason',
+  'pt_notes',
 ]);
+
+/**
+ * Additional React state keys used by guided flows but not listed as `id` on their shell field
+ * (e.g. `propertyGiftsGuided` shell does not declare `leavePropertyGifts`).
+ */
+const AUTOFILL_EXTRA_GUIDED_STATE_KEYS = [
+  'monetaryGiftsList',
+  'specificGiftsList',
+  'propertyGiftsList',
+  'leavePropertyGifts',
+  'failedPropertyGiftPassProportionately',
+  'includePropertyTrust',
+  'propertyTrustType',
+  'propertyTrustLifeTenantFirstName',
+  'propertyTrustLifeTenantLastName',
+  'propertyTrustLifeTenantName',
+  'propertyTrustLifeTenantRelationship',
+  'propertyTrustPropertiesList',
+  'hasBusinessInterests',
+  'trusteePowerCarryOnBusiness',
+  'appointSeparateBusinessTrustee',
+  'businessInterestType',
+  'businessInterestValueRange',
+  'shareholderAgreementInPlace',
+  'bprTrustClientIntent',
+  'includeBPRTrust',
+  'unspecifiedChattelsAction',
+  'chattelGuidedRecipientName',
+  'chattelGuidedRecipientRelationship',
+  'chattelGuidedPick',
+  'chattelsInheritanceTax',
+  'produceMemorandum',
+  'personalChattelsGift',
+  'chattelsGiftBeneficiaryName',
+  'chattelsGiftBeneficiaryRelationship',
+  'chattelGiftPick',
+  'deliberatelyExcludingAnyone',
+  'excludedPersonData',
+  'provisionsForPets',
+  'substitutePetCarer',
+  'petsCaredForByRSPCA',
+  'leavePetCareFund',
+  'amountToLeaveForPetCare',
+  'petCarerGift',
+  'personalGiftToPetCarer',
+  'petCarerPersonalGift',
+  'forgiveDebt',
+  'includeReceiptByMinors',
+  'includeCypresClause',
+  'bringLifetimeGiftsIntoAccount',
+  'specifyLifetimeLoansGifts',
+  'specifyLoansGiftsText',
+  'stepProvisionsApply',
+  'excludeSpecificStepProvisions',
+  'stepProvisionToExcludeOne',
+  'stepProvisionsToExcludeMultiple',
+];
 
 export function collectAllFormStateKeys(formData) {
   const keys = new Set(AUTOFILL_NON_FIELD_STATE_KEYS);
+  for (const k of AUTOFILL_EXTRA_GUIDED_STATE_KEYS) {
+    keys.add(k);
+  }
   for (const sec of formData?.formSections || []) {
     collectFormFieldIdsRecursive(sec.fields, keys);
   }
@@ -116,6 +203,7 @@ function autofillValueNeedsTopUp(v) {
     const t = v.trim();
     if (t === '' || t === 'Standard value') return true;
   }
+  if (Array.isArray(v) && v.length === 0) return true;
   return false;
 }
 
@@ -977,7 +1065,9 @@ function applyRichPersonDemoOverrides(dummyData) {
 }
 
 export const generateDummyFormData = (formData) => {
-  if (import.meta.env.DEV) {
+  const autofillDevLogs =
+    typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV;
+  if (autofillDevLogs) {
     console.log(
       '[AUTOFILL GENERATE] start — this runs only when FormRenderer autofill is triggered (home / or matter form). It does not run from /solicitor dashboard matters list.',
       { phase: 'autofill_generate_start' },
@@ -1083,6 +1173,8 @@ export const generateDummyFormData = (formData) => {
     hasBusinessInterests: 'Yes',
     trusteePowerCarryOnBusiness: 'Yes',
     appointSeparateBusinessTrustee: 'Yes',
+    /** Shown when solicitor/client legacy BPR toggle used alongside bprTrustClientIntent */
+    includeBPRTrust: 'Yes',
     failedMoneyGiftPassProportionately: 'Yes',
     failedSpecificGiftPassProportionately: 'Yes',
     failedPropertyGiftPassProportionately: 'Yes',
@@ -1398,22 +1490,26 @@ export const generateDummyFormData = (formData) => {
           },
         ];
         dummyData.includePropertyTrust = 'Yes';
+        dummyData.pt_wants_trust = 'yes';
         dummyData.propertyTrustType = 'life-interest';
+        dummyData.pt_trust_type = 'life_interest';
         dummyData.propertyTrustLifeTenantFirstName = DEMO.partner.firstName;
         dummyData.propertyTrustLifeTenantLastName = DEMO.partner.lastName;
         dummyData.propertyTrustLifeTenantName = `${DEMO.partner.firstName} ${DEMO.partner.lastName}`.trim();
         dummyData.propertyTrustLifeTenantRelationship = 'spouse';
+        dummyData.pt_life_tenant_first = DEMO.partner.firstName;
+        dummyData.pt_life_tenant_last = DEMO.partner.lastName;
+        dummyData.pt_life_tenant_rel = 'spouse';
+        dummyData.pt_tenure = 'freehold';
+        dummyData.pt_ownership_share = 'tic_50';
+        dummyData.pt_life_tenant_rights = 'occupy_free';
+        dummyData.pt_sale_instruction = 'trustees_consent_reinvest';
+        dummyData.pt_remainder_beneficiaries = 'children_equally';
+        dummyData.pt_overreaching = 'yes_include';
+        dummyData.pt_reason = ['protect_children', 'family_home'];
+        dummyData.pt_notes = 'Demo only: imaginary mortgage noted for solicitor — Will Tool.';
         dummyData.propertyTrustPropertiesList = props;
-        const summaryBase = formatPropertyTrustClientSummaryFromState({
-          ...dummyData,
-          includePropertyTrust: 'Yes',
-          propertyTrustType: 'life-interest',
-          propertyTrustLifeTenantFirstName: DEMO.partner.firstName,
-          propertyTrustLifeTenantLastName: DEMO.partner.lastName,
-          propertyTrustLifeTenantRelationship: 'spouse',
-          propertyTrustPropertiesList: props,
-        });
-        dummyData.propertyTrustClientSummary = `${summaryBase}${DEMO_TEXT_TAG}`;
+        dummyData.propertyTrustClientSummary = `${formatPropertyTrustClientSummaryFromState(dummyData)}${DEMO_TEXT_TAG}`;
         processedCount += 6;
         return;
       }
@@ -1611,12 +1707,13 @@ export const generateDummyFormData = (formData) => {
         dummyData.furtherResidualGiftsDetails = '';
         dummyData.furtherResidualFallbackRows = [];
         dummyData.failedResiduePassProportionately = '';
-        dummyData.give10PercentToCharity = 'No';
-        dummyData.charityGiftOnlyIfIHTDue = '';
-        dummyData.splitCharitableGift = '';
-        dummyData.charityBenefitDetails = '';
-        dummyData.minimumCharityAmount = '';
-        dummyData.minimumCharityAmountValue = '';
+        dummyData.give10PercentToCharity = 'Yes';
+        dummyData.charityGiftOnlyIfIHTDue = 'No';
+        dummyData.splitCharitableGift = 'No';
+        dummyData.charityBenefitDetails =
+          'Cancer Research UK (Charity No. 1089464); British Heart Foundation (Charity No. 225971); Macmillan Cancer Support (Charity No. 261017)';
+        dummyData.minimumCharityAmount = 'Yes';
+        dummyData.minimumCharityAmountValue = '50000';
         dummyData.howIHTDealtWithSplitting = 'BeforeTax';
         processedCount += 18;
         return;
@@ -1625,13 +1722,30 @@ export const generateDummyFormData = (formData) => {
         return;
       }
       if (field.type === 'businessInterestsGuided') {
+        dummyData.biz_has_interests = dummyData.biz_has_interests || 'yes';
+        dummyData.biz_type = dummyData.biz_type || 'shares_minority';
+        dummyData.biz_ownership_pct = dummyData.biz_ownership_pct || 'majority';
+        dummyData.biz_ownership_sole = dummyData.biz_ownership_sole || 'sole';
+        dummyData.biz_duration = dummyData.biz_duration || 'over2';
+        dummyData.biz_value = dummyData.biz_value || '250to500k';
+        dummyData.biz_agreement = dummyData.biz_agreement || 'unsure';
+        dummyData.biz_nature = dummyData.biz_nature || 'trading';
+        dummyData.biz_trustees_continue = dummyData.biz_trustees_continue || 'yes';
+        dummyData.biz_beneficiaries = dummyData.biz_beneficiaries || 'children';
+        /** Demo exercises separate business trustee modal + separateTrusteeData row in rich-person pass */
+        dummyData.biz_separate_trustee = 'yes';
+        dummyData.biz_fallback = dummyData.biz_fallback || 'residue';
+        dummyData.biz_notes =
+          dummyData.biz_notes ||
+          `Minority shareholding in Mitchell & Associates Ltd — demo note for solicitor.${DEMO_TEXT_TAG}`;
         dummyData.hasBusinessInterests = dummyData.hasBusinessInterests || 'Yes';
         dummyData.trusteePowerCarryOnBusiness = dummyData.trusteePowerCarryOnBusiness || 'Yes';
-        dummyData.appointSeparateBusinessTrustee = dummyData.appointSeparateBusinessTrustee || 'Yes';
+        dummyData.appointSeparateBusinessTrustee = 'Yes';
         dummyData.businessInterestType = dummyData.businessInterestType || 'ltd-shares';
         dummyData.businessInterestValueRange = dummyData.businessInterestValueRange || '250k-1m';
         dummyData.shareholderAgreementInPlace = dummyData.shareholderAgreementInPlace || 'Unsure';
         dummyData.bprTrustClientIntent = dummyData.bprTrustClientIntent || 'Yes';
+        dummyData.includeBPRTrust = dummyData.includeBPRTrust || 'Yes';
         processedCount += 1;
         return;
       }
@@ -1852,6 +1966,7 @@ export const generateDummyFormData = (formData) => {
     propertyTrustTerms: 'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.',
     bprTrustDetails: 'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.',
     bprTrustTerms: 'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.',
+    includeBPRTrust: 'Yes',
     /** Residuary / FLIT / charity gift details — owned by `estateResidueGuided` autofill when that block runs. */
     funeralWishes: 'I wish for a simple cremation service. Please ensure all family members and close friends are informed in advance.',
     otherFuneralRequirements: 'My ashes are to be scattered in the garden of remembrance at Golders Green Crematorium.',
@@ -1938,7 +2053,7 @@ export const generateDummyFormData = (formData) => {
     if (s?._hiddenFromClient) return;
     collectAllFieldIds(s.fields, allIds);
   });
-  const missingIds = [...allIds].filter((id) => dummyData[id] === undefined || dummyData[id] === null || dummyData[id] === '');
+  const missingIds = [...allIds].filter((id) => autofillValueNeedsTopUp(dummyData[id]));
   console.log(`[AUTOFILL GENERATE] 🔍 Found ${missingIds.length} missing field IDs, filling with defaults...`);
   missingIds.forEach((id) => {
     const f = fieldById.get(id);
@@ -1994,7 +2109,7 @@ export const generateDummyFormData = (formData) => {
       topUpApplied++;
     }
   }
-  if (import.meta.env.DEV) {
+  if (autofillDevLogs) {
     console.log('[AUTOFILL GENERATE] schema top-up pass:', { topUpApplied });
   }
 
