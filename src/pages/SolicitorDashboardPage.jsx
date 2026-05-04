@@ -1038,9 +1038,9 @@ export default function SolicitorDashboardPage() {
             <div className="hidden lg:block overflow-x-auto rounded-b-2xl">
               <table className="solicitor-matters-table table-fixed min-w-[1000px] w-full border-collapse divide-y divide-slate-200">
                 <colgroup>
-                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '10%' }} />
                   <col style={{ width: '17%' }} />
-                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '10%' }} />
                   <col style={{ width: '9%' }} />
                   <col style={{ width: '9%' }} />
                   <col style={{ width: '17%' }} />
@@ -1076,13 +1076,17 @@ export default function SolicitorDashboardPage() {
                             : 'hover:bg-slate-50'
                         }
                       >
-                        <td className="align-middle px-3 xl:px-4 py-2 text-center">
+                        <td className="align-middle min-w-0 px-3 xl:px-4 py-2 text-center">
                           <Link
                             to={`/solicitor/matters/${matter.id}`}
-                            className="solicitor-matter-ref-link mx-auto inline-block max-w-full rounded-lg bg-slate-100 px-2 py-1 text-center font-mono text-[11px] font-semibold leading-none text-indigo-700 break-all ring-1 ring-inset ring-slate-200/80 hover:bg-indigo-50 hover:text-indigo-900 hover:ring-indigo-200"
-                            title="Open matter"
+                            className="solicitor-matter-ref-link mx-auto inline-flex max-w-full min-w-0 items-center justify-center truncate rounded-md bg-slate-100 px-2.5 py-1.5 font-mono text-xs font-semibold tabular-nums leading-none tracking-tight text-indigo-700 ring-1 ring-inset ring-slate-200/80 hover:bg-indigo-50 hover:text-indigo-900 hover:ring-indigo-200"
+                            title={
+                              matter.client_reference
+                                ? `Open matter — ${matter.client_reference}`
+                                : 'Open matter'
+                            }
                           >
-                            {matter.client_reference}
+                            {matter.client_reference || '—'}
                           </Link>
                         </td>
                         <td className="align-middle min-w-0 px-3 xl:px-4 py-2 text-left">
