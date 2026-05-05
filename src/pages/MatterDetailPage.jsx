@@ -25,6 +25,7 @@ import {
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
 } from '../constants/clientMode.js';
 import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
+import MatterLpaOpportunityPanel from '../components/solicitor/MatterLpaOpportunityPanel.jsx';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
@@ -1122,6 +1123,7 @@ export default function MatterDetailPage() {
               </button>
             </div>
             <FormPeopleSummaryPanel payload={mergedPayload} variant="solicitor" />
+            <MatterLpaOpportunityPanel mergedPayload={mergedPayload} />
 
             <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned solicitor</p>

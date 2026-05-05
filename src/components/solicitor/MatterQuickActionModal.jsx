@@ -499,30 +499,20 @@ export default function MatterQuickActionModal({
           {category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED ? (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
               <div className="min-w-0 space-y-3">
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Client answers
-                  </p>
-                  <p className="m-0 text-xs leading-snug text-slate-600 dark:text-slate-300">
-                    Each block is the intake question with the client’s answer — use for drafting the clause.
-                  </p>
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client answers
+                </p>
                 <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
                   {propertyTrustIntakeRows.length === 0 ? (
                     <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
-                      No property trust intake captured.
+                      No structured property trust intake captured.
                     </p>
                   ) : (
-                    <dl className="space-y-3 sm:space-y-4">
+                    <dl className="space-y-3">
                       {propertyTrustIntakeRows.map((row, idx) => (
-                        <div
-                          key={`pt-qa-${idx}-${row.label}`}
-                          className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/80"
-                        >
-                          <dt className="text-sm font-semibold text-slate-800 dark:text-slate-100">{row.label}</dt>
-                          <dd className="mt-1.5 border-l-2 border-indigo-400/70 pl-3 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-slate-700 dark:border-indigo-400/50 dark:text-slate-200">
-                            {row.value}
-                          </dd>
+                        <div key={`${row.label}-${idx}`} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
+                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
                         </div>
                       ))}
                     </dl>

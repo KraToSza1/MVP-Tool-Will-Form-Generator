@@ -5,6 +5,31 @@ import { ArrowLeft } from 'lucide-react';
 import FormRenderer from '../components/FormRenderer.jsx';
 import { getMatterDetail, saveSolicitorMatter, updateMatterStatus, MATTER_STATUS } from '../lib/matters.js';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
+import { mergeCapacityConcernIntoLpa } from '../lib/lpaOpportunityLogic.js';
+
+function shouldFlagLpaFromCapacityConcernsField(capacityConcerns) {
+  if (typeof capacityConcerns !== 'string') return false;
+  const t = capacityConcerns.trim();
+  if (t.length < 10) return false;
+  const firstLine = t.split(/\r?\n/)[0].trim().toLowerCase();
+  if (
+    firstLine === 'no'
+    || firstLine.startsWith('no ')
+    || firstLine === 'none'
+    || firstLine === 'n/a'
+    || firstLine.startsWith('no concerns')
+    || firstLine.startsWith('not applicable')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function augmentSolicitorFormValuesForLpa(fv) {
+  if (!fv || typeof fv !== 'object') return fv;
+  if (!shouldFlagLpaFromCapacityConcernsField(fv.capacityConcerns)) return fv;
+  return { ...fv, lpa_opportunity: mergeCapacityConcernIntoLpa(fv.lpa_opportunity) };
+}
 
 export default function MatterEditorPage() {
   const { matterId } = useParams();
@@ -58,7 +83,11 @@ export default function MatterEditorPage() {
       type: 'matter',
       shareEnabled: false,
       save: async ({ formValues, currentIndex, saveType }) => {
-        const result = await saveSolicitorMatter(matter.id, formValues, currentIndex);
+        const result = await saveSolicitorMatter(
+          matter.id,
+          augmentSolicitorFormValuesForLpa(formValues),
+          currentIndex,
+        );
         if (saveType === 'manual') {
           if (result.error) {
             toast.error('Could not save solicitor draft', { description: result.error });
@@ -69,7 +98,11 @@ export default function MatterEditorPage() {
         return result;
       },
       submit: async ({ formValues, currentIndex }) => {
-        const saveResult = await saveSolicitorMatter(matter.id, formValues, currentIndex);
+        const saveResult = await saveSolicitorMatter(
+          matter.id,
+          augmentSolicitorFormValuesForLpa(formValues),
+          currentIndex,
+        );
         if (saveResult.error) {
           return saveResult;
         }

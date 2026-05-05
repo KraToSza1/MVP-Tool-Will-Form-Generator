@@ -91,6 +91,7 @@ import {
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
 import BookAppointmentModal from './BookAppointmentModal.jsx';
+import LpaOpportunityClient from './LpaOpportunityClient.jsx';
 import { getSessionAppointmentContext, formatSlotLabel } from '../lib/appointments.js';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
@@ -532,6 +533,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   
   const isDev = import.meta.env.DEV;
   const isFinalStep = currentIndex === visibleSections.length - 1;
+  const lpaPreSubmitStepIndex = useMemo(
+    () => visibleSections.findIndex((s) => s._identityVerificationStep || s._clientSignatureStep),
+    [visibleSections],
+  );
+  const showLpaPreSubmitBanner =
+    !solicitorMode
+    && visibleSections.length > 0
+    && (lpaPreSubmitStepIndex >= 0
+      ? currentIndex === lpaPreSubmitStepIndex
+      : currentIndex === visibleSections.length - 1);
   const primaryActionLabel = isFinalStep
     ? isSubmittingMatter
       ? (submittedMatterId ? 'Updating submission...' : 'Submitting...')
@@ -4644,6 +4655,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 }).filter(Boolean)
                 )}
               </div>
+
+              <LpaOpportunityClient
+                solicitorMode={solicitorMode}
+                formValues={formValues}
+                setFormValues={setFormValues}
+                currentSectionTitle={currentSection?.formSection ?? ''}
+                actualSectionIndex={actualSectionIndex}
+                showPreSubmitBanner={showLpaPreSubmitBanner}
+                submitted={submitted}
+              />
 
               <div className="flex flex-col sm:flex-row justify-between mt-6 gap-3">
                 <button
