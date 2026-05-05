@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, Copy, Download, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, X, XCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, Eye, ExternalLink, FilePenLine, FileText, IdCard, Mail, Save, UserPlus, X, XCircle, Trash2 } from 'lucide-react';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
@@ -12,6 +12,7 @@ import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_
 import { mergeMatterPayloads } from '../lib/formPayload.js';
 import {
   isMatterTestamentaryCapacityOutstanding,
+  getMatterOutstandingCategories,
   getMissingIdVerificationDocs,
   getMissingTestamentaryCapacityFields,
   ID_VERIFICATION_DOC_LABELS,
@@ -26,12 +27,50 @@ import {
 } from '../constants/clientMode.js';
 import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
 import MatterLpaOpportunityPanel from '../components/solicitor/MatterLpaOpportunityPanel.jsx';
+import ClientEmailDraftModal from '../components/solicitor/ClientEmailDraftModal.jsx';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
   if (typeof window === 'undefined') return '';
   return `${window.location.origin}/`;
+}
+
+/** Client-facing lines for solicitor chase emails — must stay in sync with `getMatterOutstandingCategories`. */
+const OUTSTANDING_CLIENT_EMAIL_LINES = {
+  [OUTSTANDING_CATEGORY.ID_VERIFICATION]:
+    'Provide or complete identity verification documents (photo ID, proof of address, etc.).',
+  [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]:
+    'Finish Business Property Relief (BPR) Trust paperwork with your solicitor (details, schedule number, and terms).',
+  [OUTSTANDING_CATEGORY.BPR_TRUST_REVIEW]:
+    'Confirm whether a BPR Trust should be included once you have spoken with your solicitor.',
+  [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED]:
+    'Finish Property Trust wording with your solicitor (property details, schedule number, and terms).',
+  [OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]:
+    'Confirm whether a Property Trust should be included once you have spoken with your solicitor.',
+  [OUTSTANDING_CATEGORY.TESTAMENTARY_CAPACITY]:
+    'Complete any remaining Testamentary Capacity or signing steps your solicitor still needs.',
+};
+
+function buildClientEmailBody(clientName, reference, toolUrl, outstandingCategories) {
+  const bullets = outstandingCategories.map((c) => OUTSTANDING_CLIENT_EMAIL_LINES[c]).filter(Boolean);
+  if (bullets.length) {
+    return (
+      `Dear ${clientName},\n\n` +
+      `We are writing because there are still outstanding items on your Will matter (reference ${reference}) that need to be completed:\n\n` +
+      bullets.map((b) => `- ${b}`).join('\n') +
+      `\n\nPlease sign in to continue your questionnaire here:\n${toolUrl}\n\n` +
+      `If you are unsure what to do next, reply to this email and we will guide you.\n\n` +
+      `Kind regards`
+    );
+  }
+  return (
+    `Dear ${clientName},\n\n` +
+    `Thank you for submitting your Will instructions.\n\n` +
+    `You can complete or review your form here:\n${toolUrl}\n\n` +
+    `If you have any questions, please contact us.\n\n` +
+    `Kind regards`
+  );
 }
 
 function formatDate(value) {
@@ -149,6 +188,17 @@ function describeActivity(item) {
     return {
       title: 'Internal notes updated',
       summary: 'Solicitor notes for this matter were updated.',
+      actorLabel,
+    };
+  }
+
+  if (action === 'client_email_sent') {
+    const preview = meta.subject_preview ? String(meta.subject_preview) : '';
+    return {
+      title: 'Email sent to client',
+      summary: preview
+        ? `An update email was sent from Microsoft 365: ${preview}.`
+        : 'An update email was sent to the client from Microsoft 365.',
       actorLabel,
     };
   }
@@ -332,6 +382,7 @@ export default function MatterDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [quickActionCategory, setQuickActionCategory] = useState(null);
+  const [clientEmailDraftOpen, setClientEmailDraftOpen] = useState(false);
   const clientIdSectionRef = useRef(null);
 
   const handleConfirmDelete = async () => {
@@ -672,78 +723,31 @@ export default function MatterDetailPage() {
 
   const clientEmail = matter?.client_email || clientSnapshot?.email || '';
   const clientName = matter?.client_name || clientSnapshot?.fullName || 'Client';
+  const outstandingCategoriesForEmail = useMemo(
+    () => (matter ? getMatterOutstandingCategories(matter) : []),
+    [matter],
+  );
+
   const emailDraft = useMemo(() => {
-    if (!clientEmail) return null;
-    const subjectText = `Your Will - ${matter?.client_reference || 'next steps'}`;
-    const bodyText =
-      `Dear ${clientName},\n\n` +
-      `Thank you for submitting your Will instructions.\n\n` +
-      `You can complete or review your form here: ${getClientWillToolUrl()}\n\n` +
-      `If you have any questions, please contact us.\n\n` +
-      `Kind regards`;
-    const subject = encodeURIComponent(subjectText);
-    const body = encodeURIComponent(bodyText);
+    if (!clientEmail || !matter) return null;
+    const toolUrl = getClientWillToolUrl();
+    const ref = matter.client_reference || 'your matter';
+    const subjectText =
+      outstandingCategoriesForEmail.length > 0
+        ? `Your Will — outstanding items (${ref})`
+        : `Your Will — next steps (${ref})`;
+    const bodyText = buildClientEmailBody(clientName, ref, toolUrl, outstandingCategoriesForEmail);
+    const subjectEnc = encodeURIComponent(subjectText);
+    const bodyEnc = encodeURIComponent(bodyText);
     return {
+      matterId: matter.id,
+      recipientName: clientName,
       to: clientEmail,
       subjectText,
       bodyText,
-      mailtoHref: `mailto:${clientEmail}?subject=${subject}&body=${body}`,
-      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(clientEmail)}&subject=${subject}&body=${body}`,
+      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(clientEmail)}&subject=${subjectEnc}&body=${bodyEnc}`,
     };
-  }, [clientEmail, clientName, matter?.client_reference]);
-
-  const remoteTcEmailDraft = useMemo(() => {
-    if (!clientEmail) return null;
-    const dueDateText = sixWeekDueDateIso
-      ? new Date(sixWeekDueDateIso).toLocaleString('en-GB')
-      : null;
-    const subjectText = `Remote Testamentary Capacity / Signing Prompt - ${matter?.client_reference || 'Will matter'}`;
-    const bodyText =
-      `Dear ${clientName},\n\n` +
-      `We can complete your Testamentary Capacity and signing checks remotely.\n\n` +
-      `Please open your secure Will Tool link and complete any outstanding sections:\n` +
-      `${getClientWillToolUrl()}\n\n` +
-      (dueDateText ? `Target completion date: ${dueDateText}\n\n` : '') +
-      `If you have questions, reply to this email and we will guide you through the remote process.\n\n` +
-      `Kind regards`;
-    const subject = encodeURIComponent(subjectText);
-    const body = encodeURIComponent(bodyText);
-    return {
-      to: clientEmail,
-      subjectText,
-      bodyText,
-      mailtoHref: `mailto:${clientEmail}?subject=${subject}&body=${body}`,
-      outlookWebHref: `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(clientEmail)}&subject=${subject}&body=${body}`,
-    };
-  }, [clientEmail, clientName, matter?.client_reference, sixWeekDueDateIso]);
-
-  const handleCopyEmailDraft = async () => {
-    if (!emailDraft) return;
-    try {
-      await navigator.clipboard.writeText(
-        `To: ${emailDraft.to}\nSubject: ${emailDraft.subjectText}\n\n${emailDraft.bodyText}`
-      );
-      toast.success('Email draft copied', { description: 'Paste into Outlook or any email client.' });
-    } catch {
-      toast.error('Copy failed', { description: 'Could not copy email draft.' });
-    }
-  };
-
-  const handleOpenEmailDraft = (draft, e) => {
-    if (!draft) return;
-    e.preventDefault();
-    window.location.href = draft.mailtoHref;
-    toast('If your email app did not open', {
-      description: 'Use Outlook Web fallback or copy the draft.',
-      action: {
-        label: 'Open Outlook Web',
-        onClick: () => {
-          window.open(draft.outlookWebHref, '_blank', 'noopener,noreferrer');
-        },
-      },
-      duration: 9000,
-    });
-  };
+  }, [clientEmail, clientName, matter, outstandingCategoriesForEmail]);
 
   const handleReminderDateChange = async (e) => {
     const value = e.target.value;
@@ -812,11 +816,11 @@ export default function MatterDetailPage() {
             href={getClientWillToolUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            title="Opens the same client intake as your customers (new tab)"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="Opens the generic public Will Tool in a new tab. It does not load this matter’s saved answers — use Review & edit answers for that."
           >
-            <ExternalLink size={14} />
-            Preview client intake
+            <Eye size={14} aria-hidden />
+            Open public intake
           </a>
           <button
             type="button"
@@ -828,36 +832,14 @@ export default function MatterDetailPage() {
             Copy client link
           </button>
           {emailDraft && (
-            <a
-              href={emailDraft.mailtoHref}
-              onClick={(e) => handleOpenEmailDraft(emailDraft, e)}
+            <button
+              type="button"
+              onClick={() => setClientEmailDraftOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              title="Open email to client with pre-filled template"
+              title="Preview the client email, open Microsoft Outlook on the web, or copy the draft"
             >
               <Mail size={14} />
               Email client
-            </a>
-          )}
-          {remoteTcEmailDraft && (
-            <a
-              href={remoteTcEmailDraft.mailtoHref}
-              onClick={(e) => handleOpenEmailDraft(remoteTcEmailDraft, e)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-              title="Prompt client to complete Testamentary Capacity/signing remotely"
-            >
-              <Mail size={14} />
-              Email remote TC prompt
-            </a>
-          )}
-          {emailDraft && (
-            <button
-              type="button"
-              onClick={handleCopyEmailDraft}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              title="Copy email recipient, subject and body"
-            >
-              <Copy size={14} />
-              Copy email draft
             </button>
           )}
         </div>
@@ -884,11 +866,11 @@ export default function MatterDetailPage() {
           </button>
           <Link
             to={`/solicitor/matters/${matter.id}/form`}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
-            title="Edit client answers and complete Testamentary Capacity"
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 focus:ring-offset-white"
+            title="Solicitor questionnaire for this matter only — change answers, Testamentary Capacity, and save to the matter."
           >
-            <FilePenLine size={16} />
-            Edit questionnaire
+            <FilePenLine size={16} aria-hidden />
+            Review &amp; edit answers
           </Link>
           <button
             type="button"
@@ -906,8 +888,11 @@ export default function MatterDetailPage() {
           </button>
         </div>
       </div>
-      <p className="text-sm text-slate-600 -mt-2">
-        <strong>Edit questionnaire</strong> lets you change any client answers, complete Testamentary Capacity (including remote workflows), and save to the matter. <strong>Download PDF</strong> builds the will from saved data for review.
+      <p className="text-sm text-slate-600 dark:text-slate-400 -mt-2 [&_strong]:text-slate-900 [&_strong]:dark:text-slate-200">
+        <strong>Open public intake</strong> is the generic client website in a new tab — it does{' '}
+        <strong>not</strong> show this matter’s saved form. <strong>Review &amp; edit answers</strong> is your
+        workspace for <strong>this</strong> matter (change answers, Testamentary Capacity, remote signing).{' '}
+        <strong>Download PDF</strong> builds the will from saved data.
       </p>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -1279,6 +1264,11 @@ export default function MatterDetailPage() {
           </p>
         </ConfirmModal>
       )}
+      <ClientEmailDraftModal
+        open={clientEmailDraftOpen && !!emailDraft}
+        onClose={() => setClientEmailDraftOpen(false)}
+        draft={emailDraft}
+      />
       <MatterQuickActionModal
         open={!!quickActionCategory}
         onClose={closeQuickAction}

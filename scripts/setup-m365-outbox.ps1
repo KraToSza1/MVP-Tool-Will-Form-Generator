@@ -70,6 +70,11 @@ function Deploy-Function([string]$projectRef) {
   & npx supabase functions deploy process-appointment-outbox --project-ref $projectRef --no-verify-jwt
 }
 
+function Deploy-SolicitorClientEmailFunction([string]$projectRef) {
+  Write-Step "Deploying send-solicitor-client-email (requires signed-in solicitor JWT)"
+  & npx supabase functions deploy send-solicitor-client-email --project-ref $projectRef
+}
+
 function Trigger-TestSend([string]$projectRef) {
   Write-Step "Triggering outbox sender function"
   $envPath = Join-Path (Get-Location) ".env"
@@ -135,6 +140,7 @@ Set-Secret "M365_REPLY_TO" $replyTo $ProjectRef
 
 if (-not $SkipDeploy) {
   Deploy-Function $ProjectRef
+  Deploy-SolicitorClientEmailFunction $ProjectRef
 }
 
 Trigger-TestSend $ProjectRef
