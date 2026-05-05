@@ -15,6 +15,7 @@ import SolicitorCalendarPage from "./pages/SolicitorCalendarPage.jsx";
 import SolicitorAvailabilityPage from "./pages/SolicitorAvailabilityPage.jsx";
 import SolicitorReportsPage from "./pages/SolicitorReportsPage.jsx";
 import SolicitorStaffPage from "./pages/SolicitorStaffPage.jsx";
+import SolicitorSignInEventsPage from "./pages/SolicitorSignInEventsPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
@@ -93,6 +94,7 @@ export default function App() {
             <Route path="availability" element={<SolicitorAvailabilityPage />} />
             <Route path="reports" element={<SolicitorReportsPage />} />
             <Route path="staff" element={<SolicitorStaffPage />} />
+            <Route path="sign-in-events" element={<SolicitorSignInEventsPage />} />
             <Route path="matters/:matterId" element={<MatterDetailPage />} />
             <Route path="matters/:matterId/form" element={<MatterEditorPage />} />
             <Route path="questionnaire" element={<QuestionnaireEditorPage />} />

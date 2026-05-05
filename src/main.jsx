@@ -1,7 +1,15 @@
-import React from 'react'
+import React from 'react';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Toaster } from 'sonner';
+import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import './styles/aristone-guardians.css';
-import { StrictMode } from 'react'
+import App from './App.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { ThemeProvider } from './context/ThemeContext.jsx';
+import { initBrowserMonitoring } from './monitoring/sentry.js';
 
 /** Warm connection to Supabase API (helps sign-in and data calls, including in embedded iframes). */
 function injectSupabasePreconnect() {
@@ -18,14 +26,9 @@ function injectSupabasePreconnect() {
     /* ignore */
   }
 }
+
+initBrowserMonitoring();
 injectSupabasePreconnect();
-import { createRoot } from 'react-dom/client'
-import { Toaster } from 'sonner'
-import { BrowserRouter } from 'react-router-dom'
-import App from './App.jsx'
-import ErrorBoundary from './components/ErrorBoundary.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
-import { ThemeProvider } from './context/ThemeContext.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -40,4 +43,4 @@ createRoot(document.getElementById('root')).render(
       </BrowserRouter>
     </ErrorBoundary>
   </StrictMode>,
-)
+);

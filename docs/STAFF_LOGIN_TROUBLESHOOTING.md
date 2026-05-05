@@ -1,5 +1,35 @@
 # Staff login problems
 
+## When staff are not technical — you still “see” the failure
+
+She does **not** need to fetch logs from her Mac or phone, paste diagnostics, or use Supabase. **Trying to sign in is enough.**
+
+Every failed Microsoft / OAuth step is logged **on the server** inside **Supabase** (same project as production `VITE_SUPABASE_URL`). You open **[Supabase Dashboard](https://supabase.com/dashboard) → Logs**, filter **Auth**, and scroll to roughly **when she tapped sign in**. That is how you diagnose “unable to exchange code” etc. without asking her for anything technical.
+
+**In the solicitor portal (after deploying the migration `20260506120000_sign_in_support_events.sql`):** sign in as a firm **`admin`** (or the configured owner override account). Open **`/solicitor/sign-in-events`** or use the **Sign-in log** link in the top nav. You get a chronological list of **client-recorded failures** (Microsoft OAuth errors, policy blocks, emergency password errors) — no action from staff. If the migration is missing, that page explains how to enable it.
+
+If you add **`VITE_SENTRY_DSN`** in Vercel, many auth failures are also sent **automatically** to Sentry — again, **nothing** required from staff.
+
+The login-page **copy diagnostics** / **`?support=1`** shortcuts are optional for people who are comfortable pasting JSON; treat them as helpers, **not** a requirement for solicitors.
+
+---
+
+## See what went wrong (admins)
+
+Your app **does not stream end-user phone logs to your laptop** — iOS Safari and Mac Safari do not expose that. You still have workable options:
+
+1. **Supabase (authoritative for Microsoft 365 / Entra)** — In the [Supabase Dashboard](https://supabase.com/dashboard) for the same project as `VITE_SUPABASE_URL`, open **Logs** → **Postgres** / **Auth** (or **Edge** depending on your dashboard version) and filter for **Auth**. Failed OAuth and “unable to exchange code” errors are recorded **on the server** when she tries to sign in. Match her attempt by **time** (within a minute or two).
+
+2. **Solicitor portal “Sign-in log”** — After running migration `supabase/migrations/20260506120000_sign_in_support_events.sql` in SQL Editor: sign into the portal as an **`admin`** user (or the configured owner override). Open **`/solicitor/sign-in-events`** (nav: **Sign-in log**). Recorded OAuth / policy failures appear there without asking staff for anything technical.
+
+3. **In-app diagnostics (optional)** — Comfortably technical users may use **Copy sign-in diagnostics for support** on the login page; paste into Slack/email for you. Combine with Supabase logs at the same time if needed.
+
+4. **Optional Sentry** — Add `VITE_SENTRY_DSN` in Vercel (see `.env.example`). Important auth failures emit **support messages** into your Sentry project (still no passwords). Useful if you want a single inbox for frontend issues across devices.
+
+Staff can append `?support=1` to the login URL (e.g. `/celista-login?support=1`) to preview the diagnostic JSON on screen if clipboard fails on mobile.
+
+---
+
 ## “Sign-in timed out” (embedded in WordPress / iframe)
 
 The Will Tool is **meant to work embedded** on your site (iframe). Staff can sign in **inside** the embed using the same email and password as in a full tab.

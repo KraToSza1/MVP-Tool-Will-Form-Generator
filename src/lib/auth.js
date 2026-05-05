@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
+import { pushAuthDiagnosticEvent } from './authDiagnostics.js';
 import { primeFormDefinitionSessionUserId } from './formDefinition.js';
 
 /** Set for the duration of signInSolicitor — used for nested timing logs */
@@ -459,6 +460,7 @@ function logM365Auth(phase, detail) {
   }
 }
 
+
 function safeParseAuthRedirectUrl(url) {
   try {
     const u = new URL(url);
@@ -476,9 +478,11 @@ function safeParseAuthRedirectUrl(url) {
 export async function startMicrosoft365SignIn() {
   if (!isSupabaseConfigured() || !supabase) {
     logM365Auth('abort', { reason: 'Supabase not configured' });
+    pushAuthDiagnosticEvent({ type: 'm365_oauth_aborted', reason: 'supabase_not_configured' });
     return { error: 'Supabase not configured' };
   }
   if (typeof window === 'undefined') {
+    pushAuthDiagnosticEvent({ type: 'm365_oauth_aborted', reason: 'non_browser' });
     return { error: 'Microsoft sign-in is only available in the browser' };
   }
   const origin = window.location.origin;
@@ -506,15 +510,26 @@ export async function startMicrosoft365SignIn() {
       status: error.status,
       code: error.code,
     });
+    pushAuthDiagnosticEvent({
+      type: 'm365_oauth_start_failed',
+      message: error.message,
+      code: error.code ?? null,
+      status: error.status ?? null,
+    });
     authError('startMicrosoft365SignIn failed', error);
     return { error: error.message || 'Could not start Microsoft sign-in' };
   }
   if (data?.url) {
     logM365Auth('redirect (next navigation — Supabase → Microsoft)', safeParseAuthRedirectUrl(data.url));
+    pushAuthDiagnosticEvent({
+      type: 'm365_oauth_redirect_issued',
+      redirectHost: safeParseAuthRedirectUrl(data.url).host ?? null,
+    });
     window.location.assign(data.url);
     return { ok: true };
   }
   logM365Auth('unexpected response', { hasData: !!data, dataKeys: data ? Object.keys(data) : [] });
+  pushAuthDiagnosticEvent({ type: 'm365_oauth_no_url_returned' });
   return { error: 'No sign-in URL returned. Enable the Azure provider in the Supabase project and try again.' };
 }
 

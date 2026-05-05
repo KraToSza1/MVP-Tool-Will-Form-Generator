@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
+    "@sentry/react": "^9.47.1",
     "@supabase/supabase-js": "^2.104.0",
     "buffer": "^6.0.3",
     "framer-motion": "^12.38.0",

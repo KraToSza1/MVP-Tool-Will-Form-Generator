@@ -5,11 +5,14 @@ import {
   evaluateSolicitorAccessPolicy,
   signInSolicitor,
   signOutSolicitor,
+  SOLICITOR_ADMIN_OVERRIDE_EMAIL,
   subscribeToAuthChanges,
   updateMyDisplayName,
 } from '../lib/auth.js';
+import { pushAuthDiagnosticEvent } from '../lib/authDiagnostics.js';
 import { AuthContext } from './authContext.js';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
+import { captureAuthSupportEvent } from '../monitoring/sentry.js';
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -89,6 +92,13 @@ export function AuthProvider({ children }) {
 
       const policy = evaluateSolicitorAccessPolicy({ user: result?.user ?? null, profile: result?.profile ?? null });
       if (result?.session && !policy.ok) {
+        pushAuthDiagnosticEvent({
+          type: 'solicitor_access_policy_blocked',
+          policyReason: policy.reason,
+        });
+        captureAuthSupportEvent('policy', `Solicitor access policy blocked (${policy.reason})`, {
+          reason: policy.reason,
+        });
         if (!policyToastShownRef.current) {
           policyToastShownRef.current = true;
           toast.error('Solicitor sign-in restricted', {
@@ -145,6 +155,10 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!session?.user,
     isStaff: profile?.role === 'solicitor' || profile?.role === 'admin',
+    isAdmin: profile?.role === 'admin',
+    canViewSignInSupport:
+      profile?.role === 'admin' ||
+      String(user?.email || '').toLowerCase() === String(SOLICITOR_ADMIN_OVERRIDE_EMAIL).toLowerCase(),
     signIn: signInSolicitor,
     signOut,
     updateDisplayName,

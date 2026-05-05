@@ -5,6 +5,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   Calendar,
+  ClipboardList,
   Clock,
   FileEdit,
   HelpCircle,
@@ -53,7 +54,7 @@ function navPillLinkClass(isActive, isDark, variant = 'default') {
 }
 
 export default function SolicitorLayout() {
-  const { profile, signOut, user, loading: authLoading, updateDisplayName } = useAuth();
+  const { profile, signOut, user, loading: authLoading, updateDisplayName, canViewSignInSupport } = useAuth();
   const location = useLocation();
   const { isDark } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
@@ -236,6 +237,19 @@ export default function SolicitorLayout() {
                   <Users className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
                   <span className="whitespace-nowrap">Staff</span>
                 </NavLink>
+                {canViewSignInSupport ? (
+                  <>
+                    <div className={inPillDivider} aria-hidden="true" />
+                    <NavLink
+                      to="/solicitor/sign-in-events"
+                      className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
+                      title="Recorded sign-in failures (admin)"
+                    >
+                      <ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
+                      <span className="whitespace-nowrap">Sign-in log</span>
+                    </NavLink>
+                  </>
+                ) : null}
                 <div className={inPillDivider} aria-hidden="true" />
                 <NavLink
                   to="/solicitor/urgent"
