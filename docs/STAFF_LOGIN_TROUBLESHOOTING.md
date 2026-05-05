@@ -6,7 +6,7 @@ She does **not** need to fetch logs from her Mac or phone, paste diagnostics, or
 
 Every failed Microsoft / OAuth step is logged **on the server** inside **Supabase** (same project as production `VITE_SUPABASE_URL`). You open **[Supabase Dashboard](https://supabase.com/dashboard) → Logs**, filter **Auth**, and scroll to roughly **when she tapped sign in**. That is how you diagnose “unable to exchange code” etc. without asking her for anything technical.
 
-**In the solicitor portal (after deploying the migration `20260506120000_sign_in_support_events.sql`):** sign in as a firm **`admin`** (or the configured owner override account). Open **`/solicitor/sign-in-events`** or use the **Sign-in log** link in the top nav. You get a chronological list of **client-recorded failures** (Microsoft OAuth errors, policy blocks, emergency password errors) — no action from staff. If the migration is missing, that page explains how to enable it.
+**In the solicitor portal (after deploying the migration `20260506120000_sign_in_support_events.sql`):** only **explicitly allowlisted** sign-in emails see **Sign-in log** in the nav (not every solicitor or every user with `role = admin` in Supabase — see `VITE_SIGN_IN_LOG_ALLOW_EMAILS` in `.env.example`, otherwise the coded owner fallback). Open **`/solicitor/sign-in-events`** after signing in as that account. You get **client-recorded failures** — no action from staff. If the migration is missing, that page explains how to enable it.
 
 If you add **`VITE_SENTRY_DSN`** in Vercel, many auth failures are also sent **automatically** to Sentry — again, **nothing** required from staff.
 
@@ -20,7 +20,7 @@ Your app **does not stream end-user phone logs to your laptop** — iOS Safari a
 
 1. **Supabase (authoritative for Microsoft 365 / Entra)** — In the [Supabase Dashboard](https://supabase.com/dashboard) for the same project as `VITE_SUPABASE_URL`, open **Logs** → **Postgres** / **Auth** (or **Edge** depending on your dashboard version) and filter for **Auth**. Failed OAuth and “unable to exchange code” errors are recorded **on the server** when she tries to sign in. Match her attempt by **time** (within a minute or two).
 
-2. **Solicitor portal “Sign-in log”** — After running migration `supabase/migrations/20260506120000_sign_in_support_events.sql` in SQL Editor: sign into the portal as an **`admin`** user (or the configured owner override). Open **`/solicitor/sign-in-events`** (nav: **Sign-in log**). Recorded OAuth / policy failures appear there without asking staff for anything technical.
+2. **Solicitor portal “Sign-in log”** — After running migration `supabase/migrations/20260506120000_sign_in_support_events.sql`: sign into the portal with an email listed in **`VITE_SIGN_IN_LOG_ALLOW_EMAILS`** (Vercel env), **or** the default owner-email fallback in code if that env var is unset. Other staff (including `role = admin` in `profiles`) do **not** see the nav link unless their address is explicitly listed.
 
 3. **In-app diagnostics (optional)** — Comfortably technical users may use **Copy sign-in diagnostics for support** on the login page; paste into Slack/email for you. Combine with Supabase logs at the same time if needed.
 

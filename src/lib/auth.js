@@ -149,6 +149,44 @@ const PROFILE_FETCH_TIMEOUT_MS = 35_000;
 export const SOLICITOR_ALLOWED_EMAIL_DOMAIN = 'aristonesolicitors.co.uk';
 export const SOLICITOR_ADMIN_OVERRIDE_EMAIL = 'raymondvdw@gmail.com';
 export const SOLICITOR_LOGIN_PATH = '/celista-login';
+
+/**
+ * Who sees **Sign-in log** (`/solicitor/sign-in-events`) in the solicitor nav — explicitly allowlisted emails only
+ * (not every `profiles.role = admin` user).
+ *
+ * Set `VITE_SIGN_IN_LOG_ALLOW_EMAILS` on Vercel to a comma-separated list, e.g. your Microsoft Aristone login.
+ * If unset, defaults to `@see SOLICITOR_ADMIN_OVERRIDE_EMAIL` only.
+ *
+ * Matching uses `profiles.email` and `auth.users` email from session (normalized lowercase).
+ *
+ * @returns {string[]} Lowercase trimmed emails (deduped).
+ */
+export function getSignInLogViewerEmails() {
+  const raw = import.meta.env.VITE_SIGN_IN_LOG_ALLOW_EMAILS;
+  if (typeof raw === 'string' && raw.trim()) {
+    return [
+      ...new Set(
+        raw
+          .split(',')
+          .map((s) => String(s || '').trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+  }
+  return [String(SOLICITOR_ADMIN_OVERRIDE_EMAIL).toLowerCase()];
+}
+
+/** @returns {boolean} Whether this solicitor session should see Sign-in log (nav + route). */
+export function canSessionViewSignInLog(profile, authUser) {
+  const allowed = new Set(getSignInLogViewerEmails());
+  const candidates = [];
+  const p = String(profile?.email || '').trim().toLowerCase();
+  const u = String(authUser?.email || '').trim().toLowerCase();
+  if (p) candidates.push(p);
+  if (u && u !== p) candidates.push(u);
+  return candidates.some((e) => allowed.has(e));
+}
+
 export const LEGACY_SOLICITOR_LOGIN_PATH = '/solicitor/login';
 
 function hasAzureProviderIdentity(user) {

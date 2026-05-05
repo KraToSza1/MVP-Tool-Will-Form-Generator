@@ -243,7 +243,7 @@ export default function SolicitorLayout() {
                     <NavLink
                       to="/solicitor/sign-in-events"
                       className={({ isActive }) => navPillLinkClass(isActive, isDark, 'default')}
-                      title="Recorded sign-in failures (admin)"
+                      title="Recorded sign-in failures — allowlisted emails only"
                     >
                       <ClipboardList className="h-3.5 w-3.5 shrink-0 opacity-90 sm:h-4 sm:w-4" aria-hidden />
                       <span className="whitespace-nowrap">Sign-in log</span>

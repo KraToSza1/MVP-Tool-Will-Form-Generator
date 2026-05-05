@@ -2,10 +2,10 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
+  canSessionViewSignInLog,
   evaluateSolicitorAccessPolicy,
   signInSolicitor,
   signOutSolicitor,
-  SOLICITOR_ADMIN_OVERRIDE_EMAIL,
   subscribeToAuthChanges,
   updateMyDisplayName,
 } from '../lib/auth.js';
@@ -156,9 +156,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!session?.user,
     isStaff: profile?.role === 'solicitor' || profile?.role === 'admin',
     isAdmin: profile?.role === 'admin',
-    canViewSignInSupport:
-      profile?.role === 'admin' ||
-      String(user?.email || '').toLowerCase() === String(SOLICITOR_ADMIN_OVERRIDE_EMAIL).toLowerCase(),
+    canViewSignInSupport: canSessionViewSignInLog(profile, user),
     signIn: signInSolicitor,
     signOut,
     updateDisplayName,
