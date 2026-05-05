@@ -22,6 +22,7 @@ import ThemeToggleButton from '../ThemeToggleButton.jsx';
 import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
 import { listMatters } from '../../lib/matters.js';
 import { getMatterOutstandingCategories } from '../../lib/matterOutstanding.js';
+import { FRESH_CLIENT_INTAKE_URL } from '../../lib/clientIntakeFresh.js';
 
 function initialsFromName(name) {
   if (!name || typeof name !== 'string') return '—';
@@ -278,9 +279,10 @@ export default function SolicitorLayout() {
                 </NavLink>
                 <div className={inPillDivider} aria-hidden="true" />
                 <a
-                  href="/"
+                  href={FRESH_CLIENT_INTAKE_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  title="Opens client intake with a blank form and a new reference (this device’s old draft is cleared)"
                   className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors sm:min-h-[44px] sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-sm ${previewLinkClass}`}
                 >
                   <Home className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden />

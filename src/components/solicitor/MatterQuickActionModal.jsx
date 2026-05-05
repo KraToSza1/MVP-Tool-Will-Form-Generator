@@ -13,8 +13,6 @@ import { buildPropertyTrustDetailsDraftFromClient } from '../../utils/propertyTr
 import {
   formatBusinessInterestsIntakeRows,
   formatPropertyTrustIntakeRows,
-  buildBprTrustTermsStub,
-  buildPropertyTrustTermsStub,
 } from '../../utils/solicitorClientSummaries.js';
 
 /**
@@ -476,25 +474,6 @@ export default function MatterQuickActionModal({
                   placeholder="Trust terms agreed with the client."
                   rows={4}
                 />
-                <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 dark:border-slate-600 dark:bg-slate-950">
-                  <p className="m-0 text-xs font-semibold text-indigo-300">Clause assistant (draft stub)</p>
-                  <p className="m-0 mt-1 text-xs leading-relaxed text-slate-300">
-                    Inserts neutral wording based on client intake — replace with final solicitor terms before issue.
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-violet-600 dark:hover:bg-violet-500"
-                    onClick={() => {
-                      const stub = buildBprTrustTermsStub(merged || {});
-                      setFields((prev) => {
-                        const cur = String(prev.bprTrustTerms || '').trim();
-                        return { ...prev, bprTrustTerms: cur ? `${stub}\n\n${cur}` : stub };
-                      });
-                    }}
-                  >
-                    Insert draft clause from intake
-                  </button>
-                </div>
               </div>
             </div>
           ) : null}
@@ -520,20 +499,30 @@ export default function MatterQuickActionModal({
           {category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED ? (
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
               <div className="min-w-0 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Client answers
-                </p>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Client answers
+                  </p>
+                  <p className="m-0 text-xs leading-snug text-slate-600 dark:text-slate-300">
+                    Each block is the intake question with the client’s answer — use for drafting the clause.
+                  </p>
+                </div>
                 <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
                   {propertyTrustIntakeRows.length === 0 ? (
                     <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
                       No property trust intake captured.
                     </p>
                   ) : (
-                    <dl className="space-y-3">
+                    <dl className="space-y-3 sm:space-y-4">
                       {propertyTrustIntakeRows.map((row, idx) => (
-                        <div key={`pt-row-${idx}-${row.label}`} className="min-w-0">
-                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
-                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
+                        <div
+                          key={`pt-qa-${idx}-${row.label}`}
+                          className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/80"
+                        >
+                          <dt className="text-sm font-semibold text-slate-800 dark:text-slate-100">{row.label}</dt>
+                          <dd className="mt-1.5 border-l-2 border-indigo-400/70 pl-3 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-slate-700 dark:border-indigo-400/50 dark:text-slate-200">
+                            {row.value}
+                          </dd>
                         </div>
                       ))}
                     </dl>
@@ -567,25 +556,6 @@ export default function MatterQuickActionModal({
                   placeholder="Trust terms agreed with the client."
                   rows={4}
                 />
-                <div className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 dark:border-slate-600 dark:bg-slate-950">
-                  <p className="m-0 text-xs font-semibold text-indigo-300">Clause assistant (draft stub)</p>
-                  <p className="m-0 mt-1 text-xs leading-relaxed text-slate-300">
-                    Inserts neutral wording from the client property-trust intake — replace with final terms before issue.
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-violet-600 dark:hover:bg-violet-500"
-                    onClick={() => {
-                      const stub = buildPropertyTrustTermsStub(merged || {});
-                      setFields((prev) => {
-                        const cur = String(prev.propertyTrustTerms || '').trim();
-                        return { ...prev, propertyTrustTerms: cur ? `${stub}\n\n${cur}` : stub };
-                      });
-                    }}
-                  >
-                    Insert draft clause from intake
-                  </button>
-                </div>
               </div>
             </div>
           ) : null}

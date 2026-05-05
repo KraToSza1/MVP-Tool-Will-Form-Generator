@@ -2,8 +2,7 @@
  * Read-only intake lines for solicitor quick-action modals (merged client + solicitor payload).
  */
 
-import { formatPropertyTrustClientSummaryFromState } from './propertyTrustFormat.js';
-import { normalizePtReason } from '../lib/propertyTrustGuidedComplete.js';
+import { getPropertyTrustSolicitorReviewRows } from './propertyTrustFormat.js';
 
 function trim(s) {
   if (s == null) return '';
@@ -144,54 +143,6 @@ export function formatBusinessInterestsIntakeRows(merged) {
   return rows;
 }
 
-const PT_TENURE_LABEL = {
-  freehold: 'Freehold',
-  leasehold: 'Leasehold',
-  unsure: 'Not sure',
-};
-
-const PT_SHARE_LABEL = {
-  sole_owner: 'Sole owner — entire property',
-  tic_50: 'Tenants in common — 50% share',
-  tic_other: 'Tenants in common — different split (to confirm)',
-  joint_tenants: 'Joint tenants — severance may be needed',
-  unsure: 'Not sure — will check',
-};
-
-const PT_RIGHTS_LABEL = {
-  occupy_free: 'Live rent-free for life',
-  occupy_or_rent: 'Live there or let and keep income',
-  income_only: 'Income only (not occupation)',
-  discuss: 'Discuss with solicitor',
-};
-
-const PT_SALE_LABEL = {
-  trustees_consent_reinvest: 'Sale agreed — proceeds follow life tenant',
-  trustees_reinvest_new_property: 'Trustees may buy replacement home',
-  no_sale_without_all: 'No sale without all trustees + remainder consent',
-  discuss: 'Discuss with solicitor',
-};
-
-const PT_REMAINDER_LABEL = {
-  children_equally: 'Children equally',
-  children_specified: 'Children — proportions at appointment',
-  named_others: 'Named individuals — to confirm',
-  residue: 'Fall into residue',
-  discuss: 'Discuss at appointment',
-};
-
-const PT_OVER_LABEL = {
-  yes_include: 'Include overreaching protection (recommended)',
-  discuss: 'Discuss with solicitor',
-};
-
-const PT_REASON_LABEL = {
-  protect_children: 'Protect children’s inheritance',
-  care_fees: 'Care fees / means-testing',
-  iht: 'Inheritance tax / nil-rate band',
-  family_home: 'Keep spouse/partner in the home',
-};
-
 /**
  * @param {Record<string, unknown>} merged
  * @returns {{ label: string, value: string }[]}
@@ -221,60 +172,18 @@ export function formatPropertyTrustIntakeRows(merged) {
 
   if (inc !== 'Yes' && inc !== 'Unsure') return rows;
 
-  const summary = formatPropertyTrustClientSummaryFromState(merged);
-  if (summary) rows.push({ label: 'Client summary (auto)', value: summary });
+  const qa = getPropertyTrustSolicitorReviewRows(merged);
+  rows.push(...qa);
+  if (qa.length === 0) {
+    rows.push({
+      label: 'Questionnaire answers',
+      value:
+        'No structured property-trust answers were saved yet. Open the matter questionnaire or guided flow to capture them.',
+    });
+  }
 
   const notes = trim(merged.pt_notes);
-  if (notes) rows.push({ label: 'Additional notes', value: notes });
+  if (notes) rows.push({ label: 'Client’s additional notes (free text)', value: notes });
 
   return rows;
-}
-
-/** Compact rows for clause stub (property trust) */
-export function formatPropertyTrustStubLines(merged) {
-  const base = formatPropertyTrustClientSummaryFromState(merged || {});
-  const extras = [];
-  const ten = trim(merged?.pt_tenure);
-  if (ten) extras.push(`Tenure: ${PT_TENURE_LABEL[ten] || ten}`);
-  const sh = trim(merged?.pt_ownership_share);
-  if (sh) extras.push(`Ownership: ${PT_SHARE_LABEL[sh] || sh}`);
-  const rt = trim(merged?.pt_life_tenant_rights);
-  if (rt) extras.push(`Life tenant rights: ${PT_RIGHTS_LABEL[rt] || rt}`);
-  const sl = trim(merged?.pt_sale_instruction);
-  if (sl) extras.push(`If life tenant sells: ${PT_SALE_LABEL[sl] || sl}`);
-  const rm = trim(merged?.pt_remainder_beneficiaries);
-  if (rm) extras.push(`Remainder: ${PT_REMAINDER_LABEL[rm] || rm}`);
-  const ov = trim(merged?.pt_overreaching);
-  if (ov) extras.push(`Overreaching: ${PT_OVER_LABEL[ov] || ov}`);
-  const reasons = normalizePtReason(merged?.pt_reason).map((r) => PT_REASON_LABEL[r] || r);
-  if (reasons.length) extras.push(`Reasons: ${reasons.join('; ')}`);
-  const fn = trim(merged?.propertyTrustLifeTenantFirstName);
-  const ln = trim(merged?.propertyTrustLifeTenantLastName);
-  const rel = trim(merged?.propertyTrustLifeTenantRelationship);
-  const life = [fn, ln].filter(Boolean).join(' ');
-  if (life) extras.push(`Life tenant: ${life}${rel ? ` (${rel})` : ''}`);
-
-  return [base, extras.filter(Boolean).join('\n')].filter(Boolean).join('\n\n');
-}
-
-/**
- * @param {Record<string, unknown>} merged
- * @returns {string}
- */
-export function buildBprTrustTermsStub(merged) {
-  const lines = formatBusinessInterestsIntakeRows(merged || {});
-  const body = lines.length
-    ? lines.map((r) => `${r.label}: ${r.value}`).join('\n')
-    : '(No structured business intake captured — replace with agreed terms.)';
-
-  return `[Draft stub — not legal advice]\n\nBUSINESS PROPERTY RELIEF TRUST\n\n${body}\n\nTrustees to hold the qualifying business property on the agreed terms. Solicitor to replace this stub with final clause wording, schedule cross-reference, and any limitations.`;
-}
-
-/**
- * @param {Record<string, unknown>} merged
- * @returns {string}
- */
-export function buildPropertyTrustTermsStub(merged) {
-  const block = formatPropertyTrustStubLines(merged || {});
-  return `[Draft stub — not legal advice]\n\nPROPERTY TRUST\n\n${block || '(No client property-trust intake captured.)'}\n\nSolicitor to replace with final trust wording, powers of trustees, overreaching provisions, and schedule reference as appropriate.`;
 }

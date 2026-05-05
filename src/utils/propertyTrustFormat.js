@@ -302,6 +302,116 @@ export function formatPropertyTrustClientSummaryFromState(formValues) {
 }
 
 /**
+ * Structured question / answer lines for solicitor review (e.g. quick-action modal).
+ * One row per client answer — readable for drafting; not a single compressed paragraph.
+ * @param {Record<string, unknown>} formValues
+ * @returns {{ label: string, value: string }[]}
+ */
+export function getPropertyTrustSolicitorReviewRows(formValues) {
+  if (!formValues || typeof formValues !== 'object') return [];
+  const rows = [];
+
+  const typeKey = trim(formValues.propertyTrustType);
+  if (typeKey) {
+    rows.push({
+      label: 'What type of property trust does the client want?',
+      value: TRUST_TYPE_LABEL[typeKey] || typeKey,
+    });
+  }
+
+  const fn = trim(formValues.propertyTrustLifeTenantFirstName);
+  const ln = trim(formValues.propertyTrustLifeTenantLastName);
+  const rel = trim(formValues.propertyTrustLifeTenantRelationship);
+  const name = [fn, ln].filter(Boolean).join(' ');
+  if (name || rel) {
+    const bits = [];
+    if (name) bits.push(name);
+    if (rel) bits.push(`Relationship: ${rel}`);
+    rows.push({
+      label: 'Who is the life tenant?',
+      value: bits.join('\n'),
+    });
+  }
+
+  const list = Array.isArray(formValues.propertyTrustPropertiesList)
+    ? formValues.propertyTrustPropertiesList
+    : [];
+  list.forEach((p, i) => {
+    if (!p || typeof p !== 'object') return;
+    const line = formatAddressLine(p);
+    const line1 = trim(p.addressLine1);
+    if (!line && !line1) return;
+    const tRaw = trim(p.tenure);
+    const tenureBit = tRaw ? `Tenure noted for this property: ${PT_TENURE_LABEL[tRaw] || tRaw}` : '';
+    const value = [line || line1, tenureBit].filter(Boolean).join('\n');
+    rows.push({
+      label:
+        list.length > 1 ? `Property ${i + 1} — address going into the trust` : 'Property address going into the trust',
+      value,
+    });
+  });
+
+  const tenure = trim(formValues.pt_tenure);
+  if (tenure) {
+    rows.push({
+      label: 'Main trust property — tenure (how the title is held)',
+      value: PT_TENURE_LABEL[tenure] || tenure,
+    });
+  }
+
+  const share = trim(formValues.pt_ownership_share);
+  if (share) {
+    rows.push({
+      label: 'Ownership / share (sole, tenants in common, joint tenants, etc.)',
+      value: PT_SHARE_LABEL[share] || share,
+    });
+  }
+
+  const rights = trim(formValues.pt_life_tenant_rights);
+  if (rights) {
+    rows.push({
+      label: 'Life tenant’s rights during their lifetime',
+      value: PT_RIGHTS_LABEL[rights] || rights,
+    });
+  }
+
+  const sale = trim(formValues.pt_sale_instruction);
+  if (sale) {
+    rows.push({
+      label: 'If the life tenant sells or moves — client’s preference',
+      value: PT_SALE_LABEL[sale] || sale,
+    });
+  }
+
+  const remainder = trim(formValues.pt_remainder_beneficiaries);
+  if (remainder) {
+    rows.push({
+      label: 'Who inherits after the life interest ends?',
+      value: PT_REMAINDER_LABEL[remainder] || remainder,
+    });
+  }
+
+  const over = trim(formValues.pt_overreaching);
+  if (over) {
+    rows.push({
+      label: 'Overreaching / protection on sale',
+      value: PT_OVER_LABEL[over] || over,
+    });
+  }
+
+  const reasons = normalizePtReason(formValues.pt_reason);
+  if (reasons.length) {
+    const text = reasons.map((r) => `• ${PT_REASON_LABEL[r] || r}`).join('\n');
+    rows.push({
+      label: 'Why does the client want this trust?',
+      value: text,
+    });
+  }
+
+  return rows;
+}
+
+/**
  * Draft solicitor wording from client's structured trust properties (schedule/terms still added by solicitor).
  * @param {Record<string, unknown>} formValues
  * @returns {string}

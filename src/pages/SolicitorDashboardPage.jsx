@@ -20,6 +20,7 @@ import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
+import { FRESH_CLIENT_INTAKE_URL } from '../lib/clientIntakeFresh.js';
 
 /**
  * Status filter options. The `outstanding:<category>` values are dashboard-only
@@ -705,9 +706,10 @@ export default function SolicitorDashboardPage() {
                 <li>The matter appears in your list below</li>
               </ol>
               <a
-                href="/"
+                href={FRESH_CLIENT_INTAKE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                title="Opens client intake with a blank form and new reference — local draft cleared on this device"
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <ExternalLink size={16} />
