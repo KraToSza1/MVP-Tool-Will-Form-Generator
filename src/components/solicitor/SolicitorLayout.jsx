@@ -12,6 +12,7 @@ import {
   Home,
   LogOut,
   PencilLine,
+  RefreshCw,
   Save,
   Users,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
 import { listMatters } from '../../lib/matters.js';
 import { getMatterOutstandingCategories } from '../../lib/matterOutstanding.js';
 import { FRESH_CLIENT_INTAKE_URL } from '../../lib/clientIntakeFresh.js';
+import { portalFreshStartReload } from '../../lib/portalBrowserFreshStart.js';
 
 function initialsFromName(name) {
   if (!name || typeof name !== 'string') return '—';
@@ -60,6 +62,7 @@ export default function SolicitorLayout() {
   const { isDark } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [freshStartBusy, setFreshStartBusy] = useState(false);
   const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
@@ -129,6 +132,26 @@ export default function SolicitorLayout() {
       await signOut();
     } finally {
       setSigningOut(false);
+    }
+  };
+
+  const handlePortalFreshStart = async () => {
+    if (freshStartBusy) return;
+    const ok =
+      typeof window === 'undefined' ||
+      window.confirm(
+        'Clear this browser’s saved Will Tool portal data?\n\nYou will be signed out on this device. Light/dark theme is kept.\nUse this after a stuck Microsoft sign-in or odd behaviour.',
+      );
+    if (!ok) return;
+    setFreshStartBusy(true);
+    setProfileOpen(false);
+    try {
+      await portalFreshStartReload({});
+    } catch {
+      setFreshStartBusy(false);
+      toast.error('Could not reload', {
+        description: 'Close Safari/Chrome tabs for this site and try again.',
+      });
     }
   };
 
@@ -420,6 +443,17 @@ export default function SolicitorLayout() {
                       Edit questionnaire
                     </Link>
                     <div className={`my-1 h-px ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                    <button
+                      type="button"
+                      onClick={() => void handlePortalFreshStart()}
+                      disabled={freshStartBusy || signingOut}
+                      className={`flex w-full min-h-[44px] items-center gap-2 px-4 py-2.5 text-left text-sm disabled:opacity-50 ${
+                        isDark ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-800 hover:bg-slate-50'
+                      }`}
+                    >
+                      <RefreshCw size={16} className={`shrink-0 ${freshStartBusy ? 'animate-spin' : ''}`} />
+                      Clear browser data &amp; reload
+                    </button>
                     <button
                       type="button"
                       onClick={handleSignOut}

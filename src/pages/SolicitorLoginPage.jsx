@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Copy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import ThemeToggleButton from '../components/ThemeToggleButton.jsx';
@@ -20,6 +20,7 @@ import {
 } from '../lib/auth.js';
 import { captureAuthSupportEvent } from '../monitoring/sentry.js';
 import { POST_CALENDAR_CONNECT_RETURN_KEY } from '../lib/staffCalendar.js';
+import { portalFreshStartReload } from '../lib/portalBrowserFreshStart.js';
 
 function takePostCalendarConnectReturnPath() {
   if (typeof window === 'undefined') return null;
@@ -41,6 +42,7 @@ export default function SolicitorLoginPage() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminSubmitting, setAdminSubmitting] = useState(false);
+  const [portalFreshBusy, setPortalFreshBusy] = useState(false);
   const [inIframe, setInIframe] = useState(false);
   const staffDeniedToastRef = useRef(false);
   const oauthReturnHandledRef = useRef(false);
@@ -70,6 +72,21 @@ export default function SolicitorLoginPage() {
   useEffect(() => {
     setInIframe(typeof window !== 'undefined' && window.self !== window.top);
   }, []);
+
+  /** After “Clear browser data & reload” — show confirmation and drop query param. */
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    if (q.get('portal_cleared') !== '1') return;
+    toast.success('Browser data cleared', {
+      id: 'portal-fresh-cleared',
+      description: 'You can sign in again with Microsoft 365 or emergency access.',
+      duration: 9000,
+    });
+    const u = new URL(window.location.href);
+    u.searchParams.delete('portal_cleared');
+    const rest = u.searchParams.toString();
+    window.history.replaceState({}, '', `${u.pathname}${rest ? `?${rest}` : ''}`);
+  }, [location.search, location.pathname]);
 
   /** After OAuth, Supabase may add ?error= / ?code= — log, toast on failure, strip params from URL. */
   useEffect(() => {
@@ -241,6 +258,29 @@ export default function SolicitorLoginPage() {
         'Solicitors and staff reset their password through Microsoft 365 or your IT team. Emergency owner accounts: contact your system administrator.',
       duration: 10000,
     });
+  };
+
+  const handleLoginPortalFreshStart = async () => {
+    if (portalFreshBusy || msSigningIn || adminSubmitting) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(
+        'Remove saved Will Tool data in this browser and reload?\n\nUse if Microsoft sign-in loops or looks stuck. Light/dark theme stays the same.',
+      )
+    ) {
+      return;
+    }
+    setPortalFreshBusy(true);
+    try {
+      await portalFreshStartReload({});
+    } catch {
+      setPortalFreshBusy(false);
+      toast.error('Could not clear browser data', {
+        description:
+          'Try Safari or Chrome settings → clear website data for this site, then open the login page again.',
+        duration: 14000,
+      });
+    }
   };
 
   return (
@@ -451,6 +491,20 @@ export default function SolicitorLoginPage() {
               <Copy size={16} className="shrink-0" aria-hidden />
               Copy sign-in diagnostics for support
             </button>
+            <button
+              type="button"
+              onClick={() => void handleLoginPortalFreshStart()}
+              disabled={portalFreshBusy || msSigningIn || adminSubmitting}
+              className="mt-2 inline-flex min-h-[44px] w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              <RefreshCw size={16} className={`shrink-0 ${portalFreshBusy ? 'animate-spin' : ''}`} aria-hidden />
+              Clear saved browser data &amp; reload sign-in page
+            </button>
+            <p className="mt-2 text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
+              Clears cached sign-in and site storage on{' '}
+              <span className="font-medium text-slate-500 dark:text-slate-400">this phone or Mac only</span>. Does not
+              change cloud settings.
+            </p>
             <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
               Tip: add <span className="wrap-break-word font-mono text-slate-500 dark:text-slate-400">{SOLICITOR_LOGIN_PATH}?support=1</span> to this page URL to preview the diagnostic JSON on screen.
             </p>

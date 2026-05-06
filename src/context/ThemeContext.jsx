@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- provider + hook pattern */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-const THEME_STORAGE_KEY = 'will-tool-theme';
+export const THEME_STORAGE_KEY = 'will-tool-theme';
 const ThemeContext = createContext(null);
 
 function getInitialTheme() {
