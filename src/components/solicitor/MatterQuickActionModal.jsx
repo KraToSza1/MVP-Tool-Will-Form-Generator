@@ -80,7 +80,7 @@ function YesNoSelect({ id, label, value, onChange, includeNotApplicable = false 
         id={id}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 touch-manipulation focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
       >
         <option value="">Select…</option>
         <option value="Yes">Yes</option>
@@ -101,7 +101,7 @@ function TextField({ id, label, value, onChange, placeholder = '' }) {
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 touch-manipulation focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
       />
     </label>
   );
@@ -117,7 +117,7 @@ function TextareaField({ id, label, value, onChange, placeholder = '', rows = 3 
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 touch-manipulation focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
       />
     </label>
   );
@@ -366,7 +366,7 @@ export default function MatterQuickActionModal({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           {errorMessage ? (
             <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-100">
               {errorMessage}
@@ -377,13 +377,29 @@ export default function MatterQuickActionModal({
             <div className="space-y-4">
               <div className="flex items-start gap-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-600/15 dark:text-emerald-100">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-                <div className="text-sm">
+                <div className="min-w-0 text-sm leading-relaxed">
                   <p className="font-semibold">Confirm ID and proof-of-address received</p>
-                  <p className="mt-1">
-                    Saving this marks <span className="font-mono text-xs">outstanding_verification</span> as
-                    cleared and stamps <span className="font-mono text-xs">verification_completed_at</span> with
-                    the current time. The badge will disappear from the dashboard.
+                  <p className="mt-2">
+                    When you save, we mark verification as complete on the matter dashboard and stamp the receipt time on
+                    the file.
                   </p>
+                  <p className="mt-3 border-t border-emerald-200/70 pt-3 text-emerald-950 dark:border-emerald-400/35 dark:text-emerald-50">
+                    <strong className="font-semibold">Need the client to upload first?</strong> Ask them to open their{' '}
+                    <strong className="font-semibold">same Will questionnaire link</strong> (bookmark or email),
+                    scroll to <strong className="font-semibold">Identity verification</strong>, then add photo ID and
+                    proof of address — or open the matter and use{' '}
+                    <strong className="font-semibold">Email client</strong>; the chasing email mentions outstanding ID
+                    items.
+                  </p>
+                  {matter.session_ref ? (
+                    <p className="mt-2 text-xs text-emerald-800/95 dark:text-emerald-100/85">
+                      Client reference:&nbsp;
+                      <span className="font-mono wrap-break-word font-semibold">{matter.session_ref}</span>
+                      <span className="block mt-1 text-[11px] font-normal opacity-95">
+                        They must use their saved link — it opens their answers and uploads.
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <TextareaField
@@ -425,31 +441,16 @@ export default function MatterQuickActionModal({
           ) : null}
 
           {category === OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
-              <div className="min-w-0 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Client answers
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start lg:gap-8">
+              <div className="order-1 min-w-0 space-y-4 lg:order-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 lg:hidden">
+                  Your entries — required to clear this flag
                 </p>
-                <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
-                  {businessIntakeRows.length === 0 ? (
-                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
-                      No structured business intake captured.
-                    </p>
-                  ) : (
-                    <dl className="space-y-3">
-                      {businessIntakeRows.map((row) => (
-                        <div key={row.label} className="min-w-0">
-                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
-                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </div>
-              </div>
-              <div className="min-w-0 space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-300">
+                <p className="hidden text-sm text-slate-600 dark:text-slate-300 lg:block">
                   Saving these three fields clears the BPR Trust completion outstanding.
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 lg:hidden">
+                  Fill schedule, details, and terms below, then Save & close.
                 </p>
                 <TextField
                   id="qa-bpr-schedule"
@@ -475,6 +476,30 @@ export default function MatterQuickActionModal({
                   rows={4}
                 />
               </div>
+              <div className="order-2 min-w-0 space-y-3 lg:order-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client answers
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 lg:hidden">
+                  Read-only intake summary — editable fields are above on this screen.
+                </p>
+                <div className="max-h-[min(32vh,240px)] touch-pan-y overflow-y-auto overscroll-y-contain rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 [-webkit-overflow-scrolling:touch] sm:max-h-[min(42vh,360px)] dark:border-slate-600 dark:bg-slate-800 lg:max-h-[min(52vh,480px)]">
+                  {businessIntakeRows.length === 0 ? (
+                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
+                      No structured business intake captured.
+                    </p>
+                  ) : (
+                    <dl className="space-y-3">
+                      {businessIntakeRows.map((row) => (
+                        <div key={row.label} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
+                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -497,31 +522,16 @@ export default function MatterQuickActionModal({
           ) : null}
 
           {category === OUTSTANDING_CATEGORY.PROPERTY_TRUST_REQUIRED ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
-              <div className="min-w-0 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  Client answers
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start lg:gap-8">
+              <div className="order-1 min-w-0 space-y-4 lg:order-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 lg:hidden">
+                  Your entries — required to clear this flag
                 </p>
-                <div className="max-h-[min(52vh,480px)] overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
-                  {propertyTrustIntakeRows.length === 0 ? (
-                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
-                      No structured property trust intake captured.
-                    </p>
-                  ) : (
-                    <dl className="space-y-3">
-                      {propertyTrustIntakeRows.map((row, idx) => (
-                        <div key={`${row.label}-${idx}`} className="min-w-0">
-                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
-                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </div>
-              </div>
-              <div className="min-w-0 space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-300">
+                <p className="hidden text-sm text-slate-600 dark:text-slate-300 lg:block">
                   Saving these three fields clears the Property Trust completion outstanding.
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 lg:hidden">
+                  Edit schedule number, property details, and trust terms below, then Save & close.
                 </p>
                 <TextField
                   id="qa-pt-schedule"
@@ -547,6 +557,30 @@ export default function MatterQuickActionModal({
                   rows={4}
                 />
               </div>
+              <div className="order-2 min-w-0 space-y-3 lg:order-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Client answers
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 lg:hidden">
+                  Read-only intake summary — editable fields are above on this screen.
+                </p>
+                <div className="max-h-[min(32vh,240px)] touch-pan-y overflow-y-auto overscroll-y-contain rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 [-webkit-overflow-scrolling:touch] sm:max-h-[min(42vh,360px)] dark:border-slate-600 dark:bg-slate-800 lg:max-h-[min(52vh,480px)]">
+                  {propertyTrustIntakeRows.length === 0 ? (
+                    <p className="m-0 text-sm text-slate-600 dark:text-slate-300">
+                      No structured property trust intake captured.
+                    </p>
+                  ) : (
+                    <dl className="space-y-3">
+                      {propertyTrustIntakeRows.map((row, idx) => (
+                        <div key={`${row.label}-${idx}`} className="min-w-0">
+                          <dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{row.label}</dt>
+                          <dd className="mt-0.5 break-words text-sm text-slate-900 dark:text-slate-100">{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -568,7 +602,7 @@ export default function MatterQuickActionModal({
           ) : null}
         </div>
 
-        <footer className="flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           {deepLink ? (
             <Link
               to={deepLink.to}
