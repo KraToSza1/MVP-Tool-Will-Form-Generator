@@ -2,6 +2,7 @@ import { supabase, isSupabaseConfigured } from './supabase.js';
 import { mattersLoadTrace } from './mattersLoadTrace.js';
 import { buildClientSnapshot, buildMatterPayload, mergeMatterPayloads } from './formPayload.js';
 import { compressIdentityVerification } from './compressIdImages.js';
+import { flowLog, safeRefLog } from './willToolDebug.js';
 
 export const MATTER_STATUS = {
   SUBMITTED: 'submitted',
@@ -113,33 +114,26 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
   }
 
   const t0 = performance.now();
-  console.log('[WillTool Flow] client_submit_build_start', { ref, currentIndex, phase: 'client_submit_build_start' });
+  flowLog('client_submit_build_start', { ref: safeRefLog(ref), currentIndex, phase: 'client_submit_build_start' });
 
   const payload = buildMatterPayload(formValues, currentIndex);
   if (formValues?.identityVerification && typeof formValues.identityVerification === 'object') {
-    console.log('[WillTool Flow] client_submit_compress_id_start', { ref, phase: 'client_submit_compress_id_start' });
+    flowLog('client_submit_compress_id_start', { ref: safeRefLog(ref), phase: 'client_submit_compress_id_start' });
     const tCompress = performance.now();
     payload.identityVerification = await compressIdentityVerification(formValues.identityVerification);
-    console.log('[WillTool Flow] client_submit_compress_id_done', {
-      ref,
+    flowLog('client_submit_compress_id_done', {
+      ref: safeRefLog(ref),
       ms: Math.round(performance.now() - tCompress),
       phase: 'client_submit_compress_id_done',
     });
   }
 
   const snapshot = buildClientSnapshot(formValues);
-  const payloadBytes = safeJsonByteLength(payload);
-  const snapshotBytes = safeJsonByteLength(snapshot);
-  const topLevelKeys = Object.keys(formValues || {}).length;
 
-  console.log('[WillTool Flow] Client submitting to matter (RPC submit_will_matter)', {
-    ref,
+  flowLog('Client submitting to matter (RPC submit_will_matter)', {
+    ref: safeRefLog(ref),
     currentIndex,
-    snapshotKeys: Object.keys(snapshot || {}),
     hasIdDocs: !!payload.identityVerification,
-    payloadBytes,
-    snapshotBytes,
-    formValuesTopLevelKeys: topLevelKeys,
     phase: 'client_submit',
   });
 
@@ -149,7 +143,7 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
   const controller = new AbortController();
   const rpcCall = (async () => {
     try {
-      console.log('[WillTool Flow] client_submit_fetch_anon', { ref, phase: 'client_submit_fetch_anon' });
+      flowLog('client_submit_fetch_anon', { ref: safeRefLog(ref), phase: 'client_submit_fetch_anon' });
       return await submitWillMatterViaAnonFetch({
         ref,
         secret,
@@ -202,7 +196,7 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
   }, 10_000);
 
   const tRpc = performance.now();
-  console.log('[WillTool Flow] client_submit_rpc_await', { ref, phase: 'client_submit_rpc_await', elapsedSinceStartMs: Math.round(tRpc - t0) });
+  flowLog('client_submit_rpc_await', { ref: safeRefLog(ref), phase: 'client_submit_rpc_await', elapsedSinceStartMs: Math.round(tRpc - t0) });
 
   let result;
   try {
@@ -245,9 +239,9 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
     return { error: error.message || 'Submission failed. Try again.' };
   }
 
-  console.log('[WillTool Flow] Matter created in DB; client submission complete', {
+  flowLog('Matter created in DB; client submission complete', {
     matterId: data,
-    ref,
+    ref: safeRefLog(ref),
     rpcMs,
     totalMs: Math.round(performance.now() - t0),
     phase: 'client_submit_done',
@@ -277,7 +271,7 @@ export async function listMatters(
     status,
     orderColumn,
   });
-  console.log('[WillTool Flow] listMatters: request start', {
+  flowLog('listMatters: request start', {
     label: debugLabel,
     status,
     search: search || '(none)',
@@ -341,7 +335,7 @@ export async function listMatters(
     }
   }
 
-  console.log('[WillTool Flow] listMatters: request done', {
+  flowLog('listMatters: request done', {
     label: debugLabel,
     count: list.length,
     elapsedMs,
@@ -375,7 +369,7 @@ export async function listStaffProfiles() {
   }
 
   const list = data ?? [];
-  console.log('[WillTool Flow] Staff profiles loaded', { count: list.length, phase: 'solicitor_staff_list' });
+  flowLog('Staff profiles loaded', { count: list.length, phase: 'solicitor_staff_list' });
   return { data: list };
 }
 
@@ -404,7 +398,7 @@ export async function getMatterDetail(matterId) {
     console.warn('[WillTool Flow] getMatterDetail activity error:', activityError);
   }
 
-  console.log('[WillTool Flow] Matter detail loaded for solicitor', { matterId, clientRef: matter?.client_reference, status: matter?.status, activityCount: (activity ?? []).length, phase: 'solicitor_matter_open' });
+  flowLog('Matter detail loaded for solicitor', { matterId, clientRef: matter?.client_reference, status: matter?.status, activityCount: (activity ?? []).length, phase: 'solicitor_matter_open' });
 
   const mergedPayload = mergeMatterPayloads(matter?.client_payload, matter?.solicitor_payload);
 
@@ -443,7 +437,7 @@ export async function updateMatterStatus(matterId, status, changes = {}) {
     metadata: { status },
   });
 
-  console.log('[WillTool Flow] Matter status updated', { matterId, status, phase: 'solicitor_status_change' });
+  flowLog('Matter status updated', { matterId, status, phase: 'solicitor_status_change' });
   return { data };
 }
 
@@ -473,7 +467,7 @@ export async function assignMatter(matterId, assignedSolicitorId) {
     metadata: { assigned_solicitor_id: assignedSolicitorId || null },
   });
 
-  console.log('[WillTool Flow] Matter assigned', { matterId, assignedSolicitorId: assignedSolicitorId || null, phase: 'solicitor_assign' });
+  flowLog('Matter assigned', { matterId, assignedSolicitorId: assignedSolicitorId || null, phase: 'solicitor_assign' });
   return { data };
 }
 
@@ -498,7 +492,7 @@ export async function updateMatterReminderDate(matterId, reminderDate) {
     return { error: error.message };
   }
 
-  console.log('[WillTool Flow] Matter reminder date updated', { matterId, reminderDate: reminderDate || null, phase: 'solicitor_reminder_save' });
+  flowLog('Matter reminder date updated', { matterId, reminderDate: reminderDate || null, phase: 'solicitor_reminder_save' });
   return { data };
 }
 
@@ -530,7 +524,7 @@ export async function saveSolicitorMatter(matterId, formValues, currentIndex) {
     metadata: { current_step: currentIndex },
   });
 
-  console.log('[WillTool Flow] Solicitor form progress saved', { matterId, currentStep: currentIndex, phase: 'solicitor_form_save' });
+  flowLog('Solicitor form progress saved', { matterId, currentStep: currentIndex, phase: 'solicitor_form_save' });
   return { data };
 }
 
@@ -595,7 +589,7 @@ export async function patchMatterSolicitorPayload(matterId, partial, extraColumn
     },
   });
 
-  console.log('[WillTool Flow] Solicitor quick action saved', {
+  flowLog('Solicitor quick action saved', {
     matterId,
     patchedKeys: Object.keys(safePartial),
     extraColumns: Object.keys(extraColumns || {}),
@@ -624,7 +618,7 @@ export async function deleteMatter(matterId) {
     return { error: 'Could not delete matter. You may not have permission, or it was already removed.' };
   }
 
-  console.log('[WillTool Flow] Matter deleted', { matterId, phase: 'solicitor_matter_deleted' });
+  flowLog('Matter deleted', { matterId, phase: 'solicitor_matter_deleted' });
   return { ok: true };
 }
 
@@ -651,6 +645,6 @@ export async function updateSolicitorNotes(matterId, solicitorNotes) {
     metadata: {},
   });
 
-  console.log('[WillTool Flow] Solicitor notes saved', { matterId, phase: 'solicitor_notes_save' });
+  flowLog('Solicitor notes saved', { matterId, phase: 'solicitor_notes_save' });
   return { data };
 }

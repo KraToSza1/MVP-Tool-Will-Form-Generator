@@ -196,7 +196,7 @@ function SamePersonOrNewBlock({ formValues, setFormValues, pickKey, nameKey, rel
 }
 
 /** @param {{ field: object, formValues: object, setFormValues: Function }} props */
-export default function PersonalChattelsGuided({ field: _field, formValues, setFormValues }) {
+export default function PersonalChattelsGuided({ formValues, setFormValues }) {
   const uid = useId();
   const [debtOpen, setDebtOpen] = useState(false);
   const [dPick, setDPick] = useState('');

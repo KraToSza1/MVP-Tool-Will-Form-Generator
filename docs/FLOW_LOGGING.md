@@ -2,6 +2,10 @@
 
 Structured logs are emitted across the client → submission → solicitor flow so you can verify sync and that lawyers have what they need.
 
+**Production:** Flow and PDF debug logs are **off** unless `import.meta.env.DEV` or `VITE_DEBUG_WILL_TOOL=true`. Real errors still use `console.error` without form payloads or secrets.
+
+See `src/lib/willToolDebug.js` and `docs/ENV_AND_SECRETS.md`.
+
 ## Console filter
 
 In the browser DevTools Console, filter by:

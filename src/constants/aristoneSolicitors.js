@@ -68,6 +68,17 @@ export const getAristoneLegalName = () => {
   return ARISTONE_PROFILE.fullLegalFormat;
 };
 
+/** Professional executor / trustee auto-populate block for PDF and form selections. */
+export function getAristoneProfessionalExecutorOptions() {
+  const { firmName, address, fullDetails } = ARISTONE_PROFILE.autoPopulateData;
+  return {
+    fullDetails: fullDetails || `${firmName}, of ${address}, Solicitors`,
+    firmName,
+    address,
+    designation: 'Solicitors',
+  };
+}
+
 // Helper function to get contact details
 export const getAristoneContactDetails = () => {
   return {

@@ -56,7 +56,6 @@ export default function BookAppointmentModal({
   sessionSecret = '',
   clientName = '',
   clientEmail = '',
-  matterId = null,
   rules: rulesProp,
   onAppointmentChange,
 }) {

@@ -172,7 +172,7 @@ const PT_REASON_OPTS = [
 ];
 
 /** @param {{ field: object, formValues: object, setFormValues: Function }} props */
-export default function PropertyTrustGuided({ field: _field, formValues, setFormValues }) {
+export default function PropertyTrustGuided({ formValues, setFormValues }) {
   const uidStr = useId();
   const modalTitleId = useId();
   const [modalOpen, setModalOpen] = useState(false);

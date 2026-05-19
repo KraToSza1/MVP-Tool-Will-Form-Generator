@@ -10,10 +10,13 @@ import {
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from '../lib/bprTrustClientIntent.js';
 import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
+import { getAristoneProfessionalExecutorOptions } from '../constants/aristoneSolicitors.js';
+import { flowLog } from '../lib/willToolDebug.js';
 
-/** True in Vite dev, or when you run `globalThis.__PDF_DEBUG__ = true` in the browser console (e.g. to trace PDF text on a prod build). */
+/** True in Vite dev, VITE_DEBUG_WILL_TOOL, or `globalThis.__PDF_DEBUG__` in the browser console. */
 const pdfDebugEnabled = () =>
   (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEBUG_WILL_TOOL === 'true') ||
   (typeof globalThis !== 'undefined' && globalThis.__PDF_DEBUG__ === true);
 
 const pdfDebugLog = (...args) => {
@@ -618,14 +621,7 @@ const standardizeAristoneName = (text) => {
 };
 
 // Auto-populate Aristone professional selections
-const _getAristoneProfessionalOptions = () => {
-  return {
-    fullDetails: `${getCanonicalFirmName()}, of [Office Address], Solicitors`,
-    firmName: getCanonicalFirmName(),
-    address: "[Office Address]", // TODO: Replace with actual office address
-    designation: "Solicitors"
-  };
-};
+const _getAristoneProfessionalOptions = () => getAristoneProfessionalExecutorOptions();
 
 // Sanitize unprofessional or informal content for legal documents
 const sanitizeUnprofessionalContent = (text) => {
@@ -1160,7 +1156,7 @@ const interpolateText = (text, values, options = {}) => {
   
   Object.entries(bracketPlaceholderMap).forEach(([placeholder, fieldRef]) => {
     if (processedText.includes(placeholder)) {
-      console.log(`[PDF INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
+      pdfDebugLog(`[PDF INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
       processedText = processedText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), fieldRef);
     }
   });
@@ -1190,10 +1186,10 @@ const interpolateText = (text, values, options = {}) => {
         // Only swap if it's actually different (avoid no-op)
         if (mappedId !== sectionId) {
           sectionId = mappedId;
-          console.log(`[PDF INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
+          pdfDebugLog(`[PDF INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
         } else {
           // Even if same ID, ensure we're using the correct section ID for data lookup
-          console.log(`[PDF INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
+          pdfDebugLog(`[PDF INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
         }
       }
     }
@@ -1278,7 +1274,7 @@ const interpolateText = (text, values, options = {}) => {
         
         // Debug logging for separate trustees
         if (sectionId === 'separateTrusteesSection') {
-          console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Looking for data:`, {
+          pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Looking for data:`, {
             hasPetCarerData: !!values.petCarerData,
             hasSubstitutePetCarerData: !!values.substitutePetCarerData,
             hasSeparateTrusteeData: !!values.separateTrusteeData,
@@ -1297,7 +1293,7 @@ const interpolateText = (text, values, options = {}) => {
         // If sectionData is null, undefined, not an array, or empty, return unresolved marker immediately
         if (!sectionData || !Array.isArray(sectionData) || sectionData.length === 0) {
           if (sectionId === 'separateTrusteesSection') {
-            console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
+            pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
           }
           return `{{field:${sectionId}:${subField}}}`;
         }
@@ -1338,7 +1334,7 @@ const interpolateText = (text, values, options = {}) => {
                 );
                 
                 if (isPlaceholder) {
-                  console.log(`[PDF INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
+                  pdfDebugLog(`[PDF INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
                   return ''; // Return empty to mark as incomplete
                 }
                 return item; // Return as-is if it's a valid formatted string
@@ -1367,7 +1363,7 @@ const interpolateText = (text, values, options = {}) => {
               if ((!name || name.trim() === '') || (!address || !item.address1)) {
                 // Debug logging for separate trustees when validation fails
                 if (sectionId === 'separateTrusteesSection') {
-                  console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
+                  pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
                     item,
                     hasName: !!(name && name.trim()),
                     hasAddress: !!(address && item.address1),
@@ -1393,7 +1389,7 @@ const interpolateText = (text, values, options = {}) => {
           
           // Debug logging for separate trustees
           if (sectionId === 'separateTrusteesSection') {
-            console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
+            pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
               formattedItems,
               length: formattedItems.length,
               items: formattedItems.map(item => ({ value: item, type: typeof item }))
@@ -1421,14 +1417,14 @@ const interpolateText = (text, values, options = {}) => {
             
             // Debug logging for separate trustees
             if (sectionId === 'separateTrusteesSection') {
-              console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
+              pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
             }
             
             return wrapClientValue(result);
           } else {
             // No valid formatted items after filtering - return unresolved marker
             if (sectionId === 'separateTrusteesSection') {
-              console.log(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
+              pdfDebugLog(`[PDF INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
             }
             return `{{field:${sectionId}:${subField}}}`;
           }
@@ -1881,7 +1877,7 @@ const interpolateText = (text, values, options = {}) => {
 
 export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
   const { isClientPDF = false, formSchema: customSchema } = options || {};
-  console.log('[WillTool Flow] PDF generator started', { isClientPDF, hasFormValues: !!formValues, valueKeys: formValues ? Object.keys(formValues).length : 0 });
+  flowLog('PDF generator started', { isClientPDF, hasFormValues: !!formValues });
   pdfDebugLog('generatePDFWithJSPDF — text logs: dev build, or set globalThis.__PDF_DEBUG__ = true');
   try {
     const schema = customSchema && customSchema.formSections ? customSchema : formSchema;
@@ -2722,7 +2718,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                           return; // Skip this clause
                         } else {
                           // Valid content found - log for debugging
-                          console.log(`[PDF VALIDATION] ✅ Separate trustees clause has valid content: "${betweenText}"`);
+                          pdfDebugLog(`[PDF VALIDATION] ✅ Separate trustees clause has valid content: "${betweenText}"`);
                         }
                       } else {
                         // Check if the pattern is "I appoint as Trustees" (no text between) - this is the problematic pattern
@@ -2732,7 +2728,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                           return; // Skip this clause
                         }
                         // If regex didn't match but clause contains both phrases, it might be a different structure - allow it
-                        console.log(`[PDF VALIDATION] ℹ️ Separate trustees clause has different structure, allowing: "${interpolated.substring(0, 100)}"`);
+                        pdfDebugLog(`[PDF VALIDATION] ℹ️ Separate trustees clause has different structure, allowing: "${interpolated.substring(0, 100)}"`);
                       }
                     }
                     
@@ -2857,7 +2853,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const isProblematicClause = problematicClauseIds.some(id => clause.id?.includes(id));
       
       if (isProblematicClause) {
-        console.log(`[PDF VALIDATION] 🔍 CHECKING PROBLEMATIC CLAUSE ${validationClauseNumber}:`, {
+        pdfDebugLog(`[PDF VALIDATION] 🔍 CHECKING PROBLEMATIC CLAUSE ${validationClauseNumber}:`, {
           clauseId: clause.id,
           clauseIncomplete: clause.incomplete,
           clauseIncompleteType: typeof clause.incomplete,
@@ -2881,7 +2877,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           issue: `Incomplete clause — requires user input: ${missingFields}`,
           snippet: snippet
         };
-        console.log(`[PDF VALIDATION] Found incomplete clause ${validationClauseNumber}:`, {
+        pdfDebugLog(`[PDF VALIDATION] Found incomplete clause ${validationClauseNumber}:`, {
           section: incompleteItem.section,
           field: incompleteItem.field,
           issue: incompleteItem.issue.substring(0, 60)
@@ -2965,7 +2961,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         });
       } else {
         // Log that we're skipping placeholderPatterns for this clause since it's already validated
-        console.log(`[PDF VALIDATION] ℹ️ Skipping placeholderPatterns check for clause ${validationClauseNumber} (already validated by specific "I appoint" check)`);
+        pdfDebugLog(`[PDF VALIDATION] ℹ️ Skipping placeholderPatterns check for clause ${validationClauseNumber} (already validated by specific "I appoint" check)`);
       }
       
       // CRITICAL: Additional check for missing subjects in clause text (catch any that slipped through)
@@ -2997,7 +2993,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       if (clause.incomplete === false) {
         // Clause is explicitly marked as complete by buildClauses.js - trust it
         if (isProblematicClause) {
-          console.log(`[PDF VALIDATION] ✅ PROBLEMATIC CLAUSE ${validationClauseNumber} MARKED COMPLETE BY buildClauses - TRUSTING IT:`, {
+          pdfDebugLog(`[PDF VALIDATION] ✅ PROBLEMATIC CLAUSE ${validationClauseNumber} MARKED COMPLETE BY buildClauses - TRUSTING IT:`, {
             clauseId: clause.id,
             clauseIncomplete: clause.incomplete,
             clauseText: clause.text
@@ -3009,7 +3005,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         
         // ALWAYS-ON Debug logging for problematic clauses being flagged by isPlaceholderOrIncomplete
         if (isProblematicClause) {
-          console.log(`[PDF VALIDATION] ⚠️ PROBLEMATIC CLAUSE ${validationClauseNumber} FLAGGED BY isPlaceholderOrIncomplete:`, {
+          pdfDebugLog(`[PDF VALIDATION] ⚠️ PROBLEMATIC CLAUSE ${validationClauseNumber} FLAGGED BY isPlaceholderOrIncomplete:`, {
             clauseId: clause.id,
             clauseIncomplete: clause.incomplete,
             clauseText: clause.text,
@@ -3079,7 +3075,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         item.issue.toLowerCase().includes('incomplete') ||
         item.issue.includes('requires user input');
       if (matches) {
-        console.log(`[PDF VALIDATION] Item added to criticalBlanks:`, {
+        pdfDebugLog(`[PDF VALIDATION] Item added to criticalBlanks:`, {
           section: item.section,
           field: item.field,
           clauseNumber: item.clauseNumber,
@@ -3105,11 +3101,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const scheduleNumMatch = scheduleName.match(/\d+/);
       const scheduleNumber = scheduleNumMatch ? scheduleNumMatch[0] : null;
       
-      console.log(`[PDF SCHEDULES MISSING] Checking ${scheduleName}, extracted number: ${scheduleNumber}`);
+      pdfDebugLog(`[PDF SCHEDULES MISSING] Checking ${scheduleName}, extracted number: ${scheduleNumber}`);
       
       if (!scheduleNumber) {
         // Can't identify schedule, consider it missing
-        console.log(`[PDF SCHEDULES MISSING] ❌ ${scheduleName} - no schedule number found, marking as missing`);
+        pdfDebugLog(`[PDF SCHEDULES MISSING] ❌ ${scheduleName} - no schedule number found, marking as missing`);
         return true;
       }
       
@@ -3117,7 +3113,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
         String(formValues.propertyTrustScheduleNumber).trim() : '';
       
-      console.log(`[PDF SCHEDULES MISSING] Comparing "${propertyTrustScheduleNum}" === "${scheduleNumber}" for Property Trust`);
+      pdfDebugLog(`[PDF SCHEDULES MISSING] Comparing "${propertyTrustScheduleNum}" === "${scheduleNumber}" for Property Trust`);
       
       if (propertyTrustScheduleNum === scheduleNumber) {
         // This is a Property Trust schedule - check if content exists
@@ -3127,7 +3123,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           String(formValues.propertyTrustTerms).trim() : '';
         
         const isMissing = !details && !terms;
-        console.log(`[PDF SCHEDULES MISSING] Property Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
+        pdfDebugLog(`[PDF SCHEDULES MISSING] Property Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
         
         // Schedule is missing if both details and terms are empty
         return isMissing;
@@ -3137,12 +3133,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
         String(formValues.bprTrustScheduleNumber).trim() : '';
       
-      console.log(`[PDF SCHEDULES MISSING] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}" for BPR Trust`);
+      pdfDebugLog(`[PDF SCHEDULES MISSING] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}" for BPR Trust`);
       
       if (bprTrustScheduleNum === scheduleNumber) {
         const bprIntentSched = getBprTrustClientIntent(formValues);
         if (bprIntentSched === 'Unsure' && !isBprSolicitorPackageComplete(formValues)) {
-          console.log(`[PDF SCHEDULES MISSING] BPR intent Unsure and solicitor package incomplete — schedule not treated as missing`);
+          pdfDebugLog(`[PDF SCHEDULES MISSING] BPR intent Unsure and solicitor package incomplete — schedule not treated as missing`);
           return false;
         }
         // This is a BPR Trust schedule - check if content exists
@@ -3152,7 +3148,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           String(formValues.bprTrustTerms).trim() : '';
         
         const isMissing = !details && !terms;
-        console.log(`[PDF SCHEDULES MISSING] BPR Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
+        pdfDebugLog(`[PDF SCHEDULES MISSING] BPR Trust schedule ${scheduleNumber} - details: ${!!details}, terms: ${!!terms}, isMissing: ${isMissing}`);
         
         // Schedule is missing if both details and terms are empty
         return isMissing;
@@ -3161,11 +3157,11 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       // For other schedule types, use generic lookup (fallback)
       const scheduleKey = scheduleName.toLowerCase().replace(/\s+/g, '');
       const hasGenericContent = formValues[scheduleKey] || formValues[`${scheduleKey}Data`] || formValues[`${scheduleKey}Details`];
-      console.log(`[PDF SCHEDULES MISSING] Generic schedule ${scheduleName} - hasContent: ${!!hasGenericContent}, isMissing: ${!hasGenericContent}`);
+      pdfDebugLog(`[PDF SCHEDULES MISSING] Generic schedule ${scheduleName} - hasContent: ${!!hasGenericContent}, isMissing: ${!hasGenericContent}`);
       return !hasGenericContent;
     });
     
-    console.log(`[PDF SCHEDULES MISSING] Total schedule references: ${scheduleReferences.size}, Missing schedules: ${schedulesMissing.length}`, schedulesMissing);
+    pdfDebugLog(`[PDF SCHEDULES MISSING] Total schedule references: ${scheduleReferences.size}, Missing schedules: ${schedulesMissing.length}`, schedulesMissing);
     
     // Check if any placeholders or missing items exist (including schedules)
     // CRITICAL: Check for missing subjects in clauses before allowing PDF generation
@@ -3179,12 +3175,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     const hasPlaceholders = missing.length > 0 || schedulesMissing.length > 0;
     const hasCriticalIssues = hasCriticalMissingSubjects || hasIncompleteClause31;
     
-    console.log(`[PDF VALIDATION] Missing items: ${missing.length}, Schedules missing: ${schedulesMissing.length}`);
-    console.log(`[PDF VALIDATION] Critical missing subjects: ${hasCriticalMissingSubjects}, Incomplete Clause 31: ${hasIncompleteClause31}`);
-    console.log(`[PDF VALIDATION] Has placeholders: ${hasPlaceholders}, Has critical issues: ${hasCriticalIssues}`);
-    console.log(`[PDF VALIDATION] criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}`);
+    pdfDebugLog(`[PDF VALIDATION] Missing items: ${missing.length}, Schedules missing: ${schedulesMissing.length}`);
+    pdfDebugLog(`[PDF VALIDATION] Critical missing subjects: ${hasCriticalMissingSubjects}, Incomplete Clause 31: ${hasIncompleteClause31}`);
+    pdfDebugLog(`[PDF VALIDATION] Has placeholders: ${hasPlaceholders}, Has critical issues: ${hasCriticalIssues}`);
+    pdfDebugLog(`[PDF VALIDATION] criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}`);
     if (missing.length > 0) {
-      console.log(`[PDF VALIDATION] First 3 missing items:`, missing.slice(0, 3).map(m => ({
+      pdfDebugLog(`[PDF VALIDATION] First 3 missing items:`, missing.slice(0, 3).map(m => ({
         section: m.section,
         field: m.field,
         clauseNumber: m.clauseNumber,
@@ -3192,7 +3188,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       })));
     }
     if (criticalBlanks.length > 0) {
-      console.log(`[PDF VALIDATION] First 3 criticalBlanks:`, criticalBlanks.slice(0, 3).map(m => ({
+      pdfDebugLog(`[PDF VALIDATION] First 3 criticalBlanks:`, criticalBlanks.slice(0, 3).map(m => ({
         section: m.section,
         field: m.field,
         clauseNumber: m.clauseNumber,
@@ -3202,7 +3198,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     
     // Helper function to render validation errors report (will be called at the END)
     const renderValidationErrorsReport = () => {
-      console.log(`[PDF VALIDATION REPORT] Rendering report - hasPlaceholders: ${hasPlaceholders}, criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}, missing.length: ${missing.length}`);
+      pdfDebugLog(`[PDF VALIDATION REPORT] Rendering report - hasPlaceholders: ${hasPlaceholders}, criticalBlanks.length: ${criticalBlanks.length}, placeholders.length: ${placeholders.length}, missing.length: ${missing.length}`);
       
       // Fallback: if we have missing items but they weren't categorized, show them all
       const itemsToShow = criticalBlanks.length > 0 ? criticalBlanks : 
@@ -3210,7 +3206,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
                          missing.length > 0 ? missing : [];
       
       if (itemsToShow.length === 0 && schedulesMissing.length === 0) {
-        console.log(`[PDF VALIDATION REPORT] Skipping report - no items to show`);
+        pdfDebugLog(`[PDF VALIDATION REPORT] Skipping report - no items to show`);
         return;
       }
       
@@ -3257,7 +3253,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         });
         
         itemsToDisplay.forEach((item) => {
-          console.log(`[PDF VALIDATION REPORT] Rendering item:`, {
+          pdfDebugLog(`[PDF VALIDATION REPORT] Rendering item:`, {
             section: item.section,
             field: item.field,
             clauseNumber: item.clauseNumber,
@@ -3424,7 +3420,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const oldNumber = String(formValues.propertyTrustScheduleNumber).trim();
       if (oldNumber) {
         scheduleNumberMap.set(oldNumber, legalScheduleIndex);
-        console.log(`[PDF SCHEDULE MAP] Property Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
+        pdfDebugLog(`[PDF SCHEDULE MAP] Property Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
         legalScheduleIndex++;
       }
     }
@@ -3440,12 +3436,12 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       const oldNumber = String(formValues.bprTrustScheduleNumber).trim();
       if (oldNumber && !scheduleNumberMap.has(oldNumber)) {
         scheduleNumberMap.set(oldNumber, legalScheduleIndex);
-        console.log(`[PDF SCHEDULE MAP] BPR Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
+        pdfDebugLog(`[PDF SCHEDULE MAP] BPR Trust: old "${oldNumber}" -> legal "Schedule ${legalScheduleIndex}"`);
         legalScheduleIndex++;
       }
     }
     
-    console.log(`[PDF SCHEDULE MAP] Total schedule mappings:`, Array.from(scheduleNumberMap.entries()));
+    pdfDebugLog(`[PDF SCHEDULE MAP] Total schedule mappings:`, Array.from(scheduleNumberMap.entries()));
 
     // Pre-compute paragraph count per section for Mariyam's numbering rules:
     // Single-paragraph section: no sub-number (1. Header, then body text)
@@ -3500,7 +3496,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         processedClauseText = processedClauseText.replace(/Schedule\s+(\d+)/gi, (match, oldNum) => {
           const legalNum = scheduleNumberMap.get(oldNum);
           if (legalNum) {
-            console.log(`[PDF SCHEDULE MAP] Replacing "${match}" with "Schedule ${legalNum}" in clause ${clauseNumber}`);
+            pdfDebugLog(`[PDF SCHEDULE MAP] Replacing "${match}" with "Schedule ${legalNum}" in clause ${clauseNumber}`);
             return `Schedule ${legalNum}`;
           }
           // If not mapped, still add to references but use original number
@@ -3676,17 +3672,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     
     // Add schedules after the last clause (on same page if space allows, otherwise new page)
     // Use sequential legal naming (Schedule 1, Schedule 2, etc.) instead of random numbers
-    console.log(`[PDF SCHEDULE] ========== STARTING SCHEDULE RENDERING ==========`);
-    console.log(`[PDF SCHEDULE] scheduleReferences.size: ${scheduleReferences.size}`);
-    console.log(`[PDF SCHEDULE] scheduleReferences contents:`, Array.from(scheduleReferences));
-    console.log(`[PDF SCHEDULE] Current yPos after last clause: ${yPos.toFixed(1)}`);
-    console.log(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
-    console.log(`[PDF SCHEDULE] Available space on current page: ${(pageHeight - margin - yPos).toFixed(1)} units`);
+    pdfDebugLog(`[PDF SCHEDULE] ========== STARTING SCHEDULE RENDERING ==========`);
+    pdfDebugLog(`[PDF SCHEDULE] scheduleReferences.size: ${scheduleReferences.size}`);
+    pdfDebugLog(`[PDF SCHEDULE] scheduleReferences contents:`, Array.from(scheduleReferences));
+    pdfDebugLog(`[PDF SCHEDULE] Current yPos after last clause: ${yPos.toFixed(1)}`);
+    pdfDebugLog(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
+    pdfDebugLog(`[PDF SCHEDULE] Available space on current page: ${(pageHeight - margin - yPos).toFixed(1)} units`);
     
     if (scheduleReferences.size > 0) {
       let scheduleIndex = 1; // Start with Schedule 1 for legal numbering
       const scheduleArray = Array.from(scheduleReferences);
-      console.log(`[PDF SCHEDULE] Processing ${scheduleArray.length} schedule(s):`, scheduleArray);
+      pdfDebugLog(`[PDF SCHEDULE] Processing ${scheduleArray.length} schedule(s):`, scheduleArray);
       
       // CRITICAL: Filter out schedules that don't have content BEFORE rendering
       const schedulesWithContent = scheduleArray.filter(scheduleName => {
@@ -3702,7 +3698,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           const hasDetails = formValues.propertyTrustDetails && String(formValues.propertyTrustDetails).trim() !== '';
           const hasTerms = formValues.propertyTrustTerms && String(formValues.propertyTrustTerms).trim() !== '';
           const hasContent = hasDetails || hasTerms;
-          console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Property Trust) - hasContent: ${hasContent}`);
+          pdfDebugLog(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Property Trust) - hasContent: ${hasContent}`);
           return hasContent;
         }
         
@@ -3713,76 +3709,76 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           const hasDetails = formValues.bprTrustDetails && String(formValues.bprTrustDetails).trim() !== '';
           const hasTerms = formValues.bprTrustTerms && String(formValues.bprTrustTerms).trim() !== '';
           const hasContent = hasDetails || hasTerms;
-          console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (BPR Trust) - hasContent: ${hasContent}`);
+          pdfDebugLog(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (BPR Trust) - hasContent: ${hasContent}`);
           return hasContent;
         }
         
         // For other schedules, check generic fields
         const scheduleKey = scheduleName.toLowerCase().replace(/\s+/g, '');
         const hasGenericContent = formValues[scheduleKey] || formValues[`${scheduleKey}Data`] || formValues[`${scheduleKey}Details`];
-        console.log(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Generic) - hasContent: ${!!hasGenericContent}`);
+        pdfDebugLog(`[PDF SCHEDULE FILTER] Schedule ${scheduleNumber} (Generic) - hasContent: ${!!hasGenericContent}`);
         return !!hasGenericContent;
       });
       
-      console.log(`[PDF SCHEDULE] Filtered schedules: ${schedulesWithContent.length} with content out of ${scheduleArray.length} total`);
+      pdfDebugLog(`[PDF SCHEDULE] Filtered schedules: ${schedulesWithContent.length} with content out of ${scheduleArray.length} total`);
       
       schedulesWithContent.forEach((scheduleName, index) => {
-        console.log(`[PDF SCHEDULE] ========== PROCESSING SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
-        console.log(`[PDF SCHEDULE] Original scheduleName from references: "${scheduleName}"`);
-        console.log(`[PDF SCHEDULE] Current yPos: ${yPos.toFixed(1)}`);
-        console.log(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
+        pdfDebugLog(`[PDF SCHEDULE] ========== PROCESSING SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
+        pdfDebugLog(`[PDF SCHEDULE] Original scheduleName from references: "${scheduleName}"`);
+        pdfDebugLog(`[PDF SCHEDULE] Current yPos: ${yPos.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] pageHeight: ${pageHeight}, margin: ${margin}`);
         
         // Check if we need a new page - be lenient: only add new page if we're very close to bottom
         // This allows schedule to appear on same page as last clause whenever possible
         // We only need space for the heading initially - content can flow to next page if needed
         const availableSpace = pageHeight - margin - yPos;
-        console.log(`[PDF SCHEDULE] Available space calculation: pageHeight (${pageHeight}) - margin (${margin}) - yPos (${yPos.toFixed(1)}) = ${availableSpace.toFixed(1)}`);
-        console.log(`[PDF SCHEDULE] Threshold check: availableSpace (${availableSpace.toFixed(1)}) < 40? ${availableSpace < 40}`);
+        pdfDebugLog(`[PDF SCHEDULE] Available space calculation: pageHeight (${pageHeight}) - margin (${margin}) - yPos (${yPos.toFixed(1)}) = ${availableSpace.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] Threshold check: availableSpace (${availableSpace.toFixed(1)}) < 40? ${availableSpace < 40}`);
         
         // Only force new page if we're within 40 units of the bottom (very tight)
         // Otherwise, render on same page and let content flow naturally
         if (availableSpace < 40) {
-          console.log(`[PDF SCHEDULE] ❌ Very little space remaining (${availableSpace.toFixed(1)} units < 40), adding new page`);
+          pdfDebugLog(`[PDF SCHEDULE] ❌ Very little space remaining (${availableSpace.toFixed(1)} units < 40), adding new page`);
           doc.addPage();
           yPos = margin;
-          console.log(`[PDF SCHEDULE] ✅ New page added, yPos reset to: ${yPos}`);
+          pdfDebugLog(`[PDF SCHEDULE] ✅ New page added, yPos reset to: ${yPos}`);
         } else {
           // Add spacing after last clause before schedule
-          console.log(`[PDF SCHEDULE] ✅ Enough space (${availableSpace.toFixed(1)} units >= 40), rendering on same page`);
-          console.log(`[PDF SCHEDULE] Adding 12 units spacing after last clause`);
+          pdfDebugLog(`[PDF SCHEDULE] ✅ Enough space (${availableSpace.toFixed(1)} units >= 40), rendering on same page`);
+          pdfDebugLog(`[PDF SCHEDULE] Adding 12 units spacing after last clause`);
           yPos += 12; // Slightly more spacing for visual separation
-          console.log(`[PDF SCHEDULE] yPos after spacing: ${yPos.toFixed(1)}`);
+          pdfDebugLog(`[PDF SCHEDULE] yPos after spacing: ${yPos.toFixed(1)}`);
         }
         
         // Use legal sequential naming: Schedule 1, Schedule 2, etc.
         const legalScheduleName = `Schedule ${scheduleIndex}`;
-        console.log(`[PDF SCHEDULE] Legal schedule name: "${legalScheduleName}" (replacing "${scheduleName}")`);
-        console.log(`[PDF SCHEDULE] scheduleIndex: ${scheduleIndex}`);
+        pdfDebugLog(`[PDF SCHEDULE] Legal schedule name: "${legalScheduleName}" (replacing "${scheduleName}")`);
+        pdfDebugLog(`[PDF SCHEDULE] scheduleIndex: ${scheduleIndex}`);
         
         // Final check before rendering heading - ensure we have space for at least the heading
         const spaceForHeading = yPos + 30;
         const maxAllowedY = pageHeight - margin;
-        console.log(`[PDF SCHEDULE] Final heading check: yPos (${yPos.toFixed(1)}) + 30 = ${spaceForHeading.toFixed(1)}, maxAllowedY: ${maxAllowedY.toFixed(1)}`);
-        console.log(`[PDF SCHEDULE] Final check condition: ${spaceForHeading.toFixed(1)} > ${maxAllowedY.toFixed(1)}? ${spaceForHeading > maxAllowedY}`);
+        pdfDebugLog(`[PDF SCHEDULE] Final heading check: yPos (${yPos.toFixed(1)}) + 30 = ${spaceForHeading.toFixed(1)}, maxAllowedY: ${maxAllowedY.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] Final check condition: ${spaceForHeading.toFixed(1)} > ${maxAllowedY.toFixed(1)}? ${spaceForHeading > maxAllowedY}`);
         
         if (spaceForHeading > maxAllowedY) {
-          console.log(`[PDF SCHEDULE] ❌ Final check: not enough space for heading, adding new page`);
+          pdfDebugLog(`[PDF SCHEDULE] ❌ Final check: not enough space for heading, adding new page`);
           doc.addPage();
           yPos = margin;
-          console.log(`[PDF SCHEDULE] ✅ New page added after final check, yPos reset to: ${yPos}`);
+          pdfDebugLog(`[PDF SCHEDULE] ✅ New page added after final check, yPos reset to: ${yPos}`);
         } else {
-          console.log(`[PDF SCHEDULE] ✅ Final check passed, enough space for heading`);
+          pdfDebugLog(`[PDF SCHEDULE] ✅ Final check passed, enough space for heading`);
         }
         
-        console.log(`[PDF SCHEDULE] About to render heading "${legalScheduleName}" at yPos: ${yPos.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] About to render heading "${legalScheduleName}" at yPos: ${yPos.toFixed(1)}`);
         doc.setFontSize(14);
         doc.setFont('times', 'bold');
         const scheduleTitleWidth = doc.getTextWidth(legalScheduleName);
-        console.log(`[PDF SCHEDULE] Heading text width: ${scheduleTitleWidth.toFixed(1)}, centering at: ${(pageWidth / 2 - scheduleTitleWidth / 2).toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] Heading text width: ${scheduleTitleWidth.toFixed(1)}, centering at: ${(pageWidth / 2 - scheduleTitleWidth / 2).toFixed(1)}`);
         doc.text(legalScheduleName, pageWidth / 2 - scheduleTitleWidth / 2, yPos);
-        console.log(`[PDF SCHEDULE] ✅ Heading "${legalScheduleName}" rendered successfully`);
+        pdfDebugLog(`[PDF SCHEDULE] ✅ Heading "${legalScheduleName}" rendered successfully`);
         yPos += 15;
-        console.log(`[PDF SCHEDULE] yPos after heading: ${yPos.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] yPos after heading: ${yPos.toFixed(1)}`);
         
         doc.setFontSize(11.5);
         doc.setFont('times', 'normal');
@@ -3794,7 +3790,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         const scheduleNumMatch = scheduleName.match(/\d+/);
         const scheduleNumber = scheduleNumMatch ? scheduleNumMatch[0] : null;
         
-        console.log(`[PDF SCHEDULE] Rendering ${scheduleName}, extracted number: ${scheduleNumber}`);
+        pdfDebugLog(`[PDF SCHEDULE] Rendering ${scheduleName}, extracted number: ${scheduleNumber}`);
         
         // Map schedule number to actual form fields
         let scheduleData = null;
@@ -3804,17 +3800,17 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
             String(formValues.propertyTrustScheduleNumber).trim() : '';
           
-          console.log(`[PDF SCHEDULE] Property Trust schedule number in form: "${propertyTrustScheduleNum}"`);
+          pdfDebugLog(`[PDF SCHEDULE] Property Trust schedule number in form: "${propertyTrustScheduleNum}"`);
           
           if (propertyTrustScheduleNum === scheduleNumber) {
-            console.log(`[PDF SCHEDULE] ✅ Matched Property Trust schedule ${scheduleNumber}`);
+            pdfDebugLog(`[PDF SCHEDULE] ✅ Matched Property Trust schedule ${scheduleNumber}`);
             // This is a Property Trust schedule - combine details and terms
             const details = formValues.propertyTrustDetails ? 
               String(formValues.propertyTrustDetails).trim() : '';
             const terms = formValues.propertyTrustTerms ? 
               String(formValues.propertyTrustTerms).trim() : '';
             
-            console.log(`[PDF SCHEDULE] Property Trust details length: ${details.length}, terms length: ${terms.length}`);
+            pdfDebugLog(`[PDF SCHEDULE] Property Trust details length: ${details.length}, terms length: ${terms.length}`);
             
             // Combine details and terms if both exist
             if (details && terms) {
@@ -3825,7 +3821,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
               scheduleData = terms;
             }
             
-            console.log(`[PDF SCHEDULE] Property Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
+            pdfDebugLog(`[PDF SCHEDULE] Property Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
           }
           
           // Check if this schedule number matches BPR Trust schedule
@@ -3833,37 +3829,37 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
             const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
               String(formValues.bprTrustScheduleNumber).trim() : '';
             
-            console.log(`[PDF SCHEDULE] BPR Trust schedule number in form: "${bprTrustScheduleNum}"`);
-            console.log(`[PDF SCHEDULE] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}"`);
+            pdfDebugLog(`[PDF SCHEDULE] BPR Trust schedule number in form: "${bprTrustScheduleNum}"`);
+            pdfDebugLog(`[PDF SCHEDULE] Comparing "${bprTrustScheduleNum}" === "${scheduleNumber}"`);
             
             if (bprTrustScheduleNum === scheduleNumber) {
-              console.log(`[PDF SCHEDULE] ✅ Matched BPR Trust schedule ${scheduleNumber}`);
+              pdfDebugLog(`[PDF SCHEDULE] ✅ Matched BPR Trust schedule ${scheduleNumber}`);
               // This is a BPR Trust schedule - combine details and terms
               const details = formValues.bprTrustDetails ? 
                 String(formValues.bprTrustDetails).trim() : '';
               const terms = formValues.bprTrustTerms ? 
                 String(formValues.bprTrustTerms).trim() : '';
               
-              console.log(`[PDF SCHEDULE] BPR Trust details exists: ${!!details}, length: ${details.length}`);
-              console.log(`[PDF SCHEDULE] BPR Trust terms exists: ${!!terms}, length: ${terms.length}`);
+              pdfDebugLog(`[PDF SCHEDULE] BPR Trust details exists: ${!!details}, length: ${details.length}`);
+              pdfDebugLog(`[PDF SCHEDULE] BPR Trust terms exists: ${!!terms}, length: ${terms.length}`);
               
               // Combine details and terms if both exist
               if (details && terms) {
                 scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}\n\nBusiness Property Relief Trust Terms: ${terms}`;
-                console.log(`[PDF SCHEDULE] ✅ Combined BPR Trust details + terms, total length: ${scheduleData.length}`);
+                pdfDebugLog(`[PDF SCHEDULE] ✅ Combined BPR Trust details + terms, total length: ${scheduleData.length}`);
               } else if (details) {
                 scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}`;
-                console.log(`[PDF SCHEDULE] ✅ Using BPR Trust details only, length: ${scheduleData.length}`);
+                pdfDebugLog(`[PDF SCHEDULE] ✅ Using BPR Trust details only, length: ${scheduleData.length}`);
               } else if (terms) {
                 scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Relief Trust Terms: ${terms}`;
-                console.log(`[PDF SCHEDULE] ✅ Using BPR Trust terms only, length: ${scheduleData.length}`);
+                pdfDebugLog(`[PDF SCHEDULE] ✅ Using BPR Trust terms only, length: ${scheduleData.length}`);
               } else {
-                console.log(`[PDF SCHEDULE] ❌ BPR Trust schedule ${scheduleNumber} matched but no content found`);
+                pdfDebugLog(`[PDF SCHEDULE] ❌ BPR Trust schedule ${scheduleNumber} matched but no content found`);
               }
               
-              console.log(`[PDF SCHEDULE] BPR Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
+              pdfDebugLog(`[PDF SCHEDULE] BPR Trust scheduleData found: ${!!scheduleData}, length: ${scheduleData?.length || 0}`);
             } else {
-              console.log(`[PDF SCHEDULE] BPR Trust schedule number "${bprTrustScheduleNum}" does not match "${scheduleNumber}"`);
+              pdfDebugLog(`[PDF SCHEDULE] BPR Trust schedule number "${bprTrustScheduleNum}" does not match "${scheduleNumber}"`);
             }
           }
         }
@@ -3877,25 +3873,25 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
         
         // CRITICAL: Skip rendering schedule if no content exists
         if (!scheduleData || (typeof scheduleData === 'string' && !scheduleData.trim())) {
-          console.log(`[PDF SCHEDULE] ❌ SKIPPING ${legalScheduleName} - no content found`);
-          console.log(`[PDF SCHEDULE] scheduleName: "${scheduleName}", scheduleNumber: "${scheduleNumber}"`);
-          console.log(`[PDF SCHEDULE] Property Trust schedule: ${formValues.propertyTrustScheduleNumber}, BPR Trust schedule: ${formValues.bprTrustScheduleNumber}`);
+          pdfDebugLog(`[PDF SCHEDULE] ❌ SKIPPING ${legalScheduleName} - no content found`);
+          pdfDebugLog(`[PDF SCHEDULE] scheduleName: "${scheduleName}", scheduleNumber: "${scheduleNumber}"`);
+          pdfDebugLog(`[PDF SCHEDULE] Property Trust schedule: ${formValues.propertyTrustScheduleNumber}, BPR Trust schedule: ${formValues.bprTrustScheduleNumber}`);
           // Don't render this schedule - skip to next one
           scheduleIndex++;
           return; // Skip this schedule entirely
         }
         
         if (scheduleData && typeof scheduleData === 'string' && scheduleData.trim()) {
-          console.log(`[PDF SCHEDULE] ✅ Schedule content found, length: ${scheduleData.length} characters`);
-          console.log(`[PDF SCHEDULE] Rendering schedule content starting at yPos: ${yPos.toFixed(1)}`);
+          pdfDebugLog(`[PDF SCHEDULE] ✅ Schedule content found, length: ${scheduleData.length} characters`);
+          pdfDebugLog(`[PDF SCHEDULE] Rendering schedule content starting at yPos: ${yPos.toFixed(1)}`);
           const scheduleLines = wrapPdfLines(scheduleData, availableWidth, 11.5);
           doc.setFont('times', 'bold'); // Schedule content is client-entered
-          console.log(`[PDF SCHEDULE] Schedule content split into ${scheduleLines.length} lines`);
+          pdfDebugLog(`[PDF SCHEDULE] Schedule content split into ${scheduleLines.length} lines`);
           let lineY = yPos;
           let pageBreaksAdded = 0;
           scheduleLines.forEach((line, lineIndex) => {
             if (lineY + 5.5 > pageHeight - margin) {
-              console.log(`[PDF SCHEDULE] Page break needed at line ${lineIndex + 1}/${scheduleLines.length} (lineY: ${lineY.toFixed(1)})`);
+              pdfDebugLog(`[PDF SCHEDULE] Page break needed at line ${lineIndex + 1}/${scheduleLines.length} (lineY: ${lineY.toFixed(1)})`);
               doc.addPage();
               lineY = margin;
               pageBreaksAdded++;
@@ -3905,19 +3901,19 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           });
           doc.setFont('times', 'normal');
           yPos = lineY;
-          console.log(`[PDF SCHEDULE] Schedule content rendered, pageBreaks added: ${pageBreaksAdded}, final yPos: ${yPos.toFixed(1)}`);
+          pdfDebugLog(`[PDF SCHEDULE] Schedule content rendered, pageBreaks added: ${pageBreaksAdded}, final yPos: ${yPos.toFixed(1)}`);
         } else {
-          console.log(`[PDF SCHEDULE] ❌ No schedule content found for "${legalScheduleName}"`);
+          pdfDebugLog(`[PDF SCHEDULE] ❌ No schedule content found for "${legalScheduleName}"`);
           // Schedule stub - clearly mark as missing
           // Check for page break before missing content
           if (yPos + 20 > pageHeight - margin) {
-            console.log(`[PDF SCHEDULE] Not enough space for missing content message, adding new page`);
+            pdfDebugLog(`[PDF SCHEDULE] Not enough space for missing content message, adding new page`);
             doc.addPage();
             yPos = margin;
           }
           doc.setFont('times', 'bold');
           doc.setTextColor(200, 0, 0);
-          console.log(`[PDF SCHEDULE] Rendering missing content message for "${legalScheduleName}"`);
+          pdfDebugLog(`[PDF SCHEDULE] Rendering missing content message for "${legalScheduleName}"`);
           doc.text(`[MISSING: ${legalScheduleName} content]`, margin, yPos);
           doc.setTextColor(0, 0, 0);
           yPos += 10;
@@ -3936,19 +3932,19 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
           yPos = lineY;
         }
         
-        console.log(`[PDF SCHEDULE] ========== COMPLETED SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
-        console.log(`[PDF SCHEDULE] Final yPos after schedule content: ${yPos.toFixed(1)}`);
-        console.log(`[PDF SCHEDULE] Incrementing scheduleIndex from ${scheduleIndex} to ${scheduleIndex + 1}`);
+        pdfDebugLog(`[PDF SCHEDULE] ========== COMPLETED SCHEDULE ${index + 1}/${scheduleArray.length} ==========`);
+        pdfDebugLog(`[PDF SCHEDULE] Final yPos after schedule content: ${yPos.toFixed(1)}`);
+        pdfDebugLog(`[PDF SCHEDULE] Incrementing scheduleIndex from ${scheduleIndex} to ${scheduleIndex + 1}`);
         
         // Increment schedule index for next schedule
         scheduleIndex++;
       });
       
-      console.log(`[PDF SCHEDULE] ========== ALL SCHEDULES RENDERED ==========`);
-      console.log(`[PDF SCHEDULE] Total schedules rendered: ${scheduleArray.length}`);
-      console.log(`[PDF SCHEDULE] Final yPos: ${yPos.toFixed(1)}`);
+      pdfDebugLog(`[PDF SCHEDULE] ========== ALL SCHEDULES RENDERED ==========`);
+      pdfDebugLog(`[PDF SCHEDULE] Total schedules rendered: ${scheduleArray.length}`);
+      pdfDebugLog(`[PDF SCHEDULE] Final yPos: ${yPos.toFixed(1)}`);
     } else {
-      console.log(`[PDF SCHEDULE] No schedules to render (scheduleReferences.size = 0)`);
+      pdfDebugLog(`[PDF SCHEDULE] No schedules to render (scheduleReferences.size = 0)`);
     }
 
     // ===== EXECUTION PAGE (SIGNATURE PAGE) =====
@@ -4211,7 +4207,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
     }
     
     // Return doc and validation results for UI display
-    console.log('[WillTool Flow] PDF generator finished', { hasDoc: true, hasPlaceholders: hasPlaceholders, criticalCount: criticalBlanks.length });
+    flowLog('PDF generator finished', { hasDoc: true, hasPlaceholders, criticalCount: criticalBlanks.length });
     return {
       doc,
       missingItems: missing,
@@ -4221,7 +4217,7 @@ export const generatePDFWithJSPDF = async (formValues, signatures = {}, options 
       hasCriticalIssues: criticalBlanks.length > 0
     };
   } catch (error) {
-    console.error('[WillTool Flow] PDF generator error', error);
+    console.error('[WillTool Flow] PDF generator error', error?.message || error);
     throw error;
   }
 };

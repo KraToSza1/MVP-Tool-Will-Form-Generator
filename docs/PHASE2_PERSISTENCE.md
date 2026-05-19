@@ -50,8 +50,9 @@
 | Item | Location |
 |------|----------|
 | **Component** | `src/components/IdentityVerification.jsx`: photo/upload → base64 data URLs. |
-| **Storage today** | Stored in `formValues.identityVerification`; persisted with draft in `localStorage` (key `willForm`). |
-| **Not sent** | No backend upload; local-only. |
+| **Draft (local)** | `localStorage` key `willForm` while the client works on the form. |
+| **Cloud draft** | Excluded from `will_sessions` payload (`buildCloudPayload`). |
+| **On submit** | Compressed images stored on the matter in Supabase for solicitor review (`submitMatterFromDraft`). See `docs/IDENTITY_VERIFICATION_STORAGE.md`. |
 
 ---
 

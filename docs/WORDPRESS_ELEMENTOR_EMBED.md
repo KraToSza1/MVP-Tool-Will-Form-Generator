@@ -147,3 +147,22 @@ If you want only your WordPress site to embed the app (e.g. `https://aristonesol
 - [ ] Iframe includes `allow="camera"` so identity verification “Take photo” works inside the embed.
 - [ ] In Elementor: HTML widget with iframe **or** Shortcode widget with `[will_tool]`.
 - [ ] Iframe height looks good on mobile and desktop (test at 375px, 768px, 1280px).
+
+## Mobile / iframe QA (staging — run before live)
+
+Test on a real WordPress page with `[will_tool]` or the HTML iframe (not localhost only).
+
+| Check | iOS Safari | Android Chrome | Desktop |
+|-------|------------|----------------|---------|
+| Form loads inside iframe | | | |
+| No horizontal page scroll at **375px** width | | | |
+| Next/Back and final **Submit** visible (not clipped) | | | |
+| No **double scroll** trapping the submit button (iframe vs page) | | | |
+| **Save / resume link** copies; reopening link restores draft | | | |
+| **ID upload** — file picker works | | | |
+| **ID camera** — Take photo / selfie (if used) | | | |
+| Keyboard does not hide required fields permanently | | | |
+
+If the iframe feels cramped, use **Open in full tab** (shown when the app detects it is embedded) or increase iframe height (`80vh` or taller in plugin settings).
+
+See `docs/SESSION_RESUME_LINKS.md` for resume-link security notes.

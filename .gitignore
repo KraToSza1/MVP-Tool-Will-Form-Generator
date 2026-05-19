@@ -34,3 +34,8 @@ coverage
 # Downloads
 downloads/
 *.pdf
+
+# Environment secrets (use Vercel / Supabase dashboard only — see docs/ENV_AND_SECRETS.md)
+.env
+.env.*
+!.env.example

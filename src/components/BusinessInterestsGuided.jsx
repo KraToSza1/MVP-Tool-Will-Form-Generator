@@ -323,7 +323,7 @@ const DURATION_FEEDBACK = {
 };
 
 /** @param {{ field?: object, formValues: object, setFormValues: Function }} props */
-export default function BusinessInterestsGuided({ field: _field, formValues, setFormValues }) {
+export default function BusinessInterestsGuided({ formValues, setFormValues }) {
   const uid = useId();
   const modalTitleId = useId();
   const recordIdRef = useRef(formValues.businessSeparateTrusteeRecordId || null);

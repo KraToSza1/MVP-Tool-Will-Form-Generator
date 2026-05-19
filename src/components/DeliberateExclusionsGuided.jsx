@@ -146,7 +146,7 @@ function DexSamePersonOrNew({ formValues, pickValue, onPick, nameVal, relVal, re
   );
 }
 
-export default function DeliberateExclusionsGuided({ field: _field, formValues, setFormValues }) {
+export default function DeliberateExclusionsGuided({ formValues, setFormValues }) {
   const uid = useId();
   const [addOpen, setAddOpen] = useState(false);
   const [dPick, setDPick] = useState('');

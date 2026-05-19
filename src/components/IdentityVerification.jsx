@@ -530,6 +530,10 @@ export default function IdentityVerification({
           ? `Your questionnaire has already been submitted. Upload your documents here, then click Update submission below to attach them to the same matter. Maximum ${MAX_FILE_SIZE_MB}MB per file.`
           : `Upload your documents below. Maximum ${MAX_FILE_SIZE_MB}MB per file.`}
       </p>
+      <p className="mb-2 min-w-0 break-words text-sm text-slate-600 dark:text-slate-300">
+        Documents are sent securely to Aristone Solicitors for anti-money laundering checks and solicitor review only.
+        They are not included in your Will PDF download.
+      </p>
       <p className="mb-4 min-w-0 break-words text-sm text-slate-500 dark:text-slate-400">{uploadHint}</p>
       <div className="space-y-4">
         <UploadSlot

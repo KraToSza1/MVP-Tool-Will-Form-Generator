@@ -3,6 +3,7 @@
  * Requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in env.
  */
 import { createClient } from '@supabase/supabase-js';
+import { debugLog } from './willToolDebug.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -12,9 +13,9 @@ if (!url || !anonKey) {
 } else {
   try {
     const host = new URL(url).hostname;
-    console.log('[Supabase] Client created', { host, iframe: typeof window !== 'undefined' && window.self !== window.top });
+    debugLog('[Supabase] Client created', { host, iframe: typeof window !== 'undefined' && window.self !== window.top });
   } catch {
-    console.log('[Supabase] Client created (URL and anon key present).');
+    debugLog('[Supabase] Client created (URL and anon key present).');
   }
 }
 

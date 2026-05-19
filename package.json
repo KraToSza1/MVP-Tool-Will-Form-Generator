@@ -11,7 +11,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node scripts/run-all-tests.js",
+    "test": "vitest run src",
     "test:unit": "vitest run src",
     "test:e2e": "vitest run tests/e2e",
     "test:all": "node scripts/run-all-tests.js --start-server",

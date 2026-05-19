@@ -80,7 +80,6 @@ import {
 import { isBusinessInterestsGuidedComplete } from '../lib/businessInterestsGuidedComplete.js';
 import { isPropertyTrustGuidedComplete, getPropertyTrustGuidedValidationIssues } from '../lib/propertyTrustGuidedComplete.js';
 import { toast } from 'sonner';
-import { useTheme } from '../context/ThemeContext.jsx';
 import {
   isSolicitorMode,
   SOLICITOR_ONLY_FIELD_IDS,
@@ -110,8 +109,10 @@ import {
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 import { toProperNameCase, toProperAddressCase, normalizePostcode } from '../utils/nameCase.js';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
+import { debugLog, isWillToolDebugEnabled } from '../lib/willToolDebug.js';
+import { pruneStaleBranchValues } from '../utils/pruneStaleBranchValues.js';
 
-const DEBUG_LOGS = false; // Set true for verbose console logging
+const DEBUG_LOGS = isWillToolDebugEnabled() || import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
 const DEBUG_INTERPOLATE = import.meta.env.VITE_DEBUG_CLAUSES === 'true';
 
@@ -187,7 +188,6 @@ const CLIENT_SIGNATURE_SECTION_TITLE = 'Client signature';
 
 export default function FormRenderer({ initialFormState = null, externalPersistence = null }) {
   const navigate = useNavigate();
-  const { isDark } = useTheme();
   const { formData } = useFormDefinition();
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const refFromUrl = urlParams?.get('ref') ?? '';
@@ -207,6 +207,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       || urlParams?.get('clientSign') === 'true'
     );
   const useCloud = !useExternalPersistence && typeof window !== 'undefined' && isSupabaseConfigured();
+  const inIframe = useMemo(
+    () => typeof window !== 'undefined' && window.self !== window.top,
+    [],
+  );
   const matterIdFromPath = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const match = window.location.pathname.match(/\/solicitor\/matters\/([^/]+)/i);
@@ -290,7 +294,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     sessionLoadAttemptedRef.current = true;
 
     if (hasCloudRefAndSecret) {
-      console.log('[WillTool Flow] Client resuming: loading session from URL', { ref: refFromUrl, phase: 'client_load_start' });
+      debugLog('[WillTool Flow] Client resuming: loading session from URL', { ref: refFromUrl, phase: 'client_load_start' });
       loadSession(refFromUrl, secretFromUrl).then((result) => {
         if (result.error) {
           console.warn('[WillTool Flow] Client session load failed', { ref: refFromUrl, error: result.error });
@@ -306,7 +310,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         setReferenceNumber(refFromUrl);
         setSessionSecret(secretFromUrl);
         setSessionInitialized(true);
-        console.log('[WillTool Flow] Client session loaded; form ready', { ref: refFromUrl, step, fieldCount: Object.keys(rest).length });
+        debugLog('[WillTool Flow] Client session loaded; form ready', { ref: refFromUrl, step, fieldCount: Object.keys(rest).length });
       });
       return;
     }
@@ -328,7 +332,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return Number.isFinite(idx) && idx >= 0 ? idx : 0;
     })();
     const initialPayload = buildCloudPayload(initialFromStorage, step);
-    console.log('[WillTool Flow] Client starting: creating new session', { step, fromStorage: Object.keys(initialFromStorage).length, phase: 'client_create_start' });
+    debugLog('[WillTool Flow] Client starting: creating new session', { step, fromStorage: Object.keys(initialFromStorage).length, phase: 'client_create_start' });
 
     createSession(initialPayload).then((result) => {
       if (result.error) {
@@ -346,11 +350,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       newUrl.searchParams.set('s', secret);
       window.history.replaceState({}, '', newUrl);
       setSessionInitialized(true);
-      console.log('[WillTool Flow] Client session created; URL updated', { ref });
+      debugLog('[WillTool Flow] Client session created; URL updated', { ref });
     });
   }, [useCloud, hasCloudRefAndSecret, refFromUrl, secretFromUrl, useExternalPersistence]);
 
-  const [formValues, setFormValues] = useState(() => {
+  const [formValues, setFormValuesState] = useState(() => {
     if (initialFormState?.formValues) return initialFormState.formValues;
     if (useCloud && hasCloudRefAndSecret) return {};
     const saved = localStorage.getItem('willForm');
@@ -371,6 +375,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return {};
     }
   });
+
+  const setFormValues = useCallback((updater) => {
+    setFormValuesState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (next === prev) return prev;
+      return pruneStaleBranchValues(prev, next);
+    });
+  }, []);
+
   const [submitted, setSubmitted] = useState(false);
   const [expandedFields, setExpandedFields] = useState({});
   const [banner, setBanner] = useState(null); // { type: 'error'|'info', message: string }
@@ -551,7 +564,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   const submitCurrentMatter = useCallback(async () => {
     if (externalPersistence?.submit) {
-      console.log('[WillTool Flow] client_submit_using_external_persistence', { phase: 'client_submit_external' });
+      debugLog('[WillTool Flow] client_submit_using_external_persistence', { phase: 'client_submit_external' });
       return externalPersistence.submit({ formValues, currentIndex, referenceNumber, sessionSecret });
     }
 
@@ -573,17 +586,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret]);
 
   const finishSubmission = useCallback(async () => {
-    console.log('[WillTool Flow] client_submit_ui_start', {
+    debugLog('[WillTool Flow] client_submit_ui_start', {
       ref: referenceNumber,
       currentIndex,
       formKeys: Object.keys(formValues || {}).length,
       phase: 'client_submit_ui_start',
     });
-    if (isDev) DEBUG_LOGS && console.log('[GO NEXT] Last step reached - submitting matter or completing external persistence');
+    if (isDev) DEBUG_LOGS && debugLog('[GO NEXT] Last step reached - submitting matter or completing external persistence');
     setIsSubmittingMatter(true);
     try {
       const result = await submitCurrentMatter();
-      console.log('[WillTool Flow] client_submit_ui_result', {
+      debugLog('[WillTool Flow] client_submit_ui_result', {
         ref: referenceNumber,
         hasError: !!result?.error,
         hasMatterId: !!result?.matterId,
@@ -599,7 +612,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         setSubmittedMatterId(result.matterId);
       }
       setSubmitted(true);
-      console.log('[WillTool Flow] client_submit_ui_success', {
+      debugLog('[WillTool Flow] client_submit_ui_success', {
         ref: referenceNumber,
         matterId: result?.matterId ?? null,
         phase: 'client_submit_ui_success',
@@ -609,7 +622,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
     } finally {
       setIsSubmittingMatter(false);
-      console.log('[WillTool Flow] client_submit_ui_finally', { ref: referenceNumber, phase: 'client_submit_ui_finally' });
+      debugLog('[WillTool Flow] client_submit_ui_finally', { ref: referenceNumber, phase: 'client_submit_ui_finally' });
     }
   }, [referenceNumber, submitCurrentMatter, formValues, currentIndex, isDev]);
 
@@ -860,16 +873,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     const handleKeyDown = (e) => {
       // Escape to close modals
       if (e.key === 'Escape') {
-        DEBUG_LOGS&&console.log('[KEYBOARD] Escape key pressed');
+        DEBUG_LOGS&&debugLog('[KEYBOARD] Escape key pressed');
         if (signatureRequestModalOpen) {
           setSignatureRequestModalOpen(false);
         }
         if (validationModalOpen) {
-          DEBUG_LOGS&&console.log('[KEYBOARD] Closing validation modal with Escape key');
+          DEBUG_LOGS&&debugLog('[KEYBOARD] Closing validation modal with Escape key');
           setValidationModalOpen(false);
         }
         if (submitted) {
-          DEBUG_LOGS&&console.log('[KEYBOARD] Closing completion modal with Escape key');
+          DEBUG_LOGS&&debugLog('[KEYBOARD] Closing completion modal with Escape key');
           if (!solicitorMode) closeCompletionModalAsClient();
           else setSubmitted(false);
         }
@@ -877,7 +890,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       // Ctrl/Cmd + S to save draft (prevent default browser save)
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        DEBUG_LOGS&&console.log('[KEYBOARD] Ctrl/Cmd + S pressed - triggering manual save');
+        DEBUG_LOGS&&debugLog('[KEYBOARD] Ctrl/Cmd + S pressed - triggering manual save');
         e.preventDefault();
         // Trigger autosave manually
         try {
@@ -894,7 +907,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           if (testStr.length <= 5 * 1024 * 1024) {
             localStorage.setItem('willForm', testStr);
             setLastSaved(new Date());
-            DEBUG_LOGS&&console.log(`[KEYBOARD] Manual save completed - saved ${savedCount} fields`);
+            DEBUG_LOGS&&debugLog(`[KEYBOARD] Manual save completed - saved ${savedCount} fields`);
             toast.success('Draft saved', { description: 'Your progress has been saved.' });
           } else {
             DEBUG_LOGS&&console.warn(`[KEYBOARD] Manual save failed - data too large: ${testStr.length} bytes`);
@@ -921,7 +934,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   }, [signatureRequestModalOpen, validationModalOpen, submitted, formValues, solicitorMode, closeCompletionModalAsClient]);
 
   const scrollToTop = () => {
-    DEBUG_LOGS&&console.log('[SCROLL TO TOP] Back to top button clicked');
+    DEBUG_LOGS&&debugLog('[SCROLL TO TOP] Back to top button clicked');
     window.scrollTo({
       top: 0,
       behavior: 'smooth'
@@ -1037,7 +1050,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     Object.entries(bracketPlaceholderMap).forEach(([placeholder, fieldRef]) => {
       if (processedText.includes(placeholder)) {
-        if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
+        if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] 🔄 Replacing bracket placeholder "${placeholder}" with "${fieldRef}"`);
         processedText = processedText.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), fieldRef);
       }
     });
@@ -1067,9 +1080,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Only swap if it's actually different (avoid no-op)
           if (mappedId !== sectionId) {
             sectionId = mappedId;
-            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
+            if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] Alias mapping: ${fullKey.split(':')[0]} -> ${sectionId} (raw value was: ${raw})`);
           } else {
-            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
+            if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] Using section ID: ${sectionId} (raw value was: ${raw})`);
           }
         }
       }
@@ -1173,7 +1186,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           
           // Debug logging for separate trustees
           if (sectionId === 'separateTrusteesSection') {
-            if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - sectionData:`, {
+            if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - sectionData:`, {
               sectionData,
               sectionDataType: Array.isArray(sectionData) ? 'array' : typeof sectionData,
               sectionDataLength: Array.isArray(sectionData) ? sectionData.length : 'N/A',
@@ -1189,7 +1202,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               // If sectionData is null, undefined, not an array, or empty, return unresolved marker immediately
               if (!sectionData || !Array.isArray(sectionData) || sectionData.length === 0) {
                 if (sectionId === 'separateTrusteesSection') {
-                  if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
+                  if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid array data found, returning unresolved marker`);
                 }
                 return `{{field:${sectionId}:${subField}}}`;
               }
@@ -1240,7 +1253,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       );
                       
                       if (isPlaceholder) {
-                        if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
+                        if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] ${sectionId}:fullDetails - Detected exact placeholder string: "${item}"`);
                         return ''; // Return empty to mark as incomplete
                       }
                       
@@ -1320,7 +1333,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 if ((!name || name.trim() === '') || (!address || !item.address1)) {
                   // Debug logging for separate trustees when validation fails
                   if (sectionId === 'separateTrusteesSection') {
-                    if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
+                    if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - Validation failed for item:`, {
                       item,
                       hasName: !!(name && name.trim()),
                       hasAddress: !!(address && item.address1),
@@ -1346,7 +1359,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             
             // Debug logging for separate trustees
             if (sectionId === 'separateTrusteesSection') {
-              if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
+              if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - formattedItems after filter:`, {
                 formattedItems,
                 length: formattedItems.length,
                 items: formattedItems.map(item => ({ value: item, type: typeof item }))
@@ -1392,8 +1405,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               // Debug logging for separate trustees
               if (sectionId === 'separateTrusteesSection') {
                 if (DEBUG_INTERPOLATE) {
-                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
-                  console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - Testator name check passed (fullName: "${testatorFullName}", result: "${result}")`);
+                  debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - ✅ Returning interpolated result: "${result}"`);
+                  debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - Testator name check passed (fullName: "${testatorFullName}", result: "${result}")`);
                 }
               }
               
@@ -1401,7 +1414,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             } else {
               // No valid formatted items after filtering - return unresolved marker
               if (sectionId === 'separateTrusteesSection') {
-                if (DEBUG_INTERPOLATE) console.log(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
+                if (DEBUG_INTERPOLATE) debugLog(`[INTERPOLATE] separateTrusteesSection:fullDetails - ❌ No valid formatted items after filtering, returning unresolved marker`);
               }
               return `{{field:${sectionId}:${subField}}}`;
             }
@@ -1874,7 +1887,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       // Debug logging for critical FLIT fields
       if (clause.field === 'howResidueDistributed' && isDev) {
-        DEBUG_LOGS&&console.log(`[CONDITION DEBUG] Field "${field.id}" checking howResidueDistributed:`, {
+        DEBUG_LOGS&&debugLog(`[CONDITION DEBUG] Field "${field.id}" checking howResidueDistributed:`, {
           actualValue: value,
           expectedValue: clause.value,
           operator: clause.operator,
@@ -1883,7 +1896,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
       
       if (DEBUG_INTERPOLATE && (field.id === 'foreignWillNotRevoked' || clause.field === 'assetsAbroad')) {
-        console.log(`[CONDITION EVAL] 🔍 Evaluating condition for field "${field.id}":`, {
+        debugLog(`[CONDITION EVAL] 🔍 Evaluating condition for field "${field.id}":`, {
           clauseField: clause.field,
           clauseValue: clause.value,
           clauseOperator: clause.operator,
@@ -1909,7 +1922,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       : evalClause(field.conditions);
     
     if (DEBUG_INTERPOLATE && field.id === 'foreignWillNotRevoked') {
-      console.log(`[CONDITION EVAL] ✅ Final result for field "${field.id}":`, {
+      debugLog(`[CONDITION EVAL] ✅ Final result for field "${field.id}":`, {
         fieldId: field.id,
         conditions: field.conditions,
         conditionLogic: field.conditionLogic,
@@ -1921,7 +1934,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     // Enhanced debug logging for FLIT fields
     if (field.id && field.id.includes('FLIT') && isDev) {
-      DEBUG_LOGS&&console.log(`[CONDITION DEBUG] Field "${field.id}" condition result:`, {
+      DEBUG_LOGS&&debugLog(`[CONDITION DEBUG] Field "${field.id}" condition result:`, {
         fieldId: field.id,
         conditions: field.conditions,
         conditionLogic: field.conditionLogic,
@@ -1944,7 +1957,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             };
           })
         : [];
-      console.log('[EXECUTOR_AGE_DEBUG] evaluateFieldConditions', {
+      debugLog('[EXECUTOR_AGE_DEBUG] evaluateFieldConditions', {
         fieldId: field.id,
         conditionLogic: field.conditionLogic,
         chooseAristoneExecutor: formValues.chooseAristoneExecutor,
@@ -1961,30 +1974,30 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // Validation: Required Fields
   // ---------------------------
   const allRequiredFilled = useMemo(() => {
-    DEBUG_LOGS&&console.log('[VALIDATION CHECK] ========== VALIDATING SECTION ==========');
-    DEBUG_LOGS&&console.log('[VALIDATION CHECK] Current section:', currentSection?.formSection);
-    DEBUG_LOGS&&console.log('[VALIDATION CHECK] Total fields to check:', currentSectionRenderFields?.length);
+    DEBUG_LOGS&&debugLog('[VALIDATION CHECK] ========== VALIDATING SECTION ==========');
+    DEBUG_LOGS&&debugLog('[VALIDATION CHECK] Current section:', currentSection?.formSection);
+    DEBUG_LOGS&&debugLog('[VALIDATION CHECK] Total fields to check:', currentSectionRenderFields?.length);
 
     const checkField = (field) => {
-      DEBUG_LOGS&&console.log(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
+      DEBUG_LOGS&&debugLog(`[VALIDATION] Checking field "${field.id}" (${field.label})`);
 
       if (shouldHideSolicitorOnlyFieldForClient(field.id)) {
         return true;
       }
 
       if (field.conditions && !evaluateFieldConditions(field)) {
-        DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (conditions not met)`);
+        DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" - SKIPPED (conditions not met)`);
         return true;
       }
 
       if (['button', 'hidden', 'display'].includes(field.type)) {
-        DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - SKIPPED (type: ${field.type})`);
+        DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" - SKIPPED (type: ${field.type})`);
         return true;
       }
 
       if (field.type === 'businessInterestsGuided') {
         const ok = isBusinessInterestsGuidedComplete(formValues);
-        DEBUG_LOGS&&console.log(`[VALIDATION] businessInterestsGuided valid: ${ok}`);
+        DEBUG_LOGS&&debugLog(`[VALIDATION] businessInterestsGuided valid: ${ok}`);
         return ok;
       }
 
@@ -1995,7 +2008,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         const lapse = formValues.failedPropertyGiftPassProportionately;
         const lapseOk = lapse === 'Yes' || lapse === 'No' || lapse === 'Unsure';
         const ok = hasGifts && lapseOk;
-        DEBUG_LOGS&&console.log(
+        DEBUG_LOGS&&debugLog(
           `[VALIDATION] propertyGiftsGuided hasGifts: ${hasGifts}, lapse: "${lapse}", valid: ${ok}`
         );
         return ok;
@@ -2003,37 +2016,37 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       if (field.type === 'propertyTrustGuided') {
         const ok = isPropertyTrustGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] propertyTrustGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] propertyTrustGuided valid: ${ok}`);
         return ok;
       }
 
       if (field.type === 'personalChattelsGuided') {
         const ok = isPersonalChattelsGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] personalChattelsGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] personalChattelsGuided valid: ${ok}`);
         return ok;
       }
 
       if (field.type === 'deliberateExclusionsGuided') {
         const ok = isDeliberateExclusionsGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] deliberateExclusionsGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] deliberateExclusionsGuided valid: ${ok}`);
         return ok;
       }
 
       if (field.type === 'otherProvisionsGuided') {
         const ok = isOtherProvisionsGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] otherProvisionsGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] otherProvisionsGuided valid: ${ok}`);
         return ok;
       }
 
       if (field.type === 'administrativeProvisionsGuided') {
         const ok = isAdministrativeProvisionsGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] administrativeProvisionsGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] administrativeProvisionsGuided valid: ${ok}`);
         return ok;
       }
 
       if (field.type === 'estateResidueGuided') {
         const ok = isEstateResidueGuidedComplete(formValues);
-        DEBUG_LOGS && console.log(`[VALIDATION] estateResidueGuided valid: ${ok}`);
+        DEBUG_LOGS && debugLog(`[VALIDATION] estateResidueGuided valid: ${ok}`);
         return ok;
       }
 
@@ -2044,26 +2057,26 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (field.required) {
         if (field.type === 'checkboxGroup') {
           const isValid = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
-          DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (checkbox group) - Selected: ${Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0}, Valid: ${isValid}`);
+          DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" (checkbox group) - Selected: ${Array.isArray(formValues[field.id]) ? formValues[field.id].length : 0}, Valid: ${isValid}`);
           return isValid;
         }
         if (field.type === 'text' || field.type === 'textarea') {
           const val = formValues[field.id];
           const isValid = typeof val === 'string' && val.trim() !== '';
-          DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+          DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
           return isValid;
         }
         const isValid = !!formValues[field.id];
-        DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
+        DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" (${field.type}) - Value: "${formValues[field.id] || 'empty'}", Valid: ${isValid}`);
         return isValid;
       }
-      DEBUG_LOGS&&console.log(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
+      DEBUG_LOGS&&debugLog(`[VALIDATION] Field "${field.id}" - NOT REQUIRED, automatically valid`);
       return true;
     };
 
     const result = currentSectionRenderFields.every(checkField);
 
-    if (isDev) DEBUG_LOGS&&console.log('[VALIDATION CHECK] allRequiredFilled result:', result);
+    if (isDev) DEBUG_LOGS&&debugLog('[VALIDATION CHECK] allRequiredFilled result:', result);
     return result;
   }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, shouldHideSolicitorOnlyFieldForClient, isDev]);
 
@@ -2128,27 +2141,27 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // ---------------------------
   const collectValidationIssues = useCallback(() => {
     if (isDev) {
-      DEBUG_LOGS&&console.log('[VALIDATION] Collecting validation issues...');
-      DEBUG_LOGS&&console.log('[VALIDATION] Current section:', currentSection?.formSection);
-      DEBUG_LOGS&&console.log('[VALIDATION] Total fields in section:', currentSectionRenderFields?.length);
+      DEBUG_LOGS&&debugLog('[VALIDATION] Collecting validation issues...');
+      DEBUG_LOGS&&debugLog('[VALIDATION] Current section:', currentSection?.formSection);
+      DEBUG_LOGS&&debugLog('[VALIDATION] Total fields in section:', currentSectionRenderFields?.length);
     }
     
     const issues = [];
 
     const collectFromField = (field) => {
-      if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Checking field:`, field.id, field.label, 'required:', field.required);
+      if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] Checking field:`, field.id, field.label, 'required:', field.required);
 
       if (shouldHideSolicitorOnlyFieldForClient(field.id)) {
         return;
       }
 
       if (field.conditions && !evaluateFieldConditions(field)) {
-        if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} skipped - conditions not met`);
+        if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] Field ${field.id} skipped - conditions not met`);
         return;
       }
 
       if (['button', 'hidden', 'display'].includes(field.type)) {
-        if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} skipped - type: ${field.type}`);
+        if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] Field ${field.id} skipped - type: ${field.type}`);
         return;
       }
 
@@ -2249,7 +2262,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
         if (field.type === 'checkboxGroup') {
           const hasSelection = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
-          if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] CheckboxGroup ${field.id} - hasSelection:`, hasSelection);
+          if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] CheckboxGroup ${field.id} - hasSelection:`, hasSelection);
           if (!hasSelection) {
             isInvalid = true;
             issueMessage = 'Please select at least one option';
@@ -2257,7 +2270,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         } else {
           const value = formValues[field.id];
           const isEmpty = !value || (typeof value === 'string' && !value.trim());
-          if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} - value:`, value, 'isEmpty:', isEmpty);
+          if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] Field ${field.id} - value:`, value, 'isEmpty:', isEmpty);
           if (isEmpty) {
             isInvalid = true;
             issueMessage = 'This field is required';
@@ -2265,7 +2278,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
 
         if (isInvalid) {
-          if (isDev) DEBUG_LOGS&&console.log(`[VALIDATION] ❌ ISSUE FOUND: ${field.label} (${field.id}) - ${issueMessage}`);
+          if (isDev) DEBUG_LOGS&&debugLog(`[VALIDATION] ❌ ISSUE FOUND: ${field.label} (${field.id}) - ${issueMessage}`);
           issues.push({
             fieldId: field.id,
             fieldLabel: field.label,
@@ -2273,18 +2286,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             type: 'required'
           });
         } else if (isDev) {
-          DEBUG_LOGS&&console.log(`[VALIDATION] ✅ Field ${field.id} is valid`);
+          DEBUG_LOGS&&debugLog(`[VALIDATION] ✅ Field ${field.id} is valid`);
         }
       } else if (isDev) {
-        DEBUG_LOGS&&console.log(`[VALIDATION] Field ${field.id} is not required - skipping`);
+        DEBUG_LOGS&&debugLog(`[VALIDATION] Field ${field.id} is not required - skipping`);
       }
     };
 
     currentSectionRenderFields.forEach(collectFromField);
     
     if (isDev) {
-      DEBUG_LOGS&&console.log('[VALIDATION] Total issues collected:', issues.length);
-      DEBUG_LOGS&&console.log('[VALIDATION] Issues:', issues);
+      DEBUG_LOGS&&debugLog('[VALIDATION] Total issues collected:', issues.length);
+      DEBUG_LOGS&&debugLog('[VALIDATION] Issues:', issues);
     }
     return issues;
   }, [currentSection, currentSectionRenderFields, formValues, evaluateFieldConditions, shouldHideSolicitorOnlyFieldForClient, isDev]);
@@ -2293,27 +2306,27 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // Navigation Logic
   // ---------------------------
   const goNext = () => {
-    DEBUG_LOGS&&console.log('[NAVIGATION] ========== GO NEXT CLICKED ==========');
-    DEBUG_LOGS&&console.log('[NAVIGATION] Current section:', currentSection?.formSection);
-    DEBUG_LOGS&&console.log('[NAVIGATION] allRequiredFilled:', allRequiredFilled);
-    DEBUG_LOGS&&console.log('[NAVIGATION] currentIndex:', currentIndex, 'of', formData.formSections.length - 1);
-    DEBUG_LOGS&&console.log('[NAVIGATION] Current form values:', Object.keys(formValues));
+    DEBUG_LOGS&&debugLog('[NAVIGATION] ========== GO NEXT CLICKED ==========');
+    DEBUG_LOGS&&debugLog('[NAVIGATION] Current section:', currentSection?.formSection);
+    DEBUG_LOGS&&debugLog('[NAVIGATION] allRequiredFilled:', allRequiredFilled);
+    DEBUG_LOGS&&debugLog('[NAVIGATION] currentIndex:', currentIndex, 'of', formData.formSections.length - 1);
+    DEBUG_LOGS&&debugLog('[NAVIGATION] Current form values:', Object.keys(formValues));
     
     // Check if all required fields are filled before allowing navigation
     if (!allRequiredFilled) {
-      if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Required fields NOT filled - opening modal');
+      if (isDev) DEBUG_LOGS&&debugLog('[GO NEXT] Required fields NOT filled - opening modal');
       // Collect all validation issues
       const issues = collectValidationIssues();
       setValidationIssues(issues);
       setValidationModalOpen(true);
-      if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Modal state set to open');
+      if (isDev) DEBUG_LOGS&&debugLog('[GO NEXT] Modal state set to open');
       return;
     }
     
-    if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] All fields valid - proceeding to next step');
+    if (isDev) DEBUG_LOGS&&debugLog('[GO NEXT] All fields valid - proceeding to next step');
     if (currentIndex < visibleSections.length - 1) {
       const nextIndex = currentIndex + 1;
-      if (isDev) DEBUG_LOGS&&console.log('[GO NEXT] Moving from step', currentIndex + 1, 'to step', nextIndex + 1);
+      if (isDev) DEBUG_LOGS&&debugLog('[GO NEXT] Moving from step', currentIndex + 1, 'to step', nextIndex + 1);
       setCurrentIndex(nextIndex);
       // Scroll to top when changing sections
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2340,28 +2353,28 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   const handleNextButtonClick = (e) => {
     if (isDev) {
-      DEBUG_LOGS&&console.log('[NEXT BUTTON] ========== CLICKED ==========');
-      DEBUG_LOGS&&console.log('[NEXT BUTTON] allRequiredFilled:', allRequiredFilled);
-      DEBUG_LOGS&&console.log('[NEXT BUTTON] currentIndex:', currentIndex);
-      DEBUG_LOGS&&console.log('[NEXT BUTTON] currentSection:', currentSection?.formSection);
+      DEBUG_LOGS&&debugLog('[NEXT BUTTON] ========== CLICKED ==========');
+      DEBUG_LOGS&&debugLog('[NEXT BUTTON] allRequiredFilled:', allRequiredFilled);
+      DEBUG_LOGS&&debugLog('[NEXT BUTTON] currentIndex:', currentIndex);
+      DEBUG_LOGS&&debugLog('[NEXT BUTTON] currentSection:', currentSection?.formSection);
     }
     
     if (!allRequiredFilled) {
-      if (isDev) DEBUG_LOGS&&console.log('[NEXT BUTTON] ❌ Required fields NOT filled - collecting issues...');
+      if (isDev) DEBUG_LOGS&&debugLog('[NEXT BUTTON] ❌ Required fields NOT filled - collecting issues...');
       e.preventDefault();
       e.stopPropagation();
       
       const issues = collectValidationIssues();
       if (isDev) {
-        DEBUG_LOGS&&console.log('[NEXT BUTTON] Validation issues found:', issues);
-        DEBUG_LOGS&&console.log('[NEXT BUTTON] Number of issues:', issues.length);
+        DEBUG_LOGS&&debugLog('[NEXT BUTTON] Validation issues found:', issues);
+        DEBUG_LOGS&&debugLog('[NEXT BUTTON] Number of issues:', issues.length);
       }
       
       setValidationIssues(issues);
       setValidationModalOpen(true);
-      if (isDev) DEBUG_LOGS&&console.log('[NEXT BUTTON] ✅ Modal state set to TRUE');
+      if (isDev) DEBUG_LOGS&&debugLog('[NEXT BUTTON] ✅ Modal state set to TRUE');
     } else {
-      if (isDev) DEBUG_LOGS&&console.log('[NEXT BUTTON] ✅ All required fields filled - proceeding to next step');
+      if (isDev) DEBUG_LOGS&&debugLog('[NEXT BUTTON] ✅ All required fields filled - proceeding to next step');
       goNext();
     }
   };
@@ -2372,7 +2385,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     // Special logging for foreignWillNotRevoked
     if (normalized === 'foreignwillnotrevoked' || normalized.includes('foreignwill')) {
-      console.log('[SEARCH FIELD RECURSIVELY] 🔍 Checking field:', {
+      debugLog('[SEARCH FIELD RECURSIVELY] 🔍 Checking field:', {
         fieldId: field.id,
         fieldLabel: field.label,
         fieldType: field.type,
@@ -2388,7 +2401,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     // Check field ID directly
     if (field.id && field.id.toLowerCase() === normalized) {
       if (normalized === 'foreignwillnotrevoked' || normalized.includes('foreignwill')) {
-        console.log('[SEARCH FIELD RECURSIVELY] ✅ DIRECT ID MATCH:', field.id);
+        debugLog('[SEARCH FIELD RECURSIVELY] ✅ DIRECT ID MATCH:', field.id);
       }
       return field.id;
     }
@@ -2494,11 +2507,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   };
 
   const scrollToField = (fieldId, targetFieldIds = [], retryCount = 0) => {
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ========== SCROLLING TO FIELD "${fieldId}" ==========`);
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field ID type:`, typeof fieldId);
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field ID value:`, fieldId);
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Target field IDs (fallback):`, targetFieldIds);
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Retry count:`, retryCount);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ========== SCROLLING TO FIELD "${fieldId}" ==========`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Field ID type:`, typeof fieldId);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Field ID value:`, fieldId);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Target field IDs (fallback):`, targetFieldIds);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Retry count:`, retryCount);
     
     if (!fieldId) {
       console.error(`[SCROLL TO FIELD] ❌ No fieldId provided!`);
@@ -2507,49 +2520,49 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     // Try primary fieldId first
     const tryField = (id) => {
-      DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Trying field ID: "${id}"`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Trying field ID: "${id}"`);
       const selector = `[data-field-id="${id}"]`;
       const fieldElement = document.querySelector(selector);
       
       if (fieldElement) {
-        DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ✅ Found field element for "${id}" - scrolling and highlighting`);
-        DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Element tag:`, fieldElement.tagName);
-        DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Element classes:`, fieldElement.className);
+        DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ✅ Found field element for "${id}" - scrolling and highlighting`);
+        DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Element tag:`, fieldElement.tagName);
+        DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Element classes:`, fieldElement.className);
         
         try {
           fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ScrollIntoView called successfully`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ScrollIntoView called successfully`);
           
           // Add a highlight effect
           fieldElement.classList.add('animate-pulse');
-          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Added animate-pulse class`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Added animate-pulse class`);
           setTimeout(() => {
             fieldElement.classList.remove('animate-pulse');
-            DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Removed animate-pulse class`);
+            DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Removed animate-pulse class`);
           }, 2000);
           
           // Focus on the first input in that field (or the button itself if it's a button)
           const input = fieldElement?.querySelector('input, textarea, select');
           const isButton = fieldElement.tagName === 'BUTTON' || fieldElement.querySelector('button');
-          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Found input element:`, input, 'isButton:', isButton);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Found input element:`, input, 'isButton:', isButton);
           if (input) {
-            DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Focusing on input element in field "${id}"`);
+            DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Focusing on input element in field "${id}"`);
             setTimeout(() => {
               try {
                 input.focus();
-                DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ✅ Input focused successfully`);
+                DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ✅ Input focused successfully`);
               } catch (focusError) {
                 console.error(`[SCROLL TO FIELD] ❌ Error focusing input:`, focusError);
               }
             }, 500);
           } else if (isButton) {
-            DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Field is a button, no input to focus`);
+            DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Field is a button, no input to focus`);
           } else {
-            DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] No input element found in field`);
+            DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] No input element found in field`);
           }
           
           // Close modal after scrolling
-          DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Closing validation modal after scroll to "${id}"`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Closing validation modal after scroll to "${id}"`);
           setValidationModalOpen(false);
           return true;
         } catch (scrollError) {
@@ -2567,22 +2580,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     // Try targetFieldIds as fallback
     if (Array.isArray(targetFieldIds) && targetFieldIds.length > 0) {
-      console.log(`[SCROLL TO FIELD] Primary fieldId "${fieldId}" not found, trying ${targetFieldIds.length} fallback field IDs...`);
+      debugLog(`[SCROLL TO FIELD] Primary fieldId "${fieldId}" not found, trying ${targetFieldIds.length} fallback field IDs...`);
       for (const fallbackId of targetFieldIds) {
         if (fallbackId !== fieldId) {
-          console.log(`[SCROLL TO FIELD] Trying fallback field ID: "${fallbackId}"`);
+          debugLog(`[SCROLL TO FIELD] Trying fallback field ID: "${fallbackId}"`);
           if (tryField(fallbackId)) {
-            console.log(`[SCROLL TO FIELD] ✅ Found fallback field "${fallbackId}"`);
+            debugLog(`[SCROLL TO FIELD] ✅ Found fallback field "${fallbackId}"`);
             return;
           }
         }
       }
-      console.log(`[SCROLL TO FIELD] ⚠️ None of the fallback field IDs worked:`, targetFieldIds);
+      debugLog(`[SCROLL TO FIELD] ⚠️ None of the fallback field IDs worked:`, targetFieldIds);
     }
     
     // Try case-insensitive search
     const allFields = document.querySelectorAll('[data-field-id]');
-    DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] Total fields with data-field-id:`, allFields.length);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Total fields with data-field-id:`, allFields.length);
     
     const searchIds = [fieldId, ...(Array.isArray(targetFieldIds) ? targetFieldIds : [])];
     const foundField = Array.from(allFields).find(field => {
@@ -2591,7 +2604,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     });
     
     if (foundField) {
-      DEBUG_LOGS&&console.log(`[SCROLL TO FIELD] ✅ Found field via case-insensitive search`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ✅ Found field via case-insensitive search`);
       foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
       const input = foundField.querySelector('input, textarea, select');
       if (input) {
@@ -2606,7 +2619,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     
     // If not found and retry count is less than 3, retry after a delay (for DOM updates)
     if (retryCount < 3) {
-      console.log(`[SCROLL TO FIELD] ⏳ Field "${fieldId}" not found, retrying in ${(retryCount + 1) * 500}ms... (attempt ${retryCount + 1}/3)`);
+      debugLog(`[SCROLL TO FIELD] ⏳ Field "${fieldId}" not found, retrying in ${(retryCount + 1) * 500}ms... (attempt ${retryCount + 1}/3)`);
       setTimeout(() => {
         scrollToField(fieldId, targetFieldIds, retryCount + 1);
       }, (retryCount + 1) * 500);
@@ -2628,16 +2641,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   };
 
   const findFieldIdByLabel = (label, allowPartial = true) => {
-    console.log('[FIND FIELD BY LABEL] 🔍 Starting search:', { label, allowPartial });
+    debugLog('[FIND FIELD BY LABEL] 🔍 Starting search:', { label, allowPartial });
     if (!label || !formData?.formSections) {
       console.error('[FIND FIELD BY LABEL] ❌ Invalid input:', { label, hasFormData: !!formData, hasFormSections: !!formData?.formSections });
       return null;
     }
     const normalized = String(label).trim().toLowerCase();
-    console.log('[FIND FIELD BY LABEL] 🔍 Normalized label:', normalized);
+    debugLog('[FIND FIELD BY LABEL] 🔍 Normalized label:', normalized);
     // Extract key words from the label (first 30-50 chars usually contain the question)
     const keyWords = normalized.split(/\s+/).filter(w => w.length > 3).slice(0, 5);
-    console.log('[FIND FIELD BY LABEL] 🔍 Key words:', keyWords);
+    debugLog('[FIND FIELD BY LABEL] 🔍 Key words:', keyWords);
     
     let searchCount = 0;
     for (const section of formData.formSections) {
@@ -2646,7 +2659,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         searchCount++;
         const result = searchFieldRecursively(field, normalized, keyWords, allowPartial);
         if (result) {
-          console.log('[FIND FIELD BY LABEL] ✅ Found match:', { result, searchCount, section: section.formSection });
+          debugLog('[FIND FIELD BY LABEL] ✅ Found match:', { result, searchCount, section: section.formSection });
           return result;
         }
       }
@@ -2657,26 +2670,26 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   // Helper to find and scroll to schedule fields
   const scrollToScheduleField = (scheduleText) => {
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ========== STARTING SCHEDULE SEARCH ==========`);
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Input scheduleText: "${scheduleText}"`);
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Type of scheduleText:`, typeof scheduleText);
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Current form values:`, Object.keys(formValues).length, 'fields');
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] propertyTrustScheduleNumber:`, formValues.propertyTrustScheduleNumber);
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] bprTrustScheduleNumber:`, formValues.bprTrustScheduleNumber);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ========== STARTING SCHEDULE SEARCH ==========`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Input scheduleText: "${scheduleText}"`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Type of scheduleText:`, typeof scheduleText);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Current form values:`, Object.keys(formValues).length, 'fields');
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] propertyTrustScheduleNumber:`, formValues.propertyTrustScheduleNumber);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] bprTrustScheduleNumber:`, formValues.bprTrustScheduleNumber);
     
     // Extract schedule number from "Schedule 65432" or "Schedule65432" etc.
     const scheduleMatch = scheduleText.match(/schedule\s*(\d+)/i);
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Regex match result:`, scheduleMatch);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Regex match result:`, scheduleMatch);
     const scheduleNumber = scheduleMatch ? scheduleMatch[1] : null;
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Extracted schedule number: "${scheduleNumber}"`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Extracted schedule number: "${scheduleNumber}"`);
     
     if (!scheduleNumber) {
       console.error(`[SCROLL TO SCHEDULE] Could not extract schedule number from: "${scheduleText}"`);
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Trying fallback: search for any schedule section...`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Trying fallback: search for any schedule section...`);
     }
     
     if (scheduleNumber) {
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Searching for schedule number: ${scheduleNumber}`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Searching for schedule number: ${scheduleNumber}`);
       
       // Try multiple strategies to find the schedule field
       const searchStrategies = [
@@ -2690,15 +2703,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         `[data-field-id*="schedule"]`,
       ];
       
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Trying ${searchStrategies.length} selector strategies...`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Trying ${searchStrategies.length} selector strategies...`);
       for (let i = 0; i < searchStrategies.length; i++) {
         const selector = searchStrategies[i];
-        DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Strategy ${i + 1}: Trying selector "${selector}"`);
+        DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Strategy ${i + 1}: Trying selector "${selector}"`);
         const element = document.querySelector(selector);
-        DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Strategy ${i + 1} result:`, element);
+        DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Strategy ${i + 1} result:`, element);
         if (element) {
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found field with selector: ${selector}`);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Element details:`, {
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found field with selector: ${selector}`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Element details:`, {
             tagName: element.tagName,
             id: element.id,
             className: element.className,
@@ -2709,25 +2722,25 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           setTimeout(() => element.classList.remove('animate-pulse'), 2000);
           
           const input = element.querySelector('input, textarea, select');
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Found input element:`, input);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Found input element:`, input);
           if (input) {
             setTimeout(() => {
-              DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Focusing input...`);
+              DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Focusing input...`);
               input.focus();
             }, 500);
           }
           
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Closing validation modal...`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Closing validation modal...`);
           setValidationModalOpen(false);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
           return;
         }
       }
       
       // Strategy 5: Search all fields and find one with schedule number in value or label
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] All selector strategies failed, trying manual field search...`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] All selector strategies failed, trying manual field search...`);
       const allFields = document.querySelectorAll('[data-field-id]');
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Total fields with data-field-id: ${allFields.length}`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Total fields with data-field-id: ${allFields.length}`);
       
       let checkedCount = 0;
       for (const field of allFields) {
@@ -2741,11 +2754,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         const hasScheduleInValue = value.includes(scheduleNumber);
         
         if (hasScheduleInId || hasScheduleInLabel || hasScheduleInValue) {
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found matching field at index ${checkedCount}:`);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Field ID: "${fieldId}"`);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Label: "${label}"`);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Value: "${value}"`);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Matches:`, { hasScheduleInId, hasScheduleInLabel, hasScheduleInValue });
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ✅ SUCCESS! Found matching field at index ${checkedCount}:`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Field ID: "${fieldId}"`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Label: "${label}"`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Value: "${value}"`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Matches:`, { hasScheduleInId, hasScheduleInLabel, hasScheduleInValue });
           
           field.scrollIntoView({ behavior: 'smooth', block: 'center' });
           field.classList.add('animate-pulse');
@@ -2757,27 +2770,27 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           
           setValidationModalOpen(false);
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ========== SUCCESS - EXITING ==========`);
           return;
         }
         
         // Log first 5 fields for debugging
         if (checkedCount <= 5) {
-          DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Field ${checkedCount}: ID="${fieldId}", Label="${label.substring(0, 50)}"`);
+          DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Field ${checkedCount}: ID="${fieldId}", Label="${label.substring(0, 50)}"`);
         }
       }
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Checked ${checkedCount} fields, no match found`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Checked ${checkedCount} fields, no match found`);
     }
     
     // Fallback: Try to find any schedule-related section
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Trying fallback: search for schedule sections...`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Trying fallback: search for schedule sections...`);
     const scheduleSections = document.querySelectorAll('[aria-label*="Schedule"], [aria-label*="schedule"]');
-    DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Found ${scheduleSections.length} schedule sections`);
+    DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Found ${scheduleSections.length} schedule sections`);
     if (scheduleSections.length > 0) {
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] Falling back to first schedule section`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] Falling back to first schedule section`);
       scheduleSections[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
       setValidationModalOpen(false);
-      DEBUG_LOGS&&console.log(`[SCROLL TO SCHEDULE] ========== FALLBACK SUCCESS - EXITING ==========`);
+      DEBUG_LOGS&&debugLog(`[SCROLL TO SCHEDULE] ========== FALLBACK SUCCESS - EXITING ==========`);
       return;
     }
     
@@ -2786,12 +2799,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   };
 
   const saveDraft = () => {
-    DEBUG_LOGS&&console.log('[SAVE DRAFT] ========== MANUAL SAVE DRAFT CLICKED ==========');
-    DEBUG_LOGS&&console.log('[SAVE DRAFT] Current form values count:', Object.keys(formValues).length);
+    DEBUG_LOGS&&debugLog('[SAVE DRAFT] ========== MANUAL SAVE DRAFT CLICKED ==========');
+    DEBUG_LOGS&&debugLog('[SAVE DRAFT] Current form values count:', Object.keys(formValues).length);
     
     try {
       const dataToSave = buildLocalDraftPayload(formValues);
-      DEBUG_LOGS&&console.log(`[SAVE DRAFT] Prepared ${Object.keys(dataToSave).length} fields for saving`);
+      DEBUG_LOGS&&debugLog(`[SAVE DRAFT] Prepared ${Object.keys(dataToSave).length} fields for saving`);
       
       // Check localStorage quota
       const testStr = JSON.stringify(dataToSave);
@@ -2803,19 +2816,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (!useExternalPersistence) {
         localStorage.setItem('willForm', testStr);
       }
-      DEBUG_LOGS&&console.log(`[SAVE DRAFT] Successfully saved draft with ${Object.keys(dataToSave).length} fields`);
+      DEBUG_LOGS&&debugLog(`[SAVE DRAFT] Successfully saved draft with ${Object.keys(dataToSave).length} fields`);
 
       if (externalPersistence?.save) {
         externalPersistence.save({ formValues, currentIndex, saveType: 'manual' });
       } else if (useCloud && sessionInitialized && referenceNumber && sessionSecret) {
         const cloudPayload = buildCloudPayload(formValues, currentIndex);
-        console.log('[WillTool Flow] Client manual save: sending draft to cloud', { ref: referenceNumber, step: currentIndex });
+        debugLog('[WillTool Flow] Client manual save: sending draft to cloud', { ref: referenceNumber, step: currentIndex });
         saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
           if (res.error) {
             console.warn('[WillTool Flow] Client cloud save failed', { ref: referenceNumber, error: res.error });
             toast.error('Cloud save failed', { description: res.error });
           } else {
-            console.log('[WillTool Flow] Client draft saved to cloud (manual)', { ref: referenceNumber });
+            debugLog('[WillTool Flow] Client draft saved to cloud (manual)', { ref: referenceNumber });
             toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
           }
         });
@@ -2902,9 +2915,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   // Auto-fill form with dummy data - respects client mode (filters solicitor-only fields)
   const handleAutoFill = useCallback(() => {
-    console.log('[FORM AUTO-FILL] ========== AUTO-FILL BUTTON CLICKED ==========');
+    debugLog('[FORM AUTO-FILL] ========== AUTO-FILL BUTTON CLICKED ==========');
       const isClient = !solicitorMode;
-    console.log('[FORM AUTO-FILL] 📋 Form data available:', {
+    debugLog('[FORM AUTO-FILL] 📋 Form data available:', {
       hasFormData: !!formData,
       totalSections: formData?.formSections?.length || 0,
       visibleSections: visibleSections.length,
@@ -2913,29 +2926,29 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     });
     
     try {
-      console.log('[FORM AUTO-FILL] 🔄 Calling generateDummyFormData...');
+      debugLog('[FORM AUTO-FILL] 🔄 Calling generateDummyFormData...');
       // Generate dummy data using ALL sections (needed for proper field mapping)
       const dummyData = generateDummyFormData(formData);
       
       // Filter out solicitor-only fields if in client mode
       if (isClient) {
-        console.log('[FORM AUTO-FILL] 🔒 Client mode detected - filtering solicitor-only fields...');
+        debugLog('[FORM AUTO-FILL] 🔒 Client mode detected - filtering solicitor-only fields...');
         let removedCount = 0;
         SOLICITOR_ONLY_FIELD_IDS.forEach((fieldId) => {
           if (dummyData[fieldId] !== undefined) {
             delete dummyData[fieldId];
             removedCount++;
-            console.log(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
+            debugLog(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
           }
         });
-        console.log(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields (Estate Overview demo values are kept for clients)`);
+        debugLog(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields (Estate Overview demo values are kept for clients)`);
       }
 
-      console.log(
+      debugLog(
         '[AUTOFILL_VERIFY] Next: solicitor mode → open Trustees/Executors step. Console: filter AUTOFILL_VERIFY or EXECUTOR_AGE_DEBUG or AUTOFILL GENERATE.'
       );
       
-      console.log('[FORM AUTO-FILL] ✅ Generated dummy data:', {
+      debugLog('[FORM AUTO-FILL] ✅ Generated dummy data:', {
         totalFields: Object.keys(dummyData).length,
         contactRegistryEntries: Array.isArray(dummyData.contactRegistry) ? dummyData.contactRegistry.length : 0,
         hasSeparateTrusteeData: !!dummyData.separateTrusteeData,
@@ -2946,7 +2959,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         sampleFields: Object.keys(dummyData).slice(0, 8)
       });
 
-      console.log('[EXECUTOR_AGE_DEBUG] autofill run', {
+      debugLog('[EXECUTOR_AGE_DEBUG] autofill run', {
         when: 'after dummyData generated (before setState)',
         solicitorMode: !isClient,
         chooseAristoneExecutor: dummyData.chooseAristoneExecutor,
@@ -2956,7 +2969,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (Array.isArray(dummyData.executorData)) {
         dummyData.executorData.forEach((row, i) => {
           const keys = row && typeof row === 'object' && !Array.isArray(row) ? Object.keys(row) : null;
-          console.log('[EXECUTOR_AGE_DEBUG] autofill executorData row', {
+          debugLog('[EXECUTOR_AGE_DEBUG] autofill executorData row', {
             index: i,
             typeofRow: typeof row,
             keys,
@@ -2970,7 +2983,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       }
       
       if (dummyData.separateTrusteeData) {
-        console.log('[FORM AUTO-FILL] 🔍 Separate trustee data details:', {
+        debugLog('[FORM AUTO-FILL] 🔍 Separate trustee data details:', {
           isArray: Array.isArray(dummyData.separateTrusteeData),
           length: Array.isArray(dummyData.separateTrusteeData) ? dummyData.separateTrusteeData.length : 'N/A',
           firstItem: Array.isArray(dummyData.separateTrusteeData) && dummyData.separateTrusteeData.length > 0 
@@ -2983,18 +2996,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       const filteredToSchema = filterAutofillPayloadToFormSchema(dummyData, formData);
       if (import.meta.env.DEV && Object.keys(filteredToSchema).length < Object.keys(dummyData).length) {
         const dropped = Object.keys(dummyData).filter((k) => !(k in filteredToSchema));
-        console.log('[FORM AUTO-FILL] 🧹 Dropped non-schema autofill keys:', dropped);
+        debugLog('[FORM AUTO-FILL] 🧹 Dropped non-schema autofill keys:', dropped);
       }
       
       const nextStateForPreview = { ...filteredToSchema };
-      console.log('[FORM AUTO-FILL] ✅ New form state (schema-filtered) preview:', {
+      debugLog('[FORM AUTO-FILL] ✅ New form state (schema-filtered) preview:', {
         previousKeyCount: Object.keys(formValues).length,
         nextKeyCount: Object.keys(nextStateForPreview).length,
         hasSeparateTrusteeData: !!nextStateForPreview.separateTrusteeData
       });
       if (import.meta.env.DEV) {
         const est = getAristoneEstateRecommendationState(nextStateForPreview);
-        console.log('[FORM AUTO-FILL] Estate recommendation preview (after merge):', {
+        debugLog('[FORM AUTO-FILL] Estate recommendation preview (after merge):', {
           summary: getEstateRecommendationLogSummary(est),
           eligible: est.eligible,
           estateApproxValue: est.grossKey,
@@ -3007,22 +3020,22 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         });
       }
 
-      console.log('[FORM AUTO-FILL] 🔄 Updating form values state (replace with schema-only keys, no legacy merge)...');
+      debugLog('[FORM AUTO-FILL] 🔄 Updating form values state (replace with schema-only keys, no legacy merge)...');
       setFormValues(filteredToSchema);
       
-      console.log('[FORM AUTO-FILL] 💾 Saving to localStorage...');
+      debugLog('[FORM AUTO-FILL] 💾 Saving to localStorage...');
       try {
         localStorage.setItem('willForm', JSON.stringify(filteredToSchema));
-        console.log('[FORM AUTO-FILL] ✅ Saved to localStorage successfully');
+        debugLog('[FORM AUTO-FILL] ✅ Saved to localStorage successfully');
       } catch (storageError) {
         console.error('[FORM AUTO-FILL] ❌ Failed to save to localStorage:', storageError);
       }
       
-      console.log('[FORM AUTO-FILL] ⏱️ Scheduling form values refresh...');
+      debugLog('[FORM AUTO-FILL] ⏱️ Scheduling form values refresh...');
       setTimeout(() => {
-        console.log('[FORM AUTO-FILL] 🔄 Refreshing form values state...');
+        debugLog('[FORM AUTO-FILL] 🔄 Refreshing form values state...');
         setFormValues(current => {
-          console.log('[FORM AUTO-FILL] ✅ Form values refreshed:', {
+          debugLog('[FORM AUTO-FILL] ✅ Form values refreshed:', {
             currentCount: Object.keys(current).length,
             hasSeparateTrusteeData: !!current.separateTrusteeData,
             contactRegistryEntries: Array.isArray(current.contactRegistry) ? current.contactRegistry.length : 0
@@ -3041,7 +3054,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
       
       if (import.meta.env.DEV) {
-        console.log('[FORM AUTO-FILL] 🔍 Building clause debug export...');
+        debugLog('[FORM AUTO-FILL] 🔍 Building clause debug export...');
         const previewMaxIndex = visibleSections.length - 1;
         const exportPayload = buildClauseDebugExport(filteredToSchema, previewMaxIndex);
         window.lastClauseDebugExport = exportPayload;
@@ -3052,7 +3065,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         console.groupEnd();
       }
       
-      console.log('[FORM AUTO-FILL] ========== AUTO-FILL COMPLETED SUCCESSFULLY ==========');
+      debugLog('[FORM AUTO-FILL] ========== AUTO-FILL COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
       console.error('[FORM AUTO-FILL] ❌ Auto-fill error:', error);
       console.error('[FORM AUTO-FILL] Error details:', {
@@ -3099,20 +3112,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   // Calculate form completion percentage
   useEffect(() => {
     const calculateCompletion = () => {
-      DEBUG_LOGS&&console.log('[COMPLETION %] ========== CALCULATING FORM COMPLETION PERCENTAGE ==========');
+      DEBUG_LOGS&&debugLog('[COMPLETION %] ========== CALCULATING FORM COMPLETION PERCENTAGE ==========');
       let totalRequired = 0;
       let completedRequired = 0;
 
       formData.formSections.forEach((section, sectionIndex) => {
-        DEBUG_LOGS&&console.log(`[COMPLETION %] Section ${sectionIndex + 1}: "${section.formSection}"`);
+        DEBUG_LOGS&&debugLog(`[COMPLETION %] Section ${sectionIndex + 1}: "${section.formSection}"`);
 
         const accumulateCompletion = (field) => {
           if (field.conditions && !evaluateFieldConditions(field)) {
-            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (conditions not met)`);
+            DEBUG_LOGS&&debugLog(`[COMPLETION %] Field "${field.id}" - SKIPPED (conditions not met)`);
             return;
           }
           if (['button', 'hidden', 'display'].includes(field.type)) {
-            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - SKIPPED (type: ${field.type})`);
+            DEBUG_LOGS&&debugLog(`[COMPLETION %] Field "${field.id}" - SKIPPED (type: ${field.type})`);
             return;
           }
           if (field.type === 'section' && field.subFields) {
@@ -3121,7 +3134,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           if (!field.required) return;
           totalRequired++;
-          DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
+          DEBUG_LOGS&&debugLog(`[COMPLETION %] Field "${field.id}" - REQUIRED field found (total now: ${totalRequired})`);
           let isCompleted;
           if (field.type === 'checkboxGroup') {
             isCompleted = Array.isArray(formValues[field.id]) && formValues[field.id].length > 0;
@@ -3133,9 +3146,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           if (isCompleted) {
             completedRequired++;
-            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - COMPLETED (completed now: ${completedRequired})`);
+            DEBUG_LOGS&&debugLog(`[COMPLETION %] Field "${field.id}" - COMPLETED (completed now: ${completedRequired})`);
           } else {
-            DEBUG_LOGS&&console.log(`[COMPLETION %] Field "${field.id}" - NOT completed`);
+            DEBUG_LOGS&&debugLog(`[COMPLETION %] Field "${field.id}" - NOT completed`);
           }
         };
 
@@ -3143,7 +3156,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
 
       const percent = totalRequired > 0 ? Math.round((completedRequired / totalRequired) * 100) : 0;
-      DEBUG_LOGS&&console.log(`[COMPLETION %] FINAL CALCULATION: ${completedRequired}/${totalRequired} = ${percent}%`);
+      DEBUG_LOGS&&debugLog(`[COMPLETION %] FINAL CALCULATION: ${completedRequired}/${totalRequired} = ${percent}%`);
       setFormCompletionPercent(percent);
     };
 
@@ -3179,12 +3192,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         
         const hasPlaceholderEntries = formValues.separateTrusteeData.some(isPlaceholder);
         if (hasPlaceholderEntries) {
-          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in separateTrusteeData, cleaning up...');
+          debugLog('[CLEANUP] 🔍 Found exact placeholder string entries in separateTrusteeData, cleaning up...');
           const cleanedData = formValues.separateTrusteeData.filter(item => !isPlaceholder(item));
           if (cleanedData.length !== formValues.separateTrusteeData.length) {
             updatedValues.separateTrusteeData = cleanedData;
             hasChanges = true;
-            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from separateTrusteeData:', {
+            debugLog('[CLEANUP] ✅ Cleaned up placeholder string entries from separateTrusteeData:', {
               before: formValues.separateTrusteeData.length,
               after: cleanedData.length,
               removed: formValues.separateTrusteeData.length - cleanedData.length
@@ -3194,7 +3207,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Log when we have string entries but they're not placeholders (legitimate user input)
           const stringEntries = formValues.separateTrusteeData.filter(item => typeof item === 'string');
           if (stringEntries.length > 0) {
-            console.log('[CLEANUP] ℹ️ Found legitimate string entries in separateTrusteeData (keeping them):', stringEntries);
+            debugLog('[CLEANUP] ℹ️ Found legitimate string entries in separateTrusteeData (keeping them):', stringEntries);
           }
         }
       }
@@ -3221,12 +3234,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         
         const hasPlaceholderEntries = formValues.petCarerData.some(isPlaceholder);
         if (hasPlaceholderEntries) {
-          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in petCarerData, cleaning up...');
+          debugLog('[CLEANUP] 🔍 Found exact placeholder string entries in petCarerData, cleaning up...');
           const cleanedData = formValues.petCarerData.filter(item => !isPlaceholder(item));
           if (cleanedData.length !== formValues.petCarerData.length) {
             updatedValues.petCarerData = cleanedData;
             hasChanges = true;
-            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from petCarerData:', {
+            debugLog('[CLEANUP] ✅ Cleaned up placeholder string entries from petCarerData:', {
               before: formValues.petCarerData.length,
               after: cleanedData.length,
               removed: formValues.petCarerData.length - cleanedData.length
@@ -3236,7 +3249,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Log when we have string entries but they're not placeholders (legitimate user input)
           const stringEntries = formValues.petCarerData.filter(item => typeof item === 'string');
           if (stringEntries.length > 0) {
-            console.log('[CLEANUP] ℹ️ Found legitimate string entries in petCarerData (keeping them):', stringEntries);
+            debugLog('[CLEANUP] ℹ️ Found legitimate string entries in petCarerData (keeping them):', stringEntries);
           }
         }
       }
@@ -3264,12 +3277,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         
         const hasPlaceholderEntries = formValues.substitutePetCarerData.some(isPlaceholder);
         if (hasPlaceholderEntries) {
-          console.log('[CLEANUP] 🔍 Found exact placeholder string entries in substitutePetCarerData, cleaning up...');
+          debugLog('[CLEANUP] 🔍 Found exact placeholder string entries in substitutePetCarerData, cleaning up...');
           const cleanedData = formValues.substitutePetCarerData.filter(item => !isPlaceholder(item));
           if (cleanedData.length !== formValues.substitutePetCarerData.length) {
             updatedValues.substitutePetCarerData = cleanedData;
             hasChanges = true;
-            console.log('[CLEANUP] ✅ Cleaned up placeholder string entries from substitutePetCarerData:', {
+            debugLog('[CLEANUP] ✅ Cleaned up placeholder string entries from substitutePetCarerData:', {
               before: formValues.substitutePetCarerData.length,
               after: cleanedData.length,
               removed: formValues.substitutePetCarerData.length - cleanedData.length
@@ -3279,13 +3292,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           // Log when we have string entries but they're not placeholders (legitimate user input)
           const stringEntries = formValues.substitutePetCarerData.filter(item => typeof item === 'string');
           if (stringEntries.length > 0) {
-            console.log('[CLEANUP] ℹ️ Found legitimate string entries in substitutePetCarerData (keeping them):', stringEntries);
+            debugLog('[CLEANUP] ℹ️ Found legitimate string entries in substitutePetCarerData (keeping them):', stringEntries);
           }
         }
       }
 
       if (hasChanges) {
-        console.log('[CLEANUP] ✅ Applying cleanup changes to form values');
+        debugLog('[CLEANUP] ✅ Applying cleanup changes to form values');
         setFormValues(updatedValues);
       }
     };
@@ -3351,7 +3364,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             updatedValues.separateTrusteeData = cleanedExistingData;
             hasChanges = true;
 
-            console.log('[MODAL PROCESSOR] Processed separate trustee modal fields:', {
+            debugLog('[MODAL PROCESSOR] Processed separate trustee modal fields:', {
               trusteeObject,
               totalTrustees: cleanedExistingData.length
             });
@@ -3404,7 +3417,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             updatedValues.petCarerData = cleanedExistingData;
             hasChanges = true;
 
-            console.log('[MODAL PROCESSOR] Processed pet carer modal fields:', {
+            debugLog('[MODAL PROCESSOR] Processed pet carer modal fields:', {
               carerObject,
               totalCarers: cleanedExistingData.length
             });
@@ -3457,7 +3470,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             updatedValues.substitutePetCarerData = cleanedExistingData;
             hasChanges = true;
 
-            console.log('[MODAL PROCESSOR] Processed substitute pet carer modal fields:', {
+            debugLog('[MODAL PROCESSOR] Processed substitute pet carer modal fields:', {
               carerObject,
               totalCarers: cleanedExistingData.length
             });
@@ -3473,10 +3486,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           JSON.stringify(updatedValues.substitutePetCarerData || []) !== JSON.stringify(formValues.substitutePetCarerData || []);
         
         if (dataChanged) {
-          console.log('[MODAL PROCESSOR] Updating form values with structured modal data');
+          debugLog('[MODAL PROCESSOR] Updating form values with structured modal data');
           setFormValues(updatedValues);
         } else {
-          console.log('[MODAL PROCESSOR] No data changes detected, skipping update');
+          debugLog('[MODAL PROCESSOR] No data changes detected, skipping update');
         }
       }
     };
@@ -3488,8 +3501,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
   // Autosave (debounced) — with visual feedback
   useEffect(() => {
-    DEBUG_LOGS&&console.log('[AUTOSAVE] Form values changed, triggering autosave timer...');
-    DEBUG_LOGS&&console.log('[AUTOSAVE] Changed values:', Object.keys(formValues));
+    DEBUG_LOGS&&debugLog('[AUTOSAVE] Form values changed, triggering autosave timer...');
+    DEBUG_LOGS&&debugLog('[AUTOSAVE] Changed values:', Object.keys(formValues));
     
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
@@ -3498,10 +3511,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     setIsSaving(true);
 
     autosaveTimerRef.current = setTimeout(() => {
-      DEBUG_LOGS&&console.log('[AUTOSAVE] Executing autosave...');
+      DEBUG_LOGS&&debugLog('[AUTOSAVE] Executing autosave...');
       try {
         const dataToSave = buildLocalDraftPayload(formValues);
-        DEBUG_LOGS&&console.log(`[AUTOSAVE] Prepared ${Object.keys(dataToSave).length} fields for saving`);
+        DEBUG_LOGS&&debugLog(`[AUTOSAVE] Prepared ${Object.keys(dataToSave).length} fields for saving`);
         
         const testStr = JSON.stringify(dataToSave);
         if (testStr.length <= 5 * 1024 * 1024) {
@@ -3510,7 +3523,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           }
           setLastSaved(new Date());
           setIsSaving(false);
-          DEBUG_LOGS&&console.log(`[AUTOSAVE] Successfully saved ${Object.keys(dataToSave).length} fields to localStorage`);
+          DEBUG_LOGS&&debugLog(`[AUTOSAVE] Successfully saved ${Object.keys(dataToSave).length} fields to localStorage`);
           if (externalPersistence?.save) {
             externalPersistence.save({ formValues, currentIndex, saveType: 'auto' }).then((res) => {
               if (res?.error) console.warn('[AUTOSAVE] External save failed:', res.error);
@@ -3960,9 +3973,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return;
       }
       
-      console.log('[WillTool Flow] PDF generation started', { isClientPDF: clientCopy || !solicitorMode, phase: 'client_pdf_start' });
-      console.log('[PDF GENERATION] 🔄 Calling generatePDFWithJSPDF with sanitized values...');
-      console.log('[PDF GENERATION] 📊 Sanitized values summary:', {
+      debugLog('[WillTool Flow] PDF generation started', { isClientPDF: clientCopy || !solicitorMode, phase: 'client_pdf_start' });
+      debugLog('[PDF GENERATION] 🔄 Calling generatePDFWithJSPDF with sanitized values...');
+      debugLog('[PDF GENERATION] 📊 Sanitized values summary:', {
         totalFields: Object.keys(sanitizedValues).length,
         hasSeparateTrusteeData: !!sanitizedValues.separateTrusteeData,
         separateTrusteeDataType: Array.isArray(sanitizedValues.separateTrusteeData) ? 'array' : typeof sanitizedValues.separateTrusteeData,
@@ -3974,7 +3987,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
       
       if (sanitizedValues.separateTrusteeData) {
-        console.log('[PDF GENERATION] 🔍 Separate trustee data in sanitized values:', {
+        debugLog('[PDF GENERATION] 🔍 Separate trustee data in sanitized values:', {
           isArray: Array.isArray(sanitizedValues.separateTrusteeData),
           length: Array.isArray(sanitizedValues.separateTrusteeData) ? sanitizedValues.separateTrusteeData.length : 'N/A',
           firstItem: Array.isArray(sanitizedValues.separateTrusteeData) && sanitizedValues.separateTrusteeData.length > 0 
@@ -3990,8 +4003,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         consultantSignature
       }, { isClientPDF, formSchema: formData });
       
-      console.log('[WillTool Flow] PDF generation completed', { hasDoc: !!pdfResult?.doc, hasPlaceholders: pdfResult?.hasPlaceholders, phase: 'client_pdf_done' });
-      console.log('[PDF GENERATION] ✅ PDF generation completed:', {
+      debugLog('[WillTool Flow] PDF generation completed', { hasDoc: !!pdfResult?.doc, hasPlaceholders: pdfResult?.hasPlaceholders, phase: 'client_pdf_done' });
+      debugLog('[PDF GENERATION] ✅ PDF generation completed:', {
         hasDoc: !!pdfResult.doc,
         hasMissingItems: !!pdfResult.missingItems,
         missingItemsCount: pdfResult.missingItems?.length || 0,
@@ -4063,8 +4076,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
             String(formValues.bprTrustScheduleNumber).trim() : '';
           
-          DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] Property Trust schedule number: "${propertyTrustScheduleNum}", BPR Trust: "${bprTrustScheduleNum}"`);
-          DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] Comparing Property Trust: "${propertyTrustScheduleNum}" === "${scheduleNumber}"`);
+          DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] Property Trust schedule number: "${propertyTrustScheduleNum}", BPR Trust: "${bprTrustScheduleNum}"`);
+          DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] Comparing Property Trust: "${propertyTrustScheduleNum}" === "${scheduleNumber}"`);
           
           let scheduleType;
           let userFriendlyMessage;
@@ -4073,7 +4086,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
           if (propertyTrustScheduleNum === scheduleNumber || 
               propertyTrustScheduleNum === String(scheduleText).replace(/Schedule\s+/i, '').trim()) {
-            DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] ✅ Matched Property Trust schedule ${scheduleNumber}`);
+            DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] ✅ Matched Property Trust schedule ${scheduleNumber}`);
             scheduleType = 'Property Trust Schedule';
             sectionName = 'Property Trust';
             
@@ -4097,8 +4110,8 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             
           } else if (bprTrustScheduleNum === scheduleNumber || 
                      bprTrustScheduleNum === String(scheduleText).replace(/Schedule\s+/i, '').trim()) {
-            DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] Comparing BPR Trust: "${bprTrustScheduleNum}" === "${scheduleNumber}"`);
-            DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] ✅ Matched BPR Trust schedule ${scheduleNumber}`);
+            DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] Comparing BPR Trust: "${bprTrustScheduleNum}" === "${scheduleNumber}"`);
+            DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] ✅ Matched BPR Trust schedule ${scheduleNumber}`);
             scheduleType = 'Business Property Relief Trust Schedule';
             sectionName = 'Business Interests';
             
@@ -4122,7 +4135,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
             
           } else {
             // Generic message for unknown schedules - make it user-friendly
-            DEBUG_LOGS&&console.log(`[SCHEDULE ISSUE MAPPING] ❌ No match found for schedule ${scheduleNumber}, using generic message`);
+            DEBUG_LOGS&&debugLog(`[SCHEDULE ISSUE MAPPING] ❌ No match found for schedule ${scheduleNumber}, using generic message`);
             scheduleType = 'Schedule';
             sectionName = 'Schedules'; // Use 'Schedules' so navigation can still try to match by number
             userFriendlyMessage = `A schedule (Schedule ${scheduleNumber}) was referenced in your Will, but the details for that schedule were not provided.`;
@@ -4181,7 +4194,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
       document.body.appendChild(downloadLink);
       downloadLink.click();
-      console.log('[WillTool Flow] Client PDF downloaded', { filename, phase: 'client_pdf_download' });
+      debugLog('[WillTool Flow] Client PDF downloaded', { filename, phase: 'client_pdf_download' });
 
       setTimeout(() => {
         document.body.removeChild(downloadLink);
@@ -4354,12 +4367,30 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <p className="text-xs text-amber-800">
                     {useCloud && sessionSecret ? (
-                      <><strong>Cross-device:</strong> Your link saves and loads your form from the cloud. Anyone with the link can view or edit—share only with trusted parties and keep it secure.</>
+                      <>
+                        <strong>Secure resume link:</strong> Anyone with this link can access and update this draft.
+                        Do not forward it except to Aristone Solicitors. Keep it private on your device.
+                      </>
                     ) : (
                       <><strong>Important:</strong> Your reference number and share link let you share your progress. Form data is currently stored on this device only—opening the link on another device will not restore your form. If you share the link, anyone with it can view and edit your form. Keep it secure.</>
                     )}
                   </p>
                 </div>
+              )}
+
+              {inIframe && !useExternalPersistence && (
+                <p className="mb-4 text-xs text-slate-600 dark:text-slate-300">
+                  <a
+                    href={typeof window !== 'undefined' ? window.location.href : '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[44px] inline-flex items-center font-medium text-indigo-700 underline dark:text-indigo-400"
+                  >
+                    Open form in full tab
+                  </a>
+                  {' '}
+                  if the embedded view is difficult on your phone or tablet.
+                </p>
               )}
 
               <div className="mb-3">
@@ -4558,7 +4589,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   if (field.conditions && !evaluateFieldConditions(field)) {
                     // ALWAYS-ON Debug logging for foreignWillNotRevoked
                     if (field.id === 'foreignWillNotRevoked') {
-                      console.log(`[FIELD RENDER] ❌ Field "${field.id}" SKIPPED - conditions not met:`, {
+                      debugLog(`[FIELD RENDER] ❌ Field "${field.id}" SKIPPED - conditions not met:`, {
                         fieldId: field.id,
                         fieldLabel: field.label,
                         conditions: field.conditions,
@@ -4572,7 +4603,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   
                   // ALWAYS-ON Debug logging for foreignWillNotRevoked when it IS rendered
                   if (field.id === 'foreignWillNotRevoked') {
-                    console.log(`[FIELD RENDER] ✅ Field "${field.id}" WILL BE RENDERED:`, {
+                    debugLog(`[FIELD RENDER] ✅ Field "${field.id}" WILL BE RENDERED:`, {
                       fieldId: field.id,
                       fieldLabel: field.label,
                       currentSection: currentSection.formSection,
@@ -4875,63 +4906,63 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
           {/* Validation Modal */}
           {(() => {
-            DEBUG_LOGS&&console.log('[VALIDATION MODAL] ========== MODAL RENDER CHECK ==========');
-            DEBUG_LOGS&&console.log('[VALIDATION MODAL] validationModalOpen:', validationModalOpen);
-            DEBUG_LOGS&&console.log('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
-            DEBUG_LOGS&&console.log('[VALIDATION MODAL] validationIssues:', validationIssues);
+            DEBUG_LOGS&&debugLog('[VALIDATION MODAL] ========== MODAL RENDER CHECK ==========');
+            DEBUG_LOGS&&debugLog('[VALIDATION MODAL] validationModalOpen:', validationModalOpen);
+            DEBUG_LOGS&&debugLog('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
+            DEBUG_LOGS&&debugLog('[VALIDATION MODAL] validationIssues:', validationIssues);
             return null;
           })()}
           {validationModalOpen && (
         <div 
           className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 px-4 animate-fadeIn"
           onClick={(e) => {
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] ========== BACKDROP CLICKED ==========');
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] Event target:', e.target);
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] Target === CurrentTarget:', e.target === e.currentTarget);
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] ========== BACKDROP CLICKED ==========');
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Event target:', e.target);
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Target === CurrentTarget:', e.target === e.currentTarget);
             if (e.target === e.currentTarget) {
-              DEBUG_LOGS&&console.log('[MODAL BACKDROP] Closing modal (clicked backdrop)');
+              DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Closing modal (clicked backdrop)');
               setValidationModalOpen(false);
             } else {
-              DEBUG_LOGS&&console.log('[MODAL BACKDROP] Click was inside modal, not closing');
+              DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Click was inside modal, not closing');
             }
           }}
           onMouseDown={(e) => {
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] ========== BACKDROP MOUSE DOWN ==========');
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] Event target:', e.target);
-            DEBUG_LOGS&&console.log('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] ========== BACKDROP MOUSE DOWN ==========');
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Event target:', e.target);
+            DEBUG_LOGS&&debugLog('[MODAL BACKDROP] Event currentTarget:', e.currentTarget);
           }}
         >
           <div 
             className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-slideIn"
             onClick={(e) => {
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] ========== MODAL CONTENT CLICKED ==========');
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event target:', e.target);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event target tagName:', e.target.tagName);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event target className:', e.target.className);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] ========== MODAL CONTENT CLICKED ==========');
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event target:', e.target);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event target tagName:', e.target.tagName);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event target className:', e.target.className);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
               // Only stop propagation if clicking on the modal content itself, not on buttons inside
               if (e.target === e.currentTarget || (e.target.tagName !== 'BUTTON' && e.target.closest('button') === null)) {
-                DEBUG_LOGS&&console.log('[MODAL CONTENT] Stopping propagation (clicked on modal content, not button)');
+                DEBUG_LOGS&&debugLog('[MODAL CONTENT] Stopping propagation (clicked on modal content, not button)');
                 e.stopPropagation();
               } else {
-                DEBUG_LOGS&&console.log('[MODAL CONTENT] NOT stopping propagation (clicked on button)');
+                DEBUG_LOGS&&debugLog('[MODAL CONTENT] NOT stopping propagation (clicked on button)');
               }
             }}
             onMouseDown={(e) => {
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] ========== MODAL CONTENT MOUSE DOWN ==========');
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event target:', e.target);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event target tagName:', e.target.tagName);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
-              DEBUG_LOGS&&console.log('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] ========== MODAL CONTENT MOUSE DOWN ==========');
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event target:', e.target);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event target tagName:', e.target.tagName);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Event currentTarget:', e.currentTarget);
+              DEBUG_LOGS&&debugLog('[MODAL CONTENT] Is button or inside button:', e.target.tagName === 'BUTTON' || e.target.closest('button') !== null);
             }}
             ref={(el) => {
               if (el) {
-                DEBUG_LOGS&&console.log('[VALIDATION MODAL] ========== MODAL ELEMENT RENDERED ==========');
-                DEBUG_LOGS&&console.log('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
-                DEBUG_LOGS&&console.log('[VALIDATION MODAL] validationIssues:', validationIssues);
-                DEBUG_LOGS&&console.log('[VALIDATION MODAL] Button should render:', validationIssues.length > 0);
+                DEBUG_LOGS&&debugLog('[VALIDATION MODAL] ========== MODAL ELEMENT RENDERED ==========');
+                DEBUG_LOGS&&debugLog('[VALIDATION MODAL] validationIssues.length:', validationIssues.length);
+                DEBUG_LOGS&&debugLog('[VALIDATION MODAL] validationIssues:', validationIssues);
+                DEBUG_LOGS&&debugLog('[VALIDATION MODAL] Button should render:', validationIssues.length > 0);
               }
             }}
           >
@@ -5027,78 +5058,78 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       key={`${fieldId || issue.field || issue.fieldLabel || 'issue'}-${index}`}
                       ref={(el) => {
                         if (el) {
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] ========== ITEM BUTTON RENDERED ==========`);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Index: ${index}`);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Field ID: ${fieldId}`);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Element:`, el);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Element tagName:`, el.tagName);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Element className:`, el.className);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Element disabled:`, el.disabled);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Element tabIndex:`, el.tabIndex);
-                          DEBUG_LOGS&&console.log(`[ITEM RENDER] Has onClick:`, !!el.onclick);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] ========== ITEM BUTTON RENDERED ==========`);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Index: ${index}`);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Field ID: ${fieldId}`);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Element:`, el);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Element tagName:`, el.tagName);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Element className:`, el.className);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Element disabled:`, el.disabled);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Element tabIndex:`, el.tabIndex);
+                          DEBUG_LOGS&&debugLog(`[ITEM RENDER] Has onClick:`, !!el.onclick);
                         }
                       }}
                       onMouseDown={(e) => {
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] ========== MOUSE DOWN ON ITEM ==========');
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] Event:', e);
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] Target:', e.target);
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] Current target:', e.currentTarget);
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] Issue index:', index);
-                        DEBUG_LOGS&&console.log('[ITEM MOUSEDOWN] Issue:', issue);
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] ========== MOUSE DOWN ON ITEM ==========');
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] Event:', e);
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] Target:', e.target);
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] Current target:', e.currentTarget);
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] Issue index:', index);
+                        DEBUG_LOGS&&debugLog('[ITEM MOUSEDOWN] Issue:', issue);
                       }}
                       onKeyDown={(e) => {
-                        DEBUG_LOGS&&console.log('[ITEM KEYDOWN] ========== KEY PRESSED ON ITEM ==========');
-                        DEBUG_LOGS&&console.log('[ITEM KEYDOWN] Key:', e.key);
-                        DEBUG_LOGS&&console.log('[ITEM KEYDOWN] Code:', e.code);
-                        DEBUG_LOGS&&console.log('[ITEM KEYDOWN] Issue index:', index);
+                        DEBUG_LOGS&&debugLog('[ITEM KEYDOWN] ========== KEY PRESSED ON ITEM ==========');
+                        DEBUG_LOGS&&debugLog('[ITEM KEYDOWN] Key:', e.key);
+                        DEBUG_LOGS&&debugLog('[ITEM KEYDOWN] Code:', e.code);
+                        DEBUG_LOGS&&debugLog('[ITEM KEYDOWN] Issue index:', index);
                         if (e.key === 'Enter' || e.key === ' ') {
-                          DEBUG_LOGS&&console.log('[ITEM KEYDOWN] Enter/Space pressed - triggering click');
+                          DEBUG_LOGS&&debugLog('[ITEM KEYDOWN] Enter/Space pressed - triggering click');
                           e.preventDefault();
                           e.currentTarget.click();
                         }
                       }}
                       onClick={(e) => {
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] ========== ITEM CLICKED ==========');
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event:', e);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event type:', e.type);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event target:', e.target);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event target tagName:', e.target.tagName);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event target className:', e.target.className);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event currentTarget:', e.currentTarget);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event defaultPrevented:', e.defaultPrevented);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event isTrusted:', e.isTrusted);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event bubbles:', e.bubbles);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event cancelable:', e.cancelable);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Event timeStamp:', e.timeStamp);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue index:', index);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue object:', issue);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue keys:', Object.keys(issue));
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue section:', issue.section);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue field:', issue.field);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue fieldId:', issue.fieldId);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue issue:', issue.issue);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue message:', issue.message);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Issue snippet:', issue.snippet);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Computed fieldId:', fieldId);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Computed fieldLabel:', fieldLabel);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Is schedule issue:', isScheduleIssue);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Button element:', e.currentTarget);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Button disabled:', e.currentTarget.disabled);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Button tabIndex:', e.currentTarget.tabIndex);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Button style.pointerEvents:', window.getComputedStyle(e.currentTarget).pointerEvents);
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Button style.zIndex:', window.getComputedStyle(e.currentTarget).zIndex);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] ========== ITEM CLICKED ==========');
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event:', e);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event type:', e.type);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event target:', e.target);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event target tagName:', e.target.tagName);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event target className:', e.target.className);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event currentTarget:', e.currentTarget);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event defaultPrevented:', e.defaultPrevented);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event isTrusted:', e.isTrusted);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event bubbles:', e.bubbles);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event cancelable:', e.cancelable);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Event timeStamp:', e.timeStamp);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue index:', index);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue object:', issue);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue keys:', Object.keys(issue));
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue section:', issue.section);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue field:', issue.field);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue fieldId:', issue.fieldId);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue issue:', issue.issue);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue message:', issue.message);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Issue snippet:', issue.snippet);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Computed fieldId:', fieldId);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Computed fieldLabel:', fieldLabel);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Is schedule issue:', isScheduleIssue);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Button element:', e.currentTarget);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Button disabled:', e.currentTarget.disabled);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Button tabIndex:', e.currentTarget.tabIndex);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Button style.pointerEvents:', window.getComputedStyle(e.currentTarget).pointerEvents);
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Button style.zIndex:', window.getComputedStyle(e.currentTarget).zIndex);
                         
                         e.preventDefault();
                         e.stopPropagation();
-                        DEBUG_LOGS&&console.log('[ITEM CLICK] Prevented default and stopped propagation');
+                        DEBUG_LOGS&&debugLog('[ITEM CLICK] Prevented default and stopped propagation');
                         
                         try {
                           // Handle schedule issues with specific navigation - use sectionId first, then fallback to index
                           if (isScheduleIssue) {
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Schedule issue detected');
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Section ID:', issue.sectionId);
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Target section index:', issue.targetSectionIndex);
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Target field IDs:', issue.targetFieldIds);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Schedule issue detected');
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Section ID:', issue.sectionId);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Target section index:', issue.targetSectionIndex);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Target field IDs:', issue.targetFieldIds);
                             
                             let targetIndex = -1;
                             
@@ -5109,7 +5140,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               );
                               if (sectionByField) {
                                 targetIndex = formData.formSections.findIndex(s => s.formSection === sectionByField.formSection);
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found section by sectionId:', issue.sectionId, '→ index:', targetIndex);
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Found section by sectionId:', issue.sectionId, '→ index:', targetIndex);
                               }
                             }
                             
@@ -5117,7 +5148,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             if (targetIndex < 0 && issue.section) {
                               targetIndex = formData.formSections.findIndex(s => s.formSection === issue.section);
                               if (targetIndex >= 0) {
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found section by section name:', issue.section, '→ index:', targetIndex);
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Found section by section name:', issue.section, '→ index:', targetIndex);
                               }
                             }
                             
@@ -5125,7 +5156,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             if (targetIndex < 0 && issue.targetSectionIndex !== undefined && issue.targetSectionIndex >= 0) {
                               if (issue.targetSectionIndex < formData.formSections.length) {
                                 targetIndex = issue.targetSectionIndex;
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] ⚠️ Using provided targetSectionIndex as fallback:', targetIndex);
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] ⚠️ Using provided targetSectionIndex as fallback:', targetIndex);
                               }
                             }
                             
@@ -5135,23 +5166,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             }
                             
                             // Navigate to the correct section first
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Setting current index to:', targetIndex);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Setting current index to:', targetIndex);
                             setCurrentIndex(targetIndex);
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Closing validation modal');
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Closing validation modal');
                             setValidationModalOpen(false);
                             
                             // Wait for section to render, then scroll to first missing field
                             setTimeout(() => {
-                              DEBUG_LOGS&&console.log('[ITEM CLICK] Timeout fired, attempting to scroll to field');
+                              DEBUG_LOGS&&debugLog('[ITEM CLICK] Timeout fired, attempting to scroll to field');
                               if (issue.targetFieldIds && issue.targetFieldIds.length > 0) {
                                 const firstFieldId = issue.targetFieldIds[0];
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] Scrolling to first missing field:', firstFieldId);
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] Scrolling to first missing field:', firstFieldId);
                                 scrollToField(firstFieldId);
                               } else if (issue.fieldId) {
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] Scrolling to fieldId:', issue.fieldId);
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] Scrolling to fieldId:', issue.fieldId);
                                 scrollToField(issue.fieldId);
                               } else {
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] No target field IDs, scrolling to top');
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] No target field IDs, scrolling to top');
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                               }
                             }, 300);
@@ -5159,38 +5190,38 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           }
                           
                           if (issue.fieldId && !isScheduleIssue) {
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Has fieldId, calling scrollToField with:', issue.fieldId);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Has fieldId, calling scrollToField with:', issue.fieldId);
                             scrollToField(issue.fieldId);
                           } else if (isScheduleIssue || issue.section === 'Schedules' || (issue.field && issue.field.toLowerCase().includes('schedule'))) {
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Detected as schedule field');
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Section check:', issue.section === 'Schedules');
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Field includes schedule:', issue.field && issue.field.toLowerCase().includes('schedule'));
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Calling scrollToScheduleField with:', issue.field);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Detected as schedule field');
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Section check:', issue.section === 'Schedules');
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Field includes schedule:', issue.field && issue.field.toLowerCase().includes('schedule'));
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Calling scrollToScheduleField with:', issue.field);
                             // Handle schedule fields specially
                             scrollToScheduleField(issue.field);
                           } else {
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Not a schedule, trying regular field search for:', issue.field);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Not a schedule, trying regular field search for:', issue.field);
                             // For other PDF issues, try to find and scroll to the field
                             const fieldElement = document.querySelector(`[data-field-id="${issue.field}"]`);
-                            DEBUG_LOGS&&console.log('[ITEM CLICK] Direct querySelector result:', fieldElement);
+                            DEBUG_LOGS&&debugLog('[ITEM CLICK] Direct querySelector result:', fieldElement);
                             if (fieldElement) {
-                              DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found field element, scrolling...');
+                              DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Found field element, scrolling...');
                               fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                               fieldElement.focus();
                               setValidationModalOpen(false);
                             } else {
-                              DEBUG_LOGS&&console.log('[ITEM CLICK] Direct search failed, trying case-insensitive search...');
+                              DEBUG_LOGS&&debugLog('[ITEM CLICK] Direct search failed, trying case-insensitive search...');
                               // Try case-insensitive search
                               const allFields = document.querySelectorAll('[data-field-id]');
-                              DEBUG_LOGS&&console.log('[ITEM CLICK] Total fields with data-field-id:', allFields.length);
+                              DEBUG_LOGS&&debugLog('[ITEM CLICK] Total fields with data-field-id:', allFields.length);
                               const foundField = Array.from(allFields).find(field => {
                                 const fieldId = field.getAttribute('data-field-id') || '';
                                 return fieldId.toLowerCase() === issue.field.toLowerCase() || 
                                        fieldId.toLowerCase().includes(issue.field.toLowerCase());
                               });
-                              DEBUG_LOGS&&console.log('[ITEM CLICK] Case-insensitive search result:', foundField);
+                              DEBUG_LOGS&&debugLog('[ITEM CLICK] Case-insensitive search result:', foundField);
                               if (foundField) {
-                                DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found field via case-insensitive search, scrolling...');
+                                DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Found field via case-insensitive search, scrolling...');
                                 foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 const input = foundField.querySelector('input, textarea, select');
                                 if (input) {
@@ -5200,7 +5231,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               } else {
                                 const labelMatchId = findFieldIdByLabel(issue.field || issue.fieldLabel || fieldLabel);
                                 if (labelMatchId) {
-                                  DEBUG_LOGS&&console.log('[ITEM CLICK] ✅ Found field by label mapping:', labelMatchId);
+                                  DEBUG_LOGS&&debugLog('[ITEM CLICK] ✅ Found field by label mapping:', labelMatchId);
                                   scrollToField(labelMatchId);
                                   setValidationModalOpen(false);
                                 } else {
@@ -5266,7 +5297,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
 
             {/* Footer */}
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
-              {DEBUG_LOGS&&console.log('[VALIDATION MODAL FOOTER] Rendering footer, validationIssues.length:', validationIssues.length, 'validationIssues:', validationIssues) || null}
+              {DEBUG_LOGS&&debugLog('[VALIDATION MODAL FOOTER] Rendering footer, validationIssues.length:', validationIssues.length, 'validationIssues:', validationIssues) || null}
               <button
                 onClick={() => setValidationModalOpen(false)}
                 className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all duration-200 font-medium"
@@ -5277,70 +5308,70 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                 <button
                   type="button"
                   onMouseDown={(e) => {
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] ========== MOUSE DOWN ==========');
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event:', e);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event type:', e.type);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target:', e.target);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target tagName:', e.target.tagName);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event target className:', e.target.className);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event currentTarget:', e.currentTarget);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event defaultPrevented:', e.defaultPrevented);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event isTrusted:', e.isTrusted);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Event bubbles:', e.bubbles);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button element:', e.currentTarget);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button disabled:', e.currentTarget.disabled);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE MOUSEDOWN] Button tabIndex:', e.currentTarget.tabIndex);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] ========== MOUSE DOWN ==========');
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event:', e);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event type:', e.type);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event target:', e.target);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event target tagName:', e.target.tagName);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event target className:', e.target.className);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event currentTarget:', e.currentTarget);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event defaultPrevented:', e.defaultPrevented);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event isTrusted:', e.isTrusted);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Event bubbles:', e.bubbles);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Button element:', e.currentTarget);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Button disabled:', e.currentTarget.disabled);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE MOUSEDOWN] Button tabIndex:', e.currentTarget.tabIndex);
                   }}
                   onKeyDown={(e) => {
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] ========== KEY PRESSED ==========');
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Key:', e.key);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Code:', e.code);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Event type:', e.type);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Event target:', e.target);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Event currentTarget:', e.currentTarget);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Event defaultPrevented:', e.defaultPrevented);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] ========== KEY PRESSED ==========');
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Key:', e.key);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Code:', e.code);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Event type:', e.type);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Event target:', e.target);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Event currentTarget:', e.currentTarget);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Event defaultPrevented:', e.defaultPrevented);
                     if (e.key === 'Enter' || e.key === ' ') {
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Enter/Space pressed - triggering click');
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Enter/Space pressed - triggering click');
                       e.preventDefault();
                       e.stopPropagation();
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE KEYDOWN] Calling click() on button element');
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE KEYDOWN] Calling click() on button element');
                       e.currentTarget.click();
                     }
                   }}
                   onFocus={(e) => {
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE FOCUS] ========== BUTTON FOCUSED ==========');
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE FOCUS] Event:', e);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE FOCUS] Event target:', e.target);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE FOCUS] ========== BUTTON FOCUSED ==========');
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE FOCUS] Event:', e);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE FOCUS] Event target:', e.target);
                   }}
                   onBlur={(e) => {
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE BLUR] ========== BUTTON BLURRED ==========');
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE BLUR] Event:', e);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE BLUR] Event target:', e.target);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE BLUR] ========== BUTTON BLURRED ==========');
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE BLUR] Event:', e);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE BLUR] Event target:', e.target);
                   }}
                   onClick={(e) => {
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ========== BUTTON CLICKED ==========');
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event:', e);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event type:', e.type);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event target:', e.target);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event currentTarget:', e.currentTarget);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event defaultPrevented:', e.defaultPrevented);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event isTrusted:', e.isTrusted);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event bubbles:', e.bubbles);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Event cancelable:', e.cancelable);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Validation issues exists:', !!validationIssues);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Validation issues type:', typeof validationIssues);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Validation issues is array:', Array.isArray(validationIssues));
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Validation issues count:', validationIssues?.length);
-                    DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue exists:', !!validationIssues?.[0]);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ========== BUTTON CLICKED ==========');
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event:', e);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event type:', e.type);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event target:', e.target);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event currentTarget:', e.currentTarget);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event defaultPrevented:', e.defaultPrevented);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event isTrusted:', e.isTrusted);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event bubbles:', e.bubbles);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Event cancelable:', e.cancelable);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Validation issues exists:', !!validationIssues);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Validation issues type:', typeof validationIssues);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Validation issues is array:', Array.isArray(validationIssues));
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Validation issues count:', validationIssues?.length);
+                    DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue exists:', !!validationIssues?.[0]);
                     
                     if (validationIssues?.[0]) {
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue object:', validationIssues[0]);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue keys:', Object.keys(validationIssues[0]));
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue section:', validationIssues[0].section);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue field:', validationIssues[0].field);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue fieldId:', validationIssues[0].fieldId);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue issue:', validationIssues[0].issue);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] First issue message:', validationIssues[0].message);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue object:', validationIssues[0]);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue keys:', Object.keys(validationIssues[0]));
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue section:', validationIssues[0].section);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue field:', validationIssues[0].field);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue fieldId:', validationIssues[0].fieldId);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue issue:', validationIssues[0].issue);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] First issue message:', validationIssues[0].message);
                     } else {
                       console.error('[GO TO FIRST ISSUE] ❌ No first issue found!');
                       return;
@@ -5354,14 +5385,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       e.preventDefault();
                       e.stopPropagation();
                       
-                      console.log('[GO TO FIRST ISSUE] 🔍 ========== BUTTON CLICKED ==========');
-                      console.log('[GO TO FIRST ISSUE] 🔍 Validation issues count:', validationIssues?.length);
-                      console.log('[GO TO FIRST ISSUE] 🔍 Validation issues:', validationIssues);
+                      debugLog('[GO TO FIRST ISSUE] 🔍 ========== BUTTON CLICKED ==========');
+                      debugLog('[GO TO FIRST ISSUE] 🔍 Validation issues count:', validationIssues?.length);
+                      debugLog('[GO TO FIRST ISSUE] 🔍 Validation issues:', validationIssues);
                       
                       const firstIssue = validationIssues[0];
-                      console.log('[GO TO FIRST ISSUE] 🔍 First issue object:', firstIssue);
-                      console.log('[GO TO FIRST ISSUE] 🔍 First issue keys:', firstIssue ? Object.keys(firstIssue) : 'N/A');
-                      console.log('[GO TO FIRST ISSUE] 🔍 First issue details:', {
+                      debugLog('[GO TO FIRST ISSUE] 🔍 First issue object:', firstIssue);
+                      debugLog('[GO TO FIRST ISSUE] 🔍 First issue keys:', firstIssue ? Object.keys(firstIssue) : 'N/A');
+                      debugLog('[GO TO FIRST ISSUE] 🔍 First issue details:', {
                         field: firstIssue?.field,
                         fieldId: firstIssue?.fieldId,
                         fieldLabel: firstIssue?.fieldLabel,
@@ -5396,7 +5427,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           );
                         
                         if (!hasSeparateTrusteeData) {
-                          console.log('[GO TO FIRST ISSUE] ✅ Early check: Separate trustee issue with missing data');
+                          debugLog('[GO TO FIRST ISSUE] ✅ Early check: Separate trustee issue with missing data');
                           // Search recursively through fields and subFields to find the section containing addSeparateTrusteeButton or appointSeparateTrusteesFLIT
                           let containingSection = null;
                           let containingSectionIndex = -1;
@@ -5422,7 +5453,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           }
                           
                           if (containingSection && containingSectionIndex >= 0) {
-                            console.log('[GO TO FIRST ISSUE] Found section containing separate trustee fields:', containingSection.formSection);
+                            debugLog('[GO TO FIRST ISSUE] Found section containing separate trustee fields:', containingSection.formSection);
                             setCurrentIndex(containingSectionIndex);
                             setValidationModalOpen(false);
                             toast.info('Please click "Add Separate Trustee" to add trustee details.', { duration: 5000 });
@@ -5448,7 +5479,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           );
                         
                         if (!hasPetCarerData) {
-                          console.log('[GO TO FIRST ISSUE] ✅ Early check: Pet carer issue with missing data');
+                          debugLog('[GO TO FIRST ISSUE] ✅ Early check: Pet carer issue with missing data');
                           // Search recursively through fields and subFields to find the section containing addPetCarerButton or provisionsForPets
                           let containingSection = null;
                           let containingSectionIndex = -1;
@@ -5474,7 +5505,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           }
                           
                           if (containingSection && containingSectionIndex >= 0) {
-                            console.log('[GO TO FIRST ISSUE] Found section containing pet carer fields:', containingSection.formSection);
+                            debugLog('[GO TO FIRST ISSUE] Found section containing pet carer fields:', containingSection.formSection);
                             setCurrentIndex(containingSectionIndex);
                             setValidationModalOpen(false);
                             toast.info('Please add a pet carer in Other Provisions.', { duration: 5000 });
@@ -5489,10 +5520,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       
                       // PRIORITY 1: Use fieldId if available (most reliable) - check this FIRST
                       // This handles Property Trust and BPR Trust schedule issues that have fieldId
-                      console.log('[GO TO FIRST ISSUE] 🔍 Checking PRIORITY 1: fieldId =', firstIssue.fieldId);
+                      debugLog('[GO TO FIRST ISSUE] 🔍 Checking PRIORITY 1: fieldId =', firstIssue.fieldId);
                       if (firstIssue.fieldId) {
-                        console.log('[GO TO FIRST ISSUE] ✅ PRIORITY 1: Has fieldId, navigating to field:', firstIssue.fieldId);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Issue details:', {
+                        debugLog('[GO TO FIRST ISSUE] ✅ PRIORITY 1: Has fieldId, navigating to field:', firstIssue.fieldId);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Issue details:', {
                           section: firstIssue.section,
                           sectionId: firstIssue.sectionId,
                           fieldId: firstIssue.fieldId,
@@ -5504,14 +5535,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         // If we have a section index, navigate to that section first
                         if (firstIssue.targetSectionIndex !== undefined && firstIssue.targetSectionIndex >= 0) {
                           const targetSection = formData.formSections[firstIssue.targetSectionIndex];
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Navigating to section index:', firstIssue.targetSectionIndex);
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Target section name:', targetSection?.formSection);
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Current section index:', currentIndex);
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Navigating to section index:', firstIssue.targetSectionIndex);
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Target section name:', targetSection?.formSection);
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Current section index:', currentIndex);
                           setCurrentIndex(firstIssue.targetSectionIndex);
                           setValidationModalOpen(false);
                           // Wait for section to render, then scroll to field
                           setTimeout(() => {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Section navigation complete, scrolling to field:', firstIssue.fieldId);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Section navigation complete, scrolling to field:', firstIssue.fieldId);
                             scrollToField(firstIssue.fieldId, firstIssue.targetFieldIds);
                           }, 300);
                         } else {
@@ -5522,17 +5553,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           );
                           if (sectionIndex >= 0) {
                             const targetSection = formData.formSections[sectionIndex];
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Found section by name/id, navigating to index:', sectionIndex);
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Target section name:', targetSection?.formSection);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Found section by name/id, navigating to index:', sectionIndex);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Target section name:', targetSection?.formSection);
                             setCurrentIndex(sectionIndex);
                             setValidationModalOpen(false);
                             setTimeout(() => {
-                              DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Section navigation complete, scrolling to field:', firstIssue.fieldId);
+                              DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Section navigation complete, scrolling to field:', firstIssue.fieldId);
                               scrollToField(firstIssue.fieldId, firstIssue.targetFieldIds);
                             }, 300);
                           } else {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Section not found, trying direct field search');
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Searched for section:', firstIssue.section, 'or sectionId:', firstIssue.sectionId);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Section not found, trying direct field search');
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Searched for section:', firstIssue.section, 'or sectionId:', firstIssue.sectionId);
                             setValidationModalOpen(false);
                             scrollToField(firstIssue.fieldId, firstIssue.targetFieldIds);
                           }
@@ -5544,13 +5575,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       const isScheduleIssue = firstIssue.scheduleNumber || 
                         (firstIssue.section && (firstIssue.section.toLowerCase().includes('schedule') || firstIssue.section === 'Schedules'));
                       
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] PRIORITY 2: Is schedule issue:', isScheduleIssue);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Target section index:', firstIssue.targetSectionIndex);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Target field IDs:', firstIssue.targetFieldIds);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] PRIORITY 2: Is schedule issue:', isScheduleIssue);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Target section index:', firstIssue.targetSectionIndex);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Target field IDs:', firstIssue.targetFieldIds);
                       
                       if (isScheduleIssue && firstIssue.targetSectionIndex !== undefined && firstIssue.targetSectionIndex >= 0) {
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Schedule issue detected, navigating to section index:', firstIssue.targetSectionIndex);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Total sections available:', formData.formSections.length);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Schedule issue detected, navigating to section index:', firstIssue.targetSectionIndex);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Total sections available:', formData.formSections.length);
                         
                         if (firstIssue.targetSectionIndex < 0 || firstIssue.targetSectionIndex >= formData.formSections.length) {
                           console.error('[GO TO FIRST ISSUE] ❌ Invalid section index:', firstIssue.targetSectionIndex);
@@ -5558,20 +5589,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         }
                         
                         // Navigate to the correct section first
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Setting current index to:', firstIssue.targetSectionIndex);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Setting current index to:', firstIssue.targetSectionIndex);
                         setCurrentIndex(firstIssue.targetSectionIndex);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Closing validation modal');
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Closing validation modal');
                         setValidationModalOpen(false);
                         
                         // Wait for section to render, then scroll to first missing field
                         setTimeout(() => {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Timeout fired, attempting to scroll');
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Timeout fired, attempting to scroll');
                           if (firstIssue.targetFieldIds && firstIssue.targetFieldIds.length > 0) {
                             const firstFieldId = firstIssue.targetFieldIds[0];
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Scrolling to first missing field:', firstFieldId);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Scrolling to first missing field:', firstFieldId);
                             scrollToField(firstFieldId);
                           } else {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] No target field IDs, scrolling to top');
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] No target field IDs, scrolling to top');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }
                         }, 300);
@@ -5580,13 +5611,13 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       
                       // PRIORITY 3: Handle schedule issues without fieldId (fallback for generic schedule issues)
                       if (isScheduleIssue || firstIssue.section === 'Schedules') {
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Schedule issue detected, checking for Property Trust/BPR Trust by schedule number...');
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Schedule issue detected, checking for Property Trust/BPR Trust by schedule number...');
                         
                         // Extract schedule number from the issue
                         const scheduleNumber = firstIssue.scheduleNumber || 
                           (firstIssue.field ? firstIssue.field.match(/Schedule\s+(\d+)/i)?.[1] : null);
                         
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Extracted schedule number:', scheduleNumber);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Extracted schedule number:', scheduleNumber);
                         
                         // Check if this schedule number matches Property Trust or BPR Trust
                         const propertyTrustScheduleNum = formValues.propertyTrustScheduleNumber ? 
@@ -5594,14 +5625,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         const bprTrustScheduleNum = formValues.bprTrustScheduleNumber ? 
                           String(formValues.bprTrustScheduleNumber).trim() : '';
                         
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Property Trust schedule number:', propertyTrustScheduleNum);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] BPR Trust schedule number:', bprTrustScheduleNum);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Property Trust schedule number:', propertyTrustScheduleNum);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] BPR Trust schedule number:', bprTrustScheduleNum);
                         
                         let targetSection = null;
                         let targetFieldIds = [];
                         
                         if (scheduleNumber && propertyTrustScheduleNum === scheduleNumber) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Matched Property Trust schedule by number');
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Matched Property Trust schedule by number');
                           targetSection = 'Property Trust';
                           // Determine which fields are missing
                           if (!formValues.propertyTrustDetails || String(formValues.propertyTrustDetails).trim() === '') {
@@ -5615,7 +5646,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             targetFieldIds = ['propertyTrustDetails', 'propertyTrustTerms'];
                           }
                         } else if (scheduleNumber && bprTrustScheduleNum === scheduleNumber) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Matched BPR Trust schedule by number');
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Matched BPR Trust schedule by number');
                           targetSection = 'Business Interests';
                           // Determine which fields are missing
                           if (!formValues.bprTrustDetails || String(formValues.bprTrustDetails).trim() === '') {
@@ -5632,20 +5663,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         
                         // If we found a match, navigate to that section
                         if (targetSection && targetFieldIds.length > 0) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found matching section:', targetSection, 'with fields:', targetFieldIds);
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Found matching section:', targetSection, 'with fields:', targetFieldIds);
                           const sectionIndex = formData.formSections.findIndex(s => 
                             s.formSection === targetSection
                           );
                           if (sectionIndex >= 0) {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Navigating to section:', targetSection, 'at index:', sectionIndex);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Navigating to section:', targetSection, 'at index:', sectionIndex);
                             setCurrentIndex(sectionIndex);
                             setValidationModalOpen(false);
                             setTimeout(() => {
-                              DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Searching for fields:', targetFieldIds);
+                              DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Searching for fields:', targetFieldIds);
                               for (const fieldId of targetFieldIds) {
                                 const fieldElement = document.querySelector(`[data-field-id="${fieldId}"]`);
                                 if (fieldElement) {
-                                  DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found field:', fieldId);
+                                  DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Found field:', fieldId);
                                   fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                   const input = fieldElement.querySelector('input, textarea, select');
                                   if (input) {
@@ -5661,11 +5692,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         }
                         
                         // Fallback to generic schedule search
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Generic schedule issue, calling scrollToScheduleField');
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Generic schedule issue, calling scrollToScheduleField');
                         scrollToScheduleField(firstIssue.field || `Schedule ${firstIssue.scheduleNumber || ''}`);
                       } else if (firstIssue.field) {
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Has field (not schedule), searching for:', firstIssue.field);
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Issue details:', {
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Has field (not schedule), searching for:', firstIssue.field);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Issue details:', {
                           section: firstIssue.section,
                           field: firstIssue.field,
                           clauseNumber: firstIssue.clauseNumber,
@@ -5673,17 +5704,17 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         });
                         
                         // Strategy 1: Try direct field ID match (if field is actually an ID)
-                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 1: Trying direct field ID match:', {
+                        debugLog('[GO TO FIRST ISSUE] 🔍 Strategy 1: Trying direct field ID match:', {
                           fieldId: firstIssue.field,
                           selector: `[data-field-id="${firstIssue.field}"]`
                         });
                         let fieldElement = document.querySelector(`[data-field-id="${firstIssue.field}"]`);
-                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 1 result:', {
+                        debugLog('[GO TO FIRST ISSUE] 🔍 Strategy 1 result:', {
                           fieldElement: !!fieldElement,
                           found: !!fieldElement
                         });
                         if (fieldElement) {
-                          console.log('[GO TO FIRST ISSUE] ✅ Found field element via direct ID, scrolling...');
+                          debugLog('[GO TO FIRST ISSUE] ✅ Found field element via direct ID, scrolling...');
                           fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                           const input = fieldElement.querySelector('input, textarea, select');
                           if (input) {
@@ -5695,7 +5726,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         console.error('[GO TO FIRST ISSUE] ❌ Strategy 1 failed - field element not found');
                         
                         // Strategy 2: Try to find field by label (most reliable for PDF issues)
-                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 2: Searching for field by label:', {
+                        debugLog('[GO TO FIRST ISSUE] 🔍 Strategy 2: Searching for field by label:', {
                           fieldLabel: firstIssue.field,
                           fieldLabelAlt: firstIssue.fieldLabel,
                           searchString: firstIssue.field || firstIssue.fieldLabel
@@ -5714,7 +5745,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         const fieldLabelLower = fieldLabelOriginal.toLowerCase();
                         const issueSectionLower = (firstIssue.section || '').toLowerCase();
                         
-                        console.log('[GO TO FIRST ISSUE] 🔍 Extracted field label:', {
+                        debugLog('[GO TO FIRST ISSUE] 🔍 Extracted field label:', {
                           original: firstIssue.field || firstIssue.fieldLabel,
                           extracted: fieldLabelOriginal,
                           fieldId: firstIssue.fieldId,
@@ -5725,7 +5756,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         if (firstIssue.fieldId === 'appointSeparateTrusteesFLIT' || 
                             firstIssue.fieldId === 'separateTrusteesSection') {
                           labelMatchId = 'appointSeparateTrusteesFLIT';
-                          console.log('[GO TO FIRST ISSUE] ✅ Matched by fieldId:', firstIssue.fieldId);
+                          debugLog('[GO TO FIRST ISSUE] ✅ Matched by fieldId:', firstIssue.fieldId);
                         }
                         // PRIORITY 2: Check section name + field text combination (most reliable)
                         else if ((issueSectionLower.includes('estate') && issueSectionLower.includes('residue')) ||
@@ -5739,7 +5770,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                fieldLabelLower.includes('trustees') ||
                                fieldLabelLower.includes('appoint'))) {
                             labelMatchId = 'appointSeparateTrusteesFLIT';
-                            console.log('[GO TO FIRST ISSUE] ✅ Matched by section + field text:', {
+                            debugLog('[GO TO FIRST ISSUE] ✅ Matched by section + field text:', {
                               section: firstIssue.section,
                               field: fieldLabelOriginal
                             });
@@ -5749,7 +5780,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         else if (fieldLabelOriginal === 'Do you wish to appoint separate Trustees?' || 
                                  fieldLabelLower === 'do you wish to appoint separate trustees?') {
                           labelMatchId = 'appointSeparateTrusteesFLIT';
-                          console.log('[GO TO FIRST ISSUE] ✅ Matched by exact label:', fieldLabelOriginal);
+                          debugLog('[GO TO FIRST ISSUE] ✅ Matched by exact label:', fieldLabelOriginal);
                         }
                         // PRIORITY 3b: Check field text patterns (exclude digital executor fields)
                         else if (!fieldLabelLower.includes('digital') && 
@@ -5758,7 +5789,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                   (fieldLabelLower.includes('appoint') && fieldLabelLower.includes('separate') && fieldLabelLower.includes('trustee')) ||
                                   (fieldLabelLower.includes('wish') && fieldLabelLower.includes('appoint') && fieldLabelLower.includes('separate')))) {
                           labelMatchId = 'appointSeparateTrusteesFLIT';
-                          console.log('[GO TO FIRST ISSUE] ✅ Matched by field text pattern:', fieldLabelOriginal);
+                          debugLog('[GO TO FIRST ISSUE] ✅ Matched by field text pattern:', fieldLabelOriginal);
                         }
                         // PRIORITY 4: Try findFieldIdByLabel as fallback
                         else {
@@ -5773,15 +5804,15 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             (fieldLabelLower.includes('trustee') || fieldLabelLower.includes('trustees'));
                           
                           if (isGuardianField) {
-                            console.log('[GO TO FIRST ISSUE] ⚠️ Detected as guardian field, skipping separate trustee search');
+                            debugLog('[GO TO FIRST ISSUE] ⚠️ Detected as guardian field, skipping separate trustee search');
                           } else if (isSearchingForSeparateTrustees && (isDigitalExecutorField || isBusinessTrusteeField)) {
-                            console.log('[GO TO FIRST ISSUE] ⚠️ Detected as digital executor or business trustee field, skipping separate trustee search');
+                            debugLog('[GO TO FIRST ISSUE] ⚠️ Detected as digital executor or business trustee field, skipping separate trustee search');
                             // For separate trustees, directly map to appointSeparateTrusteesFLIT
                             labelMatchId = 'appointSeparateTrusteesFLIT';
-                            console.log('[GO TO FIRST ISSUE] ✅ Directly mapped to appointSeparateTrusteesFLIT (excluded digital executor/business trustee)');
+                            debugLog('[GO TO FIRST ISSUE] ✅ Directly mapped to appointSeparateTrusteesFLIT (excluded digital executor/business trustee)');
                           } else {
                             labelMatchId = findFieldIdByLabel(fieldLabelOriginal);
-                            console.log('[GO TO FIRST ISSUE] 🔍 Tried findFieldIdByLabel, result:', labelMatchId);
+                            debugLog('[GO TO FIRST ISSUE] 🔍 Tried findFieldIdByLabel, result:', labelMatchId);
                             
                             // CRITICAL FIX: If findFieldIdByLabel returned a digital executor, business trustee, or separateTrusteesSection field but we're looking for FLIT trustees, override it
                             if (isSearchingForSeparateTrustees && (
@@ -5789,23 +5820,23 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               labelMatchId === 'appointSeparateBusinessTrustee' ||
                               labelMatchId === 'separateTrusteesSection'
                             )) {
-                              console.log('[GO TO FIRST ISSUE] ⚠️ findFieldIdByLabel returned wrong field (' + labelMatchId + '), overriding to appointSeparateTrusteesFLIT');
+                              debugLog('[GO TO FIRST ISSUE] ⚠️ findFieldIdByLabel returned wrong field (' + labelMatchId + '), overriding to appointSeparateTrusteesFLIT');
                               labelMatchId = 'appointSeparateTrusteesFLIT';
                             }
                           }
                         }
                         
-                        console.log('[GO TO FIRST ISSUE] 🔍 Strategy 2 result:', {
+                        debugLog('[GO TO FIRST ISSUE] 🔍 Strategy 2 result:', {
                           labelMatchId,
                           found: !!labelMatchId,
                           searchString: firstIssue.field || firstIssue.fieldLabel
                         });
                         if (labelMatchId) {
-                          console.log('[GO TO FIRST ISSUE] ✅ Found field by label mapping:', labelMatchId);
+                          debugLog('[GO TO FIRST ISSUE] ✅ Found field by label mapping:', labelMatchId);
                           
                           // CRITICAL FIX: Handle conditionally rendered fields (like appointSeparateTrusteesFLIT)
                           if (labelMatchId === 'appointSeparateTrusteesFLIT') {
-                            console.log('[GO TO FIRST ISSUE] 🎯 Handling separate trustees field navigation');
+                            debugLog('[GO TO FIRST ISSUE] 🎯 Handling separate trustees field navigation');
                             
                             // Check if field conditions are met (field requires howResidueDistributed === 'IntoFLIT')
                             const fieldDef = formData.formSections
@@ -5817,7 +5848,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             );
                             const hasFLITCondition = formValues.howResidueDistributed === 'IntoFLIT';
                             
-                            console.log('[GO TO FIRST ISSUE] Field condition check:', {
+                            debugLog('[GO TO FIRST ISSUE] Field condition check:', {
                               needsFLITCondition,
                               hasFLITCondition,
                               howResidueDistributed: formValues.howResidueDistributed
@@ -5835,7 +5866,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               );
                               if (targetSectionIndex >= 0) {
                                 targetSection = formData.formSections[targetSectionIndex];
-                                console.log('[GO TO FIRST ISSUE] ✅ Found section by issue.section:', targetSection.formSection);
+                                debugLog('[GO TO FIRST ISSUE] ✅ Found section by issue.section:', targetSection.formSection);
                               }
                             }
                             
@@ -5848,7 +5879,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                 targetSectionIndex = formData.formSections.findIndex(s =>
                                   s.formSection === targetSection.formSection
                                 );
-                                console.log('[GO TO FIRST ISSUE] ✅ Found section by field search:', targetSection.formSection);
+                                debugLog('[GO TO FIRST ISSUE] ✅ Found section by field search:', targetSection.formSection);
                               }
                             }
                             
@@ -5860,16 +5891,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               );
                               if (targetSectionIndex >= 0) {
                                 targetSection = formData.formSections[targetSectionIndex];
-                                console.log('[GO TO FIRST ISSUE] ✅ Found section by name search:', targetSection.formSection);
+                                debugLog('[GO TO FIRST ISSUE] ✅ Found section by name search:', targetSection.formSection);
                               }
                             }
                             
                             if (targetSection && targetSectionIndex >= 0) {
-                              console.log('[GO TO FIRST ISSUE] 🚀 Navigating to section:', targetSection.formSection, 'at index:', targetSectionIndex);
+                              debugLog('[GO TO FIRST ISSUE] 🚀 Navigating to section:', targetSection.formSection, 'at index:', targetSectionIndex);
                               
                               // CRITICAL: Ensure FLIT condition is met BEFORE navigating
                               if (needsFLITCondition && !hasFLITCondition) {
-                                console.log('[GO TO FIRST ISSUE] ⚠️ FLIT condition not met, setting howResidueDistributed to "IntoFLIT"');
+                                debugLog('[GO TO FIRST ISSUE] ⚠️ FLIT condition not met, setting howResidueDistributed to "IntoFLIT"');
                                 setFormValues(prev => ({ ...prev, howResidueDistributed: 'IntoFLIT' }));
                                 // Wait for condition evaluation, then navigate and scroll
                                 setTimeout(() => {
@@ -5877,7 +5908,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                   setValidationModalOpen(false);
                                   // Use longer timeout to ensure field is rendered after condition evaluation
                                   setTimeout(() => {
-                                    console.log('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field after condition set:', labelMatchId);
+                                    debugLog('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field after condition set:', labelMatchId);
                                     scrollToField(labelMatchId);
                                   }, 1000);
                                 }, 300);
@@ -5890,12 +5921,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               // Wait for section to render and condition to be evaluated, then scroll to field
                               // Increased timeout to ensure condition evaluation completes and field is visible
                               setTimeout(() => {
-                                console.log('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field:', labelMatchId);
+                                debugLog('[GO TO FIRST ISSUE] 🔍 Attempting to scroll to field:', labelMatchId);
                                 // Try multiple times with increasing delays to account for conditional rendering
                                 const tryScroll = (attempt = 0) => {
                                   const fieldElement = document.querySelector(`[data-field-id="${labelMatchId}"]`);
                                   if (fieldElement) {
-                                    console.log('[GO TO FIRST ISSUE] ✅ Found field element, scrolling');
+                                    debugLog('[GO TO FIRST ISSUE] ✅ Found field element, scrolling');
                                     fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     const input = fieldElement.querySelector('input, textarea, select, button');
                                     if (input) {
@@ -5904,7 +5935,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                     fieldElement.classList.add('animate-pulse');
                                     setTimeout(() => fieldElement.classList.remove('animate-pulse'), 2000);
                                   } else if (attempt < 3) {
-                                    console.log(`[GO TO FIRST ISSUE] ⏳ Field not found, retrying in ${(attempt + 1) * 500}ms (attempt ${attempt + 1}/3)`);
+                                    debugLog(`[GO TO FIRST ISSUE] ⏳ Field not found, retrying in ${(attempt + 1) * 500}ms (attempt ${attempt + 1}/3)`);
                                     setTimeout(() => tryScroll(attempt + 1), (attempt + 1) * 500);
                                   } else {
                                     console.error('[GO TO FIRST ISSUE] ❌ Field not found after retries, using scrollToField function');
@@ -5940,7 +5971,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               );
                             
                             if (hasPetProvisions && !hasPetCarerData) {
-                              console.log('[GO TO FIRST ISSUE] ✅ User selected "Yes" for pet provisions but no pet carer data - scrolling to Add button');
+                              debugLog('[GO TO FIRST ISSUE] ✅ User selected "Yes" for pet provisions but no pet carer data - scrolling to Add button');
                               
                               // Find the section containing guided or legacy pet carer fields
                               const containingSection = formData.formSections.find(section =>
@@ -5957,7 +5988,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                                   s.formSection === containingSection.formSection
                                 );
                                 if (sectionIndex >= 0) {
-                                  console.log('[GO TO FIRST ISSUE] Navigating to section:', containingSection.formSection);
+                                  debugLog('[GO TO FIRST ISSUE] Navigating to section:', containingSection.formSection);
                                   setCurrentIndex(sectionIndex);
                                   setValidationModalOpen(false);
                                   
@@ -5976,7 +6007,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                           
                           // SPECIAL HANDLING for foreignWillNotRevoked: Find its section and navigate to it first
                           if (labelMatchId === 'foreignWillNotRevoked') {
-                            console.log('[GO TO FIRST ISSUE] 🔍 SPECIAL HANDLING: foreignWillNotRevoked detected');
+                            debugLog('[GO TO FIRST ISSUE] 🔍 SPECIAL HANDLING: foreignWillNotRevoked detected');
                             
                             // Find which section contains this field
                             let targetSectionIndex = -1;
@@ -5992,7 +6023,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                               });
                               if (hasField) {
                                 targetSectionIndex = i;
-                                console.log('[GO TO FIRST ISSUE] ✅ Found foreignWillNotRevoked in section:', {
+                                debugLog('[GO TO FIRST ISSUE] ✅ Found foreignWillNotRevoked in section:', {
                                   index: i,
                                   sectionName: section.formSection
                                 });
@@ -6002,18 +6033,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             
                             // Ensure assetsAbroad is set to "Yes" to meet the condition
                             if (formValues.assetsAbroad !== 'Yes') {
-                              console.log('[GO TO FIRST ISSUE] ⚠️ assetsAbroad is not "Yes", setting it to meet condition');
+                              debugLog('[GO TO FIRST ISSUE] ⚠️ assetsAbroad is not "Yes", setting it to meet condition');
                               setFormValues(prev => ({ ...prev, assetsAbroad: 'Yes' }));
                             }
                             
                             // Navigate to the section first
                             if (targetSectionIndex >= 0) {
-                              console.log('[GO TO FIRST ISSUE] 🔍 Navigating to section index:', targetSectionIndex);
+                              debugLog('[GO TO FIRST ISSUE] 🔍 Navigating to section index:', targetSectionIndex);
                               setCurrentIndex(targetSectionIndex);
                               setValidationModalOpen(false);
                               // Wait for section to render and condition to be evaluated
                               setTimeout(() => {
-                                console.log('[GO TO FIRST ISSUE] 🔍 Section rendered, scrolling to field');
+                                debugLog('[GO TO FIRST ISSUE] 🔍 Section rendered, scrolling to field');
                                 scrollToField(labelMatchId);
                               }, 500); // Longer timeout to ensure condition evaluation completes
                               return;
@@ -6022,7 +6053,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             }
                           }
                           
-                          console.log('[GO TO FIRST ISSUE] 🔍 Calling scrollToField with:', labelMatchId);
+                          debugLog('[GO TO FIRST ISSUE] 🔍 Calling scrollToField with:', labelMatchId);
                           scrollToField(labelMatchId);
                           setValidationModalOpen(false);
                           return;
@@ -6032,18 +6063,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         
                         // Strategy 3: Try to find field by section + partial label match
                         if (firstIssue.section) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Trying section-based search for:', firstIssue.section);
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Trying section-based search for:', firstIssue.section);
                           const section = formData.formSections.find(s => 
                             s.formSection === firstIssue.section || 
                             s.formSection?.toLowerCase() === firstIssue.section?.toLowerCase()
                           );
                           if (section) {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Found section, searching fields...');
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Found section, searching fields...');
                             // Try to find field by matching label substring
                             const fieldLabelLower = (firstIssue.field || '').toLowerCase();
                             for (const field of section.fields || []) {
                               if (field.label && field.label.toLowerCase().includes(fieldLabelLower.substring(0, 30))) {
-                                DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found matching field by label substring:', field.id);
+                                DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Found matching field by label substring:', field.id);
                                 scrollToField(field.id);
                                 setValidationModalOpen(false);
                                 return;
@@ -6053,16 +6084,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                         }
                         
                         // Strategy 4: Case-insensitive search on all fields
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Trying case-insensitive search...');
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Trying case-insensitive search...');
                         const allFields = document.querySelectorAll('[data-field-id]');
-                        DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Total fields with data-field-id:', allFields.length);
+                        DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Total fields with data-field-id:', allFields.length);
                         const foundField = Array.from(allFields).find(field => {
                           const fieldId = field.getAttribute('data-field-id') || '';
                           return fieldId.toLowerCase() === firstIssue.field.toLowerCase() || 
                                  fieldId.toLowerCase().includes(firstIssue.field.toLowerCase());
                         });
                         if (foundField) {
-                          DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] ✅ Found field via case-insensitive search, scrolling...');
+                          DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] ✅ Found field via case-insensitive search, scrolling...');
                           foundField.scrollIntoView({ behavior: 'smooth', block: 'center' });
                           const input = foundField.querySelector('input, textarea, select');
                           if (input) {
@@ -6079,7 +6110,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             s.formSection?.toLowerCase() === firstIssue.section?.toLowerCase()
                           );
                           if (sectionIndex >= 0) {
-                            DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE] Navigating to section index:', sectionIndex);
+                            DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE] Navigating to section index:', sectionIndex);
                             setCurrentIndex(sectionIndex);
                             setValidationModalOpen(false);
                             setTimeout(() => {
@@ -6103,16 +6134,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   }}
                   ref={(el) => {
                     if (el) {
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] ========== BUTTON ELEMENT RENDERED ==========');
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element:', el);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element tagName:', el.tagName);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element className:', el.className);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element disabled:', el.disabled);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element tabIndex:', el.tabIndex);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Has onClick:', !!el.onclick);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Validation issues count:', validationIssues.length);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element style.pointerEvents:', window.getComputedStyle(el).pointerEvents);
-                      DEBUG_LOGS&&console.log('[GO TO FIRST ISSUE RENDER] Element style.zIndex:', window.getComputedStyle(el).zIndex);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] ========== BUTTON ELEMENT RENDERED ==========');
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element:', el);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element tagName:', el.tagName);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element className:', el.className);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element disabled:', el.disabled);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element tabIndex:', el.tabIndex);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Has onClick:', !!el.onclick);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Validation issues count:', validationIssues.length);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element style.pointerEvents:', window.getComputedStyle(el).pointerEvents);
+                      DEBUG_LOGS&&debugLog('[GO TO FIRST ISSUE RENDER] Element style.zIndex:', window.getComputedStyle(el).zIndex);
                     }
                   }}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-md transition-all duration-200 font-medium flex items-center gap-2 cursor-pointer"

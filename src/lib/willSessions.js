@@ -3,6 +3,7 @@
  * Uses Supabase RPCs so secret is verified in DB (hash); no direct table access for anon.
  */
 import { supabase, isSupabaseConfigured } from './supabase.js';
+import { flowLog, flowWarn, safeRefLog } from './willToolDebug.js';
 
 const RPC_CREATE = 'create_will_session';
 const RPC_GET = 'get_will_session';
@@ -37,14 +38,14 @@ export async function createSession(payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[WillTool Flow] create_session: error', error.message, error);
+    console.error('[WillTool Flow] create_session: error', error.message);
     return { error: error.message };
   }
   if (data !== true) {
-    console.warn('[WillTool Flow] create_session: unexpected response', data);
+    flowWarn('create_session: unexpected response');
     return { error: data?.message ?? 'Create failed' };
   }
-  console.log('[WillTool Flow] Client session created', { ref, phase: 'client_start' });
+  flowLog('Client session created', { ref: safeRefLog(ref), phase: 'client_start' });
   return { ref, secret };
 }
 
@@ -66,18 +67,18 @@ export async function loadSession(ref, secret) {
     p_secret: secret,
   });
   if (error) {
-    console.error('[WillTool Flow] load_session: error', error.message, error);
+    console.error('[WillTool Flow] load_session: error', error.message);
     return { error: error.message };
   }
   if (data == null) {
-    console.warn('[WillTool Flow] load_session: not found or invalid secret', { ref });
+    flowWarn('load_session: not found or invalid secret', { ref: safeRefLog(ref) });
     return { error: 'Session not found or invalid secret' };
   }
   const payload = typeof data === 'object' && data !== null && 'payload' in data
     ? data.payload
     : data;
   const keys = payload && typeof payload === 'object' ? Object.keys(payload).length : 0;
-  console.log('[WillTool Flow] Client session loaded', { ref, fieldCount: keys, phase: 'client_resume' });
+  flowLog('Client session loaded', { ref: safeRefLog(ref), fieldCount: keys, phase: 'client_resume' });
   return { payload: payload ?? {} };
 }
 
@@ -101,10 +102,10 @@ export async function saveSession(ref, secret, payload) {
     p_payload: payload ?? {},
   });
   if (error) {
-    console.error('[WillTool Flow] save_session: error', error.message, error);
+    console.error('[WillTool Flow] save_session: error', error.message);
     return { error: error.message };
   }
-  console.log('[WillTool Flow] Client draft saved to cloud', { ref, phase: 'client_draft_save' });
+  flowLog('Client draft saved to cloud', { ref: safeRefLog(ref), phase: 'client_draft_save' });
   if (data !== true) {
     return { error: data?.message ?? 'Update failed' };
   }

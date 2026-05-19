@@ -31,7 +31,7 @@ const LAPSE_OPTIONS = [
 ];
 
 /** @param {{ field: object, formValues: object, setFormValues: Function }} props */
-export default function PropertyGiftsGuided({ field: _field, formValues, setFormValues }) {
+export default function PropertyGiftsGuided({ formValues, setFormValues }) {
   const uidStr = useId();
   const modalTitleId = useId();
   const [modalOpen, setModalOpen] = useState(false);

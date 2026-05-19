@@ -22,7 +22,7 @@ async function deleteWebCachesIfAny() {
 export function purgePortalBrowserStorageSync() {
   if (typeof window === 'undefined') return;
 
-  let themeBackup = null;
+  let themeBackup;
   try {
     themeBackup = window.localStorage.getItem(THEME_STORAGE_KEY);
   } catch {

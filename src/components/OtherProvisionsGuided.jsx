@@ -212,7 +212,7 @@ function SamePersonOrNew({ formValues, value, onPick, onClearPick }) {
 }
 
 /** @param {{ field: object, formValues: object, setFormValues: Function }} props */
-export default function OtherProvisionsGuided({ field, formValues, setFormValues }) {
+export default function OtherProvisionsGuided({ formValues, setFormValues }) {
   const uid = useId();
   const apply = useCallback((patch) => setFormValues((p) => ({ ...p, ...patch })), [setFormValues]);
 
