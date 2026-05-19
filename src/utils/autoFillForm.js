@@ -14,7 +14,10 @@ import {
 import { formatMonetaryGiftsDetailsFromList } from './monetaryGiftsFormat.js';
 import { formatSpecificGiftsDetailsFromList } from './specificGiftsFormat.js';
 import { formatPropertyGiftsDetailsFromList } from './propertyGiftsFormat.js';
-import { formatPropertyTrustClientSummaryFromState } from './propertyTrustFormat.js';
+import {
+  buildPropertyTrustDetailsDraftFromClient,
+  formatPropertyTrustClientSummaryFromState,
+} from './propertyTrustFormat.js';
 import { getMissingIdVerificationDocs } from '../lib/matterOutstanding.js';
 
 /**
@@ -105,6 +108,13 @@ const AUTOFILL_EXTRA_GUIDED_STATE_KEYS = [
   'propertyTrustLifeTenantName',
   'propertyTrustLifeTenantRelationship',
   'propertyTrustPropertiesList',
+  /** Solicitor schedule fields — not standalone ids in form JSON (only propertyTrustGuided shell). */
+  'propertyTrustDetails',
+  'propertyTrustScheduleNumber',
+  'propertyTrustTerms',
+  'bprTrustDetails',
+  'bprTrustScheduleNumber',
+  'bprTrustTerms',
   'hasBusinessInterests',
   'trusteePowerCarryOnBusiness',
   'appointSeparateBusinessTrustee',
@@ -359,24 +369,184 @@ const DEMO = {
   },
 };
 
-/** Minimal 1×1 PNG data URL — autofill only; submit still runs image compression. */
+/** Minimal 1×1 PNG data URL — legacy; not used for ID autofill (real uploads required). */
 const AUTOFILL_DEMO_ID_IMAGE_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-/** Populate all four ID slots so client final step and matter submit see “complete” demo attachments. */
-function applyIdentityVerificationAutofill(dummyData) {
-  dummyData.identityVerification = {
-    identityVerificationPhotoId: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
-    identityVerificationProofOfAddress1: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
-    identityVerificationProofOfAddress2: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
-    identityVerificationSelfieWithId: AUTOFILL_DEMO_ID_IMAGE_DATA_URL,
-  };
-  dummyData.identityVerificationFileNames = {
-    identityVerificationPhotoId: 'demo-photo-id.png',
-    identityVerificationProofOfAddress1: 'demo-proof-of-address-1.png',
-    identityVerificationProofOfAddress2: 'demo-proof-of-address-2.png',
-    identityVerificationSelfieWithId: 'demo-selfie-with-id.png',
-  };
+const GUIDED_SHELL_FIELD_TYPES = new Set([
+  'propertyGiftsGuided',
+  'propertyTrustGuided',
+  'personalChattelsGuided',
+  'deliberateExclusionsGuided',
+  'otherProvisionsGuided',
+  'administrativeProvisionsGuided',
+  'estateResidueGuided',
+  'businessInterestsGuided',
+  'guardianFlow',
+  'monetaryGiftsList',
+  'specificGiftsList',
+]);
+
+/** ID verification uploads are intentionally left empty — solicitors/clients add real documents. */
+export function clearIdentityVerificationAutofill(dummyData) {
+  dummyData.identityVerification = {};
+  dummyData.identityVerificationFileNames = {};
+}
+
+function isUploadOrIdentityField(field) {
+  if (!field?.id) return false;
+  if (field.id === 'identityVerification' || field.id.startsWith('identityVerification')) return true;
+  if (field.type === 'signature') return true;
+  if (['file', 'upload', 'image'].includes(field.type)) return true;
+  return false;
+}
+
+function buildDemoMonetaryGiftsList() {
+  return [
+    {
+      id: 'demo-mg-1',
+      recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+      recipientRelationship: 'son',
+      amount: 25000,
+      conditionKey: 'age-25',
+      conditionLabel: 'Only when they reach the age of 25',
+      lapseKey: 'residue',
+      lapseLabel: 'Falls into the residue of my estate (default)',
+    },
+    {
+      id: 'demo-mg-2',
+      recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
+      recipientRelationship: 'daughter',
+      amount: 15000,
+      conditionKey: 'age-21',
+      conditionLabel: 'Only when they reach the age of 21',
+      lapseKey: 'residue',
+      lapseLabel: 'Falls into the residue of my estate (default)',
+    },
+  ];
+}
+
+function buildDemoSpecificGiftsList() {
+  return [
+    {
+      id: 'demo-sg-1',
+      itemDescription: "my grandfather's gold pocket watch",
+      itemType: 'jewellery',
+      itemTypeLabel: 'Jewellery or watches',
+      itemLocation: 'At my home in the bedroom safe',
+      recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
+      recipientRelationship: 'son',
+      conditionKey: '',
+      conditionLabel: 'None',
+      lapseKey: 'residue',
+      lapseLabel: 'Falls into the residue of my estate (default)',
+    },
+    {
+      id: 'demo-sg-2',
+      itemDescription: 'my collection of family oil paintings (listed in schedule to be provided)',
+      itemType: 'artwork',
+      itemTypeLabel: 'Artwork or antiques',
+      itemLocation: '',
+      recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
+      recipientRelationship: 'daughter',
+      conditionKey: '',
+      conditionLabel: 'None',
+      lapseKey: 'residue',
+      lapseLabel: 'Falls into the residue of my estate (default)',
+    },
+  ];
+}
+
+/** Ensure property trust intent + solicitor package fields survive schema filter and matter checks. */
+function applyPropertyTrustSolicitorDemoFields(dummyData) {
+  const wantsTrust =
+    dummyData.includePropertyTrust === 'Yes' ||
+    dummyData.pt_wants_trust === 'yes' ||
+    dummyData.pt_wants_trust === 'Yes';
+  if (!wantsTrust && dummyData.includePropertyTrust !== 'Unsure') {
+    dummyData.includePropertyTrust = dummyData.includePropertyTrust || 'Yes';
+    dummyData.pt_wants_trust = dummyData.pt_wants_trust || 'yes';
+  }
+
+  if (!Array.isArray(dummyData.propertyTrustPropertiesList) || dummyData.propertyTrustPropertiesList.length === 0) {
+    dummyData.propertyTrustPropertiesList = [
+      {
+        id: 'demo-pt-1',
+        addressLine1: DEMO.testator.address1,
+        addressLine2: DEMO.testator.address2 || '',
+        town: DEMO.testator.address3 || '',
+        postcode: DEMO.testator.postcode,
+        tenure: 'freehold',
+      },
+    ];
+  }
+
+  const draftDetails = buildPropertyTrustDetailsDraftFromClient(dummyData);
+  const details = String(dummyData.propertyTrustDetails ?? '').trim();
+  dummyData.propertyTrustDetails =
+    details || draftDetails || `my property at ${DEMO.testator.address1}, ${DEMO.testator.postcode}`;
+  dummyData.propertyTrustScheduleNumber =
+    String(dummyData.propertyTrustScheduleNumber ?? '').trim() ||
+    String(Math.floor(Math.random() * 9000000) + 1000000);
+  dummyData.propertyTrustTerms =
+    String(dummyData.propertyTrustTerms ?? '').trim() ||
+    'The trustees shall have full power to manage, maintain, repair, improve, and if necessary sell the property. All rental income shall be paid to the life tenant during their lifetime.';
+  dummyData.propertyTrustClientSummary =
+    dummyData.propertyTrustClientSummary ||
+    `${formatPropertyTrustClientSummaryFromState(dummyData)}${DEMO_TEXT_TAG}`;
+}
+
+/** Gift lists + BPR / property trust drafting text — safe to call multiple times. */
+function applyDemoGiftAndTrustFallbacks(dummyData) {
+  dummyData.leaveMoneyGifts = dummyData.leaveMoneyGifts || 'Yes';
+  if (!Array.isArray(dummyData.monetaryGiftsList) || dummyData.monetaryGiftsList.length === 0) {
+    const list = buildDemoMonetaryGiftsList();
+    dummyData.monetaryGiftsList = list;
+    dummyData.monetaryGiftsDetails = `${formatMonetaryGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+  }
+  dummyData.failedMoneyGiftPassProportionately = dummyData.failedMoneyGiftPassProportionately || 'Yes';
+
+  dummyData.leaveSpecificGifts = dummyData.leaveSpecificGifts || 'Yes';
+  if (!Array.isArray(dummyData.specificGiftsList) || dummyData.specificGiftsList.length === 0) {
+    const list = buildDemoSpecificGiftsList();
+    dummyData.specificGiftsList = list;
+    dummyData.specificGiftsDetails = `${formatSpecificGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+  }
+  dummyData.failedSpecificGiftPassProportionately = dummyData.failedSpecificGiftPassProportionately || 'Yes';
+
+  if (dummyData.includeBPRTrust === 'Yes' || dummyData.biz_has_interests === 'yes') {
+    dummyData.bprTrustDetails =
+      dummyData.bprTrustDetails ||
+      'My business interests in Mitchell & Associates Ltd (Company No. 12345678) shall be held in trust.';
+    dummyData.bprTrustTerms =
+      dummyData.bprTrustTerms ||
+      'The business property relief trust shall operate according to standard terms. The trustees shall have full power to manage the business or sell the business interests as they see fit.';
+    dummyData.bprTrustScheduleNumber =
+      dummyData.bprTrustScheduleNumber || String(Math.floor(Math.random() * 9000000) + 1000000);
+  }
+
+  applyPropertyTrustSolicitorDemoFields(dummyData);
+}
+
+/**
+ * Last pass: fill any schema field still empty (including option-nested fields).
+ * Skips ID uploads, signatures, guided shells, and hidden person-array slots.
+ */
+function applyFinalAutofillCoveragePass(dummyData, formData, getFieldValue) {
+  let filled = 0;
+  forEachFormField(formData, (field) => {
+    if (!field.id || field._hiddenFromClient) return;
+    if (['display', 'button'].includes(field.type)) return;
+    if (GUIDED_SHELL_FIELD_TYPES.has(field.type)) return;
+    if (field.type === 'hidden') return;
+    if (isUploadOrIdentityField(field)) return;
+    if (!autofillValueNeedsTopUp(dummyData[field.id])) return;
+    const v = getFieldValue(field);
+    if (v == null || v === '' || v === AUTOFILL_DEMO_ID_IMAGE_DATA_URL) return;
+    dummyData[field.id] = v;
+    filled += 1;
+  });
+  return filled;
 }
 
 /**
@@ -1001,6 +1171,8 @@ function applyRichPersonDemoOverrides(dummyData) {
     dummyData.shareholderAgreementInPlace = dummyData.shareholderAgreementInPlace || 'Unsure';
   }
 
+  applyDemoGiftAndTrustFallbacks(dummyData);
+
   if (dummyData.leavePropertyGifts === 'Yes') {
     if (!Array.isArray(dummyData.propertyGiftsList) || dummyData.propertyGiftsList.length === 0) {
       const list = [
@@ -1336,7 +1508,7 @@ export const generateDummyFormData = (formData) => {
         return field.options ? field.options.map((o) => o.id || o.value).filter(Boolean) : [];
 
       case 'signature':
-        return AUTOFILL_DEMO_ID_IMAGE_DATA_URL;
+        return null;
 
       default:
         return null;
@@ -1375,64 +1547,18 @@ export const generateDummyFormData = (formData) => {
         return;
       }
       if (field.type === 'monetaryGiftsList') {
-        const list = [
-          {
-            id: 'demo-mg-1',
-            recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
-            recipientRelationship: 'son',
-            amount: 25000,
-            conditionKey: 'age-25',
-            conditionLabel: 'Only when they reach the age of 25',
-            lapseKey: 'residue',
-            lapseLabel: 'Falls into the residue of my estate (default)',
-          },
-          {
-            id: 'demo-mg-2',
-            recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
-            recipientRelationship: 'daughter',
-            amount: 15000,
-            conditionKey: 'age-21',
-            conditionLabel: 'Only when they reach the age of 21',
-            lapseKey: 'residue',
-            lapseLabel: 'Falls into the residue of my estate (default)',
-          },
-        ];
+        const list = buildDemoMonetaryGiftsList();
         dummyData.monetaryGiftsList = list;
         dummyData.monetaryGiftsDetails = `${formatMonetaryGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+        dummyData.leaveMoneyGifts = 'Yes';
         processedCount += 2;
         return;
       }
       if (field.type === 'specificGiftsList') {
-        const list = [
-          {
-            id: 'demo-sg-1',
-            itemDescription: "my grandfather's gold pocket watch",
-            itemType: 'jewellery',
-            itemTypeLabel: 'Jewellery or watches',
-            itemLocation: 'At my home in the bedroom safe',
-            recipientName: `${DEMO.children.son.firstName} ${DEMO.children.son.lastName}`,
-            recipientRelationship: 'son',
-            conditionKey: '',
-            conditionLabel: 'None',
-            lapseKey: 'residue',
-            lapseLabel: 'Falls into the residue of my estate (default)',
-          },
-          {
-            id: 'demo-sg-2',
-            itemDescription: 'my collection of family oil paintings (listed in schedule to be provided)',
-            itemType: 'artwork',
-            itemTypeLabel: 'Artwork or antiques',
-            itemLocation: '',
-            recipientName: `${DEMO.children.daughter.firstName} ${DEMO.children.daughter.lastName}`,
-            recipientRelationship: 'daughter',
-            conditionKey: '',
-            conditionLabel: 'None',
-            lapseKey: 'residue',
-            lapseLabel: 'Falls into the residue of my estate (default)',
-          },
-        ];
+        const list = buildDemoSpecificGiftsList();
         dummyData.specificGiftsList = list;
         dummyData.specificGiftsDetails = `${formatSpecificGiftsDetailsFromList(list)}${DEMO_TEXT_TAG}`;
+        dummyData.leaveSpecificGifts = 'Yes';
         processedCount += 2;
         return;
       }
@@ -2025,17 +2151,6 @@ export const generateDummyFormData = (formData) => {
   console.log(`[AUTOFILL GENERATE] ✅ Applied ${unlockFieldsApplied} unlock fields`);
 
   // FINAL PASS: Collect every fillable field ID from the entire form and fill any we missed
-  const GUIDED_SHELL_FIELD_TYPES = new Set([
-    'propertyGiftsGuided',
-    'propertyTrustGuided',
-    'personalChattelsGuided',
-    'deliberateExclusionsGuided',
-    'otherProvisionsGuided',
-    'administrativeProvisionsGuided',
-    'estateResidueGuided',
-    'businessInterestsGuided',
-    'guardianFlow',
-  ]);
   const collectAllFieldIds = (fields, ids = new Set()) => {
     if (!fields || !Array.isArray(fields)) return ids;
     fields.forEach((f) => {
@@ -2043,8 +2158,14 @@ export const generateDummyFormData = (formData) => {
       if (f._hiddenFromClient) return;
       if (['display', 'button', 'hidden', 'signature'].includes(f.type)) return;
       if (GUIDED_SHELL_FIELD_TYPES.has(f.type)) return;
+      if (f.id.startsWith('identityVerification')) return;
       ids.add(f.id);
       if (f.type === 'section' && f.subFields) collectAllFieldIds(f.subFields, ids);
+      if (Array.isArray(f.options)) {
+        for (const opt of f.options) {
+          if (opt?.fields) collectAllFieldIds(opt.fields, ids);
+        }
+      }
     });
     return ids;
   };
@@ -2091,11 +2212,12 @@ export const generateDummyFormData = (formData) => {
   console.log(`[AUTOFILL GENERATE] ✅ Filled ${missingIds.length} missing fields with defaults`);
 
   applyRichPersonDemoOverrides(dummyData);
-  applyIdentityVerificationAutofill(dummyData);
+  dummyData.appointGuardians = dummyData.appointGuardians || APPOINT_GUARDIANS_DIFFERENT;
+  applyDemoGiftAndTrustFallbacks(dummyData);
+  clearIdentityVerificationAutofill(dummyData);
+  const finalCoverageFilled = applyFinalAutofillCoveragePass(dummyData, formData, getFieldValue);
 
   const SHELL_TYPES_NO_TOPUP = new Set(GUIDED_SHELL_FIELD_TYPES);
-  SHELL_TYPES_NO_TOPUP.add('guardianFlow');
-  SHELL_TYPES_NO_TOPUP.add('businessInterestsGuided');
   let topUpApplied = 0;
   for (const f of fieldById.values()) {
     if (!f.id) continue;
@@ -2110,7 +2232,7 @@ export const generateDummyFormData = (formData) => {
     }
   }
   if (autofillDevLogs) {
-    console.log('[AUTOFILL GENERATE] schema top-up pass:', { topUpApplied });
+    console.log('[AUTOFILL GENERATE] schema top-up pass:', { topUpApplied, finalCoverageFilled });
   }
 
   const estRec = getAristoneEstateRecommendationState(dummyData);
@@ -2158,8 +2280,9 @@ export const generateDummyFormData = (formData) => {
         ? { _debtId: debt0._debtId, debtAmount: debt0.debtAmount, hasNotes: !!debt0.debtNotes }
         : null,
     },
-    identityVerificationDemoSlotsOk:
-      getMissingIdVerificationDocs({ identityVerification: dummyData.identityVerification }).length === 0,
+    identityVerificationLeftEmpty:
+      getMissingIdVerificationDocs({ identityVerification: dummyData.identityVerification }).length === 4,
+    finalCoverageFilled,
   });
   console.log('[AUTOFILL GENERATE] ========== GENERATION COMPLETE ==========');
 

@@ -1,6 +1,7 @@
 /**
  * Plain-English client review summary before final submit (intake only — no TC, no ID images).
  */
+import { ARISTONE_PROFILE } from '../constants/aristoneSolicitors.js';
 import { getMissingIdVerificationDocs } from './matterOutstanding.js';
 import { normalizePersonEntry } from './formPeopleSummary.js';
 import { getPropertyTrustClientIntent } from './propertyTrustClientIntent.js';
@@ -11,11 +12,112 @@ function trim(v) {
 }
 
 function formatPersonList(arr, max = 6) {
-  if (!Array.isArray(arr) || arr.length === 0) return ['None recorded'];
+  if (!Array.isArray(arr) || arr.length === 0) return [];
   return arr.slice(0, max).map((item) => {
     const { title } = normalizePersonEntry(item);
     return title && title !== '(unnamed)' ? title : 'Unnamed person';
   });
+}
+
+function guardianFlowPersonLabel(g) {
+  if (!g || typeof g !== 'object') return '';
+  const { title } = normalizePersonEntry({
+    title: g.title,
+    firstName: g.firstName,
+    middleName: g.middleNames ?? g.middleName,
+    lastName: g.lastName,
+  });
+  return title && title !== '(unnamed)' ? title : '';
+}
+
+function executorsSummary(formValues) {
+  const lines = [];
+  const individual = formatPersonList(formValues?.executorData, 4);
+  individual.forEach((name) => {
+    if (name && name !== 'Unnamed person') lines.push(`Individual executor: ${name}`);
+  });
+
+  const prof = formatPersonList(formValues?.professionalExecutorData, 2);
+  if (prof.length > 0) {
+    prof.forEach((name) => lines.push(`Professional executor: ${name}`));
+  } else if (
+    formValues?.appointProfessionalExecutor === 'Yes' &&
+    (formValues?.professionalExecutorSelection === 'Aristone' ||
+      formValues?.chooseAristoneSubstituteExecutor === 'Aristone')
+  ) {
+    lines.push(`Professional executor: ${ARISTONE_PROFILE.fullLegalFormat}`);
+  }
+
+  const substitute = formatPersonList(formValues?.substituteExecutorData, 2);
+  if (substitute.length > 0) {
+    substitute.forEach((name) => lines.push(`Substitute executor: ${name}`));
+  } else if (formValues?.chooseAristoneSubstituteExecutor === 'Aristone') {
+    lines.push(`Substitute executor: ${ARISTONE_PROFILE.fullLegalFormat}`);
+  }
+
+  if (lines.length === 0) return ['None recorded'];
+  return lines;
+}
+
+function guardiansSummary(formValues) {
+  const fromGuardianData = formatPersonList(formValues?.guardianData, 8);
+  if (fromGuardianData.length > 0) {
+    return fromGuardianData.map((name) => `Guardian: ${name}`);
+  }
+
+  const raw = formValues?.guardianFlowState;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const state = JSON.parse(raw);
+      const lines = [];
+      const seen = new Set();
+
+      const pushName = (g, prefix = '') => {
+        const name = guardianFlowPersonLabel(g);
+        if (!name || seen.has(name)) return;
+        seen.add(name);
+        lines.push(prefix ? `${prefix}${name}` : `Guardian: ${name}`);
+      };
+
+      if (Array.isArray(state.sameGuardians) && state.sameGuardians.length > 0) {
+        state.sameGuardians.forEach((g) => pushName(g));
+      }
+
+      if (Array.isArray(state.children) && state.children.length > 0) {
+        state.children.forEach((ch) => {
+          const childName = [ch?.childFirstName, ch?.childLastName].map(trim).filter(Boolean).join(' ');
+          const guardians = Array.isArray(ch?.guardians) ? ch.guardians : [];
+          if (!childName) {
+            guardians.forEach((g) => pushName(g));
+            return;
+          }
+          const names = guardians.map(guardianFlowPersonLabel).filter(Boolean);
+          if (names.length > 0) {
+            const label = `For ${childName}: ${names.join('; ')}`;
+            if (!seen.has(label)) {
+              seen.add(label);
+              lines.push(label);
+            }
+          }
+        });
+      }
+
+      if (lines.length > 0) return lines;
+    } catch {
+      /* ignore invalid JSON */
+    }
+  }
+
+  const clause = trim(formValues?.guardianshipDetailsData);
+  if (clause) {
+    return [clause.length > 220 ? `${clause.slice(0, 217)}…` : clause];
+  }
+
+  const appoint = trim(formValues?.appointGuardians);
+  if (appoint === 'No') return ['No guardians appointed'];
+  if (appoint) return ['Guardians appointed — see questionnaire for full details'];
+
+  return ['None recorded'];
 }
 
 function testatorLine(formValues) {
@@ -89,12 +191,12 @@ export function buildClientSubmitReviewSections(formValues) {
     {
       id: 'executors',
       title: 'Your executors',
-      lines: formatPersonList(v.executorData),
+      lines: executorsSummary(v),
     },
     {
       id: 'guardians',
       title: 'Your guardians',
-      lines: formatPersonList(v.guardianData),
+      lines: guardiansSummary(v),
     },
     {
       id: 'beneficiaries',

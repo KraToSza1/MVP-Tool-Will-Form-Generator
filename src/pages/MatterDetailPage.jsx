@@ -515,6 +515,12 @@ export default function MatterDetailPage() {
     }, 50);
   };
 
+  const scrollToDocumentChecklist = () => {
+    setTimeout(() => {
+      document.getElementById('matter-document-checklist')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
   useEffect(() => {
     if (!matter || !location.state?.scrollToIdDocs) return;
     scrollToClientId();
@@ -1056,7 +1062,13 @@ export default function MatterDetailPage() {
         clientPdfBusy={isGeneratingClientPDF}
       />
 
-      <PdfPreflightPanel matter={matter} mergedPayload={mergedPayload} />
+      <PdfPreflightPanel
+        matter={matter}
+        mergedPayload={mergedPayload}
+        onScrollToId={scrollToClientId}
+        onScrollToChecklist={scrollToDocumentChecklist}
+        onOpenOutstandingCategory={openQuickAction}
+      />
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1080,7 +1092,8 @@ export default function MatterDetailPage() {
             <MatterStatusBadge status={matter.status} />
           </div>
 
-          <div className="document-checklist mt-6 rounded-2xl border border-slate-200 bg-slate-50/90 shadow-sm overflow-hidden">
+          <div id="matter-document-checklist"
+            className="document-checklist mt-6 rounded-2xl border border-slate-200 bg-slate-50/90 shadow-sm overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-100/80 px-5 py-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600">Document checklist</h2>
               <p className="mt-0.5 text-xs text-slate-500">What’s done and what’s still needed for this matter</p>

@@ -216,6 +216,40 @@ export const SOLICITOR_ONLY_FIELD_IDS = new Set([
   'bprTrustTerms',
 ]);
 
+/**
+ * Stripped from client auto-fill only (witnesses / execution UI). BPR trust drafting fields stay
+ * in the saved client payload so solicitor dashboard workflow checks see a complete demo package.
+ */
+export const CLIENT_AUTOFILL_STRIP_FIELD_IDS = new Set([
+  'includeWitnessDetails',
+  'witness1Section',
+  'witness2Section',
+  'willExecutionDate',
+  'testatorSignature',
+  'consultantSignature',
+  'inabilityToSignProvisions',
+  'signingOnBehalfSection',
+  'interpreterSection',
+  'nativeLanguage',
+  'witness1StatusDisplay',
+  'addWitness1Button',
+  'witness1Data',
+  'witness2StatusDisplay',
+  'addWitness2Button',
+  'witness2Data',
+  'signingOnBehalfStatusDisplay',
+  'addSigningOnBehalfButton',
+  'signingOnBehalfData',
+  'interpreterStatusDisplay',
+  'addInterpreterButton',
+  'interpreterData',
+  'substituteExecutorsSection',
+  'appointProfessionalExecutor',
+  'professionalExecutorSection',
+  'substituteProfessionalExecutorSection',
+  'bprTrustSection',
+]);
+
 export const isSolicitorMode = () => {
   if (typeof window === 'undefined') return false;
   if ((window.location.pathname || '').startsWith('/solicitor')) return true;

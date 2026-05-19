@@ -61,10 +61,6 @@ const PROPERTY_TRUST_KEYS = [
 
 const EXCLUSION_KEYS = ['excludedPersonData', 'excludedPersonSection'];
 
-function keysChanged(prev, next, keys) {
-  return keys.some((k) => !Object.is(prev[k], next[k]));
-}
-
 function clearKeys(target, keys) {
   const out = { ...target };
   let changed = false;
@@ -92,8 +88,17 @@ function pruneResidue(prev, next) {
   return out;
 }
 
+/** True when the user changed an answer; false when a field is first set (e.g. bulk autofill). */
+function controllerValueChanged(prev, next, key) {
+  const p = prev[key];
+  const n = next[key];
+  if (Object.is(p, n)) return false;
+  if (p == null || p === '') return false;
+  return true;
+}
+
 function pruneGuardians(prev, next) {
-  if (prev.appointGuardians === next.appointGuardians) return next;
+  if (!controllerValueChanged(prev, next, 'appointGuardians')) return next;
   return clearKeys(next, GUARDIAN_KEYS);
 }
 
@@ -103,7 +108,7 @@ function pruneExecutors(prev, next) {
     'appointProfessionalExecutor',
     'professionalExecutorSelection',
   ];
-  if (!keysChanged(prev, next, controllerKeys)) return next;
+  if (!controllerKeys.some((k) => controllerValueChanged(prev, next, k))) return next;
   return clearKeys(next, EXECUTOR_SWITCH_KEYS);
 }
 

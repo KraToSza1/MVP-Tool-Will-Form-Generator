@@ -22,7 +22,7 @@ import { useTheme } from '../../context/ThemeContext.jsx';
 import ThemeToggleButton from '../ThemeToggleButton.jsx';
 import { mattersLoadTrace } from '../../lib/mattersLoadTrace.js';
 import { listMatters } from '../../lib/matters.js';
-import { getMatterOutstandingCategories } from '../../lib/matterOutstanding.js';
+import { summarizeUrgentMatters } from '../../lib/matterOutstanding.js';
 import { FRESH_CLIENT_INTAKE_URL } from '../../lib/clientIntakeFresh.js';
 import { portalFreshStartReload } from '../../lib/portalBrowserFreshStart.js';
 
@@ -66,7 +66,7 @@ export default function SolicitorLayout() {
   const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [displayNameInput, setDisplayNameInput] = useState('');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
-  const [urgentCount, setUrgentCount] = useState(null);
+  const [urgentBadge, setUrgentBadge] = useState(null);
   const profileWrapRef = useRef(null);
 
   useEffect(() => {
@@ -78,16 +78,16 @@ export default function SolicitorLayout() {
     ).then((r) => {
       if (!active) return;
       if (r.error) {
-        setUrgentCount(0);
+        setUrgentBadge(null);
         return;
       }
-      const n = (r.data || []).filter((m) => (getMatterOutstandingCategories(m) || []).length > 0).length;
-      setUrgentCount(n);
+      const summary = summarizeUrgentMatters(r.data || []);
+      setUrgentBadge(summary);
     });
     return () => {
       active = false;
     };
-  }, [authLoading, user?.id]);
+  }, [authLoading, user?.id, location.pathname]);
 
   useEffect(() => {
     mattersLoadTrace('SolicitorLayout mounted / route changed', {
@@ -278,16 +278,31 @@ export default function SolicitorLayout() {
                 <NavLink
                   to="/solicitor/urgent"
                   className={({ isActive }) => navPillLinkClass(isActive, isDark, 'urgent')}
-                  title="Matters with outstanding actions"
+                  title={
+                    urgentBadge?.matterCount
+                      ? `${urgentBadge.matterCount} client matter(s) with outstanding work (each matter counts once). ${
+                          urgentBadge.totalOutstandingItems > urgentBadge.matterCount
+                            ? `${urgentBadge.totalOutstandingItems} checklist lines firm-wide.`
+                            : ''
+                        }${
+                          urgentBadge.solicitorWorkflowMatterCount > 0 &&
+                          urgentBadge.solicitorWorkflowMatterCount < urgentBadge.matterCount
+                            ? ` ${urgentBadge.solicitorWorkflowMatterCount} need solicitor workflow beyond ID upload.`
+                            : ''
+                        }`
+                      : 'Matters with outstanding actions'
+                  }
                 >
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 opacity-95 sm:h-4 sm:w-4" aria-hidden />
                   <span className="whitespace-nowrap">Urgent</span>
-                  {urgentCount != null && urgentCount > 0 ? (
+                  {urgentBadge != null && urgentBadge.matterCount > 0 ? (
                     <span
                       className="ml-0.5 min-h-4.5 min-w-4.5 shrink-0 rounded-full bg-rose-600 px-1 text-center text-[10px] font-bold leading-5 text-white shadow-sm ring-1 ring-rose-500/30"
-                      aria-label={`${urgentCount} urgent ${urgentCount === 1 ? 'matter' : 'matters'}`}
+                      aria-label={`${urgentBadge.matterCount} urgent ${
+                        urgentBadge.matterCount === 1 ? 'matter' : 'matters'
+                      }, not ${urgentBadge.totalOutstandingItems} separate checklist items`}
                     >
-                      {urgentCount > 99 ? '99+' : urgentCount}
+                      {urgentBadge.matterCount > 99 ? '99+' : urgentBadge.matterCount}
                     </span>
                   ) : null}
                 </NavLink>

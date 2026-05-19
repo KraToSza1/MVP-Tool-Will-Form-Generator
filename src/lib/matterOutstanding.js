@@ -70,12 +70,12 @@ export function isTestamentaryCapacityComplete(payload) {
 }
 
 /**
- * Testamentary Capacity is solicitor workflow. Use solicitor_payload only so legacy client payload
- * values never mark this checklist as complete by mistake.
+ * Testamentary Capacity answers may live on solicitor_payload (solicitor editor) or on
+ * client_payload after questionnaire auto-fill / submit. Merged check avoids false "TC incomplete"
+ * when demo data was saved with the client intake only.
  */
-function getTestamentaryCapacityPayloadForMatter(matter) {
-  const solicitorPayload = matter?.solicitor_payload;
-  return solicitorPayload && typeof solicitorPayload === 'object' ? solicitorPayload : {};
+export function getTestamentaryCapacityPayloadForMatter(matter) {
+  return getMergedMatterPayload(matter);
 }
 
 export function isMatterTestamentaryCapacityOutstanding(matter) {
@@ -106,6 +106,55 @@ export function isMatterPropertyTrustRequiredOutstanding(matter) {
 export function isMatterPropertyTrustReviewOutstanding(matter) {
   const payload = getMergedMatterPayload(matter);
   return getPropertyTrustClientIntent(payload) === 'Unsure';
+}
+
+/**
+ * One matter counts as urgent at most once in nav badges / urgent lists — even if it has
+ * several outstanding lines (ID + BPR + TC, etc.).
+ */
+export function isMatterUrgent(matter) {
+  if (!matter) return false;
+  if (matter.status === 'completed') return false;
+  return getMatterOutstandingCategories(matter).length > 0;
+}
+
+/**
+ * @param {object[] | null | undefined} matters
+ * @returns {number} Count of matters (clients), not sum of outstanding checklist lines.
+ */
+export function countUrgentMatters(matters) {
+  return (matters || []).filter(isMatterUrgent).length;
+}
+
+/**
+ * @param {object[] | null | undefined} matters
+ * @returns {{
+ *   matterCount: number,
+ *   totalOutstandingItems: number,
+ *   idOnlyMatterCount: number,
+ *   solicitorWorkflowMatterCount: number,
+ * }}
+ */
+export function summarizeUrgentMatters(matters) {
+  const urgentList = (matters || []).filter(isMatterUrgent);
+  let totalOutstandingItems = 0;
+  let idOnlyMatterCount = 0;
+  let solicitorWorkflowMatterCount = 0;
+
+  for (const matter of urgentList) {
+    const categories = getMatterOutstandingCategories(matter);
+    totalOutstandingItems += categories.length;
+    const hasSolicitorWork = categories.some((c) => c !== OUTSTANDING_CATEGORY.ID_VERIFICATION);
+    if (hasSolicitorWork) solicitorWorkflowMatterCount += 1;
+    else if (categories.includes(OUTSTANDING_CATEGORY.ID_VERIFICATION)) idOnlyMatterCount += 1;
+  }
+
+  return {
+    matterCount: urgentList.length,
+    totalOutstandingItems,
+    idOnlyMatterCount,
+    solicitorWorkflowMatterCount,
+  };
 }
 
 export function getMatterOutstandingCategories(matter) {
@@ -157,7 +206,7 @@ export function getMissingIdVerificationDocs(payload) {
  * @returns {{ fieldId: string, label: string }[]}
  */
 export function getMissingTestamentaryCapacityFields(matter) {
-  const payload = getTestamentaryCapacityPayloadForMatter(matter);
+  const payload = getMergedMatterPayload(matter);
   return TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.filter(
     (fieldId) => !hasMeaningfulAnswer(payload?.[fieldId])
   ).map((fieldId) => ({

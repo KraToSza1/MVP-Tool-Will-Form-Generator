@@ -5,7 +5,12 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { listMatters } from '../lib/matters.js';
-import { getMatterOutstandingCategories, OUTSTANDING_CATEGORY } from '../lib/matterOutstanding.js';
+import {
+  getMatterOutstandingCategories,
+  isMatterUrgent,
+  OUTSTANDING_CATEGORY,
+  summarizeUrgentMatters,
+} from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 
 const CATEGORY_SHORT = {
@@ -77,9 +82,9 @@ export default function SolicitorUrgentPage() {
     };
   }, [authLoading, user?.id]);
 
-  const urgent = useMemo(() => {
-    return matters.filter((m) => (getMatterOutstandingCategories(m) || []).length > 0);
-  }, [matters]);
+  const urgent = useMemo(() => matters.filter(isMatterUrgent), [matters]);
+
+  const urgentSummary = useMemo(() => summarizeUrgentMatters(matters), [matters]);
 
   const visibleUrgent = useMemo(() => {
     if (scope === 'mine') return urgent.filter((m) => m.assigned_solicitor_id === user?.id);
@@ -98,11 +103,30 @@ export default function SolicitorUrgentPage() {
         <div className="min-w-0">
           <h1 className={`text-xl font-bold tracking-tight sm:text-2xl ${headingClass}`}>Urgent &amp; outstanding</h1>
           <p className={`mt-1 text-sm ${subClass}`}>
-            Matters that still need ID verification, BPR or property trust follow-up, or Testamentary Capacity.
+            Each client matter appears once below, even when several checklist lines are still open (ID, BPR,
+            property trust, Testamentary Capacity).
           </p>
+          {urgentSummary.matterCount > 0 ? (
+            <p className={`mt-2 text-xs ${mutedClass}`}>
+              Firm-wide: {urgentSummary.matterCount} matter{urgentSummary.matterCount === 1 ? '' : 's'} ·{' '}
+              {urgentSummary.totalOutstandingItems} outstanding checklist line
+              {urgentSummary.totalOutstandingItems === 1 ? '' : 's'}
+              {urgentSummary.idOnlyMatterCount > 0
+                ? ` · ${urgentSummary.idOnlyMatterCount} awaiting ID only`
+                : ''}
+              {urgentSummary.solicitorWorkflowMatterCount > 0
+                ? ` · ${urgentSummary.solicitorWorkflowMatterCount} need solicitor workflow`
+                : ''}
+            </p>
+          ) : null}
         </div>
         <span
           className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${countBadgeClass}`}
+          title={
+            visibleUrgent.length !== urgentSummary.matterCount
+              ? `Filtered view: ${visibleUrgent.length} matter(s)`
+              : `${urgentSummary.totalOutstandingItems} checklist lines across ${visibleUrgent.length} matter(s)`
+          }
         >
           <AlertTriangle className={`h-3.5 w-3.5 ${countIconClass}`} aria-hidden />
           {visibleUrgent.length} matter{visibleUrgent.length === 1 ? '' : 's'}

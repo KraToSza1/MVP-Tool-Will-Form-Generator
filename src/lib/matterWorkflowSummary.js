@@ -92,16 +92,13 @@ export function getIdVerificationStatus(matter) {
  * @returns {{ status: 'complete' | 'in_progress' | 'not_started', label: string, missing: { fieldId: string, label: string }[] }}
  */
 export function getTestamentaryCapacityStatus(matter) {
-  const solicitorPayload =
-    matter?.solicitor_payload && typeof matter.solicitor_payload === 'object'
-      ? matter.solicitor_payload
-      : {};
+  const merged = getMergedMatterPayload(matter);
   const missing = getMissingTestamentaryCapacityFields(matter);
   const anyAnswered = TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS.some((id) =>
-    hasMeaningfulAnswer(solicitorPayload[id]),
+    hasMeaningfulAnswer(merged[id]),
   );
 
-  if (isTestamentaryCapacityComplete(solicitorPayload)) {
+  if (isTestamentaryCapacityComplete(merged)) {
     return { status: 'complete', label: 'Complete', missing: [] };
   }
   if (!anyAnswered) {
@@ -181,14 +178,25 @@ export function getMatterAtAGlanceSummary(matter) {
     [matter.client_snapshot?.firstName, matter.client_snapshot?.lastName].filter(Boolean).join(' ').trim() ||
     'Not available';
 
+  const categories = getMatterOutstandingCategories(matter);
+  const completionPercent = estimateMatterClientCompletionPercent(matter);
+  const nonIdOutstanding = categories.filter((c) => c !== OUTSTANDING_CATEGORY.ID_VERIFICATION).length;
+  let completionHint = null;
+  if (completionPercent === 100 && nonIdOutstanding > 0) {
+    completionHint = 'Client sections complete — solicitor workflow items still open';
+  } else if (completionPercent === 100 && categories.length > 0) {
+    completionHint = 'Client form complete — ID upload still required';
+  }
+
   return {
     clientName,
     reference: matter.client_reference || 'Not available',
     lastActivity: matter.last_activity_at || matter.updated_at || matter.submitted_at || null,
-    completionPercent: estimateMatterClientCompletionPercent(matter),
+    completionPercent,
+    completionHint,
     idVerification: getIdVerificationStatus(matter),
     testamentaryCapacity: getTestamentaryCapacityStatus(matter),
-    outstandingCount: getMatterOutstandingCategories(matter).length,
+    outstandingCount: categories.length,
     badges: getMatterWorkflowBadges(matter),
     sessionRef: matter.session_ref || null,
     status: matter.status,

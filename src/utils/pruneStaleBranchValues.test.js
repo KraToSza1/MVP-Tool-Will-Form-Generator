@@ -66,4 +66,22 @@ describe('pruneStaleBranchValues', () => {
     const state = { howResidueDistributed: 'AsShares', residualGiftsDetails: 'A' };
     expect(pruneStaleBranchValues(state, { ...state })).toEqual(state);
   });
+
+  it('keeps executor and guardian data on first-time autofill (controller set from empty)', () => {
+    const prev = {};
+    const next = {
+      chooseAristoneExecutor: 'Individual',
+      executorData: [{ firstName: 'David', lastName: 'Day' }],
+      appointProfessionalExecutor: 'Yes',
+      professionalExecutorSelection: 'Aristone',
+      professionalExecutorData: ['Aristone Limited (trading as Aristone Solicitors)'],
+      appointGuardians: 'Yes, but appoint different guardians for children',
+      guardianFlowState: JSON.stringify({ children: [{ childFirstName: 'Leo', guardians: [] }] }),
+      guardianshipDetailsData: 'I appoint Mrs Catherine Nancy…',
+    };
+    const result = pruneStaleBranchValues(prev, next);
+    expect(result.executorData).toHaveLength(1);
+    expect(result.guardianFlowState).toBeTruthy();
+    expect(result.guardianshipDetailsData).toContain('Catherine');
+  });
 });

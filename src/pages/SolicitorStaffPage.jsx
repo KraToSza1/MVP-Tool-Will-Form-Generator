@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { listMatters, listStaffProfiles, MATTER_STATUS } from '../lib/matters.js';
-import { getMatterOutstandingCategories } from '../lib/matterOutstanding.js';
+import { getMatterOutstandingCategories, isMatterUrgent } from '../lib/matterOutstanding.js';
 import { getCurrentProviderToken, listCalendarConnections, startMicrosoftCalendarConnect } from '../lib/staffCalendar.js';
 
 function initials(name) {
@@ -81,7 +81,7 @@ export default function SolicitorStaffPage() {
       if (!id || !map.has(id)) return;
       const row = map.get(id);
       row.assigned += 1;
-      if ((getMatterOutstandingCategories(matter) || []).length > 0) row.urgent += 1;
+      if (isMatterUrgent(matter)) row.urgent += 1;
       if (matter.status === MATTER_STATUS.IN_REVIEW) row.inReview += 1;
       if (matter.status === MATTER_STATUS.COMPLETED) row.completed += 1;
       if (!row.latestActivity || new Date(matter.last_activity_at) > new Date(row.latestActivity)) {
@@ -287,7 +287,7 @@ export default function SolicitorStaffPage() {
               </div>
               <div className="max-h-[36rem] divide-y divide-slate-200 overflow-auto dark:divide-slate-700">
                 {selectedMatters.slice(0, 12).map((matter) => {
-                  const urgentCount = (getMatterOutstandingCategories(matter) || []).length;
+                  const lineCount = (getMatterOutstandingCategories(matter) || []).length;
                   return (
                     <Link
                       key={matter.id}
@@ -299,10 +299,13 @@ export default function SolicitorStaffPage() {
                           <p className="truncate text-sm font-semibold">{matter.client_reference}</p>
                           <p className={`mt-1 truncate text-xs ${mutedClass}`}>{matter.client_name || 'Unknown client'}</p>
                         </div>
-                        {urgentCount > 0 ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-[11px] font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-100">
+                        {lineCount > 0 ? (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-[11px] font-bold text-rose-800 dark:bg-rose-500/15 dark:text-rose-100"
+                            title={`${lineCount} outstanding checklist line${lineCount === 1 ? '' : 's'} on this matter`}
+                          >
                             <AlertTriangle className="h-3 w-3" aria-hidden />
-                            {urgentCount}
+                            {lineCount} {lineCount === 1 ? 'item' : 'items'}
                           </span>
                         ) : (
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-100">

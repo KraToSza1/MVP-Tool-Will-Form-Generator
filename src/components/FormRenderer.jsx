@@ -82,6 +82,7 @@ import { isPropertyTrustGuidedComplete, getPropertyTrustGuidedValidationIssues }
 import { toast } from 'sonner';
 import {
   isSolicitorMode,
+  CLIENT_AUTOFILL_STRIP_FIELD_IDS,
   SOLICITOR_ONLY_FIELD_IDS,
   TESTAMENTARY_CAPACITY_SECTION_TITLE,
   getAristoneEstateRecommendationState,
@@ -2950,14 +2951,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (isClient) {
         debugLog('[FORM AUTO-FILL] 🔒 Client mode detected - filtering solicitor-only fields...');
         let removedCount = 0;
-        SOLICITOR_ONLY_FIELD_IDS.forEach((fieldId) => {
+        CLIENT_AUTOFILL_STRIP_FIELD_IDS.forEach((fieldId) => {
           if (dummyData[fieldId] !== undefined) {
             delete dummyData[fieldId];
             removedCount++;
-            debugLog(`[FORM AUTO-FILL] 🗑️ Removed solicitor-only field: ${fieldId}`);
+            debugLog(`[FORM AUTO-FILL] 🗑️ Removed client-hidden field: ${fieldId}`);
           }
         });
-        debugLog(`[FORM AUTO-FILL] ✅ Removed ${removedCount} solicitor-only fields (Estate Overview demo values are kept for clients)`);
+        debugLog(
+          `[FORM AUTO-FILL] ✅ Removed ${removedCount} client-hidden fields (BPR/property trust drafting + TC demo values kept for dashboard workflow)`,
+        );
       }
 
       debugLog(
@@ -3062,10 +3065,9 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       
       const modeText = isClient ? 'client' : 'solicitor';
       toast.success('Form auto-filled ✓', {
-        description:
-          isClient
-            ? `Filled ${Object.keys(filteredToSchema).length} fields for testing.`
-            : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode).`,
+        description: isClient
+          ? `Filled ${Object.keys(filteredToSchema).length} fields for testing. Upload real ID documents on the final step (not auto-filled).`
+          : `Filled ${Object.keys(filteredToSchema).length} fields with test data (${modeText} mode). ID uploads left empty.`,
         duration: 2200
       });
       
@@ -4822,7 +4824,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                       onClick={() => handleAutoFill()}
                       className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 active:from-purple-700 active:to-purple-800 text-white px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl shadow-md transition-all duration-300 font-medium min-h-[44px] touch-manipulation text-sm sm:text-base w-full sm:w-auto"
                       type="button"
-                      title="Fill the form with current demo data (including four tiny placeholder ID images for the final step). Not real documents."
+                      title="Fill every section with fictional demo answers. ID document uploads are left empty for you to add real files."
                     >
                       <Zap size={18} className="sm:w-5 sm:h-5" />
                       <span className="whitespace-nowrap">Auto-Fill Form (Test Data)</span>

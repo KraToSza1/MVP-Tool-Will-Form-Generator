@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   OUTSTANDING_CATEGORY,
   TESTAMENTARY_CAPACITY_REQUIRED_FIELD_IDS,
+  countUrgentMatters,
   getMatterOutstandingCategories,
   hasMeaningfulAnswer,
   isMatterBprTrustRequiredOutstanding,
@@ -9,7 +10,9 @@ import {
   isMatterPropertyTrustRequiredOutstanding,
   isMatterPropertyTrustReviewOutstanding,
   isMatterTestamentaryCapacityOutstanding,
+  isMatterUrgent,
   isTestamentaryCapacityComplete,
+  summarizeUrgentMatters,
 } from './matterOutstanding.js';
 
 const completeCapacityPayload = Object.fromEntries(
@@ -40,11 +43,11 @@ describe('matterOutstanding', () => {
     })).toBe(true);
   });
 
-  it('does not treat client payload answers as solicitor Testamentary Capacity completion', () => {
+  it('treats client payload TC answers as complete when solicitor_payload is empty (autofill demo)', () => {
     expect(isMatterTestamentaryCapacityOutstanding({
       client_payload: completeCapacityPayload,
       solicitor_payload: {},
-    })).toBe(true);
+    })).toBe(false);
   });
 
   it('returns both outstanding categories when verification and capacity are incomplete', () => {
@@ -152,5 +155,41 @@ describe('matterOutstanding', () => {
       client_payload: { includePropertyTrust: 'Unsure' },
       solicitor_payload: completeCapacityPayload,
     })).toEqual([OUTSTANDING_CATEGORY.PROPERTY_TRUST_REVIEW]);
+  });
+
+  it('counts each urgent matter once in nav badge helpers (not sum of checklist lines)', () => {
+    const multiLineMatter = {
+      outstanding_verification: true,
+      client_payload: { bprTrustClientIntent: 'Yes' },
+      solicitor_payload: {},
+    };
+    const idOnlyMatter = {
+      outstanding_verification: true,
+      client_payload: completeCapacityPayload,
+      solicitor_payload: completeCapacityPayload,
+    };
+    const clearMatter = {
+      outstanding_verification: false,
+      client_payload: completeCapacityPayload,
+      solicitor_payload: completeCapacityPayload,
+    };
+    const completedMatter = {
+      status: 'completed',
+      outstanding_verification: true,
+      client_payload: {},
+      solicitor_payload: {},
+    };
+
+    expect(isMatterUrgent(multiLineMatter)).toBe(true);
+    expect(getMatterOutstandingCategories(multiLineMatter).length).toBeGreaterThan(1);
+
+    const matters = [multiLineMatter, idOnlyMatter, clearMatter, completedMatter];
+    expect(countUrgentMatters(matters)).toBe(2);
+
+    const summary = summarizeUrgentMatters(matters);
+    expect(summary.matterCount).toBe(2);
+    expect(summary.totalOutstandingItems).toBeGreaterThan(summary.matterCount);
+    expect(summary.idOnlyMatterCount).toBe(1);
+    expect(summary.solicitorWorkflowMatterCount).toBe(1);
   });
 });

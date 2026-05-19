@@ -48,6 +48,9 @@ export default function MatterAtAGlanceStrip({
           <p className="font-semibold text-slate-900 dark:text-slate-100">
             {summary.completionPercent != null ? `${summary.completionPercent}%` : 'Not available'}
           </p>
+          {summary.completionHint ? (
+            <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">{summary.completionHint}</p>
+          ) : null}
         </div>
         <div>
           <span className="text-slate-500 dark:text-slate-400">ID verification</span>
