@@ -28,6 +28,15 @@ import {
 import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
 import MatterLpaOpportunityPanel from '../components/solicitor/MatterLpaOpportunityPanel.jsx';
 import ClientEmailDraftModal from '../components/solicitor/ClientEmailDraftModal.jsx';
+import MatterAtAGlanceStrip from '../components/solicitor/MatterAtAGlanceStrip.jsx';
+import PdfPreflightPanel from '../components/solicitor/PdfPreflightPanel.jsx';
+import {
+  buildClientReferenceEmail,
+  buildClientResumeEmail,
+  buildClientResumeUrl,
+  isSecureResumeUrlAvailable,
+  RESUME_EMAIL_HELPER_NO_SECRET,
+} from '../lib/resumeLinkEmail.js';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
 /** Public URL for the client Will Tool (for sharing with clients). */
@@ -378,6 +387,7 @@ export default function MatterDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [staffProfiles, setStaffProfiles] = useState([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingClientPDF, setIsGeneratingClientPDF] = useState(false);
   const [reminderDate, setReminderDate] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -637,6 +647,111 @@ export default function MatterDetailPage() {
     }
   };
 
+  const handleDownloadClientPDF = async () => {
+    if (!matter || !mergedPayload || Object.keys(mergedPayload).length === 0) {
+      toast.error('No form data', { description: 'This matter has no saved form data yet.' });
+      return;
+    }
+    setIsGeneratingClientPDF(true);
+    const toastId = toast.loading('Generating client intake PDF...');
+    try {
+      const pdfModule = await importPdfGeneratorModule();
+      const generatePDFWithJSPDF = pdfModule.generatePDFWithJSPDF;
+      if (!generatePDFWithJSPDF) {
+        toast.error('PDF generator not available', { id: toastId });
+        return;
+      }
+      const pdfResult = await generatePDFWithJSPDF(mergedPayload, {}, { isClientPDF: true, formSchema: formData });
+      const doc = pdfResult?.doc || pdfResult;
+      if (!doc || typeof doc.output !== 'function') {
+        toast.error('PDF generation failed', { id: toastId });
+        return;
+      }
+      const firstName = mergedPayload.firstName || matter?.client_snapshot?.firstName || '';
+      const lastName = mergedPayload.lastName || matter?.client_snapshot?.lastName || '';
+      const testatorName = [firstName, lastName].filter(Boolean).join('-') || matter?.client_reference || 'Will';
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `${testatorName}-Client-Intake-${date}.pdf`;
+      const pdfArrayBuffer = doc.output('arraybuffer');
+      const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+      toast.success('Client intake PDF downloaded', { id: toastId, description: filename });
+    } catch (err) {
+      const msg = err?.message || 'Unknown error';
+      toast.error('PDF failed', { id: toastId, description: msg });
+    } finally {
+      setIsGeneratingClientPDF(false);
+    }
+  };
+
+  const secureResumeAvailable = useMemo(() => {
+    if (!matter) return false;
+    const secret = matter.session_secret;
+    return isSecureResumeUrlAvailable({ sessionRef: matter.session_ref, sessionSecret: secret });
+  }, [matter]);
+
+  const copyClientName = useMemo(() => {
+    if (!matter) return 'Client';
+    return (
+      matter.client_name ||
+      matter.client_snapshot?.fullName ||
+      [matter.client_snapshot?.firstName, matter.client_snapshot?.lastName].filter(Boolean).join(' ').trim() ||
+      'Client'
+    );
+  }, [matter]);
+
+  const handleCopySecureResumeEmail = async () => {
+    if (!matter || !secureResumeAvailable) return;
+    const resumeUrl = buildClientResumeUrl({
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
+      sessionRef: matter.session_ref,
+      sessionSecret: matter.session_secret,
+    });
+    if (!resumeUrl) {
+      toast.error('Secure resume link unavailable', { description: RESUME_EMAIL_HELPER_NO_SECRET });
+      return;
+    }
+    const body = buildClientResumeEmail({ clientName: copyClientName, resumeUrl });
+    try {
+      await navigator.clipboard.writeText(body);
+      toast.success('Resume email copied', {
+        description: 'Includes a working secure link. Paste into your email client.',
+      });
+    } catch {
+      toast.error('Could not copy', { description: 'Allow clipboard access for this site.' });
+    }
+  };
+
+  const handleCopyReferenceEmail = async () => {
+    if (!matter?.session_ref && !matter?.client_reference) {
+      toast.error('No reference', { description: 'This matter has no client reference to include in an email.' });
+      return;
+    }
+    const body = buildClientReferenceEmail({
+      clientName: copyClientName,
+      clientReference: matter.client_reference,
+      sessionRef: matter.session_ref,
+    });
+    try {
+      await navigator.clipboard.writeText(body);
+      toast.success('Reference email copied', {
+        description: 'No resume URL included — client must use their original secure link.',
+      });
+    } catch {
+      toast.error('Could not copy', { description: 'Allow clipboard access for this site.' });
+    }
+  };
+
   const handleStatusChange = async (nextStatus) => {
     if (!matter) return;
     if (nextStatus === MATTER_STATUS.COMPLETED && !window.confirm('Mark this matter as complete? It will move to Completed status.')) return;
@@ -847,10 +962,29 @@ export default function MatterDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={handleDownloadClientPDF}
+            disabled={isGeneratingClientPDF || !mergedPayload || Object.keys(mergedPayload).length === 0}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-amber-500/50 dark:bg-amber-950/40 dark:text-amber-100"
+            title="Intake-only PDF for the client (no execution / witness pages)"
+          >
+            {isGeneratingClientPDF ? (
+              <>
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" aria-hidden />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Download size={16} />
+                Client intake PDF
+              </>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={handleDownloadPDF}
             disabled={isGeneratingPDF || !mergedPayload || Object.keys(mergedPayload).length === 0}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Generate and download the will PDF from current client and solicitor data"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            title="Generate and download the execution will PDF from current client and solicitor data"
           >
             {isGeneratingPDF ? (
               <>
@@ -860,10 +994,21 @@ export default function MatterDetailPage() {
             ) : (
               <>
                 <Download size={16} />
-                Download PDF
+                Execution PDF
               </>
             )}
           </button>
+          {matter.status === MATTER_STATUS.SUBMITTED || matter.status === MATTER_STATUS.VERIFICATION_PENDING ? (
+            <button
+              type="button"
+              onClick={() => handleStatusChange(MATTER_STATUS.IN_REVIEW)}
+              className="inline-flex items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 dark:border-indigo-500/50 dark:bg-indigo-950/40 dark:text-indigo-100"
+              title="Mark as under solicitor review"
+            >
+              <Check size={16} />
+              Mark reviewed
+            </button>
+          ) : null}
           <Link
             to={`/solicitor/matters/${matter.id}/form`}
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-slate-950 focus:ring-offset-white"
@@ -892,8 +1037,26 @@ export default function MatterDetailPage() {
         <strong>Open public intake</strong> is the generic client website in a new tab — it does{' '}
         <strong>not</strong> show this matter’s saved form. <strong>Review &amp; edit answers</strong> is your
         workspace for <strong>this</strong> matter (change answers, Testamentary Capacity, remote signing).{' '}
-        <strong>Download PDF</strong> builds the will from saved data.
+        <strong>Download PDF</strong> builds the execution will from saved data. Use <strong>Client intake PDF</strong> for the client-facing copy.
       </p>
+
+      <MatterAtAGlanceStrip
+        matter={matter}
+        showQuickActions
+        onCopySecureResume={secureResumeAvailable ? handleCopySecureResumeEmail : undefined}
+        onCopyReferenceEmail={
+          !secureResumeAvailable && (matter.session_ref || matter.client_reference)
+            ? handleCopyReferenceEmail
+            : undefined
+        }
+        resumeEmailHelperText={
+          !secureResumeAvailable && matter.session_ref ? RESUME_EMAIL_HELPER_NO_SECRET : undefined
+        }
+        onDownloadClientPdf={handleDownloadClientPDF}
+        clientPdfBusy={isGeneratingClientPDF}
+      />
+
+      <PdfPreflightPanel matter={matter} mergedPayload={mergedPayload} />
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

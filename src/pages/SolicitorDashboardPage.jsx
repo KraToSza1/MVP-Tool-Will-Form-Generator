@@ -18,6 +18,7 @@ import {
 } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
+import MatterAtAGlanceStrip from '../components/solicitor/MatterAtAGlanceStrip.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { mattersLoadTrace } from '../lib/mattersLoadTrace.js';
 import { FRESH_CLIENT_INTAKE_URL } from '../lib/clientIntakeFresh.js';
@@ -996,6 +997,7 @@ export default function SolicitorDashboardPage() {
                         })}
                       </div>
                     )}
+                    <MatterAtAGlanceStrip matter={matter} compact />
                     <dl className="mt-3 grid grid-cols-1 gap-1 text-xs text-slate-600 sm:grid-cols-2">
                       <div>
                         <dt className="text-slate-500">Received</dt>

@@ -90,6 +90,7 @@ import {
 import IdentityVerification from './IdentityVerification.jsx';
 import FormPeopleSummaryPanel from './FormPeopleSummaryPanel.jsx';
 import BookAppointmentModal from './BookAppointmentModal.jsx';
+import ClientSubmitReviewModal from './ClientSubmitReviewModal.jsx';
 import LpaOpportunityClient from './LpaOpportunityClient.jsx';
 import { getSessionAppointmentContext, formatSlotLabel } from '../lib/appointments.js';
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
@@ -398,6 +399,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
   const [isSubmittingMatter, setIsSubmittingMatter] = useState(false);
   const [submittedMatterId, setSubmittedMatterId] = useState(null);
   const [idVerificationIncompleteModalOpen, setIdVerificationIncompleteModalOpen] = useState(false);
+  const [submitReviewModalOpen, setSubmitReviewModalOpen] = useState(false);
   const [submittedWithIncompleteId, setSubmittedWithIncompleteId] = useState(false);
   const [showBookAppointment, setShowBookAppointment] = useState(false);
   const [signatureRequestModalOpen, setSignatureRequestModalOpen] = useState(false);
@@ -2341,8 +2343,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         }
       }, 300);
     } else {
+      if (!solicitorMode) {
+        setSubmitReviewModalOpen(true);
+        return;
+      }
       const missingIdDocs = getMissingIdVerificationDocs({ identityVerification: formValues?.identityVerification });
-      const idVerificationIncomplete = !solicitorMode && missingIdDocs.length > 0;
+      const idVerificationIncomplete = missingIdDocs.length > 0;
       if (idVerificationIncomplete) {
         setIdVerificationIncompleteModalOpen(true);
         return;
@@ -2350,6 +2356,16 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       void finishSubmission();
     }
   };
+
+  const proceedAfterSubmitReview = useCallback(() => {
+    setSubmitReviewModalOpen(false);
+    const missingIdDocs = getMissingIdVerificationDocs({ identityVerification: formValues?.identityVerification });
+    if (missingIdDocs.length > 0) {
+      setIdVerificationIncompleteModalOpen(true);
+      return;
+    }
+    void finishSubmission();
+  }, [finishSubmission, formValues?.identityVerification]);
 
   const handleNextButtonClick = (e) => {
     if (isDev) {
@@ -6194,6 +6210,14 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
           </div>
         </div>
       )}
+
+      <ClientSubmitReviewModal
+        open={submitReviewModalOpen && !solicitorMode}
+        formValues={formValues}
+        onCancel={() => setSubmitReviewModalOpen(false)}
+        onConfirm={proceedAfterSubmitReview}
+        submitting={isSubmittingMatter}
+      />
 
       {/* ID verification incomplete – prompt to upload or submit anyway */}
       {idVerificationIncompleteModalOpen && !solicitorMode && (
