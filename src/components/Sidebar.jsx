@@ -30,7 +30,7 @@ export default function Sidebar({ currentIndex, setCurrentIndex, visibleSections
   return (
     <>
       {/* Mobile/Tablet top bar */}
-      <div className="lg:hidden sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200">
+      <div data-will-sticky-bar className="lg:hidden sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200">
         <div className="px-3 sm:px-4 py-3 flex items-center gap-3">
           <button
             type="button"

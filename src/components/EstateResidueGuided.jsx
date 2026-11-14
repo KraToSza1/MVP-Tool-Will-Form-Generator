@@ -787,7 +787,11 @@ function EstateResidueGuided({ field: _field, formValues, setFormValues }) {
             <p className="text-xs text-slate-500 dark:text-slate-400">Only relevant where the residue is split between exempt and non-exempt beneficiaries. If unsure, the usual default is Ratcliffe.</p>
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div
+          className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3"
+          role="radiogroup"
+          aria-label="IHT and exempt / non-exempt residuary shares"
+        >
           {[
             { v: 'NA', t: 'N / A', d: 'Not applicable' },
             { v: 'AfterTax', t: 'After tax (Benham)', d: 'Tax taken before working out shares' },
@@ -796,6 +800,8 @@ function EstateResidueGuided({ field: _field, formValues, setFormValues }) {
             <button
               key={x.v}
               type="button"
+              role="radio"
+              aria-checked={formValues.howIHTDealtWithSplitting === x.v}
               onClick={() => apply({ howIHTDealtWithSplitting: x.v })}
               className={`min-h-[44px] rounded-xl border-2 p-3 text-left text-sm transition-colors ${
                 formValues.howIHTDealtWithSplitting === x.v

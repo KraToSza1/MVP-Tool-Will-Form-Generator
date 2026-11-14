@@ -78,7 +78,7 @@ export function getEstateResidueGuidedValidationIssues(v) {
       issues.push({
         fieldId: 'estateResidueGuided',
         fieldLabel: 'Estate administration / residue',
-        message: 'Please complete the remaining questions in this section (scroll up if needed).',
+        message: 'Some questions about your residuary estate still need an answer. Tap “Go to First Issue” to jump to the next unanswered question.',
         type: 'required',
       });
     }

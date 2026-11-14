@@ -4,7 +4,7 @@
 
 - Secure solicitor authentication using Supabase Auth.
 - Protected solicitor routes:
-  - `/solicitor/login`
+  - `/celista-login`
   - `/solicitor`
   - `/solicitor/matters/:matterId`
   - `/solicitor/matters/:matterId/form`
@@ -110,6 +110,6 @@ where email = 'name@aristonesolicitors.co.uk';
 1. Run the new migration in Supabase.
 2. Create at least one solicitor user in Supabase Auth.
 3. Assign the profile role.
-4. Sign into `/solicitor/login`.
+4. Sign into `/celista-login`.
 5. Submit a client questionnaire from `/`.
 6. Confirm that the matter appears on `/solicitor`.

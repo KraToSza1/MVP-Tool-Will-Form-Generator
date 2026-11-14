@@ -544,7 +544,9 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
     };
   }, [trusteeModalOpen]);
 
-  const wasShowingBizDetails = useRef(false);
+  // Start from the current value so arriving on this step with details already open doesn't scroll
+  // the page down (only scroll when the user's answer newly reveals the details).
+  const wasShowingBizDetails = useRef(showDetails);
   useEffect(() => {
     if (showDetails && !wasShowingBizDetails.current) {
       requestAnimationFrame(() => {

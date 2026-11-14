@@ -36,6 +36,8 @@
  * All logs include field IDs, labels, types, values, and relevant context for comprehensive debugging!
  */
 
+import { getMobileInputHints } from '../utils/mobileInputHints.js';
+
 const DEBUG_LOGS = import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
 
 import React, { Suspense, useEffect, useState, useRef, useMemo } from 'react';
@@ -599,6 +601,7 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
             onBlur={handleChange}
             disabled={false}
             readOnly={false}
+            {...getMobileInputHints(field)}
           />
           {/* Validation feedback icons */}
           {formValues[field.id] && !validationErrors[field.id] && field.required && (

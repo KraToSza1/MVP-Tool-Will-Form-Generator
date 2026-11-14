@@ -34,3 +34,29 @@ export const supabase = url && anonKey
   : null;
 
 export const isSupabaseConfigured = () => !!supabase;
+
+/**
+ * Quick "can we reach the Supabase server at all?" check (DNS/network only — any HTTP response counts).
+ * Used before redirecting to Microsoft sign-in so staff get a clear message instead of a browser
+ * "site can't be reached" page when the backend is down or paused.
+ */
+export async function isSupabaseReachable(timeoutMs = 6000) {
+  if (!url || typeof fetch !== 'function') return false;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    // no-cors: resolves with an opaque response whenever the host answers at all, so CORS rules
+    // can never make a healthy server look "down"; only DNS/network failures reject.
+    await fetch(`${url.replace(/\/$/, '')}/auth/v1/health`, {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller?.signal,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}

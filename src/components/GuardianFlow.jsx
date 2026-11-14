@@ -59,7 +59,20 @@ function formatDob(v) {
   return String(v).trim();
 }
 
+/** Stop the page behind a modal from scrolling (matches the executor / business trustee modals). */
+function useLockBodyScroll() {
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+}
+
 function PersonModal({ modalTitle, subtitle, initial, onSave, onClose, formValues }) {
+  useLockBodyScroll();
   const candidates = useMemo(() => getContactCandidates(formValues || {}), [formValues]);
   const [sourceId, setSourceId] = useState('__new__');
   const [form, setForm] = useState(() =>
@@ -373,6 +386,7 @@ function PersonModal({ modalTitle, subtitle, initial, onSave, onClose, formValue
 }
 
 function ChildModal({ title, initial, onSave, onClose }) {
+  useLockBodyScroll();
   const [form, setForm] = useState(initial || { childFirstName: '', childLastName: '', dob: '' });
   const [showErrors, setShowErrors] = useState(false);
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));

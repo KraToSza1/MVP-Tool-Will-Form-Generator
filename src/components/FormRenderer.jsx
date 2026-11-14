@@ -97,6 +97,7 @@ import { getSessionAppointmentContext, formatSlotLabel } from '../lib/appointmen
 import { createSession, loadSession, saveSession, isSupabaseConfigured } from '../lib/willSessions.js';
 import { buildCloudPayload, buildLocalDraftPayload } from '../lib/formPayload.js';
 import { submitMatterFromDraft } from '../lib/matters.js';
+import { CLIENT_SUBMIT_UNREACHABLE_MESSAGE, isNetworkishError } from '../lib/clientSubmitErrors.js';
 import {
   ID_VERIFICATION_DOC_KEYS,
   ID_VERIFICATION_DOC_LABELS,
@@ -113,6 +114,7 @@ import { toProperNameCase, toProperAddressCase, normalizePostcode } from '../uti
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 import { debugLog, isWillToolDebugEnabled } from '../lib/willToolDebug.js';
 import { pruneStaleBranchValues } from '../utils/pruneStaleBranchValues.js';
+import { STEP_HEADING_ID, findFirstUnansweredInside, isTouchDevice, scrollToStepStart } from '../utils/stepScroll.js';
 
 const DEBUG_LOGS = isWillToolDebugEnabled() || import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
 // Set VITE_DEBUG_CLAUSES=true in .env to enable [INTERPOLATE] and [CONDITION EVAL] logs
@@ -260,7 +262,20 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     return Number.isFinite(idx) && idx >= 0 ? idx : 0;
   });
 
-  
+  // Whenever the step changes (Next, Back, sections menu, resume), land at the start of the new step.
+  // Field-targeted jumps ("Go to first issue") run their own scroll after this one.
+  const stepScrollMountedRef = useRef(false);
+  useEffect(() => {
+    if (!stepScrollMountedRef.current) {
+      stepScrollMountedRef.current = true;
+      return undefined;
+    }
+    // Run straight after commit (the new step is already in the DOM). Not requestAnimationFrame:
+    // browsers pause rAF for background tabs and some embedded iframes, which skipped the scroll.
+    scrollToStepStart();
+    return undefined;
+  }, [currentIndex]);
+
   // Add global success handlers
   useEffect(() => {
     window.showPartnerNameSuccess = (partnerName) => {
@@ -300,7 +315,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       loadSession(refFromUrl, secretFromUrl).then((result) => {
         if (result.error) {
           console.warn('[WillTool Flow] Client session load failed', { ref: refFromUrl, error: result.error });
-          toast.error('Could not load session', { description: result.error });
+          toast.error('Could not load your saved answers', {
+            description: isNetworkishError(result.error)
+              ? 'We could not reach the server just now. Your saved answers are safe — please reopen your link in a few minutes rather than starting again.'
+              : result.error,
+            duration: 12000,
+          });
           setSessionInitialized(true);
           return;
         }
@@ -339,7 +359,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     createSession(initialPayload).then((result) => {
       if (result.error) {
         console.warn('[WillTool Flow] Client session create failed', { error: result.error });
-        toast.error('Could not create session', { description: result.error });
+        // Calm notice instead of a raw error ("TypeError: Failed to fetch"): the client can carry on,
+        // answers are kept on this device and submit retries the connection.
+        toast.warning('Working offline for now', {
+          description: 'Your answers are being saved on this device. We will try to connect again when you submit.',
+          duration: 6000,
+        });
         setReferenceNumber(getOrCreateReferenceNumberLocal());
         setSessionInitialized(true);
         return;
@@ -571,22 +596,47 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       return externalPersistence.submit({ formValues, currentIndex, referenceNumber, sessionSecret });
     }
 
-    if (!referenceNumber || !sessionSecret) {
-      console.warn('[WillTool Flow] client_submit_skipped_no_session', {
-        hasRef: !!referenceNumber,
-        hasSecret: !!sessionSecret,
-        phase: 'client_submit_skipped',
-      });
-      return { ok: true };
+    let ref = referenceNumber;
+    let secret = sessionSecret;
+
+    if (!ref || !secret) {
+      if (!useCloud) {
+        // Local/demo build with no backend configured: nothing to send.
+        console.warn('[WillTool Flow] client_submit_skipped_no_backend', { phase: 'client_submit_skipped' });
+        return { ok: true };
+      }
+      // The secure session was never created (offline or server unreachable when the page loaded).
+      // Try again now — never report "submitted" when nothing reached Aristone.
+      const created = await createSession(buildCloudPayload(formValues, currentIndex));
+      if (created?.error || !created?.ref || !created?.secret) {
+        console.warn('[WillTool Flow] client_submit_session_retry_failed', { error: created?.error });
+        return { error: CLIENT_SUBMIT_UNREACHABLE_MESSAGE };
+      }
+      ref = created.ref;
+      secret = created.secret;
+      setReferenceNumber(ref);
+      setSessionSecret(secret);
+      try {
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('ref', ref);
+        newUrl.searchParams.set('s', secret);
+        window.history.replaceState({}, '', newUrl);
+      } catch {
+        /* URL update is best-effort */
+      }
     }
 
-    return submitMatterFromDraft({
-      ref: referenceNumber,
-      secret: sessionSecret,
+    const result = await submitMatterFromDraft({
+      ref,
+      secret,
       formValues,
       currentIndex,
     });
-  }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret]);
+    if (result?.error && isNetworkishError(result.error)) {
+      return { error: CLIENT_SUBMIT_UNREACHABLE_MESSAGE };
+    }
+    return result;
+  }, [currentIndex, externalPersistence, formValues, referenceNumber, sessionSecret, useCloud]);
 
   const finishSubmission = useCallback(async () => {
     debugLog('[WillTool Flow] client_submit_ui_start', {
@@ -608,7 +658,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
       if (result?.error) {
         console.error('[WillTool Flow] Client submit failed', { ref: referenceNumber, error: result.error });
-        toast.error('Could not complete submission', { description: result.error });
+        toast.error('Could not complete submission', { description: result.error, duration: 15000 });
         return;
       }
       if (result?.matterId) {
@@ -622,7 +672,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       });
     } catch (err) {
       console.error('[WillTool Flow] Client submit threw', { ref: referenceNumber, err });
-      toast.error('Submission failed', { description: err?.message || 'Network or server error. Check your connection and try again.' });
+      toast.error('Submission failed', {
+        description: !err?.message || isNetworkishError(err) ? CLIENT_SUBMIT_UNREACHABLE_MESSAGE : err.message,
+        duration: 15000,
+      });
     } finally {
       setIsSubmittingMatter(false);
       debugLog('[WillTool Flow] client_submit_ui_finally', { ref: referenceNumber, phase: 'client_submit_ui_finally' });
@@ -2331,18 +2384,18 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       const nextIndex = currentIndex + 1;
       if (isDev) DEBUG_LOGS&&debugLog('[GO NEXT] Moving from step', currentIndex + 1, 'to step', nextIndex + 1);
       setCurrentIndex(nextIndex);
-      // Scroll to top when changing sections
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      // Auto-focus first field in new section after a brief delay
-      setTimeout(() => {
-        const firstField = document.querySelector('[data-field-id]');
-        if (firstField) {
-          const firstInput = firstField.querySelector('input, textarea, select');
+      // Scrolling to the new step is handled by the currentIndex effect (scrollToStepStart).
+      // Auto-focus the first field only with a mouse/trackpad: on phones it pops the keyboard and its
+      // scroll used to cut the step-change scroll short, leaving people mid-page.
+      if (!isTouchDevice()) {
+        setTimeout(() => {
+          const firstField = document.querySelector('[data-field-id]');
+          const firstInput = firstField?.querySelector('input, textarea, select');
           if (firstInput && typeof firstInput.focus === 'function') {
-            firstInput.focus();
+            try { firstInput.focus({ preventScroll: true }); } catch { /* ignore */ }
           }
-        }
-      }, 300);
+        }, 300);
+      }
     } else {
       if (!solicitorMode) {
         setSubmitReviewModalOpen(true);
@@ -2545,28 +2598,31 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ✅ Found field element for "${id}" - scrolling and highlighting`);
         DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Element tag:`, fieldElement.tagName);
         DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Element classes:`, fieldElement.className);
-        
+
         try {
-          fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Long guided steps (exclusions, residue…) are one "field": point at the first unanswered
+          // question inside instead of the top of a page that can be 5,000px tall.
+          const target = findFirstUnansweredInside(fieldElement) || fieldElement;
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
           DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ScrollIntoView called successfully`);
-          
+
           // Add a highlight effect
-          fieldElement.classList.add('animate-pulse');
+          target.classList.add('animate-pulse');
           DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Added animate-pulse class`);
           setTimeout(() => {
-            fieldElement.classList.remove('animate-pulse');
+            target.classList.remove('animate-pulse');
             DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Removed animate-pulse class`);
           }, 2000);
-          
+
           // Focus on the first input in that field (or the button itself if it's a button)
-          const input = fieldElement?.querySelector('input, textarea, select');
+          const input = target.matches?.('input, textarea, select') ? target : target.querySelector('input, textarea, select');
           const isButton = fieldElement.tagName === 'BUTTON' || fieldElement.querySelector('button');
           DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Found input element:`, input, 'isButton:', isButton);
-          if (input) {
+          if (input && !isTouchDevice()) {
             DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] Focusing on input element in field "${id}"`);
             setTimeout(() => {
               try {
-                input.focus();
+                input.focus({ preventScroll: true });
                 DEBUG_LOGS&&debugLog(`[SCROLL TO FIELD] ✅ Input focused successfully`);
               } catch (focusError) {
                 console.error(`[SCROLL TO FIELD] ❌ Error focusing input:`, focusError);
@@ -2843,7 +2899,11 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         saveSession(referenceNumber, sessionSecret, cloudPayload).then((res) => {
           if (res.error) {
             console.warn('[WillTool Flow] Client cloud save failed', { ref: referenceNumber, error: res.error });
-            toast.error('Cloud save failed', { description: res.error });
+            toast.error('Cloud save failed', {
+              description: isNetworkishError(res.error)
+                ? 'We could not reach the server, so your progress was saved on this device only. Please try again in a few minutes.'
+                : res.error,
+            });
           } else {
             debugLog('[WillTool Flow] Client draft saved to cloud (manual)', { ref: referenceNumber });
             toast.success('Draft saved', { description: 'Saved on this device and in the cloud.' });
@@ -4540,7 +4600,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               </div>
 
               {!isClientIdentityOnlyStep && (
-                <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-indigo-600">
+                <div id={STEP_HEADING_ID} className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-indigo-600">
                   <div className="p-2 bg-indigo-100 rounded-lg">
                     <FileText className="w-5 h-5 text-indigo-600" />
                   </div>
@@ -4718,26 +4778,10 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
               <div className="flex flex-col sm:flex-row justify-between mt-6 gap-3">
                 <button
                     onClick={() => {
+                    // Instant, like Next (the old fade delayed the step change and could leave the card
+                    // half-transparent); the currentIndex effect scrolls to the start of the step.
                     if (currentIndex > 0) {
-                      const formSection = document.querySelector('section');
-                      if (formSection) {
-                        formSection.style.opacity = '0';
-                        formSection.style.transform = 'translateY(-10px)';
-                      }
-                      
-                      setTimeout(() => {
-                        setCurrentIndex(currentIndex - 1);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        
-                        setTimeout(() => {
-                          const newFormSection = document.querySelector('section');
-                          if (newFormSection) {
-                            newFormSection.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                            newFormSection.style.opacity = '1';
-                            newFormSection.style.transform = 'translateY(0)';
-                          }
-                        }, 50);
-                      }, 150);
+                      setCurrentIndex(currentIndex - 1);
                     }
                   }}
                   disabled={currentIndex === 0}
@@ -5564,10 +5608,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                             scrollToField(firstIssue.fieldId, firstIssue.targetFieldIds);
                           }, 300);
                         } else {
-                          // Try to find section by sectionId or section name
-                          const sectionIndex = formData.formSections.findIndex(s => 
-                            s.formSection === firstIssue.section || 
-                            s.id === firstIssue.sectionId
+                          // Try to find section by sectionId or section name. Only compare values that exist:
+                          // issues from the current step's guided blocks carry just a fieldId, and
+                          // `undefined === undefined` used to match step 1 and throw the user back to the start.
+                          const sectionIndex = visibleSections.findIndex(s =>
+                            (firstIssue.section && s.formSection === firstIssue.section) ||
+                            (firstIssue.sectionId != null && s.id != null && s.id === firstIssue.sectionId)
                           );
                           if (sectionIndex >= 0) {
                             const targetSection = formData.formSections[sectionIndex];
@@ -6181,12 +6227,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       {showBackToTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-40 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white p-4 rounded-full shadow-2xl transition-all duration-300 transform hover:scale-110 active:scale-95 animate-fadeIn"
+          className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-2 sm:bottom-8 sm:right-8 z-40 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white p-3 sm:p-4 rounded-full shadow-2xl opacity-80 sm:opacity-100 hover:opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-95 animate-fadeIn"
           type="button"
           aria-label="Back to top"
           title="Back to top"
         >
-          <ArrowUp size={24} />
+          <ArrowUp className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
       )}
 

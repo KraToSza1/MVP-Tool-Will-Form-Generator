@@ -71,14 +71,14 @@ In table `matter_activity`:
 
 ## 4. Solicitor authentication
 
-1. Open `/solicitor/login`.
+1. Open `/celista-login`.
 2. Sign in with a valid Supabase Auth solicitor account.
 3. Confirm you are redirected to `/solicitor`.
 
 ### Expected result
 
 - you can access dashboard routes only after authentication
-- unauthenticated access to `/solicitor` should redirect to `/solicitor/login`
+- unauthenticated access to `/solicitor` should redirect to `/celista-login`
 
 ## 5. Dashboard visibility
 

@@ -23,8 +23,9 @@ export default function ClientSubmitReviewModal({
 
   const overlayClass =
     'fixed inset-0 z-[56] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4 py-6 dark:bg-black/65';
+  // dvh so Safari's toolbars can't push the footer (and the Submit button) off screen.
   const panelClass =
-    'flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-900';
+    'flex max-h-[min(90dvh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-900';
 
   return React.createElement(
     'div',
@@ -71,33 +72,39 @@ export default function ClientSubmitReviewModal({
               ),
             ),
           ),
+        ),
+        React.createElement(
+          'footer',
+          { className: 'flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-600 dark:bg-slate-900' },
+          // The confirmation lives next to the button (not at the bottom of the scrolling summary),
+          // so it's obvious why "Submit to Aristone" is greyed out until it's ticked.
           React.createElement(
             'label',
-            { className: 'mt-2 flex cursor-pointer items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50/80 p-4 dark:border-indigo-500/40 dark:bg-indigo-950/40' },
+            { className: 'flex cursor-pointer items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-500/40 dark:bg-slate-800' },
             React.createElement('input', {
               type: 'checkbox',
-              className: 'mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500',
+              className: 'mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500',
               checked: confirmed,
               onChange: (e) => setConfirmed(e.target.checked),
             }),
             React.createElement('span', { className: 'text-sm font-medium text-slate-800 dark:text-slate-200' }, CONFIRM_LABEL),
           ),
-        ),
-        React.createElement(
-          'footer',
-          { className: 'flex flex-col gap-2 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-600 dark:bg-slate-900 sm:flex-row sm:justify-end' },
-          React.createElement('button', {
-            type: 'button',
-            onClick: onCancel,
-            disabled: submitting,
-            className: 'min-h-[44px] rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100',
-          }, 'Go back'),
-          React.createElement('button', {
-            type: 'button',
-            onClick: () => { if (confirmed && !submitting) onConfirm(); },
-            disabled: !confirmed || submitting,
-            className: 'min-h-[44px] rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
-          }, submitting ? 'Submitting…' : 'Submit to Aristone'),
+          React.createElement(
+            'div',
+            { className: 'flex flex-col gap-2 sm:flex-row sm:justify-end' },
+            React.createElement('button', {
+              type: 'button',
+              onClick: onCancel,
+              disabled: submitting,
+              className: 'min-h-[44px] rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100',
+            }, 'Go back'),
+            React.createElement('button', {
+              type: 'button',
+              onClick: () => { if (confirmed && !submitting) onConfirm(); },
+              disabled: !confirmed || submitting,
+              className: 'min-h-[44px] rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50',
+            }, submitting ? 'Submitting…' : 'Submit to Aristone'),
+          ),
         ),
       ),
     ),

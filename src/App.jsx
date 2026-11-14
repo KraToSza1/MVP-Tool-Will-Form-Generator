@@ -1,25 +1,62 @@
-import React, { useEffect } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Buffer } from "buffer";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import logo from "./assets/aristone-logo.svg";
 import { FormDefinitionProvider } from "./context/FormDefinitionContext.jsx";
 import PublicIntakePage from "./pages/PublicIntakePage.jsx";
-import SolicitorLoginPage from "./pages/SolicitorLoginPage.jsx";
-import SolicitorDashboardPage from "./pages/SolicitorDashboardPage.jsx";
-import MatterDetailPage from "./pages/MatterDetailPage.jsx";
-import MatterEditorPage from "./pages/MatterEditorPage.jsx";
-import QuestionnaireEditorPage from "./pages/QuestionnaireEditorPage.jsx";
-import GuardianFlowDemoPage from "./pages/GuardianFlowDemoPage.jsx";
-import SolicitorUrgentPage from "./pages/SolicitorUrgentPage.jsx";
-import SolicitorCalendarPage from "./pages/SolicitorCalendarPage.jsx";
-import SolicitorAvailabilityPage from "./pages/SolicitorAvailabilityPage.jsx";
-import SolicitorReportsPage from "./pages/SolicitorReportsPage.jsx";
-import SolicitorStaffPage from "./pages/SolicitorStaffPage.jsx";
-import SolicitorSignInEventsPage from "./pages/SolicitorSignInEventsPage.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
-import SolicitorLayout from "./components/solicitor/SolicitorLayout.jsx";
 import ThemeToggleButton from "./components/ThemeToggleButton.jsx";
 import { LEGACY_SOLICITOR_LOGIN_PATH, SOLICITOR_LOGIN_PATH } from "./lib/auth.js";
+import { isStaleChunkLoadError } from "./utils/loadPdfGeneratorModule.js";
+
+const STALE_CHUNK_RELOAD_KEY = "will-tool-stale-chunk-reload";
+
+/**
+ * React.lazy plus one automatic page reload if the chunk is gone after a new deploy
+ * (an open tab still references the old hashed file names).
+ */
+function lazyPage(loader) {
+  return lazy(() =>
+    loader()
+      .then((mod) => {
+        try { sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY); } catch { /* storage unavailable */ }
+        return mod;
+      })
+      .catch((err) => {
+        let alreadyReloaded = false;
+        try { alreadyReloaded = sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) === "1"; } catch { /* ignore */ }
+        if (isStaleChunkLoadError(err) && !alreadyReloaded) {
+          try { sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, "1"); } catch { /* ignore */ }
+          window.location.reload();
+          return new Promise(() => {}); // keep Suspense fallback while the page reloads
+        }
+        throw err;
+      })
+  );
+}
+
+// Staff-only screens are loaded on demand so clients on phones don't download the solicitor portal.
+const SolicitorLoginPage = lazyPage(() => import("./pages/SolicitorLoginPage.jsx"));
+const SolicitorDashboardPage = lazyPage(() => import("./pages/SolicitorDashboardPage.jsx"));
+const MatterDetailPage = lazyPage(() => import("./pages/MatterDetailPage.jsx"));
+const MatterEditorPage = lazyPage(() => import("./pages/MatterEditorPage.jsx"));
+const QuestionnaireEditorPage = lazyPage(() => import("./pages/QuestionnaireEditorPage.jsx"));
+const GuardianFlowDemoPage = lazyPage(() => import("./pages/GuardianFlowDemoPage.jsx"));
+const SolicitorUrgentPage = lazyPage(() => import("./pages/SolicitorUrgentPage.jsx"));
+const SolicitorCalendarPage = lazyPage(() => import("./pages/SolicitorCalendarPage.jsx"));
+const SolicitorAvailabilityPage = lazyPage(() => import("./pages/SolicitorAvailabilityPage.jsx"));
+const SolicitorReportsPage = lazyPage(() => import("./pages/SolicitorReportsPage.jsx"));
+const SolicitorStaffPage = lazyPage(() => import("./pages/SolicitorStaffPage.jsx"));
+const SolicitorSignInEventsPage = lazyPage(() => import("./pages/SolicitorSignInEventsPage.jsx"));
+const SolicitorLayout = lazyPage(() => import("./components/solicitor/SolicitorLayout.jsx"));
+
+function RouteLoading() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-slate-950 px-4 text-sm text-slate-300" role="status">
+      Loading…
+    </div>
+  );
+}
 
 function LegacySolicitorLoginRoute() {
   const location = useLocation();
@@ -81,6 +118,7 @@ export default function App() {
 
   return (
     <FormDefinitionProvider>
+      <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/" element={<PublicShell />} />
         <Route path="/dev/guardian-flow" element={<GuardianFlowDemoPage />} />
@@ -102,6 +140,7 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </FormDefinitionProvider>
   );
 }

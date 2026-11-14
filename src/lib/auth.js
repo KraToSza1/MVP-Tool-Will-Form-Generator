@@ -1,6 +1,7 @@
-import { supabase, isSupabaseConfigured } from './supabase.js';
+import { supabase, isSupabaseConfigured, isSupabaseReachable } from './supabase.js';
 import { pushAuthDiagnosticEvent } from './authDiagnostics.js';
 import { primeFormDefinitionSessionUserId } from './formDefinition.js';
+import { isNetworkishError } from './clientSubmitErrors.js';
 
 /** Set for the duration of signInSolicitor — used for nested timing logs */
 let activeAuthPipelineStart = null;
@@ -371,6 +372,13 @@ export async function signInSolicitor({ email, password }) {
     authLog('hint: invalid_credentials = wrong password or email not in THIS project; confirm VITE_SUPABASE_URL host matches Supabase dashboard', {
       supabaseHost: host,
     });
+    if (isNetworkishError(error) || error?.name === 'AuthRetryableFetchError') {
+      return {
+        code: 'server_unreachable',
+        error:
+          'The Will Tool server could not be reached, so sign-in did not happen (your password was not checked). Check your internet connection and try again in a few minutes. If it keeps happening, contact technical support.',
+      };
+    }
     return { error: error.message, code: error.code };
   }
 
@@ -530,6 +538,14 @@ export async function startMicrosoft365SignIn() {
     origin,
     redirectTo,
   });
+  if (!(await isSupabaseReachable())) {
+    logM365Auth('abort', { reason: 'Supabase unreachable' });
+    pushAuthDiagnosticEvent({ type: 'm365_oauth_aborted', reason: 'supabase_unreachable' });
+    return {
+      error:
+        'The Will Tool server could not be reached, so Microsoft sign-in was not started. Check your internet connection and try again in a few minutes. If it keeps happening, contact technical support.',
+    };
+  }
   authLog('startMicrosoft365SignIn: signInWithOAuth azure', { redirectTo, host: getSupabaseProjectHost() });
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'azure',

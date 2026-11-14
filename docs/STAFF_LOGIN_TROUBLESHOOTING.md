@@ -40,9 +40,9 @@ Some browsers **slow down or throttle** network calls when the app runs in a **c
 
 **If it still times out:** open solicitor login **in a full tab** (same account):
 
-`https://YOUR-VERCEL-APP.vercel.app/solicitor/login`
+`https://YOUR-VERCEL-APP.vercel.app/celista-login`
 
-(e.g. `https://mvp-tool-will-form-generator-chi.vercel.app/solicitor/login`)
+(e.g. `https://mvp-tool-will-form-generator-chi.vercel.app/celista-login`)
 
 **Optional:** Add a WordPress menu link “Staff: Will Tool login” pointing to that URL (opens in new tab).
 
