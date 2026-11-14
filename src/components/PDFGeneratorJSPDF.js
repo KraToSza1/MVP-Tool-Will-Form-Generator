@@ -12,6 +12,7 @@ import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from '../lib/b
 import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
 import { getAristoneProfessionalExecutorOptions } from '../constants/aristoneSolicitors.js';
 import { flowLog } from '../lib/willToolDebug.js';
+import { stripSolicitorReviewKeysFromPayload } from '../lib/formPayload.js';
 
 /** True in Vite dev, VITE_DEBUG_WILL_TOOL, or `globalThis.__PDF_DEBUG__` in the browser console. */
 const pdfDebugEnabled = () =>
@@ -1875,7 +1876,10 @@ const interpolateText = (text, values, options = {}) => {
   return processed;
 };
 
-export const generatePDFWithJSPDF = async (formValues, signatures = {}, options = {}) => {
+export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, options = {}) => {
+  // Solicitor review notes live on solicitor_payload; strip them so they can never reach a PDF
+  // (e.g. via the placeholder-scan appendix that quotes form values).
+  const formValues = stripSolicitorReviewKeysFromPayload(rawFormValues);
   const { isClientPDF = false, formSchema: customSchema } = options || {};
   flowLog('PDF generator started', { isClientPDF, hasFormValues: !!formValues });
   pdfDebugLog('generatePDFWithJSPDF — text logs: dev build, or set globalThis.__PDF_DEBUG__ = true');

@@ -112,6 +112,23 @@ export function mergeMatterPayloads(clientPayload, solicitorPayload) {
   return { ...base, ...overlay };
 }
 
+/** Internal solicitor review keys stored on solicitor_payload — never part of any PDF or client view. */
+export const SOLICITOR_REVIEW_PAYLOAD_KEYS = {
+  INTERNAL_NOTES: 'solicitorReviewInternalNotes',
+  RISK_NOTES: 'solicitorReviewRiskNotes',
+  FOLLOW_UP_QUESTIONS: 'solicitorFollowUpQuestions',
+  REVIEW_DECISION: 'solicitorReviewDecision',
+};
+
+export function stripSolicitorReviewKeysFromPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const out = { ...payload };
+  for (const key of Object.values(SOLICITOR_REVIEW_PAYLOAD_KEYS)) {
+    delete out[key];
+  }
+  return out;
+}
+
 export function buildClientSnapshot(formValues) {
   const snapshot = {};
 

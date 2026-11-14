@@ -8,7 +8,7 @@ import MatterQuickActionModal from '../components/solicitor/MatterQuickActionMod
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
-import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus, updateSolicitorNotes } from '../lib/matters.js';
+import { assignMatter, deleteMatter, getMatterDetail, listStaffProfiles, MATTER_STATUS, updateMatterReminderDate, updateMatterStatus } from '../lib/matters.js';
 import { mergeMatterPayloads } from '../lib/formPayload.js';
 import {
   isMatterTestamentaryCapacityOutstanding,
@@ -29,6 +29,8 @@ import FormPeopleSummaryPanel from '../components/FormPeopleSummaryPanel.jsx';
 import MatterLpaOpportunityPanel from '../components/solicitor/MatterLpaOpportunityPanel.jsx';
 import ClientEmailDraftModal from '../components/solicitor/ClientEmailDraftModal.jsx';
 import MatterAtAGlanceStrip from '../components/solicitor/MatterAtAGlanceStrip.jsx';
+import MatterReviewSummaryPanel from '../components/solicitor/MatterReviewSummaryPanel.jsx';
+import MatterSolicitorReviewPanel from '../components/solicitor/MatterSolicitorReviewPanel.jsx';
 import PdfPreflightPanel from '../components/solicitor/PdfPreflightPanel.jsx';
 import {
   buildClientReferenceEmail,
@@ -383,8 +385,6 @@ export default function MatterDetailPage() {
   const [matter, setMatter] = useState(null);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [solicitorNotes, setSolicitorNotes] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
   const [staffProfiles, setStaffProfiles] = useState([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingClientPDF, setIsGeneratingClientPDF] = useState(false);
@@ -410,23 +410,10 @@ export default function MatterDetailPage() {
     navigate('/solicitor');
   };
 
-  const notesDirty = matter != null && solicitorNotes !== (matter.solicitor_notes ?? '');
-  useEffect(() => {
-    if (!notesDirty) return;
-    const onBeforeUnload = (e) => {
-      e.preventDefault();
-      e.returnValue =
-        'You have unsaved changes to solicitor notes. If you leave or refresh now, those edits may be lost.';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [notesDirty]);
-
   useEffect(() => {
     let active = true;
     setMatter(null);
     setActivity([]);
-    setSolicitorNotes('');
     setReminderDate('');
     setLoading(true);
     setDeleteConfirmOpen(false);
@@ -440,7 +427,6 @@ export default function MatterDetailPage() {
       } else {
         setMatter(detailResult.matter || null);
         setActivity(detailResult.activity || []);
-        setSolicitorNotes(detailResult.matter?.solicitor_notes || '');
         const rd = detailResult.matter?.reminder_date;
         setReminderDate(toLocalDatetime(rd));
         console.log('[WillTool Flow] Matter and activity loaded for solicitor', { matterId, clientRef: detailResult.matter?.client_reference, status: detailResult.matter?.status, activityCount: (detailResult.activity || []).length });
@@ -783,20 +769,6 @@ export default function MatterDetailPage() {
     toast.success('Matter updated', { description: `Status set to ${nextStatus.replaceAll('_', ' ')}.` });
   };
 
-  const handleSaveNotes = async () => {
-    if (!matter) return;
-    setSavingNotes(true);
-    console.log('[WillTool Flow] Solicitor saving notes', { matterId: matter.id });
-    const result = await updateSolicitorNotes(matter.id, solicitorNotes);
-    setSavingNotes(false);
-    if (result.error) {
-      toast.error('Could not save notes', { description: result.error });
-      return;
-    }
-    setMatter((prev) => prev ? { ...prev, solicitor_notes: result.data?.solicitor_notes || solicitorNotes } : prev);
-    toast.success('Notes saved', { description: 'Solicitor notes updated for this matter.' });
-  };
-
   const handleAssignmentChange = async (event) => {
     if (!matter) return;
     const assignedSolicitorId = event.target.value || null;
@@ -1062,6 +1034,8 @@ export default function MatterDetailPage() {
         clientPdfBusy={isGeneratingClientPDF}
       />
 
+      <MatterReviewSummaryPanel matter={matter} />
+
       <PdfPreflightPanel
         matter={matter}
         mergedPayload={mergedPayload}
@@ -1070,7 +1044,9 @@ export default function MatterDetailPage() {
         onOpenOutstandingCategory={openQuickAction}
       />
 
-      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <MatterSolicitorReviewPanel matter={matter} onMatterUpdated={(updated) => setMatter(updated)} />
+
+      <section className="grid gap-6 lg:grid-cols-1">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -1352,26 +1328,6 @@ export default function MatterDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">Solicitor notes</p>
-          <p className="text-sm text-slate-600 mt-1">Internal notes remain outside the client-facing intake workflow. {notesDirty && <span className="font-medium text-amber-700">Unsaved changes — save before leaving.</span>}</p>
-          <textarea
-            value={solicitorNotes}
-            onChange={(event) => setSolicitorNotes(event.target.value)}
-            rows={12}
-            className="mt-4 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder="Record review notes, missing instructions, verification follow-up, or execution reminders."
-          />
-          <button
-            type="button"
-            onClick={handleSaveNotes}
-            disabled={savingNotes}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60"
-          >
-            <Save size={16} />
-            {savingNotes ? 'Saving...' : 'Save notes'}
-          </button>
-        </div>
       </section>
 
       <section

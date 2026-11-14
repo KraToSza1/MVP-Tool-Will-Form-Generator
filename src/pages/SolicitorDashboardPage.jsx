@@ -17,6 +17,7 @@ import {
   isMatterTestamentaryCapacityOutstanding,
 } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
+import MatterPipelineStatusBadge from '../components/solicitor/MatterPipelineStatusBadge.jsx';
 import MatterQuickActionModal from '../components/solicitor/MatterQuickActionModal.jsx';
 import MatterAtAGlanceStrip from '../components/solicitor/MatterAtAGlanceStrip.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
@@ -974,7 +975,8 @@ export default function SolicitorDashboardPage() {
                       </p>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 items-center">
-                      <MatterStatusBadge status={matter.status} />
+                      <MatterPipelineStatusBadge matter={matter} compact />
+                      <MatterStatusBadge status={matter.status} compact />
                       <span className="text-xs font-medium text-slate-600">
                         {matter.outstanding_verification ? 'Verification pending' : 'Verification complete'}
                       </span>
@@ -1106,7 +1108,10 @@ export default function SolicitorDashboardPage() {
                           <span className="line-clamp-2 inline-block max-w-full text-center">{partnerLabel || '—'}</span>
                         </td>
                         <td className="align-middle whitespace-nowrap px-3 xl:px-4 py-2 text-center">
-                          <MatterStatusBadge status={matter.status} compact />
+                          <div className="flex flex-col items-center gap-1">
+                            <MatterPipelineStatusBadge matter={matter} compact />
+                            <MatterStatusBadge status={matter.status} compact />
+                          </div>
                         </td>
                         <td className="align-middle px-3 xl:px-4 py-2 text-center">
                           {matter.outstanding_verification ? (
