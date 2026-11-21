@@ -41,6 +41,7 @@ import {
 } from '../lib/resumeLinkEmail.js';
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 /** Public URL for the client Will Tool (for sharing with clients). */
 function getClientWillToolUrl() {
   if (typeof window === 'undefined') return '';
@@ -901,10 +902,7 @@ export default function MatterDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/solicitor" className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
-            <ArrowLeft size={16} />
-            Back to dashboard
-          </Link>
+          <BackPill to="/solicitor" label="Back to dashboard" />
           <a
             href={getClientWillToolUrl()}
             target="_blank"

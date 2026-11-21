@@ -42,6 +42,7 @@ const MatterDetailPage = lazyPage(() => import("./pages/MatterDetailPage.jsx"));
 const MatterEditorPage = lazyPage(() => import("./pages/MatterEditorPage.jsx"));
 const QuestionnaireEditorPage = lazyPage(() => import("./pages/QuestionnaireEditorPage.jsx"));
 const GuardianFlowDemoPage = lazyPage(() => import("./pages/GuardianFlowDemoPage.jsx"));
+const WeekScheduleDemoPage = lazyPage(() => import("./pages/WeekScheduleDemoPage.jsx"));
 const SolicitorUrgentPage = lazyPage(() => import("./pages/SolicitorUrgentPage.jsx"));
 const SolicitorCalendarPage = lazyPage(() => import("./pages/SolicitorCalendarPage.jsx"));
 const SolicitorAvailabilityPage = lazyPage(() => import("./pages/SolicitorAvailabilityPage.jsx"));
@@ -122,6 +123,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<PublicShell />} />
         <Route path="/dev/guardian-flow" element={<GuardianFlowDemoPage />} />
+        {import.meta.env.DEV ? <Route path="/dev/week-schedule" element={<WeekScheduleDemoPage />} /> : null}
         <Route path={SOLICITOR_LOGIN_PATH} element={<SolicitorLoginPage />} />
         <Route path={LEGACY_SOLICITOR_LOGIN_PATH} element={<LegacySolicitorLoginRoute />} />
         <Route element={<ProtectedRoute />}>

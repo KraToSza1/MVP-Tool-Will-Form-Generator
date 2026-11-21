@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { listMatters } from '../lib/matters.js';
 import { getMatterOutstandingCategories } from '../lib/matterOutstanding.js';
+import BackPill from '../components/solicitor/BackPill.jsx';
+import WeekSchedule from '../components/solicitor/WeekSchedule.jsx';
+import { nextWorkingDays } from '../lib/weekScheduleLayout.js';
 import {
   getCurrentProviderToken,
   getMyAvailabilityRules,
@@ -34,41 +37,11 @@ function localGraphDateTime(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
 }
 
-function formatDay(date) {
-  return date.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short' });
-}
-
-function formatTime(date) {
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
 function getItemDate(value) {
   const raw = value?.dateTime || value;
   if (!raw) return null;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function itemTopPercent(date) {
-  const minutes = date.getHours() * 60 + date.getMinutes();
-  const min = CALENDAR_START_HOUR * 60;
-  const max = CALENDAR_END_HOUR * 60;
-  return Math.max(0, Math.min(100, ((minutes - min) / (max - min)) * 100));
-}
-
-function itemHeightPercent(start, end) {
-  const diffMinutes = Math.max(20, (end.getTime() - start.getTime()) / 60000);
-  const total = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
-  return Math.max(7, Math.min(100, (diffMinutes / total) * 100));
-}
-
-/** Apply HH:mm (rules) on a calendar day for positioning the “available” band. */
-function timeOnDay(day, timeStr) {
-  const raw = typeof timeStr === 'string' && timeStr.length >= 4 ? timeStr : '09:00';
-  const [h, m] = raw.slice(0, 5).split(':').map((n) => parseInt(n, 10));
-  const d = new Date(day);
-  d.setHours(Number.isFinite(h) ? h : 9, Number.isFinite(m) ? m : 0, 0, 0);
-  return d;
 }
 
 export default function SolicitorCalendarPage() {
@@ -87,7 +60,7 @@ export default function SolicitorCalendarPage() {
 
   const weekDays = useMemo(() => {
     const today = startOfLocalDay(new Date());
-    return Array.from({ length: 5 }, (_, i) => addDays(today, i));
+    return Array.from({ length: 10 }, (_, i) => addDays(today, i));
   }, []);
 
   const loadCalendar = async ({ silent = false } = {}) => {
@@ -116,7 +89,7 @@ export default function SolicitorCalendarPage() {
 
     if (providerToken) {
       const start = new Date(weekDays[0]);
-      start.setHours(CALENDAR_START_HOUR, 0, 0, 0);
+      start.setHours(0, 0, 0, 0);
       const end = new Date(weekDays[weekDays.length - 1]);
       end.setHours(CALENDAR_END_HOUR, 0, 0, 0);
       const schedule = await getMyMicrosoftSchedule({
@@ -154,18 +127,10 @@ export default function SolicitorCalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
 
-  const itemsByDay = useMemo(() => {
-    const map = new Map(weekDays.map((d) => [d.toDateString(), []]));
-    scheduleItems.forEach((item) => {
-      const start = getItemDate(item.start);
-      const end = getItemDate(item.end);
-      if (!start || !end) return;
-      const key = startOfLocalDay(start).toDateString();
-      if (!map.has(key)) return;
-      map.get(key).push({ ...item, startDate: start, endDate: end });
-    });
-    return map;
-  }, [scheduleItems, weekDays]);
+  const scheduleWithDates = useMemo(() => scheduleItems
+    .map((item) => ({ ...item, startDate: getItemDate(item.start), endDate: getItemDate(item.end) }))
+    .filter((item) => item.startDate && item.endDate), [scheduleItems]);
+  const scheduleDays = useMemo(() => nextWorkingDays(new Date(), 5, rules?.working_days), [rules?.working_days]);
 
   const urgentMine = useMemo(() => matters.filter((m) => (getMatterOutstandingCategories(m) || []).length > 0), [matters]);
   const connected = Boolean(hasProviderToken && connection?.calendar_email) && !graphError;
@@ -185,17 +150,16 @@ export default function SolicitorCalendarPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <Link to="/solicitor" className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to dashboard
-      </Link>
 
       <section className={`rounded-2xl border ${panelClass}`}>
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1fr_22rem] xl:p-7">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+            <div className="flex flex-wrap items-center gap-2">
+              <BackPill to="/solicitor" label="Back to dashboard" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden />
               Microsoft 365 calendar
+            </div>
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">Solicitor calendar</h1>
             <p className={`mt-2 max-w-2xl text-sm leading-relaxed ${mutedClass}`}>
@@ -261,93 +225,13 @@ export default function SolicitorCalendarPage() {
           Loading calendar…
         </div>
       ) : (
-        <section className={`overflow-hidden rounded-2xl border ${panelClass}`}>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Five-day schedule</h2>
-              <p className={`mt-1 text-xs ${mutedClass}`}>{rules?.timezone || 'Africa/Johannesburg'} · {CALENDAR_START_HOUR}:00 to {CALENDAR_END_HOUR}:00</p>
-              <p className={`mt-2 max-w-xl text-xs leading-relaxed ${mutedClass}`}>
-                Indigo blocks are busy time from Microsoft Calendar. Green <strong className="font-semibold text-emerald-700 dark:text-emerald-200">Available window</strong> means no busy events that day; tap it to change your default appointment hours (same for all working days).
-              </p>
-            </div>
-            {graphError ? (
-              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                Calendar permission needed
-              </span>
-            ) : null}
-          </div>
-
-          {graphError ? (
-            <div className="border-b border-slate-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 dark:border-slate-700 dark:bg-amber-500/10 dark:text-amber-100">
-              {graphError}
-            </div>
-          ) : null}
-
-          <div className="grid min-h-[34rem] grid-cols-1 divide-y divide-slate-200 dark:divide-slate-700 lg:grid-cols-5 lg:divide-x lg:divide-y-0">
-            {weekDays.map((day) => {
-              const dayItems = itemsByDay.get(day.toDateString()) || [];
-              return (
-                <div key={day.toISOString()} className="relative min-h-[28rem] bg-slate-50/40 dark:bg-slate-950/20">
-                  <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatDay(day)}</p>
-                    <p className={`mt-0.5 text-xs ${mutedClass}`}>{dayItems.length ? `${dayItems.length} busy block${dayItems.length === 1 ? '' : 's'}` : 'Open'}</p>
-                  </div>
-                  <div className="relative h-[30rem] px-3 py-4">
-                    {[8, 10, 12, 14, 16].map((hour) => (
-                      <div
-                        key={hour}
-                        className="absolute left-3 right-3 border-t border-slate-200/80 text-[10px] text-slate-400 dark:border-slate-700"
-                        style={{ top: `${((hour - CALENDAR_START_HOUR) / (CALENDAR_END_HOUR - CALENDAR_START_HOUR)) * 100}%` }}
-                      >
-                        <span className="relative -top-2 bg-slate-50 pr-1 dark:bg-slate-950">{String(hour).padStart(2, '0')}:00</span>
-                      </div>
-                    ))}
-                    {dayItems.map((item, idx) => {
-                      const top = itemTopPercent(item.startDate);
-                      const height = itemHeightPercent(item.startDate, item.endDate);
-                      return (
-                        <div
-                          key={`${item.subject || item.status}-${idx}`}
-                          className="absolute left-5 right-5 overflow-hidden rounded-xl border border-indigo-200 bg-indigo-600 px-3 py-2 text-white shadow-sm dark:border-indigo-400/40"
-                          style={{ top: `${top}%`, height: `${height}%` }}
-                          title={`${formatTime(item.startDate)} - ${formatTime(item.endDate)}`}
-                        >
-                          <p className="truncate text-xs font-semibold">{item.subject || item.status || 'Busy'}</p>
-                          <p className="mt-0.5 truncate text-[11px] text-indigo-100">{formatTime(item.startDate)} - {formatTime(item.endDate)}</p>
-                        </div>
-                      );
-                    })}
-                    {!dayItems.length ? (() => {
-                      const winStart = timeOnDay(day, rules?.start_time);
-                      const winEnd = timeOnDay(day, rules?.end_time);
-                      const top = itemTopPercent(winStart);
-                      const height = itemHeightPercent(winStart, winEnd);
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => navigate('/solicitor/availability')}
-                          className="absolute left-5 right-5 min-h-[44px] overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-left text-xs text-emerald-900 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-500/15"
-                          style={{ top: `${top}%`, height: `${height}%` }}
-                          aria-label={`Open appointment availability to edit your default hours (${rules?.start_time || '09:00'} to ${rules?.end_time || '17:00'})`}
-                        >
-                          <div className="flex items-center gap-2 font-semibold">
-                            <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                            Available window
-                          </div>
-                          <p className="mt-1 break-words">{rules?.start_time || '09:00'} – {rules?.end_time || '17:00'}</p>
-                          <p className={`mt-1.5 text-[10px] font-medium ${isDark ? 'text-emerald-200/90' : 'text-emerald-800'}`}>
-                            Tap to edit in Appointment availability
-                          </p>
-                        </button>
-                      );
-                    })() : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <WeekSchedule
+          days={scheduleDays}
+          items={scheduleWithDates}
+          rules={rules}
+          graphError={graphError}
+          onEditAvailability={() => navigate('/solicitor/availability')}
+        />
       )}
 
       <section className={`rounded-2xl border p-5 ${panelClass}`}>

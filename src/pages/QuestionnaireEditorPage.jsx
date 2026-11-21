@@ -39,6 +39,7 @@ import {
 } from '../utils/customFieldBuilder.js';
 import { PERSON_RECORD_SPECS } from '../utils/personRecordSpecs.js';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 /** Browsers may show a generic “leave site?” dialog; this string is used where a custom line still appears. */
 const LEAVE_PAGE_UNSAVED_MSG =
   'You have unsaved changes to the questionnaire. If you leave or refresh now, those edits may be lost.';
@@ -1664,13 +1665,7 @@ export default function QuestionnaireEditorPage() {
   return (
     <div className={`space-y-6 ${dirty ? 'pb-24 sm:pb-20' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          to="/solicitor"
-          className={`inline-flex items-center gap-2 text-sm font-medium questionnaire-back-link ${isDark ? 'text-slate-400 hover:text-slate-100' : 'text-slate-600 hover:text-slate-900'}`}
-        >
-          <ArrowLeft size={16} />
-          Back to dashboard
-        </Link>
+        <BackPill to="/solicitor" label="Back to dashboard" />
       </div>
 
       {loading && (

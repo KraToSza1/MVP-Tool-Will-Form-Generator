@@ -8,6 +8,7 @@ import { listMatters, listStaffProfiles, MATTER_STATUS } from '../lib/matters.js
 import { getMatterOutstandingCategories, isMatterUrgent } from '../lib/matterOutstanding.js';
 import { getCurrentProviderToken, listCalendarConnections, startMicrosoftCalendarConnect } from '../lib/staffCalendar.js';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 function initials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return 'ST';
@@ -121,17 +122,16 @@ export default function SolicitorStaffPage() {
 
   return (
     <div className={`min-w-0 space-y-6 ${pageClass}`}>
-      <Link to="/solicitor" className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to dashboard
-      </Link>
 
       <section className={`overflow-hidden rounded-2xl border ${panelClass}`}>
         <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1.2fr_0.8fr] lg:p-7">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+            <div className="flex flex-wrap items-center gap-2">
+              <BackPill to="/solicitor" label="Back to dashboard" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
               <Users className="h-3.5 w-3.5" aria-hidden />
               Staff command centre
+            </div>
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">People, work and calendar links</h1>
             <p className={`mt-2 max-w-2xl text-sm leading-relaxed ${mutedClass}`}>

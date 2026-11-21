@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Construction } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext.jsx';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 /**
  * Mariyam / design-team routes (calendar, availability, reports) that are not wired yet.
  * Keeps navigation consistent with the Aristone portal mock.
@@ -14,9 +15,6 @@ import { useTheme } from '../context/ThemeContext.jsx';
  */
 export default function SolicitorPlaceholderPage({ title, description, roadmapItems }) {
   const { isDark } = useTheme();
-  const backClass = isDark
-    ? 'text-indigo-400 hover:text-indigo-300'
-    : 'text-indigo-600 hover:text-indigo-800';
   const cardClass = isDark
     ? 'rounded-2xl border border-slate-600 bg-slate-900 p-6 shadow-sm ring-1 ring-white/5 sm:p-8'
     : 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8';
@@ -32,10 +30,7 @@ export default function SolicitorPlaceholderPage({ title, description, roadmapIt
 
   return (
     <div className="min-w-0 max-w-2xl">
-      <Link to="/solicitor" className={`inline-flex min-h-[44px] items-center gap-2 text-sm font-medium ${backClass}`}>
-        <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-        Back to dashboard
-      </Link>
+      <BackPill to="/solicitor" label="Back to dashboard" />
       <div className={`mt-6 min-w-0 ${cardClass}`}>
         <div
           className={`flex h-12 w-12 items-center justify-center rounded-xl ${iconClass}`}

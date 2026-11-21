@@ -13,6 +13,7 @@ import {
 } from '../lib/matterOutstanding.js';
 import MatterStatusBadge from '../components/solicitor/MatterStatusBadge.jsx';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 const CATEGORY_SHORT = {
   [OUTSTANDING_CATEGORY.ID_VERIFICATION]: 'ID verification',
   [OUTSTANDING_CATEGORY.BPR_TRUST_REQUIRED]: 'BPR (required)',
@@ -34,9 +35,6 @@ export default function SolicitorUrgentPage() {
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState('firm');
 
-  const backClass = isDark
-    ? 'text-indigo-400 hover:text-indigo-300'
-    : 'text-indigo-600 hover:text-indigo-800';
   const headingClass = isDark ? 'text-slate-100' : 'text-slate-900';
   const subClass = isDark ? 'text-slate-400' : 'text-slate-600';
   const mutedClass = isDark ? 'text-slate-400' : 'text-slate-500';
@@ -94,10 +92,7 @@ export default function SolicitorUrgentPage() {
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6">
-      <Link to="/solicitor" className={`inline-flex min-h-[44px] items-center gap-2 text-sm font-medium ${backClass}`}>
-        <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
-        Back to dashboard
-      </Link>
+      <BackPill to="/solicitor" label="Back to dashboard" />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">

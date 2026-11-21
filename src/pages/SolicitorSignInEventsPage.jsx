@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { supabase } from '../lib/supabase.js';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 function formatWhen(iso) {
   if (!iso) return '—';
   try {
@@ -79,15 +80,7 @@ export default function SolicitorSignInEventsPage() {
     <div className="mx-auto max-w-7xl px-3 py-6 sm:px-6 lg:px-8">
       <div className="mb-6 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <Link
-            to="/solicitor"
-            className={`mb-2 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold ${
-              isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-700 hover:text-indigo-800'
-            }`}
-          >
-            <ArrowLeft size={16} aria-hidden />
-            Back to dashboard
-          </Link>
+          <BackPill to="/solicitor" label="Back to dashboard" />
           <h1 className={`flex items-center gap-2 text-xl font-bold sm:text-2xl ${textMain}`}>
             <ClipboardList className="shrink-0" size={26} aria-hidden />
             <span className="wrap-break-word">Sign-in support log</span>

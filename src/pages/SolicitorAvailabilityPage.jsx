@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarCheck, CheckCircle2, Clock, Loader2, Save, ShieldAle
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
+import BackPill from '../components/solicitor/BackPill.jsx';
 import {
   DEFAULT_AVAILABILITY_RULES,
   WEEKDAYS,
@@ -233,17 +234,16 @@ export default function SolicitorAvailabilityPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <Link to="/solicitor" className="inline-flex min-h-[44px] items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to dashboard
-      </Link>
 
       <section className={`rounded-2xl border ${panelClass}`}>
         <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[1fr_22rem] xl:p-7">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
+            <div className="flex flex-wrap items-center gap-2">
+              <BackPill to="/solicitor" label="Back to dashboard" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">
               <CalendarCheck className="h-3.5 w-3.5" aria-hidden />
               Availability rules
+            </div>
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">Appointment availability</h1>
             <p className={`mt-2 max-w-2xl text-sm leading-relaxed ${mutedClass}`}>

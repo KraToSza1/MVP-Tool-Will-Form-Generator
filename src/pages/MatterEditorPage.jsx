@@ -7,6 +7,7 @@ import { getMatterDetail, saveSolicitorMatter, updateMatterStatus, MATTER_STATUS
 import { useFormDefinition } from '../context/FormDefinitionContext.jsx';
 import { mergeCapacityConcernIntoLpa } from '../lib/lpaOpportunityLogic.js';
 
+import BackPill from '../components/solicitor/BackPill.jsx';
 function shouldFlagLpaFromCapacityConcernsField(capacityConcerns) {
   if (typeof capacityConcerns !== 'string') return false;
   const t = capacityConcerns.trim();
@@ -136,10 +137,7 @@ export default function MatterEditorPage() {
 
   return (
     <div className="space-y-4">
-      <Link to={`/solicitor/matters/${matter.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
-        <ArrowLeft size={16} />
-        Back to matter overview
-      </Link>
+      <BackPill to={`/solicitor/matters/${matter.id}`} label="Back to matter overview" />
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
