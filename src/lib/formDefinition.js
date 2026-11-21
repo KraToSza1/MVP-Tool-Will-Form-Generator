@@ -145,6 +145,23 @@ async function getFormDefinitionImpl() {
   }
 }
 
+/** When the live questionnaire was last published (form_definitions.updated_at), or null. */
+export async function getFormDefinitionUpdatedAt() {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const { data, error } = await supabase
+      .from('form_definitions')
+      .select('updated_at')
+      .eq('name', DEFAULT_NAME)
+      .maybeSingle();
+    if (error || !data?.updated_at) return null;
+    const d = new Date(data.updated_at);
+    return Number.isNaN(d.getTime()) ? null : d;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Factory default from Supabase, or bundled JSON. Optionally seeds DB when staff and row empty.
  * @returns {Promise<{ data: object | null, error: string | null, source: 'supabase' | 'bundle' | 'bundle_after_failed_seed' }>}

@@ -26,6 +26,7 @@ import {
   listFormDefinitionRevisions,
   restoreFormDefinitionRevision,
   deleteFormDefinitionRevision,
+  getFormDefinitionUpdatedAt,
 } from '../lib/formDefinition.js';
 import { qLog } from '../lib/questionnaireLog.js';
 import ConfirmModal from '../components/ConfirmModal.jsx';
@@ -87,6 +88,22 @@ const CONFIRM_MODAL = {
     detail: 'The live questionnaire for clients does not change. This backup cannot be recovered.',
   },
 };
+
+
+/** Plain-English name for a question type (shown to staff instead of technical IDs). */
+function friendlyFieldType(type) {
+  const t = String(type || '');
+  const map = {
+    text: 'Short answer', textarea: 'Long answer', email: 'Email', tel: 'Phone number', number: 'Number',
+    currency: 'Amount (£)', date: 'Date', radio: 'Choice (pick one)', select: 'Drop-down list',
+    checkbox: 'Tick box', checkboxGroup: 'Tick boxes (pick any)', display: 'Information message',
+    section: 'Group of questions', button: 'Add-person button', hidden: 'Saved automatically',
+    signature: 'Signature', file: 'File upload',
+  };
+  if (map[t]) return map[t];
+  if (/Guided$/.test(t)) return 'Guided step';
+  return 'Question';
+}
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -169,13 +186,12 @@ function CustomFieldInputs({
         <div>
           <label className="block text-sm font-medium text-slate-700">Answer options (one per line)</label>
           <p className="mt-0.5 text-xs text-slate-500">
-            Optional: use <code className="rounded bg-slate-100 px-1">value|Label</code> to set a stable value for PDF logic; otherwise a value is generated from the label.
-          </p>
+            Type one answer per line, exactly as the client should see it.</p>
           <textarea
             value={optionsText}
             onChange={(e) => onOptionsTextChange(e.target.value)}
             rows={5}
-            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
             placeholder={'Yes\nNo\nMaybe'}
           />
         </div>
@@ -239,25 +255,25 @@ function ConditionEditor({ conditions, conditionLogic, onChange, allFields }) {
         )}
       </div>
       {rows.length === 0 && (
-        <p className="text-xs text-slate-500 italic">No conditions — this field is always visible.</p>
+        <p className="text-xs text-slate-500 italic">Always shown to the client.</p>
       )}
       {rows.map((row, i) => {
         const opts = selectedFieldOptions(row.field);
         return (
           <div key={i} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
             <select value={row.field} onChange={(e) => updateRow(i, { field: e.target.value, value: '' })} className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
-              <option value="">— select field —</option>
-              {fieldOptions.map((fo) => <option key={fo.id} value={fo.id}>{fo.id} · {fo.label}</option>)}
+              <option value="">— choose a question —</option>
+              {fieldOptions.map((fo) => <option key={fo.id} value={fo.id}>{fo.label || 'Untitled question'}</option>)}
             </select>
             <select value={row.operator} onChange={(e) => updateRow(i, { operator: e.target.value })} className="w-20 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
-              <option value="eq">equals</option>
-              <option value="ne">not equal</option>
-              <option value="in">is one of</option>
-              <option value="arrayLengthGte">has ≥</option>
+              <option value="eq">is</option>
+              <option value="ne">is not</option>
+              <option value="in">is any of</option>
+              <option value="arrayLengthGte">has at least</option>
             </select>
             {opts.length > 0 ? (
               <select value={row.value ?? ''} onChange={(e) => updateRow(i, { value: e.target.value })} className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800">
-                <option value="">— value —</option>
+                <option value="">— choose an answer —</option>
                 {opts.map((o) => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}
               </select>
             ) : (
@@ -512,7 +528,7 @@ function FieldEditModal({ field, onClose, onSave }) {
                             ? 'Edit Estate Administration / Residue (guided)'
                             : 'Edit question'}
         </h3>
-        <p className="mt-1 text-xs text-slate-500">ID: {field.id} · Type: {field.type}</p>
+        <p className="mt-1 text-xs text-slate-500">{friendlyFieldType(field.type)}</p>
         <div className="mt-4 space-y-4">
           {isDisplay && (
             <div>
@@ -624,20 +640,20 @@ function FieldEditModal({ field, onClose, onSave }) {
             <div>
               <label className="block text-sm font-medium text-slate-700">Answer options (one per line)</label>
               <p className="mt-0.5 text-xs text-slate-500">
-                Use <code className="rounded bg-slate-100 px-1">value|Label</code> to keep stable values if you later add logic.
+                Type one answer per line, exactly as the client should see it.
               </p>
               <textarea
                 value={optionsText}
                 onChange={(e) => setOptionsText(e.target.value)}
                 rows={6}
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
               />
             </div>
           )}
           {!isCustom && optionLabels.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700">Answer options (label shown to user)</label>
-              <p className="mt-0.5 text-xs text-slate-500">Changing the value can break logic; change only the label if unsure.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Change the wording the client sees. The tool keeps track of each answer behind the scenes, so your Will logic keeps working.</p>
               <div className="mt-2 space-y-2">
                 {field.options.map((opt, i) => (
                   <div key={i} className="flex gap-2">
@@ -652,7 +668,6 @@ function FieldEditModal({ field, onClose, onSave }) {
                       className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                       placeholder="Label"
                     />
-                    <span className="self-center text-xs text-slate-400">value: {String(opt.value)}</span>
                   </div>
                 ))}
               </div>
@@ -1025,6 +1040,15 @@ export default function QuestionnaireEditorPage() {
   const [definition, setDefinition] = useState(() => deepClone(formData));
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(loadLastSavedFromSession);
+  // Show the real publish time from the database (not just this browser session).
+  useEffect(() => {
+    let active = true;
+    getFormDefinitionUpdatedAt().then((d) => {
+      if (!active || !d) return;
+      setLastSavedAt((prev) => (!prev || d > prev ? d : prev));
+    });
+    return () => { active = false; };
+  }, []);
   const [saving, setSaving] = useState(false);
   const [expandedSections, setExpandedSections] = useState(() => new Set([0]));
   const [editingField, setEditingField] = useState(null);
@@ -1670,9 +1694,6 @@ export default function QuestionnaireEditorPage() {
 
   return (
     <div className={`space-y-6 ${dirty ? 'pb-24 sm:pb-20' : ''}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <BackPill to="/solicitor" label="Back to dashboard" />
-      </div>
 
       {loading && (
         <div
@@ -1726,9 +1747,12 @@ export default function QuestionnaireEditorPage() {
       <div className={editorCardClass}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className={`text-xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Edit questionnaire</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <BackPill to="/solicitor" label="Back to dashboard" />
+              <h1 className={`text-xl font-bold ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Edit questionnaire</h1>
+            </div>
             <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Change question text, labels, placeholders, and answer options. Clients will see these when filling the form. Section names and field IDs affect PDF logic—edit labels only if unsure.
+              Change the wording of any question, help text or answer. Clients see your wording as soon as you click Save questionnaire. Nothing changes for clients until you save.
             </p>
             {lastSavedLabel && (
               <p className={`mt-2 text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>Last published: {lastSavedLabel}</p>
@@ -1910,10 +1934,7 @@ export default function QuestionnaireEditorPage() {
             />
           </button>
           <p className={`questionnaire-advanced-hint mt-3 text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Drag the grip icon to reorder sections, use ↑↓, or pick a position number. Reordering changes client step order only; field IDs stay the same. New fields use IDs starting with{' '}
-            <code className={`questionnaire-advanced-code rounded-md px-1.5 py-0.5 font-mono text-[0.8rem] ${isDark ? 'bg-slate-700 text-amber-200/90' : 'bg-slate-200/90 text-slate-800'}`}>custom_</code>. For sections and fields you added, use{' '}
-            <strong className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Remove section</strong> / <strong className={`font-semibold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>Remove</strong> on each row (visible without opening this panel). Built-in questionnaire sections cannot be deleted here—edit wording only.
-          </p>
+            Drag the grip icon to reorder sections, use ↑↓, or pick a position number — this only changes the order clients see. Sections and questions you added yourself can be removed with Remove. Built-in sections can't be deleted, only reworded or hidden.</p>
           {showAdvanced && (
             <div
               id="questionnaire-advanced-toolbar"
@@ -2092,7 +2113,7 @@ export default function QuestionnaireEditorPage() {
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                         <span className={`min-w-0 questionnaire-field-text ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
-                          <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{field.id}</span>
+                          <span className={`${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{friendlyFieldType(field.type)}</span>
                           <span className="mx-2">·</span>
                           {field.type === 'display'
                             ? (field.label || (field.text ? (field.text.length > 60 ? field.text.slice(0, 60) + '…' : field.text) : '(info/alert message)'))
@@ -2201,7 +2222,7 @@ export default function QuestionnaireEditorPage() {
                                 className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs ${sf._hiddenFromClient ? 'opacity-50' : ''} ${isDark ? 'border-slate-700 bg-slate-900/80' : 'border-stone-100 bg-white'}`}
                               >
                                 <span className={`min-w-0 ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
-                                  <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{sf.id}</span>
+                                  <span className={`${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{friendlyFieldType(sf.type)}</span>
                                   <span className="mx-1.5">·</span>
                                   {sf.type === 'display'
                                     ? (sf.label || (sf.text ? (sf.text.length > 50 ? sf.text.slice(0, 50) + '…' : sf.text) : '(info)'))
@@ -2280,9 +2301,7 @@ export default function QuestionnaireEditorPage() {
                     className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm shadow-sm ${isHidden ? 'opacity-50' : ''} ${isDark ? 'border-slate-600 bg-slate-900/70' : 'border-stone-100 bg-white'}`}
                   >
                     <span className={`min-w-0 ${isDark ? 'text-slate-300' : 'text-stone-700'}`}>
-                      <span className={`font-mono ${isDark ? 'text-slate-500' : 'text-stone-500'}`}>{spec.key}</span>
-                      <span className="mx-2">·</span>
-                      {displayLabel}
+                                            {displayLabel}
                       {isHidden && (
                         <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${isDark ? 'bg-orange-900/50 text-orange-300' : 'bg-orange-100 text-orange-600'}`}>
                           Hidden
