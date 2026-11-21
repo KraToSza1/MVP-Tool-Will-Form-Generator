@@ -163,9 +163,11 @@ export default function SolicitorCalendarPage() {
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">Solicitor calendar</h1>
             <p className={`mt-2 max-w-2xl text-sm leading-relaxed ${mutedClass}`}>
-              {connected
-                ? `${connection.calendar_email} is linked for availability checks.`
-                : 'Connect Microsoft Calendar to show busy time against your Will Tool workload.'}
+              {loading
+                ? 'Checking your Microsoft calendar connection…'
+                : connected
+                  ? `${connection.calendar_email} is linked for availability checks.`
+                  : 'Connect Microsoft Calendar to show busy time against your Will Tool workload.'}
             </p>
           </div>
           <div className={`rounded-2xl border p-4 ${softClass}`}>
@@ -174,13 +176,18 @@ export default function SolicitorCalendarPage() {
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Connection</p>
                 <p className={`mt-1 text-xs ${mutedClass}`}>{connection?.calendar_email || profile?.email || 'No calendar linked'}</p>
               </div>
-              {connected ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-hidden />
+              ) : connected ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                  <CheckCircle2 className="h-4 w-4" aria-hidden /> Connected
+                </span>
               ) : (
                 <ShieldAlert className="h-5 w-5 text-amber-500" aria-hidden />
               )}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className={`mt-4 grid gap-2 ${connected || loading ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              {connected || loading ? null : (
               <button
                 type="button"
                 onClick={handleConnect}
@@ -190,6 +197,7 @@ export default function SolicitorCalendarPage() {
                 {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarDays className="h-4 w-4" aria-hidden />}
                 Connect
               </button>
+              )}
               <button
                 type="button"
                 onClick={() => loadCalendar({ silent: true })}

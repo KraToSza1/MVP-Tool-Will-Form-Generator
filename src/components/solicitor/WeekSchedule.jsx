@@ -41,7 +41,11 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
   const now = useNow();
   const todayKey = startOfDay(now).getTime();
   const [mobileDayIdx, setMobileDayIdx] = useState(0);
-  const [detail, setDetail] = useState(null); // { title, items } for the "+N more" list
+  const [detail, setDetail] = useState(null);
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem('will-tool-schedule-view') || 'list'; } catch { return 'list'; }
+  });
+  const chooseView = (v) => { setView(v); try { localStorage.setItem('will-tool-schedule-view', v); } catch { /* ignore */ } }; // { title, items } for the "+N more" list
 
   const perDay = useMemo(() => days.map((day) => {
     const dayStart = startOfDay(day).getTime();
@@ -61,6 +65,44 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
     return { day, laid, chips, slots, freeMinutes, busyCount, isToday: dayStart === todayKey };
   }), [days, items, rules, now, todayKey]);
 
+  const renderAgenda = (d, compact = false) => {
+    if (!d) return null;
+    const rows = [
+      ...d.laid.map((ev) => ({ kind: 'event', start: ev.clipStart, end: ev.clipEnd, ev })),
+      ...d.chips.filter((c) => !c.allDay).map((c) => ({ kind: 'event', start: c.startDate, end: c.endDate, ev: c })),
+      ...d.slots.map((s) => ({ kind: 'free', start: s.start, end: s.end })),
+    ].sort((a, b) => a.start - b.start);
+    const allDayChips = d.chips.filter((c) => c.allDay);
+    const pad = compact ? 'px-2.5 py-1.5' : 'px-3 py-2';
+    const titleCls = compact ? 'text-[13px] leading-snug' : 'text-sm';
+    return (
+      <ul className={compact ? 'space-y-1.5 p-2' : 'space-y-2 p-3'}>
+        {allDayChips.map((c, i) => (
+          <li key={`c${i}`} className={`rounded-lg border border-slate-200 bg-slate-50 ${pad} text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200`}>
+            <span className="font-semibold">All day</span> · {c.subject || 'Busy'}
+          </li>
+        ))}
+        {rows.map((r, i) => (r.kind === 'free' ? (
+          <li key={i}>
+            <button type="button" onClick={onEditAvailability} className={`flex w-full items-center gap-2 rounded-lg border border-dashed border-emerald-400 bg-emerald-50 ${pad} text-left text-xs text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200 ${compact ? '' : 'min-h-[44px] text-sm'}`}>
+              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="font-semibold">{fmtTime(r.start)}–{fmtTime(r.end)}</span>
+              <span className="ml-auto">Free · {formatMinutes(Math.round((r.end - r.start) / 60000))}</span>
+            </button>
+          </li>
+        ) : (
+          <li key={i} className={`rounded-lg border ${pad} ${eventTone(r.ev.status)}`} title={r.ev.subject || 'Busy'}>
+            <p className="text-[11px] font-semibold opacity-90">{fmtTime(r.ev.startDate)}–{fmtTime(r.ev.endDate)}</p>
+            <p className={`${titleCls} font-medium break-words`}>{r.ev.subject || 'Busy'}</p>
+          </li>
+        )))}
+        {!rows.length && !d.chips.length ? (
+          <li className="rounded-lg border border-slate-200 px-3 py-4 text-center text-sm text-slate-600 dark:border-slate-700 dark:text-slate-400">Nothing booked.</li>
+        ) : null}
+      </ul>
+    );
+  };
+
   const hasChips = perDay.some((d) => d.chips.length);
   const totalFree = perDay.reduce((n, d) => n + d.freeMinutes, 0);
   const gridHeight = (VIEW_END - VIEW_START) * HOUR_PX;
@@ -79,6 +121,14 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400">
+          <div className="hidden overflow-hidden rounded-lg border border-slate-300 lg:inline-flex dark:border-slate-600" role="group" aria-label="Schedule view">
+            {[['list', 'List'], ['timeline', 'Timeline']].map(([v, label]) => (
+              <button key={v} type="button" onClick={() => chooseView(v)} aria-pressed={view === v}
+                className={`px-3 py-1 text-xs font-semibold ${view === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-600" />Busy</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-indigo-400 bg-indigo-50 dark:bg-indigo-500/15" />Tentative</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-emerald-500 bg-emerald-50 dark:bg-emerald-500/15" />Free slot</span>
@@ -94,8 +144,24 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
         <div className="border-b border-slate-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 dark:border-slate-700 dark:bg-amber-500/10 dark:text-amber-100">{graphError}</div>
       ) : null}
 
+      {/* Desktop: list view (default) — one readable row per item, nothing can overlap */}
+      {view === 'list' ? (
+        <div className="hidden lg:grid lg:grid-cols-5">
+          {perDay.map((d) => (
+            <div key={d.day.toISOString()} className={`min-w-0 border-l border-slate-200 first:border-l-0 dark:border-slate-700 ${d.isToday ? 'bg-indigo-50/40 dark:bg-indigo-500/5' : ''}`}>
+              <div className={`border-b border-slate-200 px-3 py-2.5 dark:border-slate-700 ${d.isToday ? 'bg-indigo-50 dark:bg-indigo-500/10' : ''}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${d.isToday ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400'}`}>{d.isToday ? 'Today' : fmtDayName(d.day)}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{fmtDayDate(d.day)}</p>
+                <p className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">{d.busyCount} busy · <span className="text-emerald-700 dark:text-emerald-300">{formatMinutes(d.freeMinutes)} free</span></p>
+              </div>
+              {renderAgenda(d, true)}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {/* Desktop / tablet: week grid */}
-      <div className="hidden lg:block">
+      <div className={view === 'list' ? 'hidden' : 'hidden lg:block'}>
         <div className="grid grid-cols-[3.5rem_repeat(5,minmax(0,1fr))] border-b border-slate-200 dark:border-slate-700">
           <div />
           {perDay.map(({ day, busyCount, freeMinutes, isToday }) => (
@@ -258,40 +324,7 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
             </button>
           ))}
         </div>
-        {(() => {
-          const d = perDay[mobileDayIdx] || perDay[0];
-          if (!d) return null;
-          const rows = [
-            ...d.laid.map((ev) => ({ kind: 'event', start: ev.clipStart, end: ev.clipEnd, ev })),
-            ...d.slots.map((s) => ({ kind: 'free', start: s.start, end: s.end })),
-          ].sort((a, b) => a.start - b.start);
-          return (
-            <ul className="space-y-2 p-3">
-              {d.chips.map((c, i) => (
-                <li key={`c${i}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  <span className="font-semibold">{c.allDay ? 'All day' : fmtTime(c.startDate)}</span> · {c.subject || 'Busy'}
-                </li>
-              ))}
-              {rows.map((r, i) => (r.kind === 'free' ? (
-                <li key={i}>
-                  <button type="button" onClick={onEditAvailability} className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-dashed border-emerald-400 bg-emerald-50 px-3 py-2 text-left text-sm text-emerald-800 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200">
-                    <Clock className="h-4 w-4 shrink-0" aria-hidden />
-                    <span className="font-semibold">{fmtTime(r.start)}–{fmtTime(r.end)}</span>
-                    <span className="ml-auto text-xs">Free · {formatMinutes(Math.round((r.end - r.start) / 60000))}</span>
-                  </button>
-                </li>
-              ) : (
-                <li key={i} className={`rounded-xl border px-3 py-2 ${eventTone(r.ev.status)}`}>
-                  <p className="text-xs font-semibold opacity-90">{fmtTime(r.ev.startDate)}–{fmtTime(r.ev.endDate)}</p>
-                  <p className="text-sm font-medium">{r.ev.subject || 'Busy'}</p>
-                </li>
-              )))}
-              {!rows.length && !d.chips.length ? (
-                <li className="rounded-xl border border-slate-200 px-3 py-4 text-center text-sm text-slate-600 dark:border-slate-700 dark:text-slate-400">Nothing booked.</li>
-              ) : null}
-            </ul>
-          );
-        })()}
+        {renderAgenda(perDay[mobileDayIdx] || perDay[0])}
       </div>
     </section>
   );

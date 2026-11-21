@@ -88,7 +88,8 @@ export async function startMicrosoftCalendarConnect({ redirectPath = '/solicitor
       redirectTo: getBrowserRedirect(SOLICITOR_LOGIN_PATH),
       scopes: MICROSOFT_CALENDAR_SCOPES,
       queryParams: {
-        prompt: 'consent',
+        // Only show Microsoft's account picker; consent was already granted, so don't force the permissions screen.
+        prompt: 'select_account',
       },
     },
   });

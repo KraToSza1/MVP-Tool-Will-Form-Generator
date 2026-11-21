@@ -267,15 +267,21 @@ export default function SolicitorAvailabilityPage() {
                 <ShieldAlert className="h-5 w-5 text-amber-500" aria-hidden />
               )}
             </div>
-            <button
-              type="button"
-              onClick={handleConnect}
-              disabled={connecting || calendarFeatureMissing}
-              className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
-            >
-              {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarCheck className="h-4 w-4" aria-hidden />}
-              {connectButtonLabel}
-            </button>
+            {calendarChecked ? (
+              <p className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="h-4 w-4" aria-hidden /> Microsoft calendar connected
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConnect}
+                disabled={connecting || calendarFeatureMissing}
+                className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+              >
+                {connecting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarCheck className="h-4 w-4" aria-hidden />}
+                {connectButtonLabel}
+              </button>
+            )}
           </div>
         </div>
       </section>
