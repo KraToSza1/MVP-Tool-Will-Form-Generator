@@ -23,6 +23,14 @@ export default function WeekScheduleDemoPage() {
       ev('Small 01643 – weekly update to client', at(2, 12), at(2, 12, 45)),
       ev('Lit closing files review', at(2, 13), at(2, 14)),
       ev('Annual leave', at(4, 0), nextDay(4), 'oof'),
+      ev('Follow up: Marvon – lease', at(0, 11, 30), at(0, 11, 45)),
+      ev('Follow up: Avah – Grant', at(0, 11, 30), at(0, 11, 45)),
+      ev('Marshall 01723 – call', at(0, 11, 45), at(0, 12)),
+      ev('Small 01643 – deeds', at(0, 11, 45), at(0, 12, 15)),
+      ev('Follow up: Mr Bah decision deadline', at(0, 18), at(0, 18, 15)),
+      ev('Pascall 01017 – check Marvon has', at(0, 18), at(0, 18, 15)),
+      ev('Billing to be complete – Confirm', at(0, 18), at(0, 18, 15)),
+      ev('Follow up Florrie – Ashraf 01418', at(0, 19), at(0, 19, 15)),
     ];
   }, [days]);
   return (

@@ -76,7 +76,10 @@ export function layoutOverlaps(timed) {
   const out = timed.map((t) => ({ ...t }));
   let cluster = [];
   let clusterEnd = null;
+  let clusterId = 0;
   const flush = () => {
+    for (const item of cluster) item.cluster = clusterId;
+    clusterId += 1;
     const colEnds = [];
     for (const item of cluster) {
       let col = colEnds.findIndex((end) => end <= item.clipStart);

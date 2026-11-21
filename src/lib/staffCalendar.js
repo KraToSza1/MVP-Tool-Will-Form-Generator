@@ -101,10 +101,50 @@ export async function startMicrosoftCalendarConnect({ redirectPath = '/solicitor
   return { error: 'No Microsoft sign-in URL returned.' };
 }
 
+// Microsoft only gives the browser a ~1 hour access token after sign-in, and Supabase drops it on its next
+// session refresh. We hand the refresh token to the microsoft-calendar-token edge function once, then ask it
+// for fresh access tokens, so staff connect once and stay connected on every device.
+const TOKEN_FN = 'microsoft-calendar-token';
+let cachedAccess = null; // { token, expiresAt }
+let lastStoredRefresh = null;
+
+async function storeRefreshTokenIfNew(session) {
+  const refresh = session?.provider_refresh_token;
+  if (!refresh || refresh === lastStoredRefresh) return;
+  lastStoredRefresh = refresh;
+  try {
+    const { error } = await supabase.functions.invoke(TOKEN_FN, { body: { action: 'store', refresh_token: refresh } });
+    if (error) lastStoredRefresh = null;
+  } catch {
+    lastStoredRefresh = null;
+  }
+}
+
+export function captureMicrosoftRefreshToken(session) {
+  if (!supabase) return Promise.resolve();
+  return storeRefreshTokenIfNew(session);
+}
+
 export async function getCurrentProviderToken() {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
-  return data?.session?.provider_token || null;
+  const session = data?.session;
+  if (!session) return null;
+
+  if (session.provider_token) {
+    void storeRefreshTokenIfNew(session);
+    return session.provider_token;
+  }
+  if (cachedAccess && cachedAccess.expiresAt > Date.now() + 60000) return cachedAccess.token;
+
+  try {
+    const { data: res, error } = await supabase.functions.invoke(TOKEN_FN, { body: { action: 'access' } });
+    if (error || !res?.access_token) return null;
+    cachedAccess = { token: res.access_token, expiresAt: Date.now() + (Number(res.expires_in) || 3600) * 1000 };
+    return cachedAccess.token;
+  } catch {
+    return null;
+  }
 }
 
 export async function getCurrentSessionUser() {

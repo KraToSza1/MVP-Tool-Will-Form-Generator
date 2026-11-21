@@ -253,7 +253,32 @@ export async function submitMatterFromDraft({ ref, secret, formValues, currentIn
  * @param {object} options - filters and sort
  * @param {string} [debugLabel] - label for timing logs (e.g. dashboard_filtered vs dashboard_stats_all)
  */
-export async function listMatters(
+// Several screens (dashboard list, dashboard stats, header "Urgent" badge, calendar...) ask for the same
+// matters at the same moment. Share one request per identical query and reuse it briefly; any write clears it.
+const LIST_CACHE_TTL_MS = 15000;
+const listMattersCache = new Map();
+
+export function invalidateMattersCache() {
+  listMattersCache.clear();
+}
+
+export function listMatters(options = {}, debugLabel = 'listMatters') {
+  const { search = '', status = 'all', assignedOnly = false, userId = null, sortBy = 'last_activity_at' } = options || {};
+  const key = JSON.stringify([search.trim(), status, assignedOnly ? userId : null, sortBy]);
+  const hit = listMattersCache.get(key);
+  if (hit && Date.now() - hit.at < LIST_CACHE_TTL_MS) {
+    mattersLoadTrace('listMatters: shared result reused', { label: debugLabel });
+    return hit.promise;
+  }
+  const promise = listMattersUncached(options, debugLabel).then((result) => {
+    if (result?.error) listMattersCache.delete(key);
+    return result;
+  });
+  listMattersCache.set(key, { at: Date.now(), promise });
+  return promise;
+}
+
+async function listMattersUncached(
   { search = '', status = 'all', assignedOnly = false, userId = null, sortBy = 'last_activity_at' } = {},
   debugLabel = 'listMatters',
 ) {
@@ -410,6 +435,7 @@ export async function getMatterDetail(matterId) {
 }
 
 export async function updateMatterStatus(matterId, status, changes = {}) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const payload = {
@@ -442,6 +468,7 @@ export async function updateMatterStatus(matterId, status, changes = {}) {
 }
 
 export async function assignMatter(matterId, assignedSolicitorId) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const { data, error } = await supabase
@@ -472,6 +499,7 @@ export async function assignMatter(matterId, assignedSolicitorId) {
 }
 
 export async function updateMatterReminderDate(matterId, reminderDate) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const payload = { reminder_date: reminderDate || null, last_activity_at: new Date().toISOString() };
@@ -497,6 +525,7 @@ export async function updateMatterReminderDate(matterId, reminderDate) {
 }
 
 export async function saveSolicitorMatter(matterId, formValues, currentIndex) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const payload = buildMatterPayload(formValues, currentIndex);
@@ -540,6 +569,7 @@ export async function saveSolicitorMatter(matterId, formValues, currentIndex) {
  * Returns `{ data: <full matter row>, error? }`.
  */
 export async function patchMatterSolicitorPayload(matterId, partial, extraColumns = {}) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
   if (!matterId) return { error: 'matterId is required' };
   const safePartial = partial && typeof partial === 'object' ? partial : {};
@@ -600,6 +630,7 @@ export async function patchMatterSolicitorPayload(matterId, partial, extraColumn
 }
 
 export async function deleteMatter(matterId) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const { data, error } = await supabase
@@ -623,6 +654,7 @@ export async function deleteMatter(matterId) {
 }
 
 export async function updateSolicitorNotes(matterId, solicitorNotes) {
+  invalidateMattersCache();
   if (!supabase) return { error: 'Supabase not configured' };
 
   const { data, error } = await supabase

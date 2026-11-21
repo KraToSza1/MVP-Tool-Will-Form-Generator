@@ -4,7 +4,9 @@ import { formatMinutes, freeSlots, layoutOverlaps, splitDayItems, startOfDay } f
 
 const VIEW_START = 8;
 const VIEW_END = 18;
-const HOUR_PX = 56;
+const HOUR_PX = 72;
+const MAX_SIDE_BY_SIDE = 2;
+const MAX_CHIPS = 2;
 const HOURS = Array.from({ length: VIEW_END - VIEW_START + 1 }, (_, i) => VIEW_START + i);
 
 const fmtTime = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -39,6 +41,7 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
   const now = useNow();
   const todayKey = startOfDay(now).getTime();
   const [mobileDayIdx, setMobileDayIdx] = useState(0);
+  const [detail, setDetail] = useState(null); // { title, items } for the "+N more" list
 
   const perDay = useMemo(() => days.map((day) => {
     const dayStart = startOfDay(day).getTime();
@@ -113,7 +116,16 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
             <div className="px-1 py-2 text-right text-[10px] font-medium uppercase text-slate-500 dark:text-slate-400">All day</div>
             {perDay.map(({ day, chips }) => (
               <div key={day.toISOString()} className="flex min-w-0 flex-col gap-1 border-l border-slate-200 p-1.5 dark:border-slate-700">
-                {chips.map((c, i) => (
+                {chips.length > MAX_CHIPS + 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setDetail({ title: `${fmtDayName(day)} ${fmtDayDate(day)} · all day & outside hours`, items: chips })}
+                    className="order-last rounded-md px-2 py-0.5 text-left text-[11px] font-semibold text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                  >
+                    +{chips.length - MAX_CHIPS} more
+                  </button>
+                ) : null}
+                {(chips.length > MAX_CHIPS + 1 ? chips.slice(0, MAX_CHIPS) : chips).map((c, i) => (
                   <span
                     key={i}
                     title={`${c.subject || 'Busy'}${c.allDay ? ' (all day)' : ` · ${fmtTime(c.startDate)}`}`}
@@ -146,14 +158,35 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
                   type="button"
                   onClick={onEditAvailability}
                   title="Free for appointments — click to change your appointment hours"
-                  className="absolute inset-x-1 flex items-start overflow-hidden rounded-lg border border-dashed border-emerald-400 bg-emerald-50/70 px-2 py-1 text-left text-[11px] text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
+                  className="absolute inset-x-1 flex items-start gap-1 overflow-hidden rounded-lg border border-dashed border-emerald-400 bg-emerald-50/70 px-2 py-1 text-left text-[11px] text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
                   style={{ top: pxTop(s.start) + 1, height: pxHeight(s.start, s.end) }}
                 >
                   <span className="font-semibold">Free</span> {fmtTime(s.start)}–{fmtTime(s.end)}
                 </button>
               ))}
-              {laid.map((ev, i) => {
-                const width = 100 / ev.cols;
+              {Object.values(laid.reduce((acc, ev) => {
+                (acc[ev.cluster] ||= []).push(ev);
+                return acc;
+              }, {})).filter((group) => group[0].cols > MAX_SIDE_BY_SIDE).map((group) => {
+                const start = new Date(Math.min(...group.map((g) => g.clipStart)));
+                const end = new Date(Math.max(...group.map((g) => g.clipEnd)));
+                const hiddenCount = group.filter((g) => g.col >= MAX_SIDE_BY_SIDE - 1).length;
+                return (
+                  <button
+                    key={`more-${group[0].cluster}`}
+                    type="button"
+                    onClick={() => setDetail({ title: `${fmtDayName(day)} ${fmtDayDate(day)} · ${fmtTime(start)}–${fmtTime(end)}`, items: group })}
+                    className="absolute z-[1] overflow-hidden rounded-lg border border-indigo-400 bg-indigo-100 px-2 py-1 text-left text-indigo-900 shadow-sm transition hover:bg-indigo-200 dark:border-indigo-400/50 dark:bg-indigo-500/25 dark:text-indigo-50 dark:hover:bg-indigo-500/35"
+                    style={{ top: pxTop(start) + 1, height: pxHeight(start, end), left: 'calc(50% + 3px)', width: 'calc(50% - 6px)' }}
+                    title="Show all overlapping items"
+                  >
+                    <p className="text-[12px] font-bold leading-tight">+{hiddenCount} more</p>
+                    <p className="text-[10px] leading-tight opacity-80">{fmtTime(start)}–{fmtTime(end)}</p>
+                  </button>
+                );
+              })}
+              {laid.filter((ev) => ev.cols <= MAX_SIDE_BY_SIDE || ev.col < MAX_SIDE_BY_SIDE - 1).map((ev, i) => {
+                const width = 100 / Math.min(ev.cols, MAX_SIDE_BY_SIDE);
                 const short = (ev.clipEnd - ev.clipStart) / 60000 < 40;
                 return (
                   <div
@@ -182,6 +215,26 @@ export default function WeekSchedule({ days, items, rules, graphError, onEditAva
           ))}
         </div>
       </div>
+
+      {detail ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" onClick={() => setDetail(null)}>
+          <div className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{detail.title}</h3>
+              <button type="button" onClick={() => setDetail(null)} className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Close</button>
+            </div>
+            <ul className="space-y-2">
+              {[...detail.items].sort((a, b) => a.startDate - b.startDate).map((it, i) => (
+                <li key={i} className={`rounded-xl border px-3 py-2 ${eventTone(it.status)}`}>
+                  <p className="text-xs font-semibold opacity-90">{it.allDay ? 'All day' : `${fmtTime(it.startDate)}–${fmtTime(it.endDate)}`}</p>
+                  <p className="text-sm font-medium">{it.subject || 'Busy'}</p>
+                  {it.location ? <p className="text-xs opacity-80">{it.location}</p> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
 
       {/* Phones: day picker + agenda list */}
       <div className="lg:hidden">

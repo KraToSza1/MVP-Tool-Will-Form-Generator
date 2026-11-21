@@ -647,6 +647,12 @@ export function subscribeToAuthChanges(callback) {
     const t0 = nowPerfMs();
     authLog('onAuthStateChange', { event, hasSession: !!session });
     const user = session?.user ?? null;
+    if (session?.provider_refresh_token) {
+      // Save the Microsoft refresh token server-side (deferred, never awaited here) so calendars stay connected.
+      queueMicrotask(() => {
+        void import('./staffCalendar.js').then((m) => m.captureMicrosoftRefreshToken(session)).catch(() => {});
+      });
+    }
 
     // IMPORTANT: Do not `await` inside this handler. Supabase can hold resolution of
     // signInWithPassword until the callback completes; if profiles.select hangs (RLS/network),
