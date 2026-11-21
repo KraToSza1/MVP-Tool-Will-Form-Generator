@@ -131,20 +131,21 @@ export async function getCurrentProviderToken() {
   const session = data?.session;
   if (!session) return null;
 
-  if (session.provider_token) {
-    void storeRefreshTokenIfNew(session);
-    return session.provider_token;
-  }
+  // Save a newly issued refresh token first, then prefer a server-issued token (always has calendar scope),
+  // falling back to the session's provider token if the helper isn't available.
+  if (session.provider_refresh_token) await storeRefreshTokenIfNew(session);
   if (cachedAccess && cachedAccess.expiresAt > Date.now() + 60000) return cachedAccess.token;
 
   try {
     const { data: res, error } = await supabase.functions.invoke(TOKEN_FN, { body: { action: 'access' } });
-    if (error || !res?.access_token) return null;
-    cachedAccess = { token: res.access_token, expiresAt: Date.now() + (Number(res.expires_in) || 3600) * 1000 };
-    return cachedAccess.token;
+    if (!error && res?.access_token) {
+      cachedAccess = { token: res.access_token, expiresAt: Date.now() + (Number(res.expires_in) || 3600) * 1000 };
+      return cachedAccess.token;
+    }
   } catch {
-    return null;
+    /* fall through */
   }
+  return session.provider_token || null;
 }
 
 export async function getCurrentSessionUser() {

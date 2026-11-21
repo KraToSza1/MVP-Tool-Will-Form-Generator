@@ -551,7 +551,8 @@ export async function startMicrosoft365SignIn() {
     provider: 'azure',
     options: {
       redirectTo,
-      scopes: 'email openid profile',
+      // Calendar scopes + offline_access so signing in also (re)connects the Microsoft calendar for good.
+      scopes: 'email openid profile offline_access User.Read Calendars.ReadBasic',
       queryParams: {
         prompt: 'select_account',
       },
