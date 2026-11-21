@@ -10,9 +10,10 @@ import {
 import { resolveGuardianshipDetailsDataForClause } from '../utils/guardianFlowSync.js';
 import { getBprTrustClientIntent, isBprSolicitorPackageComplete } from '../lib/bprTrustClientIntent.js';
 import { getPropertyTrustClientIntent, isPropertyTrustSolicitorPackageComplete } from '../lib/propertyTrustClientIntent.js';
-import { getAristoneProfessionalExecutorOptions } from '../constants/aristoneSolicitors.js';
+import { getAristoneProfessionalExecutorOptions, ARISTONE_PROFILE } from '../constants/aristoneSolicitors.js';
 import { flowLog } from '../lib/willToolDebug.js';
 import { stripSolicitorReviewKeysFromPayload } from '../lib/formPayload.js';
+import { polishWillClauseText, SCHEDULE_REF_RE } from '../utils/willTextPolish.js';
 
 /** True in Vite dev, VITE_DEBUG_WILL_TOOL, or `globalThis.__PDF_DEBUG__` in the browser console. */
 const pdfDebugEnabled = () =>
@@ -2279,8 +2280,11 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
     doc.text('This is the Will of ', margin, yPos);
     doc.setFont('times', 'bold');
     doc.text(cleanName, margin + doc.getTextWidth('This is the Will of '), yPos);
+    const willOfLeadWidth = doc.getTextWidth('This is the Will of ');
+    doc.setFont('times', 'bold');
+    const willOfNameWidth = doc.getTextWidth(cleanName);
     doc.setFont('times', 'normal');
-    doc.text('.', margin + doc.getTextWidth('This is the Will of ' + cleanName), yPos);
+    doc.text('.', margin + willOfLeadWidth + willOfNameWidth, yPos);
     yPos += 8;
 
     // Clause bodies: segment-aware wrap + draw (measured token widths; no plain-text pre-wrap).
@@ -2409,7 +2413,13 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
       text: clause.text,
       incomplete: clause.incomplete,
       missingFields: clause.missingFields || []
-    }));
+    })).filter((clause, _i, all) => {
+      const isFallbackOnly = (t) => /^\s*If any (?:\w+\s+){0,3}(?:gift|share)[^.]*\bfails?\b/i.test(String(t || ''))
+        || /^\s*I request that my Executors take all reasonable steps to honou?r my funeral wishes as expressed in this Will\.?\s*$/i.test(String(t || ''));
+      if (!isFallbackOnly(clause.text)) return true;
+      // Keep a fallback sentence only when its section also has a real clause.
+      return all.some((other) => other !== clause && other.sectionLabel === clause.sectionLabel && !isFallbackOnly(other.text));
+    });
     
     // Explicit signing date fields - declared once for use throughout function
     const explicitSigningDateFields = [
@@ -3497,11 +3507,11 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
         processedClauseText = processedClauseText.replace(/\btest\s+test/gi, '[MISSING: content]');
         
         // CRITICAL: Replace schedule references with legal schedule numbers BEFORE other processing
-        processedClauseText = processedClauseText.replace(/Schedule\s+(\d+)/gi, (match, oldNum) => {
+        processedClauseText = processedClauseText.replace(SCHEDULE_REF_RE, (match, m1, oldNum, m2) => {
           const legalNum = scheduleNumberMap.get(oldNum);
           if (legalNum) {
             pdfDebugLog(`[PDF SCHEDULE MAP] Replacing "${match}" with "Schedule ${legalNum}" in clause ${clauseNumber}`);
-            return `Schedule ${legalNum}`;
+            return `Schedule ${m1}${legalNum}${m2}`;
           }
           // If not mapped, still add to references but use original number
           scheduleReferences.add(`Schedule ${oldNum}`);
@@ -3563,6 +3573,7 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
 
       // Final PDF-only cleanup (duplicated fragments / bad lead-ins) after all text transforms
       processedClauseText = finalizeClauseTextForPdf(processedClauseText);
+      processedClauseText = polishWillClauseText(processedClauseText);
       
       // Clean whitespace for hanging indent (remove newlines, normalize spaces)
       processedClauseText = String(processedClauseText).replace(/\s*\n\s*/g, ' ').trim();
@@ -3741,7 +3752,7 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
         
         // Only force new page if we're within 40 units of the bottom (very tight)
         // Otherwise, render on same page and let content flow naturally
-        if (availableSpace < 40) {
+        if (index === 0 || availableSpace < 40) {
           pdfDebugLog(`[PDF SCHEDULE] ❌ Very little space remaining (${availableSpace.toFixed(1)} units < 40), adding new page`);
           doc.addPage();
           yPos = margin;
@@ -3755,7 +3766,14 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
         }
         
         // Use legal sequential naming: Schedule 1, Schedule 2, etc.
-        const legalScheduleName = `Schedule ${scheduleIndex}`;
+        const headingNum = (scheduleName.match(/\d+/) || [])[0];
+        const headingLegal = (headingNum && scheduleNumberMap.get(headingNum)) || scheduleIndex;
+        const headingKind = headingNum && String(formValues.propertyTrustScheduleNumber || '').trim() === headingNum
+          ? ' — PROPERTY TRUST'
+          : headingNum && String(formValues.bprTrustScheduleNumber || '').trim() === headingNum
+            ? ' — BUSINESS PROPERTY RELIEF TRUST'
+            : '';
+        const legalScheduleName = `SCHEDULE ${headingLegal}${headingKind}`;
         pdfDebugLog(`[PDF SCHEDULE] Legal schedule name: "${legalScheduleName}" (replacing "${scheduleName}")`);
         pdfDebugLog(`[PDF SCHEDULE] scheduleIndex: ${scheduleIndex}`);
         
@@ -3849,13 +3867,13 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
               
               // Combine details and terms if both exist
               if (details && terms) {
-                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}\n\nBusiness Property Relief Trust Terms: ${terms}`;
+                scheduleData = `Business Property Details: ${details}\n\nBusiness Property Relief Trust Terms: ${terms}`;
                 pdfDebugLog(`[PDF SCHEDULE] ✅ Combined BPR Trust details + terms, total length: ${scheduleData.length}`);
               } else if (details) {
-                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Details: ${details}`;
+                scheduleData = `Business Property Details: ${details}`;
                 pdfDebugLog(`[PDF SCHEDULE] ✅ Using BPR Trust details only, length: ${scheduleData.length}`);
               } else if (terms) {
-                scheduleData = `Schedule Number: ${scheduleNumber}\nBusiness Property Relief Trust Terms: ${terms}`;
+                scheduleData = `Business Property Relief Trust Terms: ${terms}`;
                 pdfDebugLog(`[PDF SCHEDULE] ✅ Using BPR Trust terms only, length: ${scheduleData.length}`);
               } else {
                 pdfDebugLog(`[PDF SCHEDULE] ❌ BPR Trust schedule ${scheduleNumber} matched but no content found`);
@@ -4187,11 +4205,52 @@ export const generatePDFWithJSPDF = async (rawFormValues, signatures = {}, optio
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       
-      // Cover page (page 1): no page number
+      // Cover page (page 1): no page number; add a "Dated" line and the firm's details.
       if (i === 1) {
-        // Add DRAFT watermark if placeholders detected (skip cover page for watermark)
-        // No page number on cover
+        doc.setFont('times', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(60, 60, 60);
+        const datedText = 'Dated ______________________________';
+        doc.text(datedText, pageWidth / 2 - doc.getTextWidth(datedText) / 2, pageHeight * 0.62);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 120, 120);
+        const office = ARISTONE_PROFILE.primaryOffice;
+        const firmLine = `${ARISTONE_PROFILE.firmName} · ${office.addressLine1}, ${office.city}, ${office.postcode} · SRA No. ${ARISTONE_PROFILE.sraNumber}`;
+        doc.text(firmLine, pageWidth / 2 - doc.getTextWidth(firmLine) / 2, pageHeight - 24);
+        doc.setTextColor(0, 0, 0);
         continue;
+      }
+
+      // Running header on every content page.
+      const headerName = typeof cleanName === 'string' && cleanName ? cleanName : '';
+      doc.setFont('times', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Last Will and Testament${headerName ? ` of ${headerName}` : ''}`, margin, 12);
+      const firmShort = ARISTONE_PROFILE.firmName;
+      doc.text(firmShort, pageWidth - margin - doc.getTextWidth(firmShort), 12);
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.2);
+      doc.line(margin, 14, pageWidth - margin, 14);
+
+      // Execution copy: initials boxes on every page (common UK practice).
+      if (!isClientPDF) {
+        doc.setFont('times', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(110, 110, 110);
+        const labels = ['Testator', 'Witness 1', 'Witness 2'];
+        let x = margin;
+        const boxW = 14;
+        const boxH = 6;
+        const by = pageHeight - 20;
+        labels.forEach((label) => {
+          doc.text(label, x, by + 4.3);
+          const lw = doc.getTextWidth(label) + 1.5;
+          doc.setDrawColor(160, 160, 160);
+          doc.rect(x + lw, by, boxW, boxH);
+          x += lw + boxW + 6;
+        });
       }
       
       // All other pages: show page number (Page X of N, where X = i - 1, N = totalPages - 1)
