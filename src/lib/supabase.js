@@ -2,7 +2,7 @@
  * Supabase client for Will Tool Phase 2 persistence.
  * Requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in env.
  */
-import { createClient } from '@supabase/supabase-js';
+import { createClient, processLock } from '@supabase/supabase-js';
 import { debugLog } from './willToolDebug.js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -29,6 +29,9 @@ export const supabase = url && anonKey
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl,
+        // In-tab lock instead of navigator.locks: avoids "Acquiring an exclusive Navigator LockManager lock
+        // ... immediately failed" errors when auto-refresh and init race at start-up.
+        lock: processLock,
       },
     })
   : null;
