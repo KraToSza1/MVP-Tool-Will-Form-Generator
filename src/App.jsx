@@ -72,11 +72,22 @@ function LegacySolicitorLoginRoute() {
   return <Navigate to="/" replace />;
 }
 
+function isEmbeddedInOtherSite() {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch {
+    return true; // cross-origin access to window.top throws → we're in an iframe
+  }
+}
+
 function PublicShell() {
+  // Inside the firm's WordPress page the site already has its own heading, so skip the tool's header box.
+  const embedded = isEmbeddedInOtherSite();
   return (
     <div className="min-h-dvh w-full flex flex-col text-gray-800 bg-gray-50 transition-colors">
       <main className="flex-1 w-full">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 lg:py-10">
+        <div className={`w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 ${embedded ? 'py-2 sm:py-3' : 'py-4 sm:py-6 md:py-8 lg:py-10'}`}>
+          {embedded ? null : (
           <header className="relative border shadow-md px-4 sm:px-5 md:px-6 py-4 sm:py-5 rounded-lg sm:rounded-xl mb-4 sm:mb-6 bg-white border-gray-200">
             <div className="flex flex-col gap-4">
               <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
@@ -104,6 +115,7 @@ function PublicShell() {
               </div>
             </div>
           </header>
+          )}
 
           <PublicIntakePage />
         </div>

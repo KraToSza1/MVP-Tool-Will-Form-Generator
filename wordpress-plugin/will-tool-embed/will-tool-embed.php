@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Will Tool Embed
  * Description: Embed the Will Form Generator app in any page or post via shortcode [will_tool]. Configure the app URL in Settings → Will Tool Embed.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Will Tool
  * License: GPL v2 or later
  * Text Domain: will-tool-embed
@@ -22,21 +22,25 @@ function will_tool_embed_shortcode( $atts ) {
 		return '<!-- Will Tool Embed: Set the app URL in Settings → Will Tool Embed -->';
 	}
 
-	$height = get_option( WILL_TOOL_EMBED_HEIGHT_OPTION, '800' );
-	if ( strpos( $height, 'vh' ) === false && strpos( $height, 'px' ) === false ) {
+	// Default: fill the visitor's screen so the tool behaves like a full-screen app inside the page.
+	$height = trim( (string) get_option( WILL_TOOL_EMBED_HEIGHT_OPTION, '' ) );
+	if ( '' === $height || '800' === $height ) {
+		$height = '100dvh';
+	} elseif ( preg_match( '/^\d+$/', $height ) ) {
 		$height = $height . 'px';
 	}
-
-	$url = esc_url( $url );
-	$height = esc_attr( $height );
-
+	$url_attr    = esc_url( $url );
+	$height_attr = esc_attr( $height );
 	return sprintf(
-		'<div class="will-tool-embed-fullwidth" style="width: 100vw; position: relative; left: 50%%; right: 50%%; margin-left: -50vw; margin-right: -50vw;"><iframe src="%s" width="100%%" height="%s" style="min-height: 80vh; border: none;" title="Will Form Generator" allow="camera; clipboard-write; fullscreen"></iframe></div>',
-		$url,
-		$height
+		'<div class="will-tool-embed" style="width:100%%;max-width:100%%;margin:0 auto;">'
+		. '<p style="margin:0 0 6px;text-align:right;font-size:13px;"><a href="%1$s" target="_blank" rel="noopener">Open in full screen &#8599;</a></p>'
+		. '<iframe src="%1$s" title="Will questionnaire" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="camera; clipboard-write; fullscreen" '
+		. 'style="display:block;width:100%%;height:100vh;height:%2$s;min-height:560px;border:0;border-radius:8px;background:#0b1020;"></iframe>'
+		. '</div>',
+		$url_attr,
+		$height_attr
 	);
 }
-
 add_shortcode( 'will_tool', 'will_tool_embed_shortcode' );
 
 /**
@@ -86,8 +90,8 @@ function will_tool_embed_settings_page() {
 				<tr>
 					<th scope="row"><label for="will_tool_embed_height">Iframe height</label></th>
 					<td>
-						<input type="text" name="will_tool_embed_height" id="will_tool_embed_height" value="<?php echo esc_attr( $height ); ?>" placeholder="800 or 80vh" />
-						<p class="description">e.g. <code>800</code>, <code>80vh</code>, or <code>900px</code>.</p>
+						<input type="text" name="will_tool_embed_height" id="will_tool_embed_height" value="<?php echo esc_attr( $height ); ?>" placeholder="100dvh (recommended)" />
+						<p class="description">Leave blank for full screen height (recommended), or e.g. <code>900px</code>.</p>
 					</td>
 				</tr>
 			</table>
