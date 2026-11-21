@@ -114,6 +114,7 @@ import { toProperNameCase, toProperAddressCase, normalizePostcode } from '../uti
 import { importPdfGeneratorModule, isStaleChunkLoadError } from '../utils/loadPdfGeneratorModule.js';
 import { debugLog, isWillToolDebugEnabled } from '../lib/willToolDebug.js';
 import { pruneStaleBranchValues } from '../utils/pruneStaleBranchValues.js';
+import { validateUKPostcode } from '../utils/ukValidations.js';
 import { STEP_HEADING_ID, findFirstUnansweredInside, isTouchDevice, scrollToStepStart } from '../utils/stepScroll.js';
 
 const DEBUG_LOGS = isWillToolDebugEnabled() || import.meta.env.VITE_DEBUG_FIELD_RENDERER === 'true';
@@ -121,6 +122,7 @@ const DEBUG_LOGS = isWillToolDebugEnabled() || import.meta.env.VITE_DEBUG_FIELD_
 const DEBUG_INTERPOLATE = import.meta.env.VITE_DEBUG_CLAUSES === 'true';
 
 const REF_REGEX = /^[A-Z0-9]{8,12}$/;
+const isPostcodeFieldId = (id) => /postcode$/i.test(String(id || ''));
 
 // Local-only ref when Supabase not configured (existing behavior)
 function getOrCreateReferenceNumberLocal() {
@@ -285,7 +287,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
     };
     
     window.showAristoneSuccess = (executorType) => {
-      toast.success('🥇 Aristone Solicitors Selected!', { 
+      toast.success('Aristone Solicitors selected', { 
         description: `Aristone Solicitors has been selected as your professional ${executorType}. They will handle your estate professionally and efficiently.`,
         duration: 4000
       });
@@ -2051,6 +2053,12 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
         return true;
       }
 
+      // A postcode that's been typed must be a real UK postcode (empty optional postcodes are fine).
+      if (isPostcodeFieldId(field.id)) {
+        const pc = String(formValues[field.id] ?? '').trim();
+        if (pc && !validateUKPostcode(pc)) return false;
+      }
+
       if (field.type === 'businessInterestsGuided') {
         const ok = isBusinessInterestsGuidedComplete(formValues);
         DEBUG_LOGS&&debugLog(`[VALIDATION] businessInterestsGuided valid: ${ok}`);
@@ -2310,6 +2318,19 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
       if (field.type === 'section' && field.subFields) {
         field.subFields.forEach(collectFromField);
         return;
+      }
+
+      if (isPostcodeFieldId(field.id)) {
+        const pc = String(formValues[field.id] ?? '').trim();
+        if (pc && !validateUKPostcode(pc)) {
+          issues.push({
+            fieldId: field.id,
+            fieldLabel: field.label || 'Postcode',
+            message: 'Please enter a valid UK postcode (for example LU1 1QG).',
+            type: 'format',
+          });
+          return;
+        }
       }
 
       if (field.required) {
@@ -4479,7 +4500,7 @@ export default function FormRenderer({ initialFormState = null, externalPersiste
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-500">
-                      {formCompletionPercent}% Complete
+                      {Math.round(((currentIndex + 1) / Math.max(1, visibleSections.length)) * 100)}% through
                     </span>
                     <span className="text-sm font-semibold text-indigo-600">
                       Step {currentIndex + 1} of {visibleSections.length}

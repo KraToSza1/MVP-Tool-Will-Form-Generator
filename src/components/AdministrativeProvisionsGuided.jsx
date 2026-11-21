@@ -323,7 +323,7 @@ export default function AdministrativeProvisionsGuided({ field, formValues, setF
       <Explainer title="A simple example">
         <p>
           You have two children, Tom and Sarah. You gave Tom £50,000 towards a house deposit during your lifetime. Your estate is now worth £200,000, to
-          be split equally. <strong>With this clause:</strong> Tom receives £50,000 (his half minus the £50k already received) and Sarah receives £150,000.{' '}
+          be split equally. <strong>With this clause:</strong> the £50,000 is added back, so each child’s fair share is £125,000 (half of £250,000) — Tom receives £75,000 (£125,000 minus the £50,000 already received) and Sarah receives £125,000.{' '}
           <strong>Without it:</strong> both receive £100,000 — meaning Tom has effectively received £150,000 in total to Sarah’s £100,000.
         </p>
       </Explainer>

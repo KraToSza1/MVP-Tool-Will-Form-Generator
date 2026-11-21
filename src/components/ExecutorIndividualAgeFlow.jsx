@@ -131,7 +131,7 @@ function UnderageWarningBox({ show, warningText, firstName, permittedAge, formVa
         <div className="flex gap-2 items-start">
           <CheckCircle2 className="w-5 h-5 shrink-0 text-green-600 dark:text-green-400 mt-0.5" aria-hidden />
           <p className="leading-relaxed">
-            ✅ Aristone Solicitors will act as your executor until {firstName} reaches age {permittedAge}. They will then hand over to {firstName} automatically. Your estate is fully covered in the meantime.
+            Aristone Solicitors will act as your executor until {firstName} reaches age {permittedAge}. They will then hand over to {firstName} automatically. Your estate is fully covered in the meantime.
           </p>
         </div>
       </div>
@@ -156,7 +156,7 @@ function UnderageWarningBox({ show, warningText, firstName, permittedAge, formVa
             onClick={() => { setFeesOpen(true); setAcked(false); }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] dark:bg-indigo-600 dark:hover:bg-indigo-700"
           >
-            ✅ Appoint Aristone Solicitors to act in the meantime (Recommended)
+            Appoint Aristone Solicitors to act in the meantime (Recommended)
           </button>
         </div>
       </div>

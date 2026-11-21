@@ -117,11 +117,36 @@ function pinEstateResidueFromBundle(merged, bundle) {
  * @param {object} bundle  - The bundled JSON shipped with the deploy.
  * @returns {object}         Merged questionnaire (deep-cloned, safe to mutate).
  */
+const MONEY_BAND_RE = /^(?:none|under\s+£|over\s+£|£\s*\d)/i;
+
+/**
+ * Older questionnaire edits changed an option's label (what the client sees) but left the old value
+ * (what gets saved) — e.g. label "£650,001 – £1,000,000" saving "£150,001 – £325,000".
+ * For money-band options, where the value is meant to be the same text, save what the client sees.
+ */
+function repairMoneyBandOptionValues(def) {
+  const visit = (fields) => (fields || []).forEach((f) => {
+    if (Array.isArray(f.options)) {
+      f.options = f.options.map((o) => {
+        const label = typeof o?.label === 'string' ? o.label.trim() : '';
+        const value = typeof o?.value === 'string' ? o.value.trim() : '';
+        if (label && value && label !== value && MONEY_BAND_RE.test(label) && MONEY_BAND_RE.test(value)) {
+          return { ...o, value: label };
+        }
+        return o;
+      });
+    }
+    visit(f.subFields);
+  });
+  (def.formSections || []).forEach((sec) => visit(sec.fields));
+}
+
 export function mergeFormDefinitions(remote, bundle) {
   if (!remote || !Array.isArray(remote?.formSections)) return bundle;
   if (!bundle || !Array.isArray(bundle?.formSections)) return remote;
 
   const merged = JSON.parse(JSON.stringify(remote));
+  repairMoneyBandOptionValues(merged);
 
   const allRemoteFieldIds = new Set();
   merged.formSections.forEach((s) =>

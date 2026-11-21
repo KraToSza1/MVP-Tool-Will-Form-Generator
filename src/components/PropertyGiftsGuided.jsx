@@ -2,6 +2,7 @@
  * Property Gifts — guided section (April 2026).
  * Persists: leavePropertyGifts, propertyGiftsList, propertyGiftsDetails, failedPropertyGiftPassProportionately
  */
+import { validateUKPostcode } from '../utils/ukValidations.js';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -134,7 +135,7 @@ export default function PropertyGiftsGuided({ formValues, setFormValues }) {
     const e = {};
     if (!addr1.trim()) e.addr1 = true;
     if (!town.trim()) e.town = true;
-    if (!postcode.trim()) e.postcode = true;
+    if (!postcode.trim() || !validateUKPostcode(postcode.trim())) e.postcode = true;
     if (!recipient.trim()) e.recipient = true;
     setErrors(e);
     if (Object.keys(e).length > 0) return;
@@ -553,6 +554,9 @@ export default function PropertyGiftsGuided({ formValues, setFormValues }) {
                           setPostcode(e.target.value);
                         }}
                       />
+                      {errors.postcode ? (
+                        <p className="mt-1 text-xs text-red-600 dark:text-red-400" role="alert">Enter a valid UK postcode, e.g. LU1 1QG.</p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

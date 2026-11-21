@@ -280,16 +280,17 @@ const CLEAR_CLIENT_BIZ = {
   bprTrustClientIntent: '',
 };
 
+// Opening the business questions must not pre-answer them (legal choices are the client's to make).
 const DEFAULT_BIZ_OPEN = {
-  biz_ownership_pct: '100',
-  biz_ownership_sole: 'sole',
-  biz_duration: 'over2',
-  biz_agreement: 'yes',
-  biz_nature: 'trading',
-  biz_trustees_continue: 'yes',
-  biz_beneficiaries: 'children',
-  biz_separate_trustee: 'no',
-  biz_fallback: 'residue',
+  biz_ownership_pct: '',
+  biz_ownership_sole: '',
+  biz_duration: '',
+  biz_agreement: '',
+  biz_nature: '',
+  biz_trustees_continue: '',
+  biz_beneficiaries: '',
+  biz_separate_trustee: '',
+  biz_fallback: '',
 };
 
 const trusteeOnlyClears = {
@@ -743,9 +744,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             <div>
               <span className="ari-label">
                 Roughly what percentage of the business do you own?{' '}
-                <span className="ml-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                  New
-                </span>
+                
               </span>
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
                 Your best estimate is fine — this helps your solicitor check whether full or partial tax relief applies.
@@ -762,7 +761,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 <button
                   key={p.id}
                   type="button"
-                  className={`${pillBase} ${(formValues.biz_ownership_pct || '100') === p.id ? pillOn : pillOff}`}
+                  className={`${pillBase} ${formValues.biz_ownership_pct === p.id ? pillOn : pillOff}`}
                   onClick={() => onDetailChange('biz_ownership_pct', p.id)}
                 >
                   {p.label}
@@ -779,7 +778,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 <button
                   key={p.id}
                   type="button"
-                  className={`${pillBase} ${(formValues.biz_ownership_sole || 'sole') === p.id ? pillOn : pillOff}`}
+                  className={`${pillBase} ${formValues.biz_ownership_sole === p.id ? pillOn : pillOff}`}
                   onClick={() => onDetailChange('biz_ownership_sole', p.id)}
                 >
                   {p.label}
@@ -795,9 +794,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="ari-label m-0">
                 How long have you owned this business interest?{' '}
-                <span className="ml-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                  New
-                </span>
+                
               </span>
             </div>
             <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-500/30 dark:bg-slate-800">
@@ -821,7 +818,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                     id={`ari-dur-${o.id}-${uid}`}
                     type="radio"
                     name={`ari-dur-${uid}`}
-                    checked={(formValues.biz_duration || 'over2') === o.id}
+                    checked={formValues.biz_duration === o.id}
                     onChange={() => onDetailChange('biz_duration', o.id)}
                   />
                   <div>
@@ -879,7 +876,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                 <button
                   key={p.id}
                   type="button"
-                  className={`${pillBase} ${(formValues.biz_agreement || 'yes') === p.id ? pillOn : pillOff}`}
+                  className={`${pillBase} ${formValues.biz_agreement === p.id ? pillOn : pillOff}`}
                   onClick={() => onDetailChange('biz_agreement', p.id)}
                 >
                   {p.label}
@@ -890,7 +887,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
               <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
                 <span className="shrink-0 font-bold">!</span>
                 <span>
-                  Solicitor flag: Agreement exists — review for pre-emption rights or restrictions on transfer before drafting.
+                  Thanks — please bring a copy of the agreement to your appointment, as it may affect how your shares can be passed on.
                 </span>
               </div>
             ) : null}
@@ -908,10 +905,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
               </div>
               <div>
                 <h3 className="m-0 text-base font-bold sm:text-lg">
-                  What does the business mainly do?{' '}
-                  <span className="align-middle text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                    New
-                  </span>
+                  What does the business mainly do?
                 </h3>
                 <p className="ari-why m-0 mt-1 border-0 p-0 text-sm leading-relaxed">
                   WHY WE ASK: This is one of the most important tests for whether Business Property Relief applies. A business
@@ -946,7 +940,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                     id={`ari-nat-${o.id}-${uid}`}
                     type="radio"
                     name={`ari-nat-${uid}`}
-                    checked={(formValues.biz_nature || 'trading') === o.id}
+                    checked={formValues.biz_nature === o.id}
                     onChange={() => onDetailChange('biz_nature', o.id)}
                   />
                   <div>
@@ -1008,7 +1002,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                   id={`ari-carry-${o.id}-${uid}`}
                   type="radio"
                   name={`ari-carry-${uid}`}
-                  checked={(formValues.biz_trustees_continue || 'yes') === o.id}
+                  checked={formValues.biz_trustees_continue === o.id}
                   onChange={() => onDetailChange('biz_trustees_continue', o.id)}
                 />
                 <div>
@@ -1025,9 +1019,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
           <div className="space-y-2">
             <span className="ari-label">
               Who should ultimately benefit from your business interest after you die?{' '}
-              <span className="ml-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </span>
             <p className="text-xs text-slate-600 dark:text-slate-400">
               This tells your solicitor who the beneficiaries of any trust or clause should be. You can specify exact shares at
@@ -1045,7 +1037,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                     id={`ari-ben-${o.id}-${uid}`}
                     type="radio"
                     name={`ari-ben-${uid}`}
-                    checked={(formValues.biz_beneficiaries || 'children') === o.id}
+                    checked={formValues.biz_beneficiaries === o.id}
                     onChange={() => onDetailChange('biz_beneficiaries', o.id)}
                   />
                   <div>
@@ -1101,7 +1093,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                   id={`ari-sep-${o.id}-${uid}`}
                   type="radio"
                   name={`ari-sep-${uid}`}
-                  checked={(formValues.biz_separate_trustee || 'no') === o.id}
+                  checked={formValues.biz_separate_trustee === o.id}
                   onChange={() => setSeparateTrusteeChoice(o.id)}
                 />
                 <div>
@@ -1372,10 +1364,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
               </div>
               <div>
                 <h3 className="m-0 text-base font-bold sm:text-lg">
-                  If the business tax relief cannot apply, what should happen to your business interest?{' '}
-                  <span className="align-middle text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                    New
-                  </span>
+                  If the business tax relief cannot apply, what should happen to your business interest?
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
                   WHY WE ASK: Business tax relief is not guaranteed — for example if the business is sold before you die, or its
@@ -1413,7 +1402,7 @@ export default function BusinessInterestsGuided({ formValues, setFormValues }) {
                     id={`ari-fb-${o.id}-${uid}`}
                     type="radio"
                     name={`ari-fb-${uid}`}
-                    checked={(formValues.biz_fallback || 'residue') === o.id}
+                    checked={formValues.biz_fallback === o.id}
                     onChange={() => onDetailChange('biz_fallback', o.id)}
                   />
                   <div>

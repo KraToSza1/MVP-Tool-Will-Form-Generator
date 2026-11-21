@@ -390,7 +390,16 @@ function ChildModal({ title, initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || { childFirstName: '', childLastName: '', dob: '' });
   const [showErrors, setShowErrors] = useState(false);
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const isValid = form.childFirstName.trim() && form.childLastName.trim() && form.dob.trim();
+  // Guardians can only be appointed for children under 18 (typed dates bypass the date picker's min/max).
+  const dobUnder18 = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(form.dob || '').trim());
+    if (!m) return false;
+    const dob = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const today = new Date();
+    const eighteenth = new Date(dob.getFullYear() + 18, dob.getMonth(), dob.getDate());
+    return dob <= today && eighteenth > today;
+  })();
+  const isValid = form.childFirstName.trim() && form.childLastName.trim() && form.dob.trim() && dobUnder18;
 
   useEffect(() => {
     setShowErrors(false);
@@ -451,13 +460,18 @@ function ChildModal({ title, initial, onSave, onClose }) {
               </label>
               <input
                 id="gf-c-dob"
-                className={`grd-field-input${showErrors && !form.dob.trim() ? ' ring-2 ring-red-400' : ''}`}
+                className={`grd-field-input${showErrors && (!form.dob.trim() || !dobUnder18) ? ' ring-2 ring-red-400' : ''}`}
                 type="date"
                 value={/^\d{4}-\d{2}-\d{2}$/.test(String(form.dob || '').trim()) ? String(form.dob).trim() : ''}
                 max={dobMax}
                 min={dobMin}
                 onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
               />
+              {showErrors && form.dob.trim() && !dobUnder18 ? (
+                <p className="mt-1 text-xs font-medium text-red-600" role="alert">
+                  Guardians can only be appointed for children under 18 — please check the date of birth.
+                </p>
+              ) : null}
             </div>
           </div>
 

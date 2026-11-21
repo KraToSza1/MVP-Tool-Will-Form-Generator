@@ -618,9 +618,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               Is the property freehold or leasehold?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
               Your solicitor needs this when dealing with the title. If you add several properties, answer for the main one.
@@ -652,9 +650,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               What share of the property do you own?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
               This affects what goes into the trust. If you own jointly, typically only your share passes through your will.
@@ -700,9 +696,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
               <div className="min-w-0">
                 <h3 className="m-0 text-base font-bold text-slate-900 dark:text-slate-100">
                   What rights should the life tenant have over the property?{' '}
-                  <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                    New
-                  </span>
+                  
                 </h3>
                 <p className="m-0 mt-1 text-xs italic leading-relaxed text-slate-600 dark:text-slate-300">
                   WHY WE ASK: This tells your solicitor what to include in the trust clause — what the life tenant can and cannot do.
@@ -745,9 +739,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               What should happen if the life tenant wants to sell the property?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
               Important for the trust wording — what trustees may do if the life tenant moves or wants to sell.
@@ -788,9 +780,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               After the life tenant dies, who should inherit the property?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">
               Remainder beneficiaries ultimately receive the property or its value when the trust ends.
@@ -831,9 +821,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               Do you want a future buyer to get a clean title?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-800">
               <p className="m-0 text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
@@ -880,9 +868,7 @@ export default function PropertyTrustGuided({ formValues, setFormValues }) {
           <div className="min-w-0">
             <h3 className="m-0 mb-1 text-base font-bold text-slate-900 dark:text-slate-100">
               What is your main reason for wanting a property trust?{' '}
-              <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-900 dark:bg-blue-950/60 dark:text-blue-100">
-                New
-              </span>
+              
             </h3>
             <p className="m-0 mb-3 text-xs text-slate-600 dark:text-slate-400">Select all that apply.</p>
             <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">

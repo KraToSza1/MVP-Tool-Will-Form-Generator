@@ -468,7 +468,13 @@ function FieldEditModal({ field, onClose, onSave }) {
       next.rows = rows;
     }
     if (Array.isArray(field.options) && optionLabels.length === field.options.length) {
-      next.options = field.options.map((o, i) => ({ ...o, label: optionLabels[i] ?? o.label ?? o.value }));
+      next.options = field.options.map((o, i) => {
+        const label = optionLabels[i] ?? o.label ?? o.value;
+        // Plain-text options (value === label) keep the value in step, so what clients see is what gets saved.
+        // Coded values (e.g. "AsShares") stay fixed because logic depends on them.
+        const valueFollowsLabel = typeof o.value === 'string' && o.value !== '' && o.value === (o.label ?? o.value);
+        return { ...o, label, ...(valueFollowsLabel ? { value: label } : {}) };
+      });
     }
     applyConditions(next);
     onSave(next);

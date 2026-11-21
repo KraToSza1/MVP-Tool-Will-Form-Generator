@@ -94,7 +94,7 @@ function personFingerprint(data) {
   ].join('|').toLowerCase();
 }
 
-function buildTestatorRecord(payload) {
+export function buildTestatorRecord(payload) {
   if (!payload || typeof payload !== 'object') return null;
   const fn = trim(payload.firstName);
   const ln = trim(payload.lastName);
@@ -120,6 +120,12 @@ function buildTestatorRecord(payload) {
   };
 }
 
+/** "1982-11-02" → "02/11/1982" (the person forms use DD/MM/YYYY). Other formats are left alone. */
+function toUkDate(v) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : v;
+}
+
 function buildPartnerRecord(payload) {
   if (!payload || typeof payload !== 'object') return null;
   const fn = trim(payload.partnerFirstName);
@@ -133,7 +139,7 @@ function buildPartnerRecord(payload) {
     middleName: trim(payload.partnerMiddleName),
     lastName: ln,
     knownAs: trim(payload.partnerKnownAs),
-    dateOfBirth: trim(payload.partnerDateOfBirth),
+    dateOfBirth: toUkDate(trim(payload.partnerDateOfBirth)),
     gender: trim(payload.partnerGender),
     mobile: trim(payload.partnerMobile),
     email: trim(payload.partnerEmail),
@@ -144,7 +150,7 @@ function buildPartnerRecord(payload) {
     occupation: trim(payload.partnerOccupation),
     nationalityCountry: trim(payload.partnerNationalityCountry),
     countryOfResidence: trim(payload.partnerCountryOfResidence),
-    relationship: 'Partner / spouse (from intake)',
+    relationship: 'Partner',
   };
 }
 
@@ -177,24 +183,32 @@ export function getContactCandidates(formValues) {
     }
   }
 
-  const testator = buildTestatorRecord(formValues);
-  if (testator) {
-    push('__testator__', `Testator — ${labelFromData(testator)}`, 'testator', testator);
-  }
+  // The client (testator) is never offered: they can't be their own guardian, executor, beneficiary or excluded person.
 
   const partner = buildPartnerRecord(formValues);
   if (partner) {
     push('__partner__', `Partner / spouse — ${labelFromData(partner)}`, 'partner', partner);
   }
 
-  for (const { key } of PEOPLE_ARRAY_KEYS) {
+  // Children entered on the Guardians step.
+  const children = Array.isArray(formValues.guardianFlowState?.children) ? formValues.guardianFlowState.children : [];
+  children.forEach((ch, i) => {
+    if (!ch || typeof ch !== 'object') return;
+    const firstName = trim(ch.childFirstName || ch.firstName);
+    const lastName = trim(ch.childLastName || ch.lastName);
+    if (!firstName && !lastName) return;
+    const data = { ...emptyPersonRecord(), firstName, lastName, dateOfBirth: toUkDate(trim(ch.dob || ch.dateOfBirth)), relationship: 'Child' };
+    push(`child:${ch.id ?? i}`, `Child — ${labelFromData(data)}`, 'child', data);
+  });
+
+  for (const { key, role } of PEOPLE_ARRAY_KEYS) {
     const raw = formValues[key];
     if (!raw) continue;
     const arr = Array.isArray(raw) ? raw : [raw];
     arr.forEach((item, i) => {
       if (item == null || typeof item !== 'object') return;
       const lab = labelFromData(item);
-      push(`scan:${key}:${i}`, `${key} #${i + 1} — ${lab}`, `array:${key}`, { ...emptyPersonRecord(), ...item });
+      push(`scan:${key}:${i}`, `${role || 'Person'} — ${lab}`, `array:${key}`, { ...emptyPersonRecord(), ...item });
     });
   }
 

@@ -1284,7 +1284,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🥇</span>
               <span className="font-semibold">Executor Selected:</span>
               <span className="font-bold">Aristone Solicitors</span>
             </div>
@@ -1295,7 +1294,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">✅</span>
               <span className="font-semibold">Executors Added:</span>
               <span className="font-bold">{executorData.length} executor(s)</span>
             </div>
@@ -1306,7 +1304,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">👇</span>
               <span>Choose Aristone Solicitors (recommended) or add individual executors below.</span>
             </div>
           </div>
@@ -1320,7 +1317,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">🥇</span>
               <span className="font-semibold">Substitute Executor Selected:</span>
               <span className="font-bold">Aristone Solicitors</span>
             </div>
@@ -1331,7 +1327,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-green-100 border-l-4 border-green-500 text-green-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">✅</span>
               <span className="font-semibold">Substitute Executors Added:</span>
               <span className="font-bold">{substituteExecutorData.length} substitute(s)</span>
             </div>
@@ -1342,7 +1337,6 @@ function FieldRenderer({ field, formValues, setFormValues, evaluateFieldConditio
         return (
           <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-800 rounded-r p-4 my-4 text-sm">
             <div className="flex items-center gap-2">
-              <span className="text-lg">👇</span>
               <span>Choose Aristone Solicitors or add individual substitute executors below.</span>
             </div>
           </div>

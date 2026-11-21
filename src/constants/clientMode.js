@@ -50,6 +50,41 @@ const LIABILITY_BANDS = {
   'Over £1,000,000': 5,
 };
 
+/** Lower bound (in £) of a band label like "£325,001 – £650,000", "Under £50,000" or "Over £2,000,000". */
+export function bandLowerBound(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  if (/^none$/i.test(t)) return 0;
+  if (/^under\s/i.test(t)) return 0;
+  const m = t.replace(/,/g, '').match(/£\s*(\d+(?:\.\d+)?)\s*([kKmM])?/);
+  if (!m) return null;
+  let n = parseFloat(m[1]);
+  if (/k/i.test(m[2] || '')) n *= 1000;
+  if (/m/i.test(m[2] || '')) n *= 1000000;
+  return n;
+}
+
+/** Same scale as ESTATE_BANDS, worked out from the amounts so edited labels keep working. */
+function estateRankFromText(text) {
+  const min = bandLowerBound(text);
+  if (min == null) return undefined;
+  const thresholds = [0, 50000, 325001, 650001, 1000001, 3000001, 5000001];
+  let rank = 0;
+  thresholds.forEach((th, i) => { if (min >= th) rank = i; });
+  return rank;
+}
+
+/** Same scale as LIABILITY_BANDS ("None" = 0, anything up to £50k = 1, …). */
+function liabilityRankFromText(text) {
+  if (/^none$/i.test(String(text || '').trim())) return 0;
+  const min = bandLowerBound(text);
+  if (min == null) return undefined;
+  const thresholds = [50001, 325001, 650001, 1000001];
+  let rank = 1;
+  thresholds.forEach((th, i) => { if (min >= th) rank = i + 2; });
+  return rank;
+}
+
 /** Extra-verbose logs (same dedupe key) — optional on top of dev logs. */
 const VERBOSE_ESTATE_REC =
   typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEBUG_ESTATE_RECOMMENDATION === 'true';
@@ -135,7 +170,7 @@ export function getAristoneEstateRecommendationState(formValues) {
     return state;
   }
 
-  const eRank = ESTATE_BANDS[grossKey];
+  const eRank = ESTATE_BANDS[grossKey] ?? estateRankFromText(grossKey);
   if (eRank == null) {
     reasons.push('Estate value not recognised — recommendation hidden.');
     const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: null, liabMax: null, reasons };
@@ -150,7 +185,7 @@ export function getAristoneEstateRecommendationState(formValues) {
     return state;
   }
 
-  const lRank = LIABILITY_BANDS[liabilityKey];
+  const lRank = LIABILITY_BANDS[liabilityKey] ?? liabilityRankFromText(liabilityKey);
   if (lRank == null) {
     reasons.push('Liabilities value not recognised — recommendation hidden.');
     const state = { eligible: false, grossKey, liabilityKey, inferredLiability: false, grossMin: eRank, liabMax: null, reasons };

@@ -160,6 +160,58 @@ function funeralSummary(formValues) {
   return parts.map((p) => (p.length > 160 ? `${p.slice(0, 157)}…` : p));
 }
 
+function childrenSummary(v) {
+  const kids = Array.isArray(v?.guardianFlowState?.children) ? v.guardianFlowState.children : [];
+  const names = kids
+    .map((c) => [trim(c?.childFirstName || c?.firstName), trim(c?.childLastName || c?.lastName)].filter(Boolean).join(' '))
+    .filter(Boolean);
+  return names.length ? names : ['None recorded'];
+}
+
+function giftsSummary(v) {
+  const lines = [];
+  const money = Array.isArray(v?.monetaryGiftsList) ? v.monetaryGiftsList : [];
+  money.forEach((g) => {
+    const who = trim(g?.recipientName);
+    const amt = trim(g?.amount);
+    if (who || amt) lines.push(`Cash: ${amt ? (amt.startsWith('£') ? amt : `£${amt}`) : 'amount not given'} to ${who || 'recipient not given'}`);
+  });
+  const items = Array.isArray(v?.specificGiftsList) ? v.specificGiftsList : [];
+  items.forEach((g) => {
+    const what = trim(g?.itemDescription);
+    const who = trim(g?.recipientName);
+    if (what || who) lines.push(`Item: ${what || 'item not described'} to ${who || 'recipient not given'}`);
+  });
+  const props = Array.isArray(v?.propertyGiftsList) ? v.propertyGiftsList : [];
+  props.forEach((g) => {
+    const where = [trim(g?.addressLine1 || g?.addressLine), trim(g?.town), trim(g?.postcode)].filter(Boolean).join(', ');
+    const who = trim(g?.recipientName);
+    if (where || who) lines.push(`Property: ${where || 'address not given'} to ${who || 'recipient not given'}`);
+  });
+  return lines.length ? lines.map((l) => (l.length > 160 ? `${l.slice(0, 157)}…` : l)) : ['No specific gifts'];
+}
+
+function businessSummary(v) {
+  const has = trim(v?.biz_has_interests).toLowerCase();
+  if (has === 'no' || (!has && trim(v?.hasBusinessInterests) !== 'Yes')) return ['No business interests'];
+  if (has === 'unsure') return ['Business interests — to discuss with your solicitor'];
+  const type = trim(v?.biz_type) || trim(v?.businessInterestType);
+  return [`Business interests recorded${type ? ` (${type.replace(/_/g, ' ')})` : ''}`];
+}
+
+function organSummary(v) {
+  const pref = trim(v?.organDonationPreference);
+  if (!pref) return ['Not specified'];
+  const specific = trim(v?.specificOrgansToDonate);
+  return [specific ? `${pref}: ${specific}` : pref];
+}
+
+function petsSummary(v) {
+  if (trim(v?.provisionsForPets) !== 'Yes') return ['No pet provisions'];
+  const carers = Array.isArray(v?.petCarerData) ? formatPersonList(v.petCarerData) : [];
+  return carers.length ? carers.map((c) => `Carer: ${c}`) : ['Pet provisions requested'];
+}
+
 /**
  * @param {Record<string, unknown> | null | undefined} formValues
  * @returns {{ id: string, title: string, lines: string[] }[]}
@@ -185,7 +237,7 @@ export function buildClientSubmitReviewSections(formValues) {
   return [
     {
       id: 'testator',
-      title: 'You (testator)',
+      title: 'You',
       lines: [testatorLine(v)],
     },
     {
@@ -199,6 +251,11 @@ export function buildClientSubmitReviewSections(formValues) {
       lines: guardiansSummary(v),
     },
     {
+      id: 'children',
+      title: 'Your children',
+      lines: childrenSummary(v),
+    },
+    {
       id: 'beneficiaries',
       title: 'Main beneficiaries / residue',
       lines: residueSummary(v),
@@ -209,6 +266,16 @@ export function buildClientSubmitReviewSections(formValues) {
       lines: [propertyLine],
     },
     {
+      id: 'gifts',
+      title: 'Gifts',
+      lines: giftsSummary(v),
+    },
+    {
+      id: 'business',
+      title: 'Business interests',
+      lines: businessSummary(v),
+    },
+    {
       id: 'exclusions',
       title: 'Deliberate exclusions',
       lines: exclusionsSummary(v),
@@ -217,6 +284,16 @@ export function buildClientSubmitReviewSections(formValues) {
       id: 'funeral',
       title: 'Funeral wishes',
       lines: funeralSummary(v),
+    },
+    {
+      id: 'organ',
+      title: 'Organ donation',
+      lines: organSummary(v),
+    },
+    {
+      id: 'pets',
+      title: 'Pets',
+      lines: petsSummary(v),
     },
     {
       id: 'id',
